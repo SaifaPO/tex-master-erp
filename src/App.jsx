@@ -6,7 +6,7 @@ import {
   ClipboardList, Package, Cpu, QrCode, Plus, User, Clock, Layers, Search, Check, X, Calendar,
   Palette, Scissors, Printer, Sliders, Sparkles, ZoomIn, ZoomOut, FileText, PlusCircle, Table,
   Shield, Users, Lock, Edit2, Trash2, Tag, Scale, CalendarDays, FileEdit, Gift, Loader2, AlertTriangle,
-  Shirt, Box, Banknote, GripVertical, Download, Upload, ArrowUp, ArrowDown
+  Shirt, Box, Banknote, GripVertical, Download, Upload, ArrowUp, ArrowDown, BarChart3
 } from 'lucide-react';
 
 // ============================================================
@@ -99,6 +99,13 @@ function buildPrintOnlyPreset() {
 }
 
 // Bežná paleta farieb textilu pre rýchly výber pri zaraďovaní do skladu
+// Emotikony na výber profilu zamestnanca (podobne ako v messenger appkách)
+const AVATAR_EMOJI_OPTIONS = [
+  '😀', '😎', '🤓', '🧑‍🎨', '👨‍🎨', '👩‍🎨', '🦸', '🦸‍♀️', '🧙', '🧑‍🔧', '👨‍🔧', '👩‍🔧',
+  '🐱', '🐶', '🦊', '🐻', '🐼', '🦁', '🐯', '🐨', '🐺', '🦉', '🐸', '🐵',
+  '🔥', '⚡', '🚀', '🎯', '⭐', '💪', '🎨', '✂️', '🧵', '📦', '🖨️', '🧢'
+];
+
 const COLOR_PALETTE = [
   { name: 'Biela', hex: '#FFFFFF' },
   { name: 'Čierna', hex: '#111111' },
@@ -143,7 +150,8 @@ const FALLBACK_ACL = {
   update_status: { master: true, supervisor: true, sales: false, employee: true },
   manage_profiles: { master: true, supervisor: false, sales: false, employee: false },
   edit_stock: { master: true, supervisor: true, sales: false, employee: false },
-  manage_catalog: { master: true, supervisor: true, sales: false, employee: false }
+  manage_catalog: { master: true, supervisor: true, sales: false, employee: false },
+  view_reports: { master: true, supervisor: true, sales: false, employee: false }
 };
 
 const mapMaterialFromDb = (r) => ({ id: r.id, name: r.name, color: r.color, colorHex: r.color_hex || '', width: r.width, weight: r.weight, pricePerM: r.price_per_m, qty: r.qty, unit: r.unit, minQty: r.min_qty, warehouseId: r.warehouse_id || 'sklad-1', history: r.history || [] });
@@ -155,8 +163,8 @@ const mapProductToDb = (p) => ({ id: p.id, custom_code: p.customCode, name: p.na
 const mapTierFromDb = (r) => ({ id: r.id, name: r.name, fit: r.fit, ventilation: r.ventilation, desc: r.description });
 const mapTierToDb = (t) => ({ id: t.id, name: t.name, fit: t.fit, ventilation: t.ventilation, description: t.desc });
 
-const mapEmployeeFromDb = (r) => ({ id: r.id, firstName: r.first_name, lastName: r.last_name, birthday: r.birthday, nameday: r.nameday, entryDate: r.entry_date, role: r.role, position: r.position, passwordHash: r.password_hash || '', phone: r.phone || '', email: r.email || '' });
-const mapEmployeeToDb = (e) => ({ id: e.id, first_name: e.firstName, last_name: e.lastName, birthday: e.birthday, nameday: e.nameday, entry_date: e.entryDate, role: e.role, position: e.position, password_hash: e.passwordHash || null, phone: e.phone || null, email: e.email || null });
+const mapEmployeeFromDb = (r) => ({ id: r.id, firstName: r.first_name, lastName: r.last_name, birthday: r.birthday, nameday: r.nameday, entryDate: r.entry_date, role: r.role, position: r.position, passwordHash: r.password_hash || '', phone: r.phone || '', email: r.email || '', avatar: r.avatar || '' });
+const mapEmployeeToDb = (e) => ({ id: e.id, first_name: e.firstName, last_name: e.lastName, birthday: e.birthday, nameday: e.nameday, entry_date: e.entryDate, role: e.role, position: e.position, password_hash: e.passwordHash || null, phone: e.phone || null, email: e.email || null, avatar: e.avatar || null });
 
 const mapOrderFromDb = (r) => ({ id: r.id, customer: r.customer, createdAt: r.created_at, deliveryDate: r.scheduled_day, driveLink: r.drive_link, notes: r.notes, paymentType: r.payment_type || 'faktura', items: r.items || [] });
 const mapOrderToDb = (o) => ({ id: o.id, customer: o.customer, created_at: o.createdAt, scheduled_day: o.deliveryDate, drive_link: o.driveLink, notes: o.notes, payment_type: o.paymentType, items: o.items });
@@ -204,6 +212,27 @@ function currentStageLabel(item) {
   return { label: 'Hotové', done: true };
 }
 
+// Parsuje formát "YYYY-MM-DD HH:MM" (getFormattedDateTime) späť na Date objekt
+function parseFormattedDateTime(str) {
+  if (!str) return null;
+  const [datePart, timePart] = str.split(' ');
+  if (!datePart || !timePart) return null;
+  const [y, m, d] = datePart.split('-').map(Number);
+  const [h, min] = timePart.split(':').map(Number);
+  return new Date(y, m - 1, d, h, min);
+}
+
+function formatDurationMinutes(mins) {
+  if (mins === null || mins === undefined) return '—';
+  if (mins < 60) return `${mins} min`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${h} h ${m} min`;
+}
+
+const mapCostRateFromDb = (r) => ({ stationId: r.station_id, rate: r.rate, unit: r.unit || '', note: r.note || '' });
+const mapCostRateToDb = (r) => ({ station_id: r.stationId, rate: r.rate, unit: r.unit, note: r.note });
+
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
@@ -211,6 +240,7 @@ export default function App() {
   const [orders, setOrders] = useState([]);
   const [materials, setMaterials] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
+  const [costRates, setCostRates] = useState([]);
   const [activeWarehouseId, setActiveWarehouseId] = useState('');
   const [editingWarehouseId, setEditingWarehouseId] = useState(null);
   const [editingWarehouseName, setEditingWarehouseName] = useState('');
@@ -338,6 +368,7 @@ export default function App() {
   const [newEmpPosition, setNewEmpPosition] = useState('');
   const [newEmpPhone, setNewEmpPhone] = useState('');
   const [newEmpEmail, setNewEmpEmail] = useState('');
+  const [newEmpAvatar, setNewEmpAvatar] = useState('');
 
   const qrInputRef = useRef(null);
   const importFileInputRef = useRef(null);
@@ -350,7 +381,7 @@ export default function App() {
     }
     async function loadAll() {
       try {
-        const [matRes, prodRes, tierRes, sportRes, empRes, aclRes, orderRes, whRes] = await Promise.all([
+        const [matRes, prodRes, tierRes, sportRes, empRes, aclRes, orderRes, whRes, rateRes] = await Promise.all([
           supabase.from('materials').select('*').order('name'),
           supabase.from('products').select('*'),
           supabase.from('quality_tiers').select('*'),
@@ -358,7 +389,8 @@ export default function App() {
           supabase.from('employees').select('*'),
           supabase.from('acl_settings').select('*').eq('id', 1).maybeSingle(),
           supabase.from('orders').select('*').order('created_at', { ascending: false }),
-          supabase.from('warehouses').select('*').order('name')
+          supabase.from('warehouses').select('*').order('name'),
+          supabase.from('cost_rates').select('*')
         ]);
         const firstErr = [matRes, prodRes, tierRes, sportRes, empRes, orderRes, whRes].find(r => r.error);
         if (firstErr) throw firstErr.error;
@@ -374,9 +406,10 @@ export default function App() {
         setQualityTiers(loadedTiers);
         setSports((sportRes.data || []).map(r => r.name));
         setEmployees(loadedEmployees);
-        setAcl(aclRes.data ? aclRes.data.rules : FALLBACK_ACL);
+        setAcl(aclRes.data ? { ...FALLBACK_ACL, ...aclRes.data.rules } : FALLBACK_ACL);
         setOrders((orderRes.data || []).map(mapOrderFromDb));
         setWarehouses(loadedWarehouses);
+        setCostRates(rateRes.error ? [] : (rateRes.data || []).map(mapCostRateFromDb));
 
         if (loadedWarehouses.length > 0) {
           setActiveWarehouseId(loadedWarehouses[0].id);
@@ -405,6 +438,14 @@ export default function App() {
     const channel = supabase.channel('tex-master-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'materials' }, (payload) => applyRealtimeChange(setMaterials, payload, mapMaterialFromDb))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'warehouses' }, (payload) => applyRealtimeChange(setWarehouses, payload, (r) => ({ id: r.id, name: r.name })))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cost_rates' }, (payload) => {
+        setCostRates(prev => {
+          if (payload.eventType === 'DELETE') return prev.filter(x => x.stationId !== payload.old.station_id);
+          const mapped = mapCostRateFromDb(payload.new);
+          const exists = prev.some(x => x.stationId === mapped.stationId);
+          return exists ? prev.map(x => (x.stationId === mapped.stationId ? mapped : x)) : [...prev, mapped];
+        });
+      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, (payload) => applyRealtimeChange(setProducts, payload, mapProductFromDb))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'quality_tiers' }, (payload) => applyRealtimeChange(setQualityTiers, payload, mapTierFromDb))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, (payload) => applyRealtimeChange(setEmployees, payload, mapEmployeeFromDb))
@@ -611,6 +652,15 @@ export default function App() {
     const { error } = await supabase.from('materials').update({ warehouse_id: newWarehouseId }).eq('id', materialId);
     if (error) { triggerNotification('error', error.message); return; }
     triggerNotification('success', 'Položka bola presunutá do iného skladu.');
+  };
+
+  // --- SADZBY (náčrt na budúce sledovanie nákladov) ---
+  const handleUpdateCostRate = async (stationId, field, value) => {
+    if (!hasPermission('view_reports')) return;
+    const existing = costRates.find(r => r.stationId === stationId) || { stationId, rate: 0, unit: '', note: '' };
+    const updated = { ...existing, [field]: field === 'rate' ? (parseFloat(value) || 0) : value };
+    const { error } = await supabase.from('cost_rates').upsert(mapCostRateToDb(updated));
+    if (error) triggerNotification('error', error.message);
   };
 
   // --- EXPORT / IMPORT SKLADU DO EXCELU ---
@@ -1201,7 +1251,23 @@ export default function App() {
         });
         isDeductedNow = true;
       }
-      return { ...item, stationStatuses: { ...item.stationStatuses, [stationId]: statusId }, materialDeducted: isDeductedNow };
+
+      // Sledovanie, kto na stanici pracuje a koľko to trvalo (od kliknutia "Príprava" po "Hotové")
+      const existingMeta = item.stationMeta?.[stationId] || {};
+      let newMeta = { ...existingMeta };
+      if (statusId === 'priprava' && !existingMeta.startedAt) {
+        newMeta = { ...newMeta, startedAt: now, assignedEmployeeId: currentUser.id, assignedEmployeeName: currentUser.firstName, assignedEmployeeAvatar: currentUser.avatar || '' };
+      }
+      if (statusId !== 'neaktivne' && statusId !== 'caka' && statusId !== 'priprava') {
+        newMeta = { ...newMeta, assignedEmployeeId: currentUser.id, assignedEmployeeName: currentUser.firstName, assignedEmployeeAvatar: currentUser.avatar || '' };
+      }
+      if (statusId === 'hotove' && !existingMeta.completedAt) {
+        const started = parseFormattedDateTime(existingMeta.startedAt);
+        const durationMinutes = started ? Math.max(0, Math.round((parseFormattedDateTime(now) - started) / 60000)) : null;
+        newMeta = { ...newMeta, completedAt: now, durationMinutes };
+      }
+
+      return { ...item, stationStatuses: { ...item.stationStatuses, [stationId]: statusId }, stationMeta: { ...item.stationMeta, [stationId]: newMeta }, materialDeducted: isDeductedNow };
     });
 
     const { error: orderErr } = await supabase.from('orders').update({ items: updatedItems }).eq('id', orderId);
@@ -1245,10 +1311,10 @@ export default function App() {
       if (!newEmpFirstName.trim() || !newEmpLastName.trim()) { alert('Zadajte meno a priezvisko.'); return; }
       if (!newEmpPassword.trim()) { alert('Nastavte zamestnancovi prihlasovacie heslo.'); return; }
       const passwordHash = await hashPassword(newEmpPassword.trim());
-      const created = { id: `emp-${Date.now()}`, firstName: newEmpFirstName, lastName: newEmpLastName, birthday: newEmpBirthday, nameday: newEmpNameday, entryDate: newEmpEntryDate, role: newEmpRole, position: newEmpPosition, phone: newEmpPhone, email: newEmpEmail, passwordHash };
+      const created = { id: `emp-${Date.now()}`, firstName: newEmpFirstName, lastName: newEmpLastName, birthday: newEmpBirthday, nameday: newEmpNameday, entryDate: newEmpEntryDate, role: newEmpRole, position: newEmpPosition, phone: newEmpPhone, email: newEmpEmail, avatar: newEmpAvatar, passwordHash };
       const { error } = await supabase.from('employees').insert(mapEmployeeToDb(created));
       if (error) { triggerNotification('error', error.message); return; }
-      setNewEmpFirstName(''); setNewEmpLastName(''); setNewEmpBirthday(''); setNewEmpNameday(''); setNewEmpPosition(''); setNewEmpPhone(''); setNewEmpEmail(''); setNewEmpPassword('');
+      setNewEmpFirstName(''); setNewEmpLastName(''); setNewEmpBirthday(''); setNewEmpNameday(''); setNewEmpPosition(''); setNewEmpPhone(''); setNewEmpEmail(''); setNewEmpPassword(''); setNewEmpAvatar('');
       triggerNotification('success', `Zamestnanec "${created.firstName}" bol pridaný.`);
     }
   };
@@ -1415,6 +1481,9 @@ export default function App() {
               <button onClick={() => setActiveTab('materials')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'materials' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Package className="h-3.5 w-3.5" /> Sklad</button>
               <button onClick={() => setActiveTab('profiles')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'profiles' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Users className="h-3.5 w-3.5" /> Zamestnanci & Práva</button>
               <button onClick={() => setActiveTab('qr-terminal')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'qr-terminal' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><QrCode className="h-3.5 w-3.5" /> Čítačka QR</button>
+              {hasPermission('view_reports') && (
+                <button onClick={() => setActiveTab('reports')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'reports' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><BarChart3 className="h-3.5 w-3.5" /> Prehľady</button>
+              )}
             </nav>
           </div>
         </div>
@@ -1499,6 +1568,9 @@ export default function App() {
                                           <div className="flex items-center justify-between">
                                             <span className="font-mono font-bold text-indigo-400">#{item.priority} • {item.itemId}</span>
                                             <div className="flex items-center gap-1">
+                                              {item.stationMeta?.[stationId]?.assignedEmployeeAvatar && (
+                                                <span title={item.stationMeta[stationId].assignedEmployeeName} className="text-sm leading-none cursor-help">{item.stationMeta[stationId].assignedEmployeeAvatar}</span>
+                                              )}
                                               <CashBadge paymentType={item.paymentType} size="small" />
                                               <span className="text-slate-400 font-bold">{item.qty}ks</span>
                                             </div>
@@ -2328,6 +2400,7 @@ export default function App() {
                     <div key={emp.id} className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl flex items-start justify-between gap-4">
                       <div className="space-y-1">
                         <div className="flex items-center gap-2 flex-wrap">
+                          {emp.avatar && <span className="text-lg">{emp.avatar}</span>}
                           <h4 className="font-extrabold text-sm text-slate-100">{emp.firstName} {emp.lastName}</h4>
                           <span className="bg-slate-800 text-indigo-400 font-bold text-[9px] px-1.5 py-0.5 rounded uppercase border border-slate-700">{emp.role}</span>
                         </div>
@@ -2374,6 +2447,25 @@ export default function App() {
                     <div className="grid grid-cols-2 gap-2">
                       <div><label className="text-slate-400 block mb-0.5">Telefón</label><input type="tel" placeholder="napr. 0900 123 456" value={editingEmployee ? (editingEmployee.phone || '') : newEmpPhone} onChange={(e) => editingEmployee ? setEditingEmployee({ ...editingEmployee, phone: e.target.value }) : setNewEmpPhone(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" /></div>
                       <div><label className="text-slate-400 block mb-0.5">Email</label><input type="email" placeholder="meno@firma.sk" value={editingEmployee ? (editingEmployee.email || '') : newEmpEmail} onChange={(e) => editingEmployee ? setEditingEmployee({ ...editingEmployee, email: e.target.value }) : setNewEmpEmail(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" /></div>
+                    </div>
+                    <div>
+                      <label className="text-slate-400 block mb-1">Emotikon profilu</label>
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="text-2xl bg-slate-900 border border-slate-800 rounded-lg w-10 h-10 flex items-center justify-center">{(editingEmployee ? editingEmployee.avatar : newEmpAvatar) || '❓'}</span>
+                        <span className="text-[10px] text-slate-500">Vyber jeden nižšie</span>
+                      </div>
+                      <div className="grid grid-cols-8 sm:grid-cols-12 gap-1 bg-slate-900 border border-slate-800 rounded-lg p-2 max-h-[110px] overflow-y-auto">
+                        {AVATAR_EMOJI_OPTIONS.map(em => (
+                          <button
+                            type="button"
+                            key={em}
+                            onClick={() => editingEmployee ? setEditingEmployee({ ...editingEmployee, avatar: em }) : setNewEmpAvatar(em)}
+                            className={`text-lg rounded p-1 hover:bg-slate-800 ${(editingEmployee ? editingEmployee.avatar : newEmpAvatar) === em ? 'bg-indigo-600' : ''}`}
+                          >
+                            {em}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                     <div>
                       <label className="text-slate-400 block mb-0.5">{editingEmployee ? 'Nové heslo (nechaj prázdne, ak nemeníš)' : 'Prihlasovacie heslo'}</label>
@@ -2449,6 +2541,81 @@ export default function App() {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'reports' && hasPermission('view_reports') && (
+          <div className="space-y-6 print:hidden animate-in fade-in duration-150">
+            <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 shadow-xl">
+              <h2 className="text-xl font-bold text-white flex items-center gap-2 mb-2"><BarChart3 className="text-indigo-400 h-5 w-5" /> Prehľady — čas strávený na jednotlivých staniciach</h2>
+              <p className="text-xs text-slate-400 mb-4">Sleduje sa od kliknutia na "Príprava" po "Hotové" na danej stanici. Viditeľné len pre Master/Supervisor.</p>
+              <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
+                <table className="w-full text-left text-xs text-slate-300">
+                  <thead className="bg-slate-900 text-slate-400 uppercase tracking-wider">
+                    <tr>
+                      <th className="px-3 py-3">Položka</th>
+                      <th className="px-3 py-3">Odberateľ / Produkt</th>
+                      {STATION_ORDER.map(sid => <th key={sid} className="px-3 py-3 text-center">{STATION_CONFIGS[sid].name}</th>)}
+                      <th className="px-3 py-3 text-center">Spolu</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {allItems.length === 0 && (
+                      <tr><td colSpan={STATION_ORDER.length + 3} className="px-4 py-8 text-center text-slate-500 italic">Zatiaľ žiadne zákazky.</td></tr>
+                    )}
+                    {allItems.map(item => {
+                      const totalMinutes = STATION_ORDER.reduce((sum, sid) => sum + (item.stationMeta?.[sid]?.durationMinutes || 0), 0);
+                      return (
+                        <tr key={item.itemId} className="hover:bg-slate-800/40">
+                          <td className="px-3 py-3 font-mono font-bold text-indigo-400">{item.itemId}</td>
+                          <td className="px-3 py-3"><span className="font-bold text-white block">{item.customer}</span><span className="text-slate-400">{item.productName}</span></td>
+                          {STATION_ORDER.map(sid => {
+                            const meta = item.stationMeta?.[sid];
+                            if (!meta || (!meta.startedAt && !meta.durationMinutes)) return <td key={sid} className="px-3 py-3 text-center text-slate-600">—</td>;
+                            return (
+                              <td key={sid} className="px-3 py-3 text-center">
+                                <div className="flex flex-col items-center gap-0.5">
+                                  {meta.assignedEmployeeAvatar && <span title={meta.assignedEmployeeName} className="cursor-help">{meta.assignedEmployeeAvatar}</span>}
+                                  <span className={meta.durationMinutes !== undefined && meta.durationMinutes !== null ? 'text-emerald-400 font-bold' : 'text-amber-400'}>
+                                    {meta.durationMinutes !== undefined && meta.durationMinutes !== null ? formatDurationMinutes(meta.durationMinutes) : 'prebieha...'}
+                                  </span>
+                                </div>
+                              </td>
+                            );
+                          })}
+                          <td className="px-3 py-3 text-center font-bold text-white">{formatDurationMinutes(totalMinutes)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 shadow-xl">
+              <h3 className="font-bold text-md text-white flex items-center gap-2 mb-2"><Banknote className="text-indigo-400 h-5 w-5" /> Sadzby za jednotku práce (náčrt)</h3>
+              <p className="text-xs text-slate-400 mb-4">Zatiaľ len na poznačenie orientačných cien — automatický prepočet nákladov na zákazku doplníme neskôr.</p>
+              <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
+                <table className="w-full text-left text-xs text-slate-300">
+                  <thead className="bg-slate-900 text-slate-400 uppercase tracking-wider">
+                    <tr><th className="px-3 py-3">Stanica</th><th className="px-3 py-3 text-center">Sadzba (€)</th><th className="px-3 py-3 text-center">Jednotka</th><th className="px-3 py-3">Poznámka</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {STATION_ORDER.map(sid => {
+                      const rate = costRates.find(r => r.stationId === sid) || { rate: 0, unit: '', note: '' };
+                      return (
+                        <tr key={sid} className="hover:bg-slate-800/40">
+                          <td className="px-3 py-3 font-bold text-white">{STATION_CONFIGS[sid].name}</td>
+                          <td className="px-3 py-3 text-center"><input type="number" step="0.01" defaultValue={rate.rate} onBlur={(e) => handleUpdateCostRate(sid, 'rate', e.target.value)} className="w-20 bg-slate-950 border border-slate-800 rounded p-1 text-center text-white" /></td>
+                          <td className="px-3 py-3 text-center"><input type="text" defaultValue={rate.unit} onBlur={(e) => handleUpdateCostRate(sid, 'unit', e.target.value)} placeholder="napr. za kus" className="w-24 bg-slate-950 border border-slate-800 rounded p-1 text-center text-white" /></td>
+                          <td className="px-3 py-3"><input type="text" defaultValue={rate.note} onBlur={(e) => handleUpdateCostRate(sid, 'note', e.target.value)} placeholder="poznámka" className="w-full bg-slate-950 border border-slate-800 rounded p-1 text-white" /></td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
