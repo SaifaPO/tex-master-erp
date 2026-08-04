@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
+import { QRCodeSVG } from 'qrcode.react';
 import { 
   ClipboardList, Package, Cpu, QrCode, Plus, User, Clock, Layers, Search, Check, X, Calendar,
   Palette, Scissors, Printer, Sliders, Sparkles, ZoomIn, ZoomOut, FileText, PlusCircle, Table,
   Shield, Users, Lock, Edit2, Trash2, Tag, Scale, CalendarDays, FileEdit, Gift, Loader2, AlertTriangle,
-  Shirt, Box, Banknote, GripVertical, Download, Upload
+  Shirt, Box, Banknote, GripVertical, Download, Upload, ArrowUp, ArrowDown
 } from 'lucide-react';
 
 // ============================================================
@@ -301,6 +302,18 @@ export default function App() {
   const [selectedOrderDetails, setSelectedOrderDetails] = useState(null);
   const [isEditingOrder, setIsEditingOrder] = useState(false);
   const [orderEditDraft, setOrderEditDraft] = useState(null);
+  const [showAddItemForm, setShowAddItemForm] = useState(false);
+  const [addItemProductId, setAddItemProductId] = useState('');
+  const [addItemTierId, setAddItemTierId] = useState('');
+  const [addItemGender, setAddItemGender] = useState('men');
+  const [addItemQty, setAddItemQty] = useState(10);
+  const [addItemStations, setAddItemStations] = useState({});
+  const [addItemNotes, setAddItemNotes] = useState('');
+  const [addItemLayer1Mat, setAddItemLayer1Mat] = useState('');
+  const [addItemLayer2Mat, setAddItemLayer2Mat] = useState('');
+  const [addItemLayer3Mat, setAddItemLayer3Mat] = useState('');
+  const [addItemImageFile, setAddItemImageFile] = useState(null);
+  const [addItemImagePreview, setAddItemImagePreview] = useState('');
 
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [newEmpFirstName, setNewEmpFirstName] = useState('');
@@ -900,21 +913,19 @@ export default function App() {
     triggerNotification('success', `Zákazka ${orderId} bola zaradená do výroby (${itemsWithMeta.length} položiek) a materiál bol odpočítaný zo skladu.`);
   };
 
-  const handleReorderPriority = async (draggedItem, targetItem) => {
+  const handleMovePriority = async (item, direction) => {
     if (!hasPermission('edit_priority')) { triggerNotification('error', 'Nemáte oprávnenie meniť priority.'); return; }
-    if (!draggedItem || draggedItem.itemId === targetItem.itemId) return;
-    if (draggedItem.deliveryDate !== targetItem.deliveryDate) {
-      triggerNotification('error', 'Poradie priority sa dá meniť len medzi položkami s rovnakým termínom dodania.');
-      return;
-    }
-    const group = allItems.filter(i => i.deliveryDate === draggedItem.deliveryDate).sort((a, b) => a.priority - b.priority);
-    const withoutDragged = group.filter(i => i.itemId !== draggedItem.itemId);
-    const targetIndex = withoutDragged.findIndex(i => i.itemId === targetItem.itemId);
-    withoutDragged.splice(targetIndex, 0, draggedItem);
-    const reordered = withoutDragged.map((it, idx) => ({ itemId: it.itemId, orderId: it.orderId, priority: idx + 1 }));
+    const group = allItems.filter(i => i.deliveryDate === item.deliveryDate).sort((a, b) => a.priority - b.priority);
+    const currentIndex = group.findIndex(i => i.itemId === item.itemId);
+    const targetIndex = currentIndex + direction;
+    if (targetIndex < 0 || targetIndex >= group.length) return;
+
+    const reordered = [...group];
+    [reordered[currentIndex], reordered[targetIndex]] = [reordered[targetIndex], reordered[currentIndex]];
+    const withNewPriority = reordered.map((it, idx) => ({ itemId: it.itemId, orderId: it.orderId, priority: idx + 1 }));
 
     const byOrder = {};
-    reordered.forEach(r => { (byOrder[r.orderId] = byOrder[r.orderId] || []).push(r); });
+    withNewPriority.forEach(r => { (byOrder[r.orderId] = byOrder[r.orderId] || []).push(r); });
 
     for (const orderId of Object.keys(byOrder)) {
       const order = orders.find(o => o.id === orderId);
@@ -995,14 +1006,90 @@ export default function App() {
     setOrderEditDraft(prev => ({ ...prev, items: prev.items.map(it => it.itemId === itemId ? { ...it, imageUrl: '' } : it) }));
   };
 
+  const handleRemoveDraftItem = (itemId) => {
+    if (!window.confirm('Odstrániť túto položku zo zákazky? (Zmena sa uloží až po kliknutí na "Uložiť zmeny")')) return;
+    setOrderEditDraft(prev => ({ ...prev, items: prev.items.filter(it => it.itemId !== itemId) }));
+  };
+
+  const handleAddItemToExistingOrder = async () => {
+    if (!orderEditDraft) return;
+    const product = products.find(p => p.id === addItemProductId);
+    if (!product) { alert('Vyberte produkt.'); return; }
+    const tier = qualityTiers.find(t => t.id === addItemTierId);
+    const qtyNum = parseInt(addItemQty);
+    if (!qtyNum || qtyNum < 1) { alert('Zadajte platné množstvo (aspoň 1 ks).'); return; }
+    const activeStations = Object.keys(addItemStations).filter(k => addItemStations[k]);
+    if (activeStations.length === 0) { alert('Zaškrtnite aspoň jednu výrobnú stanicu.'); return; }
+
+    const neededList = [];
+    if (product.layer1) neededList.push({ layerName: 'Primárna látka', materialId: addItemLayer1Mat, qtyNeeded: calculateLayerConsumption(product, addItemGender, 'layer1', qtyNum) });
+    if (product.layer2 && addItemLayer2Mat) neededList.push({ layerName: 'Sekundárna látka', materialId: addItemLayer2Mat, qtyNeeded: calculateLayerConsumption(product, addItemGender, 'layer2', qtyNum) });
+    if (product.layer3 && addItemLayer3Mat) neededList.push({ layerName: 'Terciárna látka', materialId: addItemLayer3Mat, qtyNeeded: calculateLayerConsumption(product, addItemGender, 'layer3', qtyNum) });
+
+    let imageUrl = '';
+    if (addItemImageFile) {
+      const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${addItemImageFile.name}`;
+      const { error: upErr } = await supabase.storage.from('item-images').upload(path, addItemImageFile);
+      if (upErr) { triggerNotification('error', `Chyba pri nahrávaní obrázka: ${upErr.message}`); return; }
+      const { data: pub } = supabase.storage.from('item-images').getPublicUrl(path);
+      imageUrl = pub.publicUrl;
+    }
+
+    const newItemId = `${orderEditDraft.id}-x${Date.now().toString().slice(-6)}`;
+    const initialStatuses = {};
+    activeStations.forEach(sid => { initialStatuses[sid] = 'caka'; });
+
+    const newItem = {
+      itemId: newItemId, productId: product.id, productName: product.name, customCode: product.customCode,
+      qualityTier: tier?.name || '', gender: addItemGender, qty: qtyNum, notes: addItemNotes, imageUrl,
+      materialsNeeded: neededList, threadQtyM: product.threadM * qtyNum, priority: orderEditDraft.items.length + 1,
+      stationStatuses: initialStatuses, materialDeducted: false
+    };
+
+    setOrderEditDraft(prev => ({ ...prev, items: [...prev.items, newItem] }));
+    setAddItemProductId(''); setAddItemQty(10); setAddItemNotes(''); setAddItemImageFile(null); setAddItemImagePreview(''); setAddItemStations({});
+    setShowAddItemForm(false);
+    triggerNotification('success', `Položka "${product.name}" bola pridaná do zákazky. Nezabudni kliknúť na "Uložiť zmeny", inak sa pridanie neuloží.`);
+  };
+
   const handleSaveEditOrder = async () => {
     if (!hasPermission('create_order')) { triggerNotification('error', 'Nemáte prístup na úpravu zákaziek.'); return; }
     if (!orderEditDraft.customer.trim()) { alert('Vyplňte odberateľa.'); return; }
     if (!orderEditDraft.deliveryDate) { alert('Vyplňte termín dodania.'); return; }
-    const cleanedItems = orderEditDraft.items.map(it => ({ ...it, qty: parseInt(it.qty) && parseInt(it.qty) >= 1 ? parseInt(it.qty) : 1 }));
+
+    const originalItemIds = new Set((selectedOrderDetails.items || []).map(it => it.itemId));
+    const now = getFormattedDateTime();
+    const materialUpdates = [];
+
+    const cleanedItems = orderEditDraft.items.map(it => {
+      const cleanQty = parseInt(it.qty) && parseInt(it.qty) >= 1 ? parseInt(it.qty) : 1;
+      const isNewItem = !originalItemIds.has(it.itemId);
+      if (isNewItem && !it.materialDeducted && (it.materialsNeeded || []).length > 0) {
+        it.materialsNeeded.forEach(needed => {
+          const mat = materials.find(m => m.id === needed.materialId);
+          if (mat) {
+            const alreadyQueued = materialUpdates.find(u => u.id === mat.id);
+            const baseQty = alreadyQueued ? alreadyQueued.qty : mat.qty;
+            const baseHistory = alreadyQueued ? alreadyQueued.history : (mat.history || []);
+            const newQty = Math.max(0, parseFloat((baseQty - needed.qtyNeeded).toFixed(2)));
+            const newHist = [...baseHistory, { date: now, user: `${currentUser.firstName} ${currentUser.lastName}`, action: 'Odpísanie pre výrobu', change: -needed.qtyNeeded, note: `Zákazka ${orderEditDraft.id} • Dodatočne pridaná položka • ${it.productName} (${needed.layerName})` }];
+            if (alreadyQueued) { alreadyQueued.qty = newQty; alreadyQueued.history = newHist; }
+            else materialUpdates.push({ id: mat.id, qty: newQty, history: newHist });
+          }
+        });
+        return { ...it, qty: cleanQty, materialDeducted: true };
+      }
+      return { ...it, qty: cleanQty };
+    });
+
     const finalDraft = { ...orderEditDraft, items: cleanedItems };
     const { error } = await supabase.from('orders').update(mapOrderToDb(finalDraft)).eq('id', finalDraft.id);
     if (error) { triggerNotification('error', `Chyba: ${error.message}`); return; }
+
+    for (const mu of materialUpdates) {
+      await supabase.from('materials').update({ qty: mu.qty, history: mu.history }).eq('id', mu.id);
+    }
+
     setSelectedOrderDetails(finalDraft);
     setIsEditingOrder(false);
     setOrderEditDraft(null);
@@ -1415,7 +1502,7 @@ export default function App() {
                     <div className="flex items-center justify-end text-slate-400 text-[11px]"><span>Záznamov: <strong className="text-white font-bold">{sortedRows.length}</strong></span></div>
                   </div>
                   {hasPermission('edit_priority') && (
-                    <p className="text-[10px] text-slate-500 italic">Poradie priority zmeníš potiahnutím riadku (myšou za ikonku ⠿) — funguje len medzi položkami s rovnakým termínom dodania.</p>
+                    <p className="text-[10px] text-slate-500 italic">Poradie priority zmeníš šípkami ↑↓ pri čísle poradia — funguje len medzi položkami s rovnakým termínom dodania.</p>
                   )}
                   <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/20">
                     <table className="w-full text-left text-xs text-slate-300">
@@ -1439,19 +1526,20 @@ export default function App() {
                           .map(item => {
                           const stage = currentStageLabel(item);
                           const orderColor = colorForOrder(item.orderId);
-                          const draggable = hasPermission('edit_priority');
+                          const canReorder = hasPermission('edit_priority');
                           return (
                             <tr 
                               key={item.itemId} 
-                              draggable={draggable}
-                              onDragStart={() => setDraggedRowItem(item)}
-                              onDragOver={(e) => { if (draggable) e.preventDefault(); }}
-                              onDrop={() => draggable && handleReorderPriority(draggedRowItem, item)}
-                              className={`hover:bg-slate-800/40 border-l-4 ${orderColor.border} ${draggable ? 'cursor-move' : ''}`}
+                              className={`hover:bg-slate-800/40 border-l-4 ${orderColor.border}`}
                             >
                               <td className="px-4 py-3 text-center">
                                 <div className="flex items-center gap-1 justify-center">
-                                  {draggable && <GripVertical className="h-3.5 w-3.5 text-slate-600" />}
+                                  {canReorder && (
+                                    <div className="flex flex-col gap-0.5">
+                                      <button onClick={() => handleMovePriority(item, -1)} className="p-0.5 bg-slate-800 hover:bg-indigo-700 rounded text-slate-400 hover:text-white"><ArrowUp className="h-3 w-3" /></button>
+                                      <button onClick={() => handleMovePriority(item, 1)} className="p-0.5 bg-slate-800 hover:bg-indigo-700 rounded text-slate-400 hover:text-white"><ArrowDown className="h-3 w-3" /></button>
+                                    </div>
+                                  )}
                                   <span className="font-mono font-bold text-indigo-300">#{item.priority}</span>
                                 </div>
                               </td>
@@ -1864,7 +1952,7 @@ export default function App() {
                   <span className="text-xs text-slate-400 shrink-0">Chýba tu položka, ktorá by mala byť na tejto stanici (napr. omylom vynechaná)?</span>
                   <select value={addMissingItemId} onChange={(e) => setAddMissingItemId(e.target.value)} className="flex-1 w-full sm:w-auto bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white">
                     <option value="">-- Vyber položku --</option>
-                    {allItems.filter(it => !(activeStationFilter in (it.stationStatuses || {}))).map(it => (
+                    {allItems.filter(it => !it.stationStatuses[activeStationFilter] || it.stationStatuses[activeStationFilter] === 'neaktivne').map(it => (
                       <option key={it.itemId} value={it.itemId}>{it.itemId} • {it.customer} • {it.productName}</option>
                     ))}
                   </select>
@@ -2359,7 +2447,10 @@ export default function App() {
                     <div key={item.itemId} className="bg-slate-900 border border-slate-800 rounded-lg p-3 space-y-2">
                       <div className="flex items-center justify-between text-xs">
                         <span className="font-mono text-indigo-400 font-bold">#{idx + 1} • {item.itemId}</span>
-                        <span className="text-slate-300 font-bold">{item.productName}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-slate-300 font-bold">{item.productName}</span>
+                          <button type="button" onClick={() => handleRemoveDraftItem(item.itemId)} className="p-1 bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 rounded"><Trash2 className="h-3 w-3" /></button>
+                        </div>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         <div>
@@ -2391,6 +2482,116 @@ export default function App() {
                       </div>
                     </div>
                   ))}
+
+                  {!showAddItemForm ? (
+                    <button type="button" onClick={() => setShowAddItemForm(true)} className="w-full border-2 border-dashed border-indigo-800/50 hover:border-indigo-600 text-indigo-400 font-bold text-xs py-3 rounded-lg flex items-center justify-center gap-1.5"><Plus className="h-4 w-4" /> Pridať novú položku do tejto zákazky</button>
+                  ) : (
+                    <div className="bg-slate-900 border border-indigo-800/40 rounded-lg p-3 space-y-3">
+                      <span className="text-xs font-bold text-indigo-300 uppercase block">Nová položka</span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[10px] text-slate-500 mb-0.5">Produkt z katalógu</label>
+                          <select value={addItemProductId} onChange={(e) => {
+                              setAddItemProductId(e.target.value);
+                              const prod = products.find(p => p.id === e.target.value);
+                              if (prod) { setAddItemLayer1Mat(prod.layer1?.materialId || ''); setAddItemLayer2Mat(prod.layer2?.materialId || ''); setAddItemLayer3Mat(prod.layer3?.materialId || ''); }
+                            }} className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-xs text-white">
+                            <option value="">-- Vyber produkt --</option>
+                            {products.map(p => <option key={p.id} value={p.id}>{p.name} [{p.customCode}]</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-slate-500 mb-0.5">Úroveň vyhotovenia</label>
+                          <select value={addItemTierId} onChange={(e) => setAddItemTierId(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-xs text-white">
+                            <option value="">-- Vyber --</option>
+                            {qualityTiers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <div className="grid grid-cols-3 gap-1">
+                          {['men', 'women', 'children'].map(g => (
+                            <button type="button" key={g} onClick={() => setAddItemGender(g)} className={`py-1.5 text-center text-[10px] font-bold rounded ${addItemGender === g ? 'bg-indigo-600 text-white' : 'bg-slate-950 text-slate-400'}`}>{genderLabel(g)}</button>
+                          ))}
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-slate-500 mb-0.5">Množstvo (ks)</label>
+                          <input type="number" min="1" value={addItemQty} onChange={(e) => setAddItemQty(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-xs text-white" />
+                        </div>
+                        <div className="sm:col-span-1">
+                          <label className="block text-[10px] text-slate-500 mb-0.5">Poznámka</label>
+                          <input type="text" value={addItemNotes} onChange={(e) => setAddItemNotes(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-xs text-white" />
+                        </div>
+                      </div>
+                      {(() => {
+                        const prod = products.find(p => p.id === addItemProductId);
+                        if (!prod) return null;
+                        return (
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            {prod.layer1 && (
+                              <div>
+                                <label className="block text-[10px] text-slate-500 mb-0.5">Primárna látka</label>
+                                <select value={addItemLayer1Mat} onChange={(e) => setAddItemLayer1Mat(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-xs text-white">
+                                  {materials.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                </select>
+                              </div>
+                            )}
+                            {prod.layer2 && (
+                              <div>
+                                <label className="block text-[10px] text-slate-500 mb-0.5">Sekundárna látka</label>
+                                <select value={addItemLayer2Mat} onChange={(e) => setAddItemLayer2Mat(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-xs text-white">
+                                  <option value="">-- Nepoužiť --</option>
+                                  {materials.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                </select>
+                              </div>
+                            )}
+                            {prod.layer3 && (
+                              <div>
+                                <label className="block text-[10px] text-slate-500 mb-0.5">Terciárna látka</label>
+                                <select value={addItemLayer3Mat} onChange={(e) => setAddItemLayer3Mat(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-xs text-white">
+                                  <option value="">-- Nepoužiť --</option>
+                                  {materials.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                </select>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                      <div>
+                        <label className="block text-[10px] text-slate-500 mb-1">Výrobné stanice</label>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1">
+                          {STATION_ORDER.map(sid => {
+                            const cfg = STATION_CONFIGS[sid];
+                            const checked = !!addItemStations[sid];
+                            return (
+                              <label key={sid} className={`flex items-center gap-1 p-1.5 rounded cursor-pointer text-[10px] font-bold border ${checked ? 'bg-indigo-950/40 border-indigo-600 text-indigo-300' : 'bg-slate-950 border-slate-850 text-slate-400'}`}>
+                                <input type="checkbox" checked={checked} onChange={(e) => setAddItemStations({ ...addItemStations, [sid]: e.target.checked })} className="rounded bg-slate-900 border-slate-800 text-indigo-600" />
+                                {cfg.name}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-slate-500 mb-1">Náhľadový obrázok</label>
+                        {addItemImagePreview ? (
+                          <div className="flex items-center gap-2">
+                            <img src={addItemImagePreview} alt="" className="w-16 h-16 object-cover rounded-lg border border-slate-800" />
+                            <button type="button" onClick={() => { setAddItemImageFile(null); setAddItemImagePreview(''); }} className="bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 px-2 py-1 rounded text-[10px] font-bold">Odstrániť</button>
+                          </div>
+                        ) : (
+                          <label className="inline-flex items-center gap-1.5 border border-dashed border-slate-800 rounded-lg px-3 py-1.5 cursor-pointer hover:border-indigo-600 transition-colors text-[10px] text-slate-500">
+                            <Upload className="h-3.5 w-3.5" /> Nahrať obrázok
+                            <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files[0]; if (f) { setAddItemImageFile(f); setAddItemImagePreview(URL.createObjectURL(f)); } }} />
+                          </label>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <button type="button" onClick={handleAddItemToExistingOrder} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded text-xs uppercase">Pridať položku</button>
+                        <button type="button" onClick={() => setShowAddItemForm(false)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 rounded text-xs">Zrušiť</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex gap-2 pt-2">
@@ -2434,7 +2635,7 @@ export default function App() {
                       {item.notes && <p className="text-xs text-slate-400 italic print:text-black mt-1">Poznámka: {item.notes}</p>}
                     </div>
                     <div className="bg-white p-3 rounded-xl flex flex-col items-center border border-slate-300 shadow-sm shrink-0">
-                      <QrCode className="h-20 w-24 text-black" />
+                      <QRCodeSVG value={item.itemId} size={88} level="M" />
                       <span className="font-mono text-[9px] text-black font-extrabold mt-1">{item.itemId}</span>
                     </div>
                   </div>
