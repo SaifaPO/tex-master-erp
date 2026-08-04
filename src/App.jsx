@@ -83,7 +83,7 @@ const UNIT_OPTIONS = [
   { value: 'g', label: 'g (gramy — lepidlo, prášok)' },
   { value: 'kg', label: 'kg (kilogramy)' }
 ];
-const STATION_ORDER = Object.keys(STATION_CONFIGS);
+const STATION_ORDER = ['grafik', 'strihanie', 'laser', 'sublimacia', 'transfer', 'sietotlac', 'sitie', 'balenie'];
 
 // "Potlač" preset — ide len cez tieto stanice (bez laseru, strihania/kompletáže, sublimácie, šitia)
 const PRINT_ONLY_STATIONS = ['grafik', 'transfer', 'sietotlac', 'balenie'];
@@ -1463,63 +1463,68 @@ export default function App() {
                     <table className="w-full text-left border-collapse" style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top left', width: `${100 / (zoomLevel / 100)}%` }}>
                       <thead>
                         <tr className="bg-slate-900 border-b border-slate-800">
-                          <th className="p-3 text-xs font-bold text-slate-400 uppercase tracking-wider w-40 border-r border-slate-850">Stanica</th>
-                          {plannerDates.map(date => (<th key={date} className={`p-3 text-xs font-bold uppercase tracking-wider text-center border-r border-slate-850 ${isUrgentDate(date) ? 'bg-rose-900/50 text-rose-300' : 'text-slate-300'}`}>{formatDeliveryDate(date)}</th>))}
+                          <th className="p-3 text-xs font-bold text-slate-400 uppercase tracking-wider w-32 border-r border-slate-850 sticky left-0 bg-slate-900 z-10">Dátum</th>
+                          {STATION_ORDER.map(stationId => {
+                            const config = STATION_CONFIGS[stationId];
+                            return (
+                              <th key={stationId} className="p-3 text-xs font-bold text-slate-300 uppercase tracking-wider text-center border-r border-slate-850">
+                                <div className="flex items-center justify-center gap-1.5"><config.icon className="h-4 w-4 text-indigo-400 shrink-0" /><span>{config.name}</span></div>
+                              </th>
+                            );
+                          })}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800">
-                        {STATION_ORDER.map(stationId => {
-                          const config = STATION_CONFIGS[stationId];
-                          return (
-                            <tr key={stationId} className="hover:bg-slate-900/10">
-                              <td className="p-3 font-bold text-xs text-slate-200 bg-slate-900/40 border-r border-slate-850">
-                                <div className="flex items-center gap-1.5"><config.icon className="h-4 w-4 text-indigo-400 shrink-0" /><span>{config.name}</span></div>
-                              </td>
-                              {plannerDates.map(date => {
-                                const dayItems = allItems.filter(it => it.deliveryDate === date && it.stationStatuses[stationId] && it.stationStatuses[stationId] !== 'neaktivne').sort((a, b) => a.priority - b.priority);
-                                return (
-                                  <td key={date} className="p-1 border-r border-slate-850 align-top min-h-[110px] bg-slate-950/15">
-                                    <div className="grid grid-cols-1 gap-1">
-                                      {dayItems.map(item => {
-                                        const statusId = item.stationStatuses[stationId];
-                                        const statusCfg = config.statuses.find(s => s.id === statusId) || config.statuses[0];
-                                        const orderColor = colorForOrder(item.orderId);
-                                        return (
-                                          <div 
-                                            key={item.itemId} 
-                                            onClick={() => openOrderDetails(orders.find(o => o.id === item.orderId))} 
-                                            className={`bg-slate-900 hover:bg-slate-800 border-l-4 ${orderColor.border} border-t border-r border-b border-slate-750 p-2 rounded cursor-pointer transition-all flex flex-col justify-between text-[10px] space-y-1 shadow hover:scale-[1.02] transform`}
-                                          >
-                                            <div className="flex items-center justify-between">
-                                              <span className="font-mono font-bold text-indigo-400">#{item.priority} • {item.itemId}</span>
-                                              <div className="flex items-center gap-1">
-                                                <CashBadge paymentType={item.paymentType} size="small" />
-                                                <span className="text-slate-400 font-bold">{item.qty}ks</span>
-                                              </div>
+                        {plannerDates.map(date => (
+                          <tr key={date} className="hover:bg-slate-900/10">
+                            <td className={`p-3 font-bold text-xs bg-slate-900/40 border-r border-slate-850 sticky left-0 z-10 ${isUrgentDate(date) ? 'bg-rose-900/50 text-rose-300' : 'text-slate-200'}`}>
+                              {formatDeliveryDate(date)}
+                            </td>
+                            {STATION_ORDER.map(stationId => {
+                              const config = STATION_CONFIGS[stationId];
+                              const dayItems = allItems.filter(it => it.deliveryDate === date && it.stationStatuses[stationId] && it.stationStatuses[stationId] !== 'neaktivne').sort((a, b) => a.priority - b.priority);
+                              return (
+                                <td key={stationId} className="p-1 border-r border-slate-850 align-top min-h-[110px] bg-slate-950/15">
+                                  <div className="grid grid-cols-1 gap-1">
+                                    {dayItems.map(item => {
+                                      const statusId = item.stationStatuses[stationId];
+                                      const statusCfg = config.statuses.find(s => s.id === statusId) || config.statuses[0];
+                                      const orderColor = colorForOrder(item.orderId);
+                                      return (
+                                        <div 
+                                          key={item.itemId} 
+                                          onClick={() => openOrderDetails(orders.find(o => o.id === item.orderId))} 
+                                          className={`bg-slate-900 hover:bg-slate-800 border-l-4 ${orderColor.border} border-t border-r border-b border-slate-750 p-2 rounded cursor-pointer transition-all flex flex-col justify-between text-[10px] space-y-1 shadow hover:scale-[1.02] transform`}
+                                        >
+                                          <div className="flex items-center justify-between">
+                                            <span className="font-mono font-bold text-indigo-400">#{item.priority} • {item.itemId}</span>
+                                            <div className="flex items-center gap-1">
+                                              <CashBadge paymentType={item.paymentType} size="small" />
+                                              <span className="text-slate-400 font-bold">{item.qty}ks</span>
                                             </div>
-                                            <p className="font-extrabold text-slate-100 truncate">{item.customer}</p>
-                                            <p className="text-[9px] text-slate-300 truncate">{item.productName} ({item.qualityTier})</p>
-                                            <select
-                                              value={statusId}
-                                              onClick={(e) => e.stopPropagation()}
-                                              onChange={(e) => updateStationStatus(item.orderId, item.itemId, stationId, e.target.value)}
-                                              disabled={!hasPermission('update_status')}
-                                              className={`text-[9px] px-1 py-0.5 rounded text-center font-bold ${statusCfg.color} truncate w-full focus:outline-none`}
-                                            >
-                                              {config.statuses.filter(s => s.id !== 'neaktivne').map(st => (
-                                                <option key={st.id} value={st.id} className="bg-slate-900 text-slate-300">{st.label}</option>
-                                              ))}
-                                            </select>
                                           </div>
-                                        );
-                                      })}
-                                    </div>
-                                  </td>
-                                );
-                              })}
-                            </tr>
-                          );
-                        })}
+                                          <p className="font-extrabold text-slate-100 truncate">{item.customer}</p>
+                                          <p className="text-[9px] text-slate-300 truncate">{item.productName} ({item.qualityTier})</p>
+                                          <select
+                                            value={statusId}
+                                            onClick={(e) => e.stopPropagation()}
+                                            onChange={(e) => updateStationStatus(item.orderId, item.itemId, stationId, e.target.value)}
+                                            disabled={!hasPermission('update_status')}
+                                            className={`text-[9px] px-1 py-0.5 rounded text-center font-bold ${statusCfg.color} truncate w-full focus:outline-none`}
+                                          >
+                                            {config.statuses.filter(s => s.id !== 'neaktivne').map(st => (
+                                              <option key={st.id} value={st.id} className="bg-slate-900 text-slate-300">{st.label}</option>
+                                            ))}
+                                          </select>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
                       </tbody>
                     </table>
                   </div>
