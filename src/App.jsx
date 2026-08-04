@@ -85,6 +85,19 @@ const UNIT_OPTIONS = [
 ];
 const STATION_ORDER = Object.keys(STATION_CONFIGS);
 
+// "Potlač" preset — ide len cez tieto stanice (bez laseru, strihania/kompletáže, sublimácie, šitia)
+const PRINT_ONLY_STATIONS = ['grafik', 'transfer', 'sietotlac', 'balenie'];
+function buildAllStationsPreset() {
+  const obj = {};
+  STATION_ORDER.forEach(sid => { obj[sid] = true; });
+  return obj;
+}
+function buildPrintOnlyPreset() {
+  const obj = {};
+  STATION_ORDER.forEach(sid => { obj[sid] = PRINT_ONLY_STATIONS.includes(sid); });
+  return obj;
+}
+
 // Bežná paleta farieb textilu pre rýchly výber pri zaraďovaní do skladu
 const COLOR_PALETTE = [
   { name: 'Biela', hex: '#FFFFFF' },
@@ -246,7 +259,7 @@ export default function App() {
   const [selectedLayer1Mat, setSelectedLayer1Mat] = useState('');
   const [selectedLayer2Mat, setSelectedLayer2Mat] = useState('');
   const [selectedLayer3Mat, setSelectedLayer3Mat] = useState('');
-  const [selectedStations, setSelectedStations] = useState({});
+  const [selectedStations, setSelectedStations] = useState(buildAllStationsPreset());
   const [itemNotes, setItemNotes] = useState('');
   const [itemImageFile, setItemImageFile] = useState(null);
   const [itemImagePreview, setItemImagePreview] = useState('');
@@ -307,7 +320,7 @@ export default function App() {
   const [addItemTierId, setAddItemTierId] = useState('');
   const [addItemGender, setAddItemGender] = useState('men');
   const [addItemQty, setAddItemQty] = useState(10);
-  const [addItemStations, setAddItemStations] = useState({});
+  const [addItemStations, setAddItemStations] = useState(buildAllStationsPreset());
   const [addItemNotes, setAddItemNotes] = useState('');
   const [addItemLayer1Mat, setAddItemLayer1Mat] = useState('');
   const [addItemLayer2Mat, setAddItemLayer2Mat] = useState('');
@@ -848,6 +861,7 @@ export default function App() {
     setItemNotes('');
     setItemImageFile(null);
     setItemImagePreview('');
+    setSelectedStations(buildAllStationsPreset());
     triggerNotification('success', `Položka "${selectedProduct.name}" pridaná do zoznamu zákazky.`);
   };
 
@@ -1683,6 +1697,10 @@ export default function App() {
                     <div className="space-y-4 bg-slate-900/60 p-4 rounded-xl border border-slate-800">
                       <h3 className="font-bold text-sm text-slate-200 flex items-center gap-1.5 border-b border-slate-800 pb-2"><Sliders className="h-4 w-4 text-indigo-400" /> Výrobné stanice pre túto položku</h3>
                       <div className="grid grid-cols-2 gap-1.5">
+                        <button type="button" onClick={() => setSelectedStations(buildAllStationsPreset())} className="py-1.5 text-center text-[11px] font-bold rounded bg-indigo-600 hover:bg-indigo-700 text-white">Výroba (všetko)</button>
+                        <button type="button" onClick={() => setSelectedStations(buildPrintOnlyPreset())} className="py-1.5 text-center text-[11px] font-bold rounded bg-slate-800 hover:bg-slate-700 text-slate-200">Len potlač</button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-1.5">
                         {STATION_ORDER.map(sid => {
                           const cfg = STATION_CONFIGS[sid];
                           const checked = !!selectedStations[sid];
@@ -2505,6 +2523,10 @@ export default function App() {
                         {item.imageUrl ? (
                           <div className="flex items-center gap-2">
                             <img src={item.imageUrl} alt="" className="w-16 h-16 object-cover rounded-lg border border-slate-800" />
+                            <label className="inline-flex items-center gap-1.5 border border-dashed border-slate-800 rounded-lg px-2 py-1.5 cursor-pointer hover:border-indigo-600 transition-colors text-[10px] text-slate-400 font-bold">
+                              <Upload className="h-3 w-3" /> Zmeniť obrázok
+                              <input type="file" accept="image/*" className="hidden" onChange={(e) => handleDraftItemImageChange(item.itemId, e.target.files[0])} />
+                            </label>
                             <button type="button" onClick={() => handleDraftItemImageRemove(item.itemId)} className="bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 px-2 py-1 rounded text-[10px] font-bold">Odstrániť obrázok</button>
                           </div>
                         ) : (
@@ -2513,12 +2535,13 @@ export default function App() {
                             <input type="file" accept="image/*" className="hidden" onChange={(e) => handleDraftItemImageChange(item.itemId, e.target.files[0])} />
                           </label>
                         )}
+                        <p className="text-[9px] text-slate-600 italic mt-1">Zmena sa uloží až po kliknutí na "Uložiť zmeny" nižšie.</p>
                       </div>
                     </div>
                   ))}
 
                   {!showAddItemForm ? (
-                    <button type="button" onClick={() => setShowAddItemForm(true)} className="w-full border-2 border-dashed border-indigo-800/50 hover:border-indigo-600 text-indigo-400 font-bold text-xs py-3 rounded-lg flex items-center justify-center gap-1.5"><Plus className="h-4 w-4" /> Pridať novú položku do tejto zákazky</button>
+                    <button type="button" onClick={() => { setShowAddItemForm(true); setAddItemStations(buildAllStationsPreset()); }} className="w-full border-2 border-dashed border-indigo-800/50 hover:border-indigo-600 text-indigo-400 font-bold text-xs py-3 rounded-lg flex items-center justify-center gap-1.5"><Plus className="h-4 w-4" /> Pridať novú položku do tejto zákazky</button>
                   ) : (
                     <div className="bg-slate-900 border border-indigo-800/40 rounded-lg p-3 space-y-3">
                       <span className="text-xs font-bold text-indigo-300 uppercase block">Nová položka</span>
@@ -2593,6 +2616,10 @@ export default function App() {
                       })()}
                       <div>
                         <label className="block text-[10px] text-slate-500 mb-1">Výrobné stanice</label>
+                        <div className="grid grid-cols-2 gap-1 mb-1.5">
+                          <button type="button" onClick={() => setAddItemStations(buildAllStationsPreset())} className="py-1 text-center text-[10px] font-bold rounded bg-indigo-600 hover:bg-indigo-700 text-white">Výroba (všetko)</button>
+                          <button type="button" onClick={() => setAddItemStations(buildPrintOnlyPreset())} className="py-1 text-center text-[10px] font-bold rounded bg-slate-800 hover:bg-slate-700 text-slate-200">Len potlač</button>
+                        </div>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-1">
                           {STATION_ORDER.map(sid => {
                             const cfg = STATION_CONFIGS[sid];
