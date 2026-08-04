@@ -940,6 +940,33 @@ export default function App() {
     triggerNotification('success', 'Poradie priorít bolo upravené.');
   };
 
+  // Presun myšou (drag & drop) — funguje popri šípkach, hodí sa hlavne na počítači/myš.
+  // Na dotykových tabletoch je spoľahlivejšie použiť šípky ↑↓.
+  const handleDragDropReorder = async (draggedItem, targetItem) => {
+    if (!hasPermission('edit_priority')) { triggerNotification('error', 'Nemáte oprávnenie meniť priority.'); return; }
+    if (!draggedItem || draggedItem.itemId === targetItem.itemId) return;
+    const group = allItems.slice().sort((a, b) => a.priority - b.priority);
+    const withoutDragged = group.filter(i => i.itemId !== draggedItem.itemId);
+    const targetIndex = withoutDragged.findIndex(i => i.itemId === targetItem.itemId);
+    withoutDragged.splice(targetIndex, 0, draggedItem);
+    const withNewPriority = withoutDragged.map((it, idx) => ({ itemId: it.itemId, orderId: it.orderId, priority: idx + 1 }));
+
+    const byOrder = {};
+    withNewPriority.forEach(r => { (byOrder[r.orderId] = byOrder[r.orderId] || []).push(r); });
+
+    for (const orderId of Object.keys(byOrder)) {
+      const order = orders.find(o => o.id === orderId);
+      if (!order) continue;
+      const updates = byOrder[orderId];
+      const newItems = order.items.map(it => {
+        const upd = updates.find(u => u.itemId === it.itemId);
+        return upd ? { ...it, priority: upd.priority } : it;
+      });
+      await supabase.from('orders').update({ items: newItems }).eq('id', orderId);
+    }
+    triggerNotification('success', 'Poradie priorít bolo upravené.');
+  };
+
   const openOrderDetails = (order) => {
     setIsEditingOrder(false);
     setOrderEditDraft(null);
@@ -1530,15 +1557,22 @@ export default function App() {
                           return (
                             <tr 
                               key={item.itemId} 
-                              className={`hover:bg-slate-800/40 border-l-4 ${orderColor.border}`}
+                              draggable={canReorder}
+                              onDragStart={() => setDraggedRowItem(item)}
+                              onDragOver={(e) => { if (canReorder) e.preventDefault(); }}
+                              onDrop={() => canReorder && handleDragDropReorder(draggedRowItem, item)}
+                              className={`hover:bg-slate-800/40 border-l-4 ${orderColor.border} ${canReorder ? 'cursor-move' : ''}`}
                             >
                               <td className="px-4 py-3 text-center">
                                 <div className="flex items-center gap-1 justify-center">
                                   {canReorder && (
-                                    <div className="flex flex-col gap-0.5">
-                                      <button onClick={() => handleMovePriority(item, -1)} className="p-0.5 bg-slate-800 hover:bg-indigo-700 rounded text-slate-400 hover:text-white"><ArrowUp className="h-3 w-3" /></button>
-                                      <button onClick={() => handleMovePriority(item, 1)} className="p-0.5 bg-slate-800 hover:bg-indigo-700 rounded text-slate-400 hover:text-white"><ArrowDown className="h-3 w-3" /></button>
-                                    </div>
+                                    <>
+                                      <GripVertical className="h-3.5 w-3.5 text-slate-600 shrink-0" />
+                                      <div className="flex flex-col gap-0.5">
+                                        <button onClick={() => handleMovePriority(item, -1)} className="p-0.5 bg-slate-800 hover:bg-indigo-700 rounded text-slate-400 hover:text-white"><ArrowUp className="h-3 w-3" /></button>
+                                        <button onClick={() => handleMovePriority(item, 1)} className="p-0.5 bg-slate-800 hover:bg-indigo-700 rounded text-slate-400 hover:text-white"><ArrowDown className="h-3 w-3" /></button>
+                                      </div>
+                                    </>
                                   )}
                                   <span className="font-mono font-bold text-indigo-300">#{item.priority}</span>
                                 </div>
