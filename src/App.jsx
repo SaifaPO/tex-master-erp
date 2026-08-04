@@ -861,7 +861,7 @@ export default function App() {
 
     const orderId = `ZAK-${Date.now()}`;
     const allExistingItems = flattenOrderItems(orders);
-    const sameDayCount = allExistingItems.filter(i => i.deliveryDate === newOrderDeliveryDate).length;
+    const sameDayCount = allExistingItems.length;
     const now = getFormattedDateTime();
 
     // Okamžitý odpočet materiálu zo skladu pri vytvorení zákazky (pre všetky vrstvy: primárnu, sekundárnu, terciárnu)
@@ -915,7 +915,7 @@ export default function App() {
 
   const handleMovePriority = async (item, direction) => {
     if (!hasPermission('edit_priority')) { triggerNotification('error', 'Nemáte oprávnenie meniť priority.'); return; }
-    const group = allItems.filter(i => i.deliveryDate === item.deliveryDate).sort((a, b) => a.priority - b.priority);
+    const group = allItems.slice().sort((a, b) => a.priority - b.priority);
     const currentIndex = group.findIndex(i => i.itemId === item.itemId);
     const targetIndex = currentIndex + direction;
     if (targetIndex < 0 || targetIndex >= group.length) return;
@@ -1042,7 +1042,7 @@ export default function App() {
     const newItem = {
       itemId: newItemId, productId: product.id, productName: product.name, customCode: product.customCode,
       qualityTier: tier?.name || '', gender: addItemGender, qty: qtyNum, notes: addItemNotes, imageUrl,
-      materialsNeeded: neededList, threadQtyM: product.threadM * qtyNum, priority: orderEditDraft.items.length + 1,
+      materialsNeeded: neededList, threadQtyM: product.threadM * qtyNum, priority: allItems.length + 1,
       stationStatuses: initialStatuses, materialDeducted: false
     };
 
@@ -1502,7 +1502,7 @@ export default function App() {
                     <div className="flex items-center justify-end text-slate-400 text-[11px]"><span>Záznamov: <strong className="text-white font-bold">{sortedRows.length}</strong></span></div>
                   </div>
                   {hasPermission('edit_priority') && (
-                    <p className="text-[10px] text-slate-500 italic">Poradie priority zmeníš šípkami ↑↓ pri čísle poradia — funguje len medzi položkami s rovnakým termínom dodania.</p>
+                    <p className="text-[10px] text-slate-500 italic">Poradie priority zmeníš šípkami ↑↓ pri čísle poradia — posúva sa naprieč celým zoznamom, bez ohľadu na termín dodania.</p>
                   )}
                   <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/20">
                     <table className="w-full text-left text-xs text-slate-300">
@@ -1522,7 +1522,7 @@ export default function App() {
                       <tbody className="divide-y divide-slate-800">
                         {sortedRows
                           .slice()
-                          .sort((a, b) => (a.deliveryDate || '').localeCompare(b.deliveryDate || '') || a.priority - b.priority)
+                          .sort((a, b) => a.priority - b.priority)
                           .map(item => {
                           const stage = currentStageLabel(item);
                           const orderColor = colorForOrder(item.orderId);
