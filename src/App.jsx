@@ -28,49 +28,42 @@ const STATION_CONFIGS = {
   strihanie: { name: 'Strihanie & Kompletáž', icon: Scissors, statuses: [
     { id: 'neaktivne', label: 'Neaktívne', color: 'bg-slate-700 text-slate-300' },
     { id: 'caka', label: 'Čaká sa', color: 'bg-slate-600 text-slate-200' },
-    { id: 'priprava', label: 'Príprava', color: 'bg-amber-600 text-white' },
     { id: 'strihanie', label: 'Strihá & kompletuje sa', color: 'bg-sky-600 text-white' },
     { id: 'hotove', label: 'Hotové', color: 'bg-emerald-600 text-white' }
   ]},
   transfer: { name: 'Transfer tlač', icon: Layers, statuses: [
     { id: 'neaktivne', label: 'Neaktívne', color: 'bg-slate-700 text-slate-300' },
     { id: 'caka', label: 'Čaká sa', color: 'bg-slate-600 text-slate-200' },
-    { id: 'priprava', label: 'Príprava', color: 'bg-amber-600 text-white' },
     { id: 'tlac', label: 'Tlačí sa', color: 'bg-sky-600 text-white' },
     { id: 'hotove', label: 'Hotové', color: 'bg-emerald-600 text-white' }
   ]},
   sietotlac: { name: 'Sieťotlač', icon: Palette, statuses: [
     { id: 'neaktivne', label: 'Neaktívne', color: 'bg-slate-700 text-slate-300' },
     { id: 'caka', label: 'Čaká sa', color: 'bg-slate-600 text-slate-200' },
-    { id: 'priprava', label: 'Príprava', color: 'bg-amber-600 text-white' },
     { id: 'tlac', label: 'Tlačí sa', color: 'bg-sky-600 text-white' },
     { id: 'hotove', label: 'Hotové', color: 'bg-emerald-600 text-white' }
   ]},
   laser: { name: 'Laser', icon: Cpu, statuses: [
     { id: 'neaktivne', label: 'Neaktívne', color: 'bg-slate-700 text-slate-300' },
     { id: 'caka', label: 'Čaká sa', color: 'bg-slate-600 text-slate-200' },
-    { id: 'priprava', label: 'Príprava', color: 'bg-amber-600 text-white' },
     { id: 'rezanie', label: 'Rezanie', color: 'bg-sky-600 text-white' },
     { id: 'hotove', label: 'Hotové', color: 'bg-emerald-600 text-white' }
   ]},
   sublimacia: { name: 'Sublimácia', icon: Sparkles, statuses: [
     { id: 'neaktivne', label: 'Neaktívne', color: 'bg-slate-700 text-slate-300' },
     { id: 'caka', label: 'Čaká sa', color: 'bg-slate-600 text-slate-200' },
-    { id: 'priprava', label: 'Príprava', color: 'bg-amber-600 text-white' },
     { id: 'tlac', label: 'Tlačí sa', color: 'bg-sky-600 text-white' },
     { id: 'hotove', label: 'Hotové', color: 'bg-emerald-600 text-white' }
   ]},
   sitie: { name: 'Šitie', icon: Shirt, statuses: [
     { id: 'neaktivne', label: 'Neaktívne', color: 'bg-slate-700 text-slate-300' },
     { id: 'caka', label: 'Čaká sa', color: 'bg-slate-600 text-slate-200' },
-    { id: 'priprava', label: 'Príprava', color: 'bg-amber-600 text-white' },
     { id: 'sije', label: 'Šije sa', color: 'bg-sky-600 text-white' },
     { id: 'hotove', label: 'Hotové', color: 'bg-emerald-600 text-white' }
   ]},
   balenie: { name: 'Balenie', icon: Box, statuses: [
     { id: 'neaktivne', label: 'Neaktívne', color: 'bg-slate-700 text-slate-300' },
     { id: 'caka', label: 'Čaká sa', color: 'bg-slate-600 text-slate-200' },
-    { id: 'priprava', label: 'Príprava', color: 'bg-amber-600 text-white' },
     { id: 'prebieha', label: 'Balí sa', color: 'bg-sky-600 text-white' },
     { id: 'hotove', label: 'Hotové', color: 'bg-emerald-600 text-white' }
   ]}
@@ -157,8 +150,8 @@ const FALLBACK_ACL = {
 const mapMaterialFromDb = (r) => ({ id: r.id, name: r.name, color: r.color, colorHex: r.color_hex || '', width: r.width, weight: r.weight, pricePerM: r.price_per_m, qty: r.qty, unit: r.unit, minQty: r.min_qty, warehouseId: r.warehouse_id || 'sklad-1', history: r.history || [] });
 const mapMaterialToDb = (m) => ({ id: m.id, name: m.name, color: m.color, color_hex: m.colorHex || null, width: m.width, weight: m.weight, price_per_m: m.pricePerM, qty: m.qty, unit: m.unit, min_qty: m.minQty, warehouse_id: m.warehouseId, history: m.history });
 
-const mapProductFromDb = (r) => ({ id: r.id, customCode: r.custom_code, name: r.name, sports: r.sports || [], layer1: r.layer1, layer2: r.layer2, layer3: r.layer3, threadM: r.thread_m });
-const mapProductToDb = (p) => ({ id: p.id, custom_code: p.customCode, name: p.name, sports: p.sports, layer1: p.layer1, layer2: p.layer2, layer3: p.layer3, thread_m: p.threadM });
+const mapProductFromDb = (r) => ({ id: r.id, customCode: r.custom_code, name: r.name, sports: r.sports || [], layer1: r.layer1, layer2: r.layer2, layer3: r.layer3, threadM: r.thread_m, womenRatioPercent: r.women_ratio_percent ?? 90, childrenRatioPercent: r.children_ratio_percent ?? 65 });
+const mapProductToDb = (p) => ({ id: p.id, custom_code: p.customCode, name: p.name, sports: p.sports, layer1: p.layer1, layer2: p.layer2, layer3: p.layer3, thread_m: p.threadM, women_ratio_percent: p.womenRatioPercent, children_ratio_percent: p.childrenRatioPercent });
 
 const mapTierFromDb = (r) => ({ id: r.id, name: r.name, fit: r.fit, ventilation: r.ventilation, desc: r.description });
 const mapTierToDb = (t) => ({ id: t.id, name: t.name, fit: t.fit, ventilation: t.ventilation, description: t.desc });
@@ -298,6 +291,8 @@ export default function App() {
   const [pendingItems, setPendingItems] = useState([]);
 
   const [selectedMaterialForDetail, setSelectedMaterialForDetail] = useState(null);
+  const [isEditingMaterialDetails, setIsEditingMaterialDetails] = useState(false);
+  const [materialEditDraft, setMaterialEditDraft] = useState(null);
   const [stockCorrectionQty, setStockCorrectionQty] = useState('');
   const [stockCorrectionType, setStockCorrectionType] = useState('Pridanie na sklad');
   const [stockCorrectionNote, setStockCorrectionNote] = useState('');
@@ -327,6 +322,14 @@ export default function App() {
   const [newModelPrimary, setNewModelPrimary] = useState('');
   const [newModelSecondary, setNewModelSecondary] = useState('');
   const [newModelTertiary, setNewModelTertiary] = useState('');
+  const [newModelLayer1Lt5, setNewModelLayer1Lt5] = useState('');
+  const [newModelLayer1Ge5, setNewModelLayer1Ge5] = useState('');
+  const [newModelLayer2Lt5, setNewModelLayer2Lt5] = useState('');
+  const [newModelLayer2Ge5, setNewModelLayer2Ge5] = useState('');
+  const [newModelLayer3Lt5, setNewModelLayer3Lt5] = useState('');
+  const [newModelLayer3Ge5, setNewModelLayer3Ge5] = useState('');
+  const [newModelWomenRatio, setNewModelWomenRatio] = useState(90);
+  const [newModelChildrenRatio, setNewModelChildrenRatio] = useState(65);
 
   const [newSportInput, setNewSportInput] = useState('');
   const [editingSportIndex, setEditingSportIndex] = useState(null);
@@ -654,6 +657,36 @@ export default function App() {
     triggerNotification('success', 'Položka bola presunutá do iného skladu.');
   };
 
+  const handleStartEditMaterialDetails = () => {
+    setMaterialEditDraft({ ...selectedMaterialForDetail });
+    setIsEditingMaterialDetails(true);
+  };
+
+  const handleCancelEditMaterialDetails = () => {
+    setIsEditingMaterialDetails(false);
+    setMaterialEditDraft(null);
+  };
+
+  const handleSaveMaterialDetails = async () => {
+    if (!hasPermission('edit_stock')) { triggerNotification('error', 'Nemáte prístup ku správe skladu.'); return; }
+    if (!materialEditDraft.name.trim()) { alert('Zadajte názov materiálu.'); return; }
+    const { error } = await supabase.from('materials').update({
+      name: materialEditDraft.name,
+      color: materialEditDraft.color,
+      color_hex: materialEditDraft.colorHex || null,
+      width: materialEditDraft.width ? parseInt(materialEditDraft.width) : null,
+      weight: materialEditDraft.weight ? parseInt(materialEditDraft.weight) : null,
+      unit: materialEditDraft.unit,
+      price_per_m: parseFloat(materialEditDraft.pricePerM) || 0,
+      min_qty: parseFloat(materialEditDraft.minQty) || 0
+    }).eq('id', materialEditDraft.id);
+    if (error) { triggerNotification('error', error.message); return; }
+    setSelectedMaterialForDetail(materialEditDraft);
+    setIsEditingMaterialDetails(false);
+    setMaterialEditDraft(null);
+    triggerNotification('success', 'Údaje o položke boli upravené.');
+  };
+
   // --- SADZBY (náčrt na budúce sledovanie nákladov) ---
   const handleUpdateCostRate = async (stationId, field, value) => {
     if (!hasPermission('view_reports')) return;
@@ -771,9 +804,19 @@ export default function App() {
 
   const calculateLayerConsumption = (product, gender, layerKey, qty) => {
     if (!product || !product[layerKey]) return 0;
-    const rates = product[layerKey].consumption[gender];
-    const rate = qty >= 5 ? rates.ge5 : rates.lt5;
-    return parseFloat((rate * qty).toFixed(2));
+    const consumption = product[layerKey].consumption;
+    if (consumption.men) {
+      // starší formát - pre každé pohlavie zvlášť zadaná spotreba
+      const rates = consumption[gender] || consumption.men;
+      const rate = qty >= 5 ? rates.ge5 : rates.lt5;
+      return parseFloat((rate * qty).toFixed(2));
+    }
+    // nový formát - základná (pánska) spotreba + percentuálny pomer pre dámsky/detský strih
+    const baseRate = qty >= 5 ? (consumption.ge5 || 0) : (consumption.lt5 || 0);
+    let ratio = 1;
+    if (gender === 'women') ratio = (product.womenRatioPercent ?? 90) / 100;
+    if (gender === 'children') ratio = (product.childrenRatioPercent ?? 65) / 100;
+    return parseFloat((baseRate * ratio * qty).toFixed(2));
   };
 
   const handleSaveModel = async (e) => {
@@ -788,15 +831,18 @@ export default function App() {
       if (!newModelName || !newModelCode) { alert('Zadajte kód a názov modelu.'); return; }
       const created = {
         id: `prod-${Date.now()}`, customCode: newModelCode, name: newModelName, sports: newModelSports,
-        layer1: newModelPrimary ? { materialId: newModelPrimary, alternativeIds: [], consumption: { men: { lt5: 1.30, ge5: 1.10 }, women: { lt5: 1.15, ge5: 0.95 }, children: { lt5: 0.85, ge5: 0.70 } } } : null,
-        layer2: newModelSecondary ? { materialId: newModelSecondary, alternativeIds: [], consumption: { men: { lt5: 0.25, ge5: 0.20 }, women: { lt5: 0.20, ge5: 0.15 }, children: { lt5: 0.15, ge5: 0.10 } } } : null,
-        layer3: newModelTertiary ? { materialId: newModelTertiary, alternativeIds: [], consumption: { men: { lt5: 1.35, ge5: 1.15 }, women: { lt5: 1.20, ge5: 1.00 }, children: { lt5: 0.90, ge5: 0.75 } } } : null,
+        layer1: newModelPrimary ? { materialId: newModelPrimary, alternativeIds: [], consumption: { lt5: parseFloat(newModelLayer1Lt5) || 0, ge5: parseFloat(newModelLayer1Ge5) || 0 } } : null,
+        layer2: newModelSecondary ? { materialId: newModelSecondary, alternativeIds: [], consumption: { lt5: parseFloat(newModelLayer2Lt5) || 0, ge5: parseFloat(newModelLayer2Ge5) || 0 } } : null,
+        layer3: newModelTertiary ? { materialId: newModelTertiary, alternativeIds: [], consumption: { lt5: parseFloat(newModelLayer3Lt5) || 0, ge5: parseFloat(newModelLayer3Ge5) || 0 } } : null,
+        womenRatioPercent: parseFloat(newModelWomenRatio) || 90,
+        childrenRatioPercent: parseFloat(newModelChildrenRatio) || 65,
         threadM: 15
       };
       const { error } = await supabase.from('products').insert(mapProductToDb(created));
       if (error) { triggerNotification('error', error.message); return; }
-      setNewModelCode('');
-      setNewModelName('');
+      setNewModelCode(''); setNewModelName('');
+      setNewModelLayer1Lt5(''); setNewModelLayer1Ge5(''); setNewModelLayer2Lt5(''); setNewModelLayer2Ge5(''); setNewModelLayer3Lt5(''); setNewModelLayer3Ge5('');
+      setNewModelWomenRatio(90); setNewModelChildrenRatio(65);
       triggerNotification('success', `Model "${created.name}" pridaný do katalógu.`);
     }
   };
@@ -1252,17 +1298,17 @@ export default function App() {
         isDeductedNow = true;
       }
 
-      // Sledovanie, kto na stanici pracuje a koľko to trvalo (od kliknutia "Príprava" po "Hotové")
+      // Sledovanie, kto na stanici pracuje a koľko to trvalo (od prvého odkliknutia z "Čaká sa" po "Hotové")
       const existingMeta = item.stationMeta?.[stationId] || {};
       let newMeta = { ...existingMeta };
-      if (statusId === 'priprava' && !existingMeta.startedAt) {
+      if (statusId !== 'neaktivne' && statusId !== 'caka' && !existingMeta.startedAt) {
         newMeta = { ...newMeta, startedAt: now, assignedEmployeeId: currentUser.id, assignedEmployeeName: currentUser.firstName, assignedEmployeeAvatar: currentUser.avatar || '' };
       }
-      if (statusId !== 'neaktivne' && statusId !== 'caka' && statusId !== 'priprava') {
+      if (statusId !== 'neaktivne' && statusId !== 'caka') {
         newMeta = { ...newMeta, assignedEmployeeId: currentUser.id, assignedEmployeeName: currentUser.firstName, assignedEmployeeAvatar: currentUser.avatar || '' };
       }
       if (statusId === 'hotove' && !existingMeta.completedAt) {
-        const started = parseFormattedDateTime(existingMeta.startedAt);
+        const started = parseFormattedDateTime(newMeta.startedAt || existingMeta.startedAt);
         const durationMinutes = started ? Math.max(0, Math.round((parseFormattedDateTime(now) - started) / 60000)) : null;
         newMeta = { ...newMeta, completedAt: now, durationMinutes };
       }
@@ -1368,7 +1414,7 @@ export default function App() {
 
   const catalogFilteredProducts = products.filter(p => catalogSportFilter === 'vsetko' ? true : p.sports?.includes(catalogSportFilter));
   const pendingTotalQty = pendingItems.reduce((sum, i) => sum + i.qty, 0);
-  const genderLabel = (g) => g === 'men' ? 'Muži' : g === 'women' ? 'Ženy' : 'Deti';
+  const genderLabel = (g) => g === 'men' ? 'Muži' : g === 'women' ? 'Ženy' : g === 'children' ? 'Deti' : 'Neutrálne';
 
   const CashBadge = ({ paymentType, size = 'normal' }) => {
     if (paymentType !== 'hotovost') return null;
@@ -1759,11 +1805,12 @@ export default function App() {
                       </div>
                       <div>
                         <label className="block text-xs font-semibold text-slate-400 mb-1">Veľkostná kategória</label>
-                        <div className="grid grid-cols-3 gap-1">
-                          {['men', 'women', 'children'].map(g => (
+                        <div className="grid grid-cols-2 gap-1">
+                          {['men', 'women', 'children', 'neutral'].map(g => (
                             <button type="button" key={g} onClick={() => setSelectedGender(g)} className={`py-1.5 text-center text-xs font-bold rounded transition-colors ${selectedGender === g ? 'bg-indigo-600 text-white' : 'bg-slate-950 text-slate-400 hover:text-white'}`}>{genderLabel(g)}</button>
                           ))}
                         </div>
+                        <p className="text-[10px] text-slate-500 mt-1 italic">"Neutrálne" použi napr. pre vlajky a iné produkty bez veľkostnej kategórie.</p>
                       </div>
                       <div>
                         <label className="block text-xs font-semibold text-slate-400 mb-1">Množstvo (ks)</label>
@@ -1931,35 +1978,83 @@ export default function App() {
                       </div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div>
+                      <div className="space-y-2">
                         <label className="block text-slate-400 font-semibold mb-1">Látka 1 (Primárna) — voliteľné</label>
                         <select value={editingProduct ? (editingProduct.layer1?.materialId || '') : newModelPrimary} onChange={(e) => {
-                            if (editingProduct) setEditingProduct({ ...editingProduct, layer1: e.target.value ? { materialId: e.target.value, alternativeIds: [], consumption: { men: { lt5: 1.30, ge5: 1.10 }, women: { lt5: 1.15, ge5: 0.95 }, children: { lt5: 0.85, ge5: 0.70 } } } : null });
+                            if (editingProduct) setEditingProduct({ ...editingProduct, layer1: e.target.value ? { materialId: e.target.value, alternativeIds: [], consumption: editingProduct.layer1?.consumption?.men ? { lt5: 0, ge5: 0 } : (editingProduct.layer1?.consumption || { lt5: 0, ge5: 0 }) } : null });
                             else setNewModelPrimary(e.target.value);
                           }} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-slate-300">
                           <option value="">-- Žiadna (len dotlač) --</option>
                           {materials.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                         </select>
+                        {(editingProduct ? editingProduct.layer1 : newModelPrimary) && (
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <div>
+                              <label className="block text-[10px] text-slate-500 mb-0.5">Spotreba 1-4 ks (m)</label>
+                              <input type="number" step="0.01" value={editingProduct ? (editingProduct.layer1?.consumption?.lt5 ?? '') : newModelLayer1Lt5} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, layer1: { ...editingProduct.layer1, consumption: { ...editingProduct.layer1.consumption, lt5: parseFloat(e.target.value) || 0 } } }) : setNewModelLayer1Lt5(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-white" />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] text-slate-500 mb-0.5">Spotreba 5+ ks (m)</label>
+                              <input type="number" step="0.01" value={editingProduct ? (editingProduct.layer1?.consumption?.ge5 ?? '') : newModelLayer1Ge5} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, layer1: { ...editingProduct.layer1, consumption: { ...editingProduct.layer1.consumption, ge5: parseFloat(e.target.value) || 0 } } }) : setNewModelLayer1Ge5(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-white" />
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      <div>
+                      <div className="space-y-2">
                         <label className="block text-slate-400 font-semibold mb-1">Látka 2 (Sekundárna)</label>
                         <select value={editingProduct ? (editingProduct.layer2?.materialId || '') : newModelSecondary} onChange={(e) => {
-                            if (editingProduct) setEditingProduct({ ...editingProduct, layer2: e.target.value ? { materialId: e.target.value, alternativeIds: [], consumption: { men: { lt5: 0.25, ge5: 0.20 }, women: { lt5: 0.20, ge5: 0.15 }, children: { lt5: 0.15, ge5: 0.10 } } } : null });
+                            if (editingProduct) setEditingProduct({ ...editingProduct, layer2: e.target.value ? { materialId: e.target.value, alternativeIds: [], consumption: editingProduct.layer2?.consumption?.men ? { lt5: 0, ge5: 0 } : (editingProduct.layer2?.consumption || { lt5: 0, ge5: 0 }) } : null });
                             else setNewModelSecondary(e.target.value);
                           }} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-slate-300">
                           <option value="">-- Žiadna --</option>
                           {materials.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                         </select>
+                        {(editingProduct ? editingProduct.layer2 : newModelSecondary) && (
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <div>
+                              <label className="block text-[10px] text-slate-500 mb-0.5">Spotreba 1-4 ks (m)</label>
+                              <input type="number" step="0.01" value={editingProduct ? (editingProduct.layer2?.consumption?.lt5 ?? '') : newModelLayer2Lt5} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, layer2: { ...editingProduct.layer2, consumption: { ...editingProduct.layer2.consumption, lt5: parseFloat(e.target.value) || 0 } } }) : setNewModelLayer2Lt5(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-white" />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] text-slate-500 mb-0.5">Spotreba 5+ ks (m)</label>
+                              <input type="number" step="0.01" value={editingProduct ? (editingProduct.layer2?.consumption?.ge5 ?? '') : newModelLayer2Ge5} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, layer2: { ...editingProduct.layer2, consumption: { ...editingProduct.layer2.consumption, ge5: parseFloat(e.target.value) || 0 } } }) : setNewModelLayer2Ge5(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-white" />
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      <div>
+                      <div className="space-y-2">
                         <label className="block text-slate-400 font-semibold mb-1">Látka 3 (Terciárna)</label>
                         <select value={editingProduct ? (editingProduct.layer3?.materialId || '') : newModelTertiary} onChange={(e) => {
-                            if (editingProduct) setEditingProduct({ ...editingProduct, layer3: e.target.value ? { materialId: e.target.value, alternativeIds: [], consumption: { men: { lt5: 1.35, ge5: 1.15 }, women: { lt5: 1.20, ge5: 1.00 }, children: { lt5: 0.90, ge5: 0.75 } } } : null });
+                            if (editingProduct) setEditingProduct({ ...editingProduct, layer3: e.target.value ? { materialId: e.target.value, alternativeIds: [], consumption: editingProduct.layer3?.consumption?.men ? { lt5: 0, ge5: 0 } : (editingProduct.layer3?.consumption || { lt5: 0, ge5: 0 }) } : null });
                             else setNewModelTertiary(e.target.value);
                           }} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-slate-300">
                           <option value="">-- Žiadna --</option>
                           {materials.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                         </select>
+                        {(editingProduct ? editingProduct.layer3 : newModelTertiary) && (
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <div>
+                              <label className="block text-[10px] text-slate-500 mb-0.5">Spotreba 1-4 ks (m)</label>
+                              <input type="number" step="0.01" value={editingProduct ? (editingProduct.layer3?.consumption?.lt5 ?? '') : newModelLayer3Lt5} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, layer3: { ...editingProduct.layer3, consumption: { ...editingProduct.layer3.consumption, lt5: parseFloat(e.target.value) || 0 } } }) : setNewModelLayer3Lt5(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-white" />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] text-slate-500 mb-0.5">Spotreba 5+ ks (m)</label>
+                              <input type="number" step="0.01" value={editingProduct ? (editingProduct.layer3?.consumption?.ge5 ?? '') : newModelLayer3Ge5} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, layer3: { ...editingProduct.layer3, consumption: { ...editingProduct.layer3.consumption, ge5: parseFloat(e.target.value) || 0 } } }) : setNewModelLayer3Ge5(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-white" />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 bg-slate-950 p-3 rounded-lg border border-slate-800">
+                      <div>
+                        <label className="block text-slate-400 font-semibold mb-1">Dámsky strih (% z pánskeho)</label>
+                        <input type="number" step="1" value={editingProduct ? (editingProduct.womenRatioPercent ?? 90) : newModelWomenRatio} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, womenRatioPercent: parseFloat(e.target.value) || 0 }) : setNewModelWomenRatio(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" />
+                        <p className="text-[10px] text-slate-500 mt-0.5">napr. 90 = dámsky strih spotrebuje 90% pánskej spotreby</p>
+                      </div>
+                      <div>
+                        <label className="block text-slate-400 font-semibold mb-1">Detský strih (% z pánskeho)</label>
+                        <input type="number" step="1" value={editingProduct ? (editingProduct.childrenRatioPercent ?? 65) : newModelChildrenRatio} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, childrenRatioPercent: parseFloat(e.target.value) || 0 }) : setNewModelChildrenRatio(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" />
+                        <p className="text-[10px] text-slate-500 mt-0.5">napr. 65 = detský strih spotrebuje 65% pánskej spotreby</p>
                       </div>
                     </div>
                     <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2.5 rounded-lg uppercase">{editingProduct ? 'Uložiť Zmeny Modelu' : 'Pridať Model do Katalógu'}</button>
@@ -2115,6 +2210,12 @@ export default function App() {
                             <span className="font-mono text-xs font-bold bg-indigo-600/20 text-indigo-400 px-2.5 py-0.5 rounded border border-indigo-500/30">Priorita #{index + 1}</span>
                             <span className="font-mono text-xs font-semibold text-slate-500">ID: {item.itemId}</span>
                             <CashBadge paymentType={item.paymentType} size="small" />
+                            {item.stationMeta?.[activeStationFilter]?.assignedEmployeeAvatar && (
+                              <span className="flex items-center gap-1 bg-slate-800 border border-slate-700 rounded-full pl-1 pr-2 py-0.5 text-[10px] text-slate-300 font-bold">
+                                <span className="text-sm leading-none">{item.stationMeta[activeStationFilter].assignedEmployeeAvatar}</span>
+                                {item.stationMeta[activeStationFilter].assignedEmployeeName}
+                              </span>
+                            )}
                           </div>
                           <h3 className="font-extrabold text-base text-slate-100">{item.customer} ({item.qty} ks)</h3>
                           <p className="text-xs text-indigo-400 font-bold">{item.productName} - <span className="text-slate-100 uppercase">{item.qualityTier}</span></p>
@@ -2308,8 +2409,69 @@ export default function App() {
                   </h3>
                   <p className="text-xs text-slate-400">{selectedMaterialForDetail.width ? `Gramáž: ${selectedMaterialForDetail.weight} g/m² • Šírka: ${selectedMaterialForDetail.width} cm • ` : ''}Cena: {selectedMaterialForDetail.pricePerM?.toFixed(2)} € / {selectedMaterialForDetail.unit} bez DPH • Sklad: {warehouses.find(w => w.id === selectedMaterialForDetail.warehouseId)?.name || '—'}</p>
                 </div>
-                <button onClick={() => { setSelectedMaterialForDetail(null); handleCancelEditHistory(); }} className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white"><X className="h-5 w-5" /></button>
+                <div className="flex items-center gap-2 shrink-0">
+                  {!isEditingMaterialDetails && hasPermission('edit_stock') && (
+                    <button onClick={handleStartEditMaterialDetails} className="p-1.5 rounded bg-slate-800 text-indigo-400 hover:text-white hover:bg-indigo-700" title="Upraviť údaje o položke"><Edit2 className="h-4 w-4" /></button>
+                  )}
+                  <button onClick={() => { setSelectedMaterialForDetail(null); handleCancelEditHistory(); handleCancelEditMaterialDetails(); }} className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white"><X className="h-5 w-5" /></button>
+                </div>
               </div>
+
+              {isEditingMaterialDetails && materialEditDraft && (
+                <div className="bg-amber-950/20 border border-amber-800/40 p-4 rounded-xl space-y-3 mb-6">
+                  <span className="font-bold text-xs text-amber-300 block uppercase">Upraviť údaje o položke</span>
+                  <div>
+                    <label className="text-[10px] text-slate-500 block mb-0.5">Názov materiálu</label>
+                    <input type="text" value={materialEditDraft.name} onChange={(e) => setMaterialEditDraft({ ...materialEditDraft, name: e.target.value })} className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] text-slate-500 block mb-0.5">Farba (názov)</label>
+                      <input type="text" value={materialEditDraft.color} onChange={(e) => setMaterialEditDraft({ ...materialEditDraft, color: e.target.value })} className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-500 block mb-0.5">Farba (odtieň)</label>
+                      <div className="flex items-center gap-2">
+                        <input type="color" value={materialEditDraft.colorHex || '#888888'} onChange={(e) => setMaterialEditDraft({ ...materialEditDraft, colorHex: e.target.value })} className="w-9 h-8 bg-slate-900 border border-slate-800 rounded cursor-pointer" />
+                        <span className="text-[10px] text-slate-500">{materialEditDraft.colorHex}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="text-[10px] text-slate-500 block mb-0.5">Cena bez DPH (€)</label>
+                      <input type="number" step="0.01" value={materialEditDraft.pricePerM} onChange={(e) => setMaterialEditDraft({ ...materialEditDraft, pricePerM: e.target.value })} className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-500 block mb-0.5">Jednotka</label>
+                      <select value={materialEditDraft.unit} onChange={(e) => setMaterialEditDraft({ ...materialEditDraft, unit: e.target.value })} className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white">
+                        {UNIT_OPTIONS.map(u => <option key={u.value} value={u.value}>{u.value}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-500 block mb-0.5">Min. množstvo</label>
+                      <input type="number" step="0.01" value={materialEditDraft.minQty} onChange={(e) => setMaterialEditDraft({ ...materialEditDraft, minQty: e.target.value })} className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" />
+                    </div>
+                  </div>
+                  {(materialEditDraft.unit === 'm' || materialEditDraft.unit === 'bm') && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] text-slate-500 block mb-0.5">Šírka (cm)</label>
+                        <input type="number" value={materialEditDraft.width || ''} onChange={(e) => setMaterialEditDraft({ ...materialEditDraft, width: e.target.value })} className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-500 block mb-0.5">Gramáž (g/m²)</label>
+                        <input type="number" value={materialEditDraft.weight || ''} onChange={(e) => setMaterialEditDraft({ ...materialEditDraft, weight: e.target.value })} className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" />
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex gap-2 pt-1">
+                    <button onClick={handleSaveMaterialDetails} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded text-xs uppercase">Uložiť zmeny</button>
+                    <button onClick={handleCancelEditMaterialDetails} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 rounded text-xs">Zrušiť</button>
+                  </div>
+                </div>
+              )}
+
               <div className="bg-slate-950 p-4 rounded-xl border border-slate-850 space-y-3 mb-6">
                 <span className="font-bold text-xs text-slate-200 block">Manuálna korekcia zásoby</span>
                 <form onSubmit={handleApplyStockAdjustment} className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -2573,12 +2735,14 @@ export default function App() {
                           {STATION_ORDER.map(sid => {
                             const meta = item.stationMeta?.[sid];
                             if (!meta || (!meta.startedAt && !meta.durationMinutes)) return <td key={sid} className="px-3 py-3 text-center text-slate-600">—</td>;
+                            const hasDuration = meta.durationMinutes !== undefined && meta.durationMinutes !== null;
+                            const isDone = item.stationStatuses?.[sid] === 'hotove';
                             return (
                               <td key={sid} className="px-3 py-3 text-center">
                                 <div className="flex flex-col items-center gap-0.5">
                                   {meta.assignedEmployeeAvatar && <span title={meta.assignedEmployeeName} className="cursor-help">{meta.assignedEmployeeAvatar}</span>}
-                                  <span className={meta.durationMinutes !== undefined && meta.durationMinutes !== null ? 'text-emerald-400 font-bold' : 'text-amber-400'}>
-                                    {meta.durationMinutes !== undefined && meta.durationMinutes !== null ? formatDurationMinutes(meta.durationMinutes) : 'prebieha...'}
+                                  <span className={hasDuration ? 'text-emerald-400 font-bold' : isDone ? 'text-slate-500 italic' : 'text-amber-400'}>
+                                    {hasDuration ? formatDurationMinutes(meta.durationMinutes) : isDone ? 'hotové (bez záznamu)' : 'prebieha...'}
                                   </span>
                                 </div>
                               </td>
@@ -2738,8 +2902,8 @@ export default function App() {
                         </div>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                        <div className="grid grid-cols-3 gap-1">
-                          {['men', 'women', 'children'].map(g => (
+                        <div className="grid grid-cols-2 gap-1">
+                          {['men', 'women', 'children', 'neutral'].map(g => (
                             <button type="button" key={g} onClick={() => setAddItemGender(g)} className={`py-1.5 text-center text-[10px] font-bold rounded ${addItemGender === g ? 'bg-indigo-600 text-white' : 'bg-slate-950 text-slate-400'}`}>{genderLabel(g)}</button>
                           ))}
                         </div>
@@ -2856,11 +3020,6 @@ export default function App() {
               {selectedOrderDetails.items.map((item, itemIdx) => (
                 <div key={item.itemId} className="py-6 border-b border-slate-800 print:border-black space-y-4" style={itemIdx > 0 ? { breakBefore: 'page' } : {}}>
                   <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
-                    {item.imageUrl ? (
-                      <img src={item.imageUrl} alt={item.productName} className="w-full sm:w-48 h-48 object-cover rounded-xl border border-slate-300 shrink-0 order-first sm:order-none" />
-                    ) : (
-                      <div className="w-full sm:w-48 h-48 rounded-xl border border-dashed border-slate-700 print:border-slate-400 flex items-center justify-center text-slate-600 print:text-slate-400 text-xs italic shrink-0 order-first sm:order-none">Bez obrázka</div>
-                    )}
                     <div className="flex-1">
                       <span className="font-mono text-xs text-indigo-400 font-bold block">Položka #{itemIdx + 1} • {item.itemId}</span>
                       <h2 className="text-lg font-extrabold text-white print:text-black">{item.productName} [{item.customCode}]</h2>
@@ -2872,6 +3031,12 @@ export default function App() {
                       <span className="font-mono text-[9px] text-black font-extrabold mt-1">{item.itemId}</span>
                     </div>
                   </div>
+
+                  {item.imageUrl ? (
+                    <img src={item.imageUrl} alt={item.productName} className="w-full h-[320px] sm:h-[380px] print:h-[140mm] object-contain bg-white rounded-xl border border-slate-300" />
+                  ) : (
+                    <div className="w-full h-[320px] sm:h-[380px] print:h-[140mm] rounded-xl border border-dashed border-slate-700 print:border-slate-400 flex items-center justify-center text-slate-600 print:text-slate-400 text-sm italic">Bez obrázka</div>
+                  )}
 
                   <div className="print:hidden space-y-2">
                     <h4 className="font-extrabold text-[11px] uppercase tracking-wider text-slate-400">Aktívne dielne & Nastavenie stavu:</h4>
