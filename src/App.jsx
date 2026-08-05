@@ -2,11 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
 import { QRCodeSVG } from 'qrcode.react';
+import { Html5Qrcode } from 'html5-qrcode';
 import { 
   ClipboardList, Package, Cpu, QrCode, Plus, User, Clock, Layers, Search, Check, X, Calendar,
   Palette, Scissors, Printer, Sliders, Sparkles, ZoomIn, ZoomOut, FileText, PlusCircle, Table,
   Shield, Users, Lock, Edit2, Trash2, Tag, Scale, CalendarDays, FileEdit, Gift, Loader2, AlertTriangle,
-  Shirt, Box, Banknote, GripVertical, Download, Upload, ArrowUp, ArrowDown, BarChart3
+  Shirt, Box, Banknote, GripVertical, Download, Upload, ArrowUp, ArrowDown, BarChart3, Camera
 } from 'lucide-react';
 
 // ============================================================
@@ -147,8 +148,8 @@ const FALLBACK_ACL = {
   view_reports: { master: true, supervisor: true, sales: false, employee: false }
 };
 
-const mapMaterialFromDb = (r) => ({ id: r.id, name: r.name, color: r.color, colorHex: r.color_hex || '', width: r.width, weight: r.weight, pricePerM: r.price_per_m, qty: r.qty, unit: r.unit, minQty: r.min_qty, warehouseId: r.warehouse_id || 'sklad-1', history: r.history || [] });
-const mapMaterialToDb = (m) => ({ id: m.id, name: m.name, color: m.color, color_hex: m.colorHex || null, width: m.width, weight: m.weight, price_per_m: m.pricePerM, qty: m.qty, unit: m.unit, min_qty: m.minQty, warehouse_id: m.warehouseId, history: m.history });
+const mapMaterialFromDb = (r) => ({ id: r.id, name: r.name, color: r.color, colorHex: r.color_hex || '', width: r.width, weight: r.weight, pricePerM: r.price_per_m, qty: r.qty, unit: r.unit, minQty: r.min_qty, warehouseId: r.warehouse_id || 'sklad-1', manufacturer: r.manufacturer || '', history: r.history || [] });
+const mapMaterialToDb = (m) => ({ id: m.id, name: m.name, color: m.color, color_hex: m.colorHex || null, width: m.width, weight: m.weight, price_per_m: m.pricePerM, qty: m.qty, unit: m.unit, min_qty: m.minQty, warehouse_id: m.warehouseId, manufacturer: m.manufacturer || null, history: m.history });
 
 const mapProductFromDb = (r) => ({ id: r.id, customCode: r.custom_code, name: r.name, sports: r.sports || [], layer1: r.layer1, layer2: r.layer2, layer3: r.layer3, threadM: r.thread_m, womenRatioPercent: r.women_ratio_percent ?? 90, childrenRatioPercent: r.children_ratio_percent ?? 65 });
 const mapProductToDb = (p) => ({ id: p.id, custom_code: p.customCode, name: p.name, sports: p.sports, layer1: p.layer1, layer2: p.layer2, layer3: p.layer3, thread_m: p.threadM, women_ratio_percent: p.womenRatioPercent, children_ratio_percent: p.childrenRatioPercent });
@@ -234,6 +235,7 @@ export default function App() {
   const [materials, setMaterials] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [costRates, setCostRates] = useState([]);
+  const [reportPeriod, setReportPeriod] = useState('month');
   const [activeWarehouseId, setActiveWarehouseId] = useState('');
   const [editingWarehouseId, setEditingWarehouseId] = useState(null);
   const [editingWarehouseName, setEditingWarehouseName] = useState('');
@@ -252,6 +254,11 @@ export default function App() {
 
   const [currentUser, setCurrentUser] = useState(null); 
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [pendingScanCode] = useState(() => {
+    try { return new URLSearchParams(window.location.search).get('scan'); } catch { return null; }
+  });
+  const [isCameraScanning, setIsCameraScanning] = useState(false);
+  const html5QrCodeRef = useRef(null);
   const [loginSelectedId, setLoginSelectedId] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
@@ -314,6 +321,7 @@ export default function App() {
   const [newMatWeight, setNewMatWeight] = useState(140);
   const [newMatPrice, setNewMatPrice] = useState(4.50);
   const [newMatQty, setNewMatQty] = useState(100);
+  const [newMatManufacturer, setNewMatManufacturer] = useState('');
 
   const [editingProduct, setEditingProduct] = useState(null);
   const [newModelCode, setNewModelCode] = useState('');
@@ -466,7 +474,17 @@ export default function App() {
 
   useEffect(() => {
     if (activeTab === 'qr-terminal' && qrInputRef.current) qrInputRef.current.focus();
+    if (activeTab !== 'qr-terminal' && html5QrCodeRef.current) { stopCameraScan(); }
   }, [activeTab]);
+
+  // Ak appku otvorili cez QR kód s odkazom (?scan=...), automaticky prepnúť na Čítačku QR a predvyplniť kód
+  useEffect(() => {
+    if (isAuthenticated && pendingScanCode) {
+      setActiveTab('qr-terminal');
+      setManualQrInput(pendingScanCode);
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [isAuthenticated]);
 
   const hasPermission = (action) => acl[action] ? acl[action][currentUser?.role] : false;
 
@@ -602,12 +620,13 @@ export default function App() {
     const now = getFormattedDateTime();
     const created = {
       id: `tex-${Date.now()}`, name: newMatName, color: newMatColor, colorHex: newMatColorHex, width: parseInt(newMatWidth) || null, weight: parseInt(newMatWeight) || null,
-      pricePerM: parseFloat(newMatPrice), qty: parseFloat(newMatQty), unit: newMatUnit, minQty: 50, warehouseId: newMatWarehouseId,
+      pricePerM: parseFloat(newMatPrice), qty: parseFloat(newMatQty), unit: newMatUnit, minQty: 50, warehouseId: newMatWarehouseId, manufacturer: newMatManufacturer,
       history: [{ date: now, user: `${currentUser.firstName} ${currentUser.lastName}`, action: 'Pridanie na sklad', change: parseFloat(newMatQty), note: 'Prvotný príjem novej položky' }]
     };
     const { error } = await supabase.from('materials').insert(mapMaterialToDb(created));
     if (error) { triggerNotification('error', `Chyba: ${error.message}`); return; }
     setNewMatName('');
+    setNewMatManufacturer('');
     triggerNotification('success', `Položka "${created.name}" bola naskladnená.`);
   };
 
@@ -678,13 +697,25 @@ export default function App() {
       weight: materialEditDraft.weight ? parseInt(materialEditDraft.weight) : null,
       unit: materialEditDraft.unit,
       price_per_m: parseFloat(materialEditDraft.pricePerM) || 0,
-      min_qty: parseFloat(materialEditDraft.minQty) || 0
+      min_qty: parseFloat(materialEditDraft.minQty) || 0,
+      manufacturer: materialEditDraft.manufacturer || null
     }).eq('id', materialEditDraft.id);
     if (error) { triggerNotification('error', error.message); return; }
     setSelectedMaterialForDetail(materialEditDraft);
     setIsEditingMaterialDetails(false);
     setMaterialEditDraft(null);
     triggerNotification('success', 'Údaje o položke boli upravené.');
+  };
+
+  const handleDeleteMaterial = async () => {
+    if (!hasPermission('edit_stock')) { triggerNotification('error', 'Nemáte prístup ku správe skladu.'); return; }
+    if (!window.confirm(`Naozaj natrvalo vymazať položku "${selectedMaterialForDetail.name}" zo skladu? Táto akcia zmaže aj celú jej históriu pohybov a nedá sa vrátiť späť.`)) return;
+    const { error } = await supabase.from('materials').delete().eq('id', selectedMaterialForDetail.id);
+    if (error) { triggerNotification('error', error.message); return; }
+    setSelectedMaterialForDetail(null);
+    setIsEditingMaterialDetails(false);
+    setMaterialEditDraft(null);
+    triggerNotification('success', 'Položka bola vymazaná zo skladu.');
   };
 
   // --- SADZBY (náčrt na budúce sledovanie nákladov) ---
@@ -699,6 +730,7 @@ export default function App() {
   // --- EXPORT / IMPORT SKLADU DO EXCELU ---
   const buildMaterialRow = (m, includeWarehouse) => ({
     Nazov: m.name,
+    Vyrobca: m.manufacturer || '',
     Farba: m.color,
     Farba_hex: m.colorHex || '',
     Sirka_cm: m.width || '',
@@ -744,7 +776,7 @@ export default function App() {
 
   const handleDownloadImportTemplate = () => {
     const sample = [{
-      Nazov: 'Polyester Interlock', Farba: 'Biela', Farba_hex: '#FFFFFF', Sirka_cm: 160, Gramaz_gm2: 140,
+      Nazov: 'Polyester Interlock', Vyrobca: 'Sinterama', Farba: 'Biela', Farba_hex: '#FFFFFF', Sirka_cm: 160, Gramaz_gm2: 140,
       Jednotka: 'm', Cena_bez_DPH: 4.5, Mnozstvo: 100, Min_mnozstvo: 20, Sklad: warehouses[0]?.name || 'Sklad 1'
     }];
     const wb = XLSX.utils.book_new();
@@ -776,6 +808,7 @@ export default function App() {
         toInsert.push(mapMaterialToDb({
           id: `tex-${Date.now()}-${idx}`,
           name: String(name),
+          manufacturer: row.Vyrobca || row['Výrobca'] || '',
           color: row.Farba || row['Farba'] || '',
           colorHex: row.Farba_hex || '',
           width: row.Sirka_cm ? parseInt(row.Sirka_cm) : null,
@@ -1247,7 +1280,10 @@ export default function App() {
   const handleQrScan = (scannedCode) => {
     if (!hasPermission('scan_qr')) { triggerNotification('error', 'Prístup zamietnutý na skenovanie.'); return; }
     if (!scannedCode.trim()) return;
-    const code = scannedCode.trim();
+    let code = scannedCode.trim();
+    // Ak sa naskenoval celý odkaz (URL v QR kóde), vytiahnuť z neho len kód položky
+    const scanParamMatch = code.match(/[?&]scan=([^&]+)/);
+    if (scanParamMatch) code = decodeURIComponent(scanParamMatch[1]);
     const found = findItemByItemId(code);
     if (!found) { triggerNotification('error', `Položka ${code} nebola nájdená.`); setManualQrInput(''); return; }
     const { order, item } = found;
@@ -1274,6 +1310,37 @@ export default function App() {
       triggerNotification('success', `VÝSTUP naskenovaný: Práca na položke ${item.itemId} ukončená.`);
     }
     setManualQrInput('');
+  };
+
+  // --- SKENOVANIE KAMEROU (priamo v appke, netreba samostatný fotoaparát) ---
+  const startCameraScan = () => {
+    setIsCameraScanning(true);
+    setTimeout(async () => {
+      try {
+        const html5QrCode = new Html5Qrcode('qr-camera-region');
+        html5QrCodeRef.current = html5QrCode;
+        await html5QrCode.start(
+          { facingMode: 'environment' },
+          { fps: 10, qrbox: 220 },
+          (decodedText) => {
+            handleQrScan(decodedText);
+            stopCameraScan();
+          },
+          () => { /* ignorovať priebežné neúspešné pokusy o dekódovanie jednotlivých snímok */ }
+        );
+      } catch (err) {
+        triggerNotification('error', `Nepodarilo sa spustiť kameru: ${err?.message || err}. Skontroluj, či appka má povolený prístup ku kamere.`);
+        setIsCameraScanning(false);
+      }
+    }, 150);
+  };
+
+  const stopCameraScan = async () => {
+    if (html5QrCodeRef.current) {
+      try { await html5QrCodeRef.current.stop(); html5QrCodeRef.current.clear(); } catch (e) { /* kamera už mohla byť zastavená */ }
+      html5QrCodeRef.current = null;
+    }
+    setIsCameraScanning(false);
   };
 
   const updateStationStatus = async (orderId, itemId, stationId, statusId) => {
@@ -1388,6 +1455,35 @@ export default function App() {
   };
 
   const allItems = flattenOrderItems(orders);
+
+  const getSportStats = () => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    const filtered = allItems.filter(it => {
+      if (!it.deliveryDate) return false;
+      const d = new Date(it.deliveryDate + 'T00:00:00');
+      if (isNaN(d.getTime())) return false;
+      if (reportPeriod === 'year') return d.getFullYear() === currentYear;
+      return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+    });
+    const stats = {};
+    filtered.forEach(item => {
+      const product = products.find(p => p.id === item.productId);
+      const sportsForItem = (product?.sports && product.sports.length > 0) ? product.sports : ['Nezaradené'];
+      const itemMeters = (item.materialsNeeded || []).reduce((s, m) => s + (m.qtyNeeded || 0), 0);
+      const itemMinutes = STATION_ORDER.reduce((s, sid) => s + (item.stationMeta?.[sid]?.durationMinutes || 0), 0);
+      sportsForItem.forEach(sport => {
+        if (!stats[sport]) stats[sport] = { orderIds: new Set(), qty: 0, meters: 0, minutes: 0 };
+        stats[sport].orderIds.add(item.orderId);
+        stats[sport].qty += item.qty;
+        stats[sport].meters += itemMeters;
+        stats[sport].minutes += itemMinutes;
+      });
+    });
+    return Object.entries(stats).map(([sport, s]) => ({ sport, orders: s.orderIds.size, qty: s.qty, meters: parseFloat(s.meters.toFixed(2)), minutes: s.minutes })).sort((a, b) => b.qty - a.qty);
+  };
+  const sportStats = getSportStats();
 
   const distinctDeliveryDates = Array.from(new Set(allItems.map(i => i.deliveryDate).filter(Boolean))).sort();
 
@@ -2323,7 +2419,7 @@ export default function App() {
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
                                 <span className="inline-block w-4 h-4 rounded-full border border-slate-600 shrink-0" style={{ backgroundColor: item.colorHex || '#475569' }} title={item.color}></span>
-                                <div><span className="font-bold text-white block">{item.name}</span><span className="text-[10px] text-slate-400 font-mono">#{item.id} • {item.color}</span></div>
+                                <div><span className="font-bold text-white block">{item.name}</span><span className="text-[10px] text-slate-400 font-mono">#{item.id} • {item.color}{item.manufacturer ? ` • ${item.manufacturer}` : ''}</span></div>
                               </div>
                             </td>
                             <td className="px-3 py-3 text-center font-bold">{item.width ? `${item.width} cm` : '—'}</td>
@@ -2347,6 +2443,7 @@ export default function App() {
                 <h3 className="font-bold text-md text-white flex items-center gap-1.5"><Plus className="text-indigo-400 h-5 w-5" /> Zaradiť novú položku do skladu</h3>
                 <form onSubmit={handleAddNewMaterial} className="space-y-3 text-xs">
                   <div><label className="text-slate-400 block mb-0.5">Názov materiálu</label><input type="text" required value={newMatName} onChange={(e) => setNewMatName(e.target.value)} placeholder="Polyester Ripstop / Gombík 12mm / Farba čierna" className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" /></div>
+                  <div><label className="text-slate-400 block mb-0.5">Výrobca (voliteľné)</label><input type="text" value={newMatManufacturer} onChange={(e) => setNewMatManufacturer(e.target.value)} placeholder="napr. Sinterama, Coats, Gütermann..." className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" /></div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="text-slate-400 block mb-0.5">Do skladu</label>
@@ -2399,7 +2496,7 @@ export default function App() {
 
         {selectedMaterialForDetail && (
           <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-            <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl w-full max-w-xl shadow-2xl relative animate-in zoom-in-95 duration-200">
+            <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto shadow-2xl relative animate-in zoom-in-95 duration-200">
               <div className="flex justify-between items-start border-b border-slate-800 pb-3 mb-4">
                 <div>
                   <span className="font-mono text-xs text-indigo-400 font-bold block mb-1">Karta položky #{selectedMaterialForDetail.id}</span>
@@ -2407,11 +2504,14 @@ export default function App() {
                     <span className="inline-block w-4 h-4 rounded-full border border-slate-600 shrink-0" style={{ backgroundColor: selectedMaterialForDetail.colorHex || '#475569' }}></span>
                     {selectedMaterialForDetail.name} ({selectedMaterialForDetail.color})
                   </h3>
-                  <p className="text-xs text-slate-400">{selectedMaterialForDetail.width ? `Gramáž: ${selectedMaterialForDetail.weight} g/m² • Šírka: ${selectedMaterialForDetail.width} cm • ` : ''}Cena: {selectedMaterialForDetail.pricePerM?.toFixed(2)} € / {selectedMaterialForDetail.unit} bez DPH • Sklad: {warehouses.find(w => w.id === selectedMaterialForDetail.warehouseId)?.name || '—'}</p>
+                  <p className="text-xs text-slate-400">{selectedMaterialForDetail.width ? `Gramáž: ${selectedMaterialForDetail.weight} g/m² • Šírka: ${selectedMaterialForDetail.width} cm • ` : ''}Cena: {selectedMaterialForDetail.pricePerM?.toFixed(2)} € / {selectedMaterialForDetail.unit} bez DPH • Sklad: {warehouses.find(w => w.id === selectedMaterialForDetail.warehouseId)?.name || '—'}{selectedMaterialForDetail.manufacturer ? ` • Výrobca: ${selectedMaterialForDetail.manufacturer}` : ''}</p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {!isEditingMaterialDetails && hasPermission('edit_stock') && (
-                    <button onClick={handleStartEditMaterialDetails} className="p-1.5 rounded bg-slate-800 text-indigo-400 hover:text-white hover:bg-indigo-700" title="Upraviť údaje o položke"><Edit2 className="h-4 w-4" /></button>
+                    <>
+                      <button onClick={handleStartEditMaterialDetails} className="p-1.5 rounded bg-slate-800 text-indigo-400 hover:text-white hover:bg-indigo-700" title="Upraviť údaje o položke"><Edit2 className="h-4 w-4" /></button>
+                      <button onClick={handleDeleteMaterial} className="p-1.5 rounded bg-slate-800 text-rose-400 hover:text-white hover:bg-rose-700" title="Zmazať položku zo skladu"><Trash2 className="h-4 w-4" /></button>
+                    </>
                   )}
                   <button onClick={() => { setSelectedMaterialForDetail(null); handleCancelEditHistory(); handleCancelEditMaterialDetails(); }} className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white"><X className="h-5 w-5" /></button>
                 </div>
@@ -2423,6 +2523,10 @@ export default function App() {
                   <div>
                     <label className="text-[10px] text-slate-500 block mb-0.5">Názov materiálu</label>
                     <input type="text" value={materialEditDraft.name} onChange={(e) => setMaterialEditDraft({ ...materialEditDraft, name: e.target.value })} className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-500 block mb-0.5">Výrobca</label>
+                    <input type="text" value={materialEditDraft.manufacturer || ''} onChange={(e) => setMaterialEditDraft({ ...materialEditDraft, manufacturer: e.target.value })} className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" />
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
@@ -2698,6 +2802,19 @@ export default function App() {
                     <div className="flex flex-col justify-end"><p className="text-slate-400">Skenuje:</p><strong className="text-white font-bold text-sm">{currentUser.firstName} {currentUser.lastName}</strong></div>
                   </div>
                   <div className="bg-indigo-950/20 border border-indigo-500/30 p-5 rounded-xl space-y-4">
+                    {!isCameraScanning ? (
+                      <button onClick={startCameraScan} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm py-3 rounded-xl uppercase tracking-wider flex items-center justify-center gap-2">
+                        <Camera className="h-5 w-5" /> Skenovať kamerou
+                      </button>
+                    ) : (
+                      <div className="space-y-2">
+                        <div id="qr-camera-region" className="w-full rounded-xl overflow-hidden border-2 border-emerald-500"></div>
+                        <button onClick={stopCameraScan} className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs py-2 rounded-lg">Zrušiť skenovanie kamerou</button>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 text-[10px] text-slate-500 uppercase font-bold">
+                      <div className="flex-1 h-px bg-slate-800"></div> alebo zadaj ručne <div className="flex-1 h-px bg-slate-800"></div>
+                    </div>
                     <input ref={qrInputRef} type="text" value={manualQrInput} onChange={(e) => setManualQrInput(e.target.value)} placeholder="Sem pípnite kód položky zo sprievodky..." className="w-full bg-slate-900 border-2 border-slate-700 focus:border-indigo-500 text-slate-100 font-mono text-center tracking-wider text-md rounded-xl px-4 py-3 focus:outline-none" />
                     <button onClick={() => handleQrScan(manualQrInput)} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs py-2 rounded-lg mt-3">Potvrdiť Sken manuálne</button>
                   </div>
@@ -2709,6 +2826,44 @@ export default function App() {
 
         {activeTab === 'reports' && hasPermission('view_reports') && (
           <div className="space-y-6 print:hidden animate-in fade-in duration-150">
+            <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 shadow-xl">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-2">
+                <h2 className="text-xl font-bold text-white flex items-center gap-2"><BarChart3 className="text-indigo-400 h-5 w-5" /> Prehľad podľa športu / kategórie</h2>
+                <div className="flex items-center gap-2 bg-slate-900 p-1.5 rounded-xl border border-slate-800">
+                  <button onClick={() => setReportPeriod('month')} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${reportPeriod === 'month' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>Tento mesiac</button>
+                  <button onClick={() => setReportPeriod('year')} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${reportPeriod === 'year' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>Tento rok</button>
+                </div>
+              </div>
+              <p className="text-xs text-slate-400 mb-4">Podľa termínu dodania zákazky. Peňažný prehľad (fakturácia) doplníme neskôr.</p>
+              <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
+                <table className="w-full text-left text-xs text-slate-300">
+                  <thead className="bg-slate-900 text-slate-400 uppercase tracking-wider">
+                    <tr>
+                      <th className="px-3 py-3">Šport / Kategória</th>
+                      <th className="px-3 py-3 text-center">Počet zákaziek</th>
+                      <th className="px-3 py-3 text-center">Kusov oblečenia</th>
+                      <th className="px-3 py-3 text-center">Metrov materiálu spolu</th>
+                      <th className="px-3 py-3 text-center">Čas práce spolu</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {sportStats.length === 0 && (
+                      <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-500 italic">Za toto obdobie zatiaľ nie sú žiadne zákazky.</td></tr>
+                    )}
+                    {sportStats.map(s => (
+                      <tr key={s.sport} className="hover:bg-slate-800/40">
+                        <td className="px-3 py-3 font-bold text-white">{s.sport}</td>
+                        <td className="px-3 py-3 text-center text-indigo-300 font-bold">{s.orders}</td>
+                        <td className="px-3 py-3 text-center">{s.qty} ks</td>
+                        <td className="px-3 py-3 text-center">{s.meters} m</td>
+                        <td className="px-3 py-3 text-center">{formatDurationMinutes(s.minutes)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
             <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 shadow-xl">
               <h2 className="text-xl font-bold text-white flex items-center gap-2 mb-2"><BarChart3 className="text-indigo-400 h-5 w-5" /> Prehľady — čas strávený na jednotlivých staniciach</h2>
               <p className="text-xs text-slate-400 mb-4">Sleduje sa od kliknutia na "Príprava" po "Hotové" na danej stanici. Viditeľné len pre Master/Supervisor.</p>
@@ -3027,7 +3182,7 @@ export default function App() {
                       {item.notes && <p className="text-xs text-slate-400 italic print:text-black mt-1">Poznámka: {item.notes}</p>}
                     </div>
                     <div className="bg-white p-3 rounded-xl flex flex-col items-center border border-slate-300 shadow-sm shrink-0">
-                      <QRCodeSVG value={item.itemId} size={88} level="M" />
+                      <QRCodeSVG value={`${window.location.origin}${window.location.pathname}?scan=${item.itemId}`} size={88} level="M" />
                       <span className="font-mono text-[9px] text-black font-extrabold mt-1">{item.itemId}</span>
                     </div>
                   </div>
