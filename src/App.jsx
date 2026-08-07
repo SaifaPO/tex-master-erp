@@ -716,6 +716,7 @@ export default function App() {
   };
 
 
+  const handleLogin = async (e) => {
     e.preventDefault();
     setLoginError('');
     const emp = employees.find(x => x.id === loginSelectedId);
