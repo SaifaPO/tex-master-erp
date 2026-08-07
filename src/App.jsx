@@ -401,6 +401,7 @@ export default function App() {
   const [selectedLayer2Mat, setSelectedLayer2Mat] = useState('');
   const [selectedLayer3Mat, setSelectedLayer3Mat] = useState('');
   const [selectedStations, setSelectedStations] = useState(buildAllStationsPreset());
+  const [selectedDesignerId, setSelectedDesignerId] = useState('');
   const [itemNotes, setItemNotes] = useState('');
   const [itemImageFile, setItemImageFile] = useState(null);
   const [itemImagePreview, setItemImagePreview] = useState('');
@@ -473,6 +474,7 @@ export default function App() {
   const [addItemGender, setAddItemGender] = useState('men');
   const [addItemQty, setAddItemQty] = useState(10);
   const [addItemStations, setAddItemStations] = useState(buildAllStationsPreset());
+  const [addItemDesignerId, setAddItemDesignerId] = useState('');
   const [addItemNotes, setAddItemNotes] = useState('');
   const [addItemLayer1Mat, setAddItemLayer1Mat] = useState('');
   const [addItemLayer2Mat, setAddItemLayer2Mat] = useState('');
@@ -1378,7 +1380,7 @@ export default function App() {
       tempId: `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       productId: selectedProduct.id, productName: selectedProduct.name, customCode: selectedProduct.customCode,
       qualityTier: selectedQualityTier.name, gender: selectedGender, qty: qtyNum, activeStations,
-      notes: itemNotes, materialsNeeded: neededList, threadQtyM: selectedProduct.threadM * qtyNum, imageUrl
+      notes: itemNotes, materialsNeeded: neededList, threadQtyM: selectedProduct.threadM * qtyNum, imageUrl, assignedDesignerId: selectedDesignerId
     };
     setPendingItems([...pendingItems, newItem]);
     setItemQty(10);
@@ -1386,6 +1388,7 @@ export default function App() {
     setItemImageFile(null);
     setItemImagePreview('');
     setSelectedStations(buildAllStationsPreset());
+    setSelectedDesignerId('');
     triggerNotification('success', `Položka "${selectedProduct.name}" pridaná do zoznamu zákazky.`);
   };
 
@@ -1427,7 +1430,7 @@ export default function App() {
       item.activeStations.forEach(sid => { initialStatuses[sid] = 'caka'; });
       return {
         itemId, productId: item.productId, productName: item.productName, customCode: item.customCode,
-        qualityTier: item.qualityTier, gender: item.gender, qty: item.qty, notes: item.notes, imageUrl: item.imageUrl || '',
+        qualityTier: item.qualityTier, gender: item.gender, qty: item.qty, notes: item.notes, imageUrl: item.imageUrl || '', assignedDesignerId: item.assignedDesignerId || '',
         materialsNeeded: item.materialsNeeded, threadQtyM: item.threadQtyM, priority: sameDayCount + idx + 1,
         stationStatuses: initialStatuses, materialDeducted: (item.materialsNeeded || []).length > 0
       };
@@ -1576,6 +1579,16 @@ export default function App() {
     setOrderEditDraft(prev => ({ ...prev, items: prev.items.filter(it => it.itemId !== itemId) }));
   };
 
+  const handleReassignDesigner = async (orderId, itemId, newDesignerId) => {
+    if (!hasPermission('update_status') && !hasPermission('manage_profiles')) { triggerNotification('error', 'Nemáte oprávnenie meniť priradenie.'); return; }
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+    const updatedItems = order.items.map(item => item.itemId === itemId ? { ...item, assignedDesignerId: newDesignerId } : item);
+    const { error } = await supabase.from('orders').update({ items: updatedItems }).eq('id', orderId);
+    if (error) { triggerNotification('error', error.message); return; }
+    if (selectedOrderDetails?.id === orderId) setSelectedOrderDetails({ ...order, items: updatedItems });
+  };
+
   const handleAddItemToExistingOrder = async () => {
     if (!orderEditDraft) return;
     const product = products.find(p => p.id === addItemProductId);
@@ -1606,13 +1619,13 @@ export default function App() {
 
     const newItem = {
       itemId: newItemId, productId: product.id, productName: product.name, customCode: product.customCode,
-      qualityTier: tier?.name || '', gender: addItemGender, qty: qtyNum, notes: addItemNotes, imageUrl,
+      qualityTier: tier?.name || '', gender: addItemGender, qty: qtyNum, notes: addItemNotes, imageUrl, assignedDesignerId: addItemDesignerId,
       materialsNeeded: neededList, threadQtyM: product.threadM * qtyNum, priority: allItems.length + 1,
       stationStatuses: initialStatuses, materialDeducted: false
     };
 
     setOrderEditDraft(prev => ({ ...prev, items: [...prev.items, newItem] }));
-    setAddItemProductId(''); setAddItemQty(10); setAddItemNotes(''); setAddItemImageFile(null); setAddItemImagePreview(''); setAddItemStations({});
+    setAddItemProductId(''); setAddItemQty(10); setAddItemNotes(''); setAddItemImageFile(null); setAddItemImagePreview(''); setAddItemStations({}); setAddItemDesignerId('');
     setShowAddItemForm(false);
     triggerNotification('success', `Položka "${product.name}" bola pridaná do zákazky. Nezabudni kliknúť na "Uložiť zmeny", inak sa pridanie neuloží.`);
   };
@@ -2170,6 +2183,7 @@ export default function App() {
               {hasPermission('view_reports') && (
                 <button onClick={() => setActiveTab('reports')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'reports' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><BarChart3 className="h-3.5 w-3.5" /> Prehľady</button>
               )}
+              <button onClick={() => setActiveTab('designers')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'designers' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Palette className="h-3.5 w-3.5" /> Dashboard Grafikov</button>
             </nav>
           </div>
         </div>
@@ -2575,6 +2589,15 @@ export default function App() {
                           );
                         })}
                       </div>
+                      {selectedStations.grafik && (
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-400 mb-1">Priradený grafik (voliteľné)</label>
+                          <select value={selectedDesignerId} onChange={(e) => setSelectedDesignerId(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white">
+                            <option value="">-- Nepriradený (uvidí ktokoľvek na Grafike) --</option>
+                            {employees.map(e => <option key={e.id} value={e.id}>{e.avatar} {e.firstName} {e.lastName}</option>)}
+                          </select>
+                        </div>
+                      )}
                       <div>
                         <label className="block text-xs font-semibold text-slate-400 mb-1">Poznámka k tejto položke</label>
                         <textarea rows={5} value={itemNotes} onChange={(e) => setItemNotes(e.target.value)} placeholder="Napr. Pantone 286C, mesh podpazušie, číslovanie 1-10..." className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white" />
@@ -3638,6 +3661,67 @@ export default function App() {
           </div>
         )}
 
+        {activeTab === 'designers' && (() => {
+          const activeGrafikItems = allItems.filter(it => it.stationStatuses?.grafik && it.stationStatuses.grafik !== 'neaktivne' && it.stationStatuses.grafik !== 'hotove');
+          const designerIds = Array.from(new Set(activeGrafikItems.map(it => it.assignedDesignerId).filter(Boolean)));
+          const columns = [
+            { id: '', label: 'Nepriradené', avatar: '❓' },
+            ...designerIds.map(id => {
+              const emp = employees.find(e => e.id === id);
+              return { id, label: emp ? `${emp.firstName} ${emp.lastName}` : 'Neznámy', avatar: emp?.avatar || '👤' };
+            })
+          ];
+          return (
+            <div className="space-y-4 print:hidden animate-in fade-in duration-150">
+              <h2 className="text-xl font-bold text-white flex items-center gap-2"><Palette className="text-indigo-400 h-5 w-5" /> Dashboard Grafikov</h2>
+              <p className="text-xs text-slate-400 -mt-2">Zákazky aktuálne rozpracované na Grafike, zoradené podľa priradeného grafika. Priradenie sa nastavuje pri vytváraní/úprave položky.</p>
+              {activeGrafikItems.length === 0 ? (
+                <div className="bg-slate-950 border border-slate-800 rounded-2xl p-10 text-center text-slate-500 italic">Momentálne nie je na Grafike žiadna rozpracovaná zákazka.</div>
+              ) : (
+                <div className="flex gap-4 overflow-x-auto pb-2">
+                  {columns.map(col => {
+                    const colItems = activeGrafikItems.filter(it => (it.assignedDesignerId || '') === col.id);
+                    if (colItems.length === 0) return null;
+                    return (
+                      <div key={col.id || 'unassigned'} className="bg-slate-950 border border-slate-800 rounded-2xl p-3 w-72 shrink-0 space-y-2">
+                        <div className="flex items-center gap-2 px-1 pb-2 border-b border-slate-800">
+                          <span className="text-xl">{col.avatar}</span>
+                          <span className="font-bold text-sm text-white">{col.label}</span>
+                          <span className="ml-auto bg-slate-800 text-slate-400 text-[10px] font-bold px-2 py-0.5 rounded-full">{colItems.length}</span>
+                        </div>
+                        {colItems.sort((a, b) => a.priority - b.priority).map(item => {
+                          const orderColor = colorForOrder(item.orderId);
+                          const statusCfg = STATION_CONFIGS.grafik.statuses.find(s => s.id === item.stationStatuses.grafik);
+                          return (
+                            <div key={item.itemId} className={`bg-slate-900 border-l-4 ${orderColor.border} border-t border-r border-b border-slate-800 rounded-lg p-3 space-y-1.5 cursor-pointer hover:bg-slate-850`} onClick={() => openOrderDetails(orders.find(o => o.id === item.orderId))}>
+                              {item.imageUrl && <img src={item.imageUrl} alt="" className="w-full h-20 object-cover rounded" />}
+                              <p className="font-mono text-[10px] text-indigo-400 font-bold">#{item.priority} • {item.itemId}</p>
+                              <p className="font-bold text-xs text-white truncate">{item.customer}</p>
+                              <p className="text-[11px] text-slate-400 truncate">{item.productName} ({item.qty}ks)</p>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${statusCfg?.color || 'bg-slate-700 text-slate-300'}`}>{statusCfg?.label}</span>
+                                <select
+                                  value={item.assignedDesignerId || ''}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onChange={(e) => handleReassignDesigner(item.orderId, item.itemId, e.target.value)}
+                                  className="text-[9px] bg-slate-950 border border-slate-800 rounded px-1 py-0.5 text-slate-300"
+                                >
+                                  <option value="">Nepriradiť</option>
+                                  {employees.map(e => <option key={e.id} value={e.id}>{e.avatar} {e.firstName}</option>)}
+                                </select>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         {selectedOrderDetails && (
           <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 shadow-xl space-y-6 print:bg-white print:text-black print:border-none print:p-0 mt-6 animate-in fade-in duration-200">
             <div className="flex justify-between items-center border-b border-slate-800 pb-4 print:hidden">
@@ -3823,6 +3907,15 @@ export default function App() {
                           })}
                         </div>
                       </div>
+                      {addItemStations.grafik && (
+                        <div>
+                          <label className="block text-[10px] text-slate-500 mb-1">Priradený grafik (voliteľné)</label>
+                          <select value={addItemDesignerId} onChange={(e) => setAddItemDesignerId(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-xs text-white">
+                            <option value="">-- Nepriradený --</option>
+                            {employees.map(e => <option key={e.id} value={e.id}>{e.avatar} {e.firstName} {e.lastName}</option>)}
+                          </select>
+                        </div>
+                      )}
                       <div>
                         <label className="block text-[10px] text-slate-500 mb-1">Náhľadový obrázok</label>
                         {addItemImagePreview ? (
