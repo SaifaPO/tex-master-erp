@@ -157,8 +157,8 @@ const mapProductToDb = (p) => ({ id: p.id, custom_code: p.customCode, name: p.na
 const mapTierFromDb = (r) => ({ id: r.id, name: r.name, fit: r.fit, ventilation: r.ventilation, desc: r.description });
 const mapTierToDb = (t) => ({ id: t.id, name: t.name, fit: t.fit, ventilation: t.ventilation, description: t.desc });
 
-const mapEmployeeFromDb = (r) => ({ id: r.id, firstName: r.first_name, lastName: r.last_name, birthday: r.birthday, nameday: r.nameday, entryDate: r.entry_date, role: r.role, position: r.position, passwordHash: r.password_hash || '', phone: r.phone || '', email: r.email || '', avatar: r.avatar || '' });
-const mapEmployeeToDb = (e) => ({ id: e.id, first_name: e.firstName, last_name: e.lastName, birthday: e.birthday, nameday: e.nameday, entry_date: e.entryDate, role: e.role, position: e.position, password_hash: e.passwordHash || null, phone: e.phone || null, email: e.email || null, avatar: e.avatar || null });
+const mapEmployeeFromDb = (r) => ({ id: r.id, firstName: r.first_name, lastName: r.last_name, birthday: r.birthday, nameday: r.nameday, entryDate: r.entry_date, role: r.role, position: r.position, passwordHash: r.password_hash || '', phone: r.phone || '', email: r.email || '', avatar: r.avatar || '', pinHash: r.pin_hash || '', totpSecret: r.totp_secret || '', totpEnabled: !!r.totp_enabled, authUserId: r.auth_user_id || '' });
+const mapEmployeeToDb = (e) => ({ id: e.id, first_name: e.firstName, last_name: e.lastName, birthday: e.birthday, nameday: e.nameday, entry_date: e.entryDate, role: e.role, position: e.position, password_hash: e.passwordHash || null, phone: e.phone || null, email: e.email || null, avatar: e.avatar || null, pin_hash: e.pinHash || null, totp_secret: e.totpSecret || null, totp_enabled: !!e.totpEnabled, auth_user_id: e.authUserId || null });
 
 const mapOrderFromDb = (r) => ({ id: r.id, customer: r.customer, createdAt: r.created_at, deliveryDate: r.scheduled_day, driveLink: r.drive_link, notes: r.notes, paymentType: r.payment_type || 'faktura', items: r.items || [] });
 const mapOrderToDb = (o) => ({ id: o.id, customer: o.customer, created_at: o.createdAt, scheduled_day: o.deliveryDate, drive_link: o.driveLink, notes: o.notes, payment_type: o.paymentType, items: o.items });
@@ -179,6 +179,58 @@ async function hashPassword(pw) {
   const enc = new TextEncoder().encode(pw);
   const buf = await crypto.subtle.digest('SHA-256', enc);
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// --- TOTP (RFC 6238) — dvojfaktorové overenie kompatibilné s Google Authenticator / Authy / Microsoft Authenticator ---
+// Implementované priamo cez vstavané Web Crypto API prehliadača, žiadna externá knižnica.
+const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+
+function generateBase32Secret(length = 16) {
+  const array = new Uint8Array(length);
+  crypto.getRandomValues(array);
+  let secret = '';
+  for (let i = 0; i < length; i++) secret += BASE32_ALPHABET[array[i] % 32];
+  return secret;
+}
+
+function base32ToBytes(base32) {
+  const clean = base32.replace(/=+$/, '').toUpperCase();
+  let bits = '';
+  for (const char of clean) {
+    const val = BASE32_ALPHABET.indexOf(char);
+    if (val === -1) continue;
+    bits += val.toString(2).padStart(5, '0');
+  }
+  const bytes = [];
+  for (let i = 0; i + 8 <= bits.length; i += 8) bytes.push(parseInt(bits.substr(i, 8), 2));
+  return new Uint8Array(bytes);
+}
+
+async function generateTotpCode(secretBase32, timeOffsetSteps = 0) {
+  const keyBytes = base32ToBytes(secretBase32);
+  const counter = Math.floor(Date.now() / 1000 / 30) + timeOffsetSteps;
+  const counterBuf = new ArrayBuffer(8);
+  new DataView(counterBuf).setUint32(4, counter, false);
+  const cryptoKey = await crypto.subtle.importKey('raw', keyBytes, { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
+  const hmac = new Uint8Array(await crypto.subtle.sign('HMAC', cryptoKey, counterBuf));
+  const offset = hmac[hmac.length - 1] & 0x0f;
+  const binCode = ((hmac[offset] & 0x7f) << 24) | ((hmac[offset + 1] & 0xff) << 16) | ((hmac[offset + 2] & 0xff) << 8) | (hmac[offset + 3] & 0xff);
+  return (binCode % 1000000).toString().padStart(6, '0');
+}
+
+async function verifyTotpCode(enteredCode, secretBase32) {
+  const clean = enteredCode.trim();
+  if (!/^\d{6}$/.test(clean)) return false;
+  // Toleruje +/- 30 sekúnd posun hodín na telefóne
+  for (let offset = -1; offset <= 1; offset++) {
+    if ((await generateTotpCode(secretBase32, offset)) === clean) return true;
+  }
+  return false;
+}
+
+function buildOtpAuthUri(secretBase32, accountLabel) {
+  const issuer = 'TEX-MASTER ERP';
+  return `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(accountLabel)}?secret=${secretBase32}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30`;
 }
 
 function flattenOrderItems(ordersList) {
@@ -258,11 +310,47 @@ export default function App() {
     try { return new URLSearchParams(window.location.search).get('scan'); } catch { return null; }
   });
   const [isCameraScanning, setIsCameraScanning] = useState(false);
+  const [stationLoginParam] = useState(() => {
+    try { return new URLSearchParams(window.location.search).get('station'); } catch { return null; }
+  });
+  const stationQrGridRef = useRef(null);
+  const [activeStationContext, setActiveStationContext] = useState(null);
+  const [pinDigits, setPinDigits] = useState('');
+  const [pinError, setPinError] = useState('');
+  const [pinAttempts, setPinAttempts] = useState(0);
+  const [pinLockedUntil, setPinLockedUntil] = useState(null);
+  const [pinLockCountdown, setPinLockCountdown] = useState(0);
+  const [newEmpPin, setNewEmpPin] = useState('');
+  const [editEmpPin, setEditEmpPin] = useState('');
   const html5QrCodeRef = useRef(null);
   const [loginSelectedId, setLoginSelectedId] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [loginStep, setLoginStep] = useState('credentials');
+  const [pendingTotpEmployee, setPendingTotpEmployee] = useState(null);
+  const [loginTotpCode, setLoginTotpCode] = useState('');
+  const [loginTotpError, setLoginTotpError] = useState('');
+  const [isVerifyingTotp, setIsVerifyingTotp] = useState(false);
+  const [totpSetupSecret, setTotpSetupSecret] = useState('');
+  const [totpSetupCode, setTotpSetupCode] = useState('');
+  const [totpSetupError, setTotpSetupError] = useState('');
+  const [showTotpSetup, setShowTotpSetup] = useState(false);
+  // --- Supabase Auth (Master/Supervisor/Obchodník) ---
+  const [authScreenMode, setAuthScreenMode] = useState('login'); // 'login' | 'signup'
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authSignupPassword2, setAuthSignupPassword2] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [isAuthBusy, setIsAuthBusy] = useState(false);
+  const [authSession, setAuthSession] = useState(null);
+  const [mfaStep, setMfaStep] = useState(null); // null | { factorId, challengeId }
+  const [mfaCode, setMfaCode] = useState('');
+  const [mfaError, setMfaError] = useState('');
+  const [enrolledMfaFactor, setEnrolledMfaFactor] = useState(null);
+  const [mfaEnrollData, setMfaEnrollData] = useState(null);
+  const [mfaEnrollCode, setMfaEnrollCode] = useState('');
+  const [mfaEnrollError, setMfaEnrollError] = useState('');
   const [showMasterSwitcher, setShowMasterSwitcher] = useState(false);
   const [newEmpPassword, setNewEmpPassword] = useState('');
   const [editEmpPassword, setEditEmpPassword] = useState('');
@@ -472,6 +560,41 @@ export default function App() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
+  const employeesRef = useRef(employees);
+  useEffect(() => { employeesRef.current = employees; }, [employees]);
+
+  // Obnovenie sedenia Supabase Auth pri načítaní appky + reakcia na prihlásenie/odhlásenie/MFA
+  useEffect(() => {
+    if (isLoading) return;
+
+    const handleSessionUser = async (session) => {
+      if (!session) { setAuthSession(null); return; }
+      setAuthSession(session);
+      const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (aal && aal.nextLevel === 'aal2' && aal.currentLevel !== 'aal2') {
+        const { data: factorsData } = await supabase.auth.mfa.listFactors();
+        const totpFactor = factorsData?.totp?.[0];
+        if (totpFactor) {
+          const { data: challengeData } = await supabase.auth.mfa.challenge({ factorId: totpFactor.id });
+          setMfaStep({ factorId: totpFactor.id, challengeId: challengeData.id });
+          return;
+        }
+      }
+      const emp = employeesRef.current.find(x => x.authUserId === session.user.id);
+      if (emp) {
+        setCurrentUser(emp);
+        setIsAuthenticated(true);
+        const { data: factorsData2 } = await supabase.auth.mfa.listFactors();
+        const verified = factorsData2?.totp?.find(f => f.status === 'verified');
+        setEnrolledMfaFactor(verified ? verified.id : null);
+      }
+    };
+
+    supabase.auth.getSession().then(({ data }) => handleSessionUser(data.session));
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => handleSessionUser(session));
+    return () => listener.subscription.unsubscribe();
+  }, [isLoading]);
+
   useEffect(() => {
     if (activeTab === 'qr-terminal' && qrInputRef.current) qrInputRef.current.focus();
     if (activeTab !== 'qr-terminal' && html5QrCodeRef.current) { stopCameraScan(); }
@@ -486,10 +609,113 @@ export default function App() {
     }
   }, [isAuthenticated]);
 
+  // Ak appku otvorili cez QR kód stanice (?station=...), nastaviť kontext stanice pre PIN prihlásenie
+  useEffect(() => {
+    if (stationLoginParam && STATION_CONFIGS[stationLoginParam]) {
+      setActiveStationContext(stationLoginParam);
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
+  // Odpočítavanie zámky pri opakovane nesprávnom PIN-e
+  useEffect(() => {
+    if (!pinLockedUntil) { setPinLockCountdown(0); return; }
+    const tick = () => {
+      const remaining = Math.ceil((pinLockedUntil - Date.now()) / 1000);
+      if (remaining <= 0) { setPinLockedUntil(null); setPinLockCountdown(0); setPinAttempts(0); }
+      else setPinLockCountdown(remaining);
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [pinLockedUntil]);
+
   const hasPermission = (action) => acl[action] ? acl[action][currentUser?.role] : false;
 
   // --- PRIHLÁSENIE / ODHLÁSENIE ---
-  const handleLogin = async (e) => {
+  // --- SUPABASE AUTH: registrácia, prihlásenie a MFA pre Master/Supervisor/Obchodníka ---
+  const handleAuthSignup = async (e) => {
+    e.preventDefault();
+    setAuthError('');
+    if (!authEmail.trim()) { setAuthError('Zadaj email.'); return; }
+    const matchingEmployee = employees.find(x => x.email && x.email.toLowerCase() === authEmail.trim().toLowerCase() && ['master', 'supervisor', 'sales'].includes(x.role));
+    if (!matchingEmployee) { setAuthError('Tento email nepatrí žiadnemu profilu s prístupom (Master/Supervisor/Obchodník). Over si ho v Zamestnanci & Práva, alebo požiadaj Mastra, nech ho tam doplní.'); return; }
+    if (matchingEmployee.authUserId) { setAuthError('Tento profil už má vytvorený účet — použi prihlásenie, nie registráciu.'); return; }
+    if (authPassword.length < 8) { setAuthError('Heslo musí mať aspoň 8 znakov.'); return; }
+    if (authPassword !== authSignupPassword2) { setAuthError('Heslá sa nezhodujú.'); return; }
+    setIsAuthBusy(true);
+    const { data, error } = await supabase.auth.signUp({ email: authEmail.trim(), password: authPassword });
+    if (error) { setIsAuthBusy(false); setAuthError(error.message); return; }
+    if (!data.user) { setIsAuthBusy(false); setAuthError('Účet bol vytvorený, ale je potrebné potvrdenie emailom. Over si schránku, alebo požiadaj Mastra o vypnutie potvrdzovania v Supabase.'); return; }
+    await supabase.from('employees').update({ auth_user_id: data.user.id }).eq('id', matchingEmployee.id);
+    setIsAuthBusy(false);
+    setAuthPassword(''); setAuthSignupPassword2('');
+    triggerNotification('success', 'Účet bol vytvorený a prepojený s profilom. Prihlasujem...');
+  };
+
+  const handleAuthLogin = async (e) => {
+    e.preventDefault();
+    setAuthError('');
+    if (!authEmail.trim() || !authPassword) { setAuthError('Zadaj email aj heslo.'); return; }
+    setIsAuthBusy(true);
+    const { data, error } = await supabase.auth.signInWithPassword({ email: authEmail.trim(), password: authPassword });
+    if (error) { setIsAuthBusy(false); setAuthError(error.message === 'Invalid login credentials' ? 'Nesprávny email alebo heslo.' : error.message); return; }
+    setIsAuthBusy(false);
+    setAuthPassword('');
+    // onAuthStateChange (nižšie) sa postará o zvyšok — nájde profil, prípadne vyžiada MFA kód
+  };
+
+  const handleMfaVerify = async () => {
+    if (!mfaStep) return;
+    setMfaError('');
+    setIsAuthBusy(true);
+    const { error } = await supabase.auth.mfa.verify({ factorId: mfaStep.factorId, challengeId: mfaStep.challengeId, code: mfaCode.trim() });
+    setIsAuthBusy(false);
+    if (error) { setMfaError('Nesprávny alebo expirovaný kód. Skús nový kód z appky.'); setMfaCode(''); return; }
+    setMfaStep(null);
+    setMfaCode('');
+  };
+
+  const handleAuthLogout = async () => {
+    await supabase.auth.signOut();
+    setAuthSession(null);
+    setCurrentUser(null);
+    setIsAuthenticated(false);
+    setMfaStep(null);
+    setActiveStationContext(null);
+  };
+
+  // MFA (2FA) nastavenie vo vlastnom profile — cez Supabase Auth (bezpečné, tajný kľúč nikdy neopustí server)
+  const handleBeginAuthMfaEnroll = async () => {
+    setMfaEnrollError('');
+    const { data, error } = await supabase.auth.mfa.enroll({ factorType: 'totp' });
+    if (error) { setMfaEnrollError(error.message); return; }
+    setMfaEnrollData(data);
+  };
+
+  const handleConfirmAuthMfaEnroll = async () => {
+    if (!mfaEnrollData) return;
+    setMfaEnrollError('');
+    const { data: challengeData, error: challengeErr } = await supabase.auth.mfa.challenge({ factorId: mfaEnrollData.id });
+    if (challengeErr) { setMfaEnrollError(challengeErr.message); return; }
+    const { error } = await supabase.auth.mfa.verify({ factorId: mfaEnrollData.id, challengeId: challengeData.id, code: mfaEnrollCode.trim() });
+    if (error) { setMfaEnrollError('Kód nesedí. Skontroluj čas na telefóne a skús znova.'); return; }
+    setEnrolledMfaFactor(mfaEnrollData.id);
+    setMfaEnrollData(null);
+    setMfaEnrollCode('');
+    triggerNotification('success', '2FA bolo zapnuté.');
+  };
+
+  const handleDisableAuthMfa = async () => {
+    if (!enrolledMfaFactor) return;
+    if (!window.confirm('Naozaj vypnúť dvojfaktorové overenie?')) return;
+    const { error } = await supabase.auth.mfa.unenroll({ factorId: enrolledMfaFactor });
+    if (error) { triggerNotification('error', error.message); return; }
+    setEnrolledMfaFactor(null);
+    triggerNotification('success', '2FA bolo vypnuté.');
+  };
+
+
     e.preventDefault();
     setLoginError('');
     const emp = employees.find(x => x.id === loginSelectedId);
@@ -500,10 +726,36 @@ export default function App() {
     const enteredHash = await hashPassword(loginPassword);
     setIsLoggingIn(false);
     if (enteredHash !== emp.passwordHash) { setLoginError('Nesprávne heslo.'); return; }
-    setCurrentUser(emp);
-    setIsAuthenticated(true);
     setLoginPassword('');
     setLoginError('');
+    if (emp.totpEnabled && emp.totpSecret) {
+      setPendingTotpEmployee(emp);
+      setLoginStep('totp');
+      return;
+    }
+    setCurrentUser(emp);
+    setIsAuthenticated(true);
+  };
+
+  const handleVerifyLoginTotp = async () => {
+    if (!pendingTotpEmployee) return;
+    setIsVerifyingTotp(true);
+    const ok = await verifyTotpCode(loginTotpCode, pendingTotpEmployee.totpSecret);
+    setIsVerifyingTotp(false);
+    if (!ok) { setLoginTotpError('Nesprávny alebo expirovaný kód. Skús nový kód z appky (mení sa každých 30 sekúnd).'); setLoginTotpCode(''); return; }
+    setCurrentUser(pendingTotpEmployee);
+    setIsAuthenticated(true);
+    setLoginStep('credentials');
+    setPendingTotpEmployee(null);
+    setLoginTotpCode('');
+    setLoginTotpError('');
+  };
+
+  const handleCancelTotpLogin = () => {
+    setLoginStep('credentials');
+    setPendingTotpEmployee(null);
+    setLoginTotpCode('');
+    setLoginTotpError('');
   };
 
   const handleLogout = () => {
@@ -512,6 +764,75 @@ export default function App() {
     setLoginSelectedId('');
     setLoginPassword('');
     setShowMasterSwitcher(false);
+    setActiveStationContext(null);
+    setPinDigits('');
+    setPinError('');
+    setLoginStep('credentials');
+    setPendingTotpEmployee(null);
+    setLoginTotpCode('');
+  };
+
+  // Odhlásenie, ktoré NEOPÚŠŤA kontext stanice - hneď sa ukáže PIN obrazovka pre ďalšieho pracovníka
+  const handleQuickStationLogout = () => {
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+    setPinDigits('');
+    setPinError('');
+  };
+
+  const handlePinDigitPress = (digit) => {
+    if (pinLockedUntil) return;
+    if (pinDigits.length >= 4) return;
+    const next = pinDigits + digit;
+    setPinDigits(next);
+    setPinError('');
+    if (next.length === 4) handlePinLogin(next);
+  };
+
+  const handlePinBackspace = () => setPinDigits(pinDigits.slice(0, -1));
+
+  const handlePinLogin = async (pin) => {
+    if (pinLockedUntil) return;
+    const enteredHash = await hashPassword(pin);
+    const emp = employees.find(x => x.pinHash && x.pinHash === enteredHash);
+    if (!emp) {
+      const attempts = pinAttempts + 1;
+      setPinAttempts(attempts);
+      setPinDigits('');
+      if (attempts >= 5) {
+        setPinLockedUntil(Date.now() + 60000);
+        setPinError('Príliš veľa nesprávnych pokusov. Skús to znova o minútu.');
+      } else {
+        setPinError(`Nesprávny PIN (pokus ${attempts}/5).`);
+      }
+      return;
+    }
+    setCurrentUser(emp);
+    setIsAuthenticated(true);
+    setPinDigits('');
+    setPinError('');
+    setPinAttempts(0);
+    setActiveTab('isolated-station');
+    setActiveStationFilter(activeStationContext);
+  };
+
+  const handlePrintStationCodes = () => {
+    if (!stationQrGridRef.current) return;
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    if (!printWindow) { triggerNotification('error', 'Prehliadač zablokoval otvorenie okna na tlač. Povoľ vyskakovacie okná pre túto appku.'); return; }
+    printWindow.document.write(`
+      <html><head><title>QR kódy staníc</title>
+      <style>
+        body { font-family: sans-serif; padding: 20px; background: white; }
+        .qr-grid { display: flex; flex-wrap: wrap; gap: 16px; }
+        .qr-item { display: inline-flex; flex-direction: column; align-items: center; text-align: center; padding: 14px; border: 1px solid #ccc; border-radius: 12px; }
+        .qr-item span { display: block; font-weight: bold; margin-top: 8px; font-size: 13px; color: #000; }
+      </style>
+      </head><body><div class="qr-grid">${stationQrGridRef.current.innerHTML}</div></body></html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => { printWindow.print(); }, 300);
   };
 
   const triggerNotification = (type, text) => {
@@ -1413,27 +1734,72 @@ export default function App() {
     if (editingEmployee) {
       let passwordHash = editingEmployee.passwordHash;
       if (editEmpPassword.trim()) passwordHash = await hashPassword(editEmpPassword.trim());
-      const updated = { ...editingEmployee, passwordHash };
+      let pinHash = editingEmployee.pinHash;
+      if (editEmpPin.trim()) {
+        if (!/^\d{4}$/.test(editEmpPin.trim())) { alert('PIN musí mať presne 4 číslice.'); return; }
+        pinHash = await hashPassword(editEmpPin.trim());
+        if (employees.some(x => x.id !== editingEmployee.id && x.pinHash === pinHash)) { alert('Tento PIN už používa iný zamestnanec. Zvoľte iný.'); return; }
+      }
+      const updated = { ...editingEmployee, passwordHash, pinHash };
       const { error } = await supabase.from('employees').update(mapEmployeeToDb(updated)).eq('id', updated.id);
       if (error) { triggerNotification('error', error.message); return; }
       if (currentUser.id === updated.id) setCurrentUser(updated);
       setEditingEmployee(null);
       setEditEmpPassword('');
+      setEditEmpPin('');
       triggerNotification('success', 'Zamestnanec bol upravený.');
     } else {
       if (!newEmpFirstName.trim() || !newEmpLastName.trim()) { alert('Zadajte meno a priezvisko.'); return; }
-      if (!newEmpPassword.trim()) { alert('Nastavte zamestnancovi prihlasovacie heslo.'); return; }
-      const passwordHash = await hashPassword(newEmpPassword.trim());
-      const created = { id: `emp-${Date.now()}`, firstName: newEmpFirstName, lastName: newEmpLastName, birthday: newEmpBirthday, nameday: newEmpNameday, entryDate: newEmpEntryDate, role: newEmpRole, position: newEmpPosition, phone: newEmpPhone, email: newEmpEmail, avatar: newEmpAvatar, passwordHash };
+      if (['master', 'supervisor', 'sales'].includes(newEmpRole) && !newEmpEmail.trim()) { alert('Pre túto rolu zadajte email — zamestnanec si podľa neho vytvorí prihlasovací účet.'); return; }
+      let pinHash = '';
+      if (newEmpPin.trim()) {
+        if (!/^\d{4}$/.test(newEmpPin.trim())) { alert('PIN musí mať presne 4 číslice.'); return; }
+        pinHash = await hashPassword(newEmpPin.trim());
+        if (employees.some(x => x.pinHash === pinHash)) { alert('Tento PIN už používa iný zamestnanec. Zvoľte iný.'); return; }
+      }
+      const passwordHash = newEmpPassword.trim() ? await hashPassword(newEmpPassword.trim()) : '';
+      const created = { id: `emp-${Date.now()}`, firstName: newEmpFirstName, lastName: newEmpLastName, birthday: newEmpBirthday, nameday: newEmpNameday, entryDate: newEmpEntryDate, role: newEmpRole, position: newEmpPosition, phone: newEmpPhone, email: newEmpEmail, avatar: newEmpAvatar, passwordHash, pinHash };
       const { error } = await supabase.from('employees').insert(mapEmployeeToDb(created));
       if (error) { triggerNotification('error', error.message); return; }
-      setNewEmpFirstName(''); setNewEmpLastName(''); setNewEmpBirthday(''); setNewEmpNameday(''); setNewEmpPosition(''); setNewEmpPhone(''); setNewEmpEmail(''); setNewEmpPassword(''); setNewEmpAvatar('');
+      setNewEmpFirstName(''); setNewEmpLastName(''); setNewEmpBirthday(''); setNewEmpNameday(''); setNewEmpPosition(''); setNewEmpPhone(''); setNewEmpEmail(''); setNewEmpPassword(''); setNewEmpAvatar(''); setNewEmpPin('');
       triggerNotification('success', `Zamestnanec "${created.firstName}" bol pridaný.`);
     }
   };
 
-  const handleStartEditEmployee = (emp) => { setEditingEmployee({ ...emp }); setEditEmpPassword(''); };
-  const handleCancelEditEmployee = () => { setEditingEmployee(null); setEditEmpPassword(''); };
+  const handleStartEditEmployee = (emp) => { setEditingEmployee({ ...emp }); setEditEmpPassword(''); setEditEmpPin(''); setShowTotpSetup(false); setTotpSetupSecret(''); setTotpSetupCode(''); setTotpSetupError(''); };
+
+  const handleBeginTotpSetup = () => {
+    setTotpSetupSecret(generateBase32Secret());
+    setTotpSetupCode('');
+    setTotpSetupError('');
+    setShowTotpSetup(true);
+  };
+
+  const handleConfirmTotpSetup = async () => {
+    if (!editingEmployee) return;
+    const ok = await verifyTotpCode(totpSetupCode, totpSetupSecret);
+    if (!ok) { setTotpSetupError('Kód nesedí. Skontroluj čas na telefóne a skús znova.'); return; }
+    const { error } = await supabase.from('employees').update({ totp_secret: totpSetupSecret, totp_enabled: true }).eq('id', editingEmployee.id);
+    if (error) { triggerNotification('error', error.message); return; }
+    const updated = { ...editingEmployee, totpSecret: totpSetupSecret, totpEnabled: true };
+    setEditingEmployee(updated);
+    if (currentUser.id === updated.id) setCurrentUser(updated);
+    setShowTotpSetup(false);
+    setTotpSetupCode('');
+    triggerNotification('success', '2FA bolo zapnuté.');
+  };
+
+  const handleDisableTotp = async () => {
+    if (!editingEmployee) return;
+    if (!window.confirm(`Naozaj vypnúť dvojfaktorové overenie pre ${editingEmployee.firstName}?`)) return;
+    const { error } = await supabase.from('employees').update({ totp_secret: null, totp_enabled: false }).eq('id', editingEmployee.id);
+    if (error) { triggerNotification('error', error.message); return; }
+    const updated = { ...editingEmployee, totpSecret: '', totpEnabled: false };
+    setEditingEmployee(updated);
+    if (currentUser.id === updated.id) setCurrentUser(updated);
+    triggerNotification('success', '2FA bolo vypnuté.');
+  };
+  const handleCancelEditEmployee = () => { setEditingEmployee(null); setEditEmpPassword(''); setEditEmpPin(''); };
 
   const handleDeleteEmployee = async (id) => {
     if (!hasPermission('manage_profiles')) { triggerNotification('error', 'Nemáte prístup do správy profilov.'); return; }
@@ -1544,31 +1910,131 @@ export default function App() {
   }
 
   if (!isAuthenticated || !currentUser) {
+    if (loginStep === 'totp' && pendingTotpEmployee) {
+      return (
+        <div className="min-h-screen bg-slate-900 text-slate-100 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-slate-950 border border-slate-800 rounded-2xl p-8 shadow-2xl space-y-6 text-center">
+            <div className="space-y-1">
+              <div className="bg-gradient-to-br from-indigo-500 to-pink-500 p-3 rounded-xl text-white inline-flex mb-1"><Lock className="h-6 w-6" /></div>
+              <h1 className="text-lg font-extrabold text-white">Dvojfaktorové overenie</h1>
+              <p className="text-xs text-slate-500">Zadaj 6-miestny kód z appky Google Authenticator / Authy pre {pendingTotpEmployee.firstName}</p>
+            </div>
+            <input
+              type="text" inputMode="numeric" maxLength={6} autoFocus
+              value={loginTotpCode}
+              onChange={(e) => { setLoginTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6)); setLoginTotpError(''); }}
+              onKeyDown={(e) => e.key === 'Enter' && handleVerifyLoginTotp()}
+              className="w-full bg-slate-900 border-2 border-slate-700 focus:border-indigo-500 text-white text-2xl font-mono text-center tracking-[0.5em] rounded-xl px-4 py-3"
+              placeholder="000000"
+            />
+            {loginTotpError && <p className="text-xs text-rose-400 bg-rose-950/30 border border-rose-900/40 rounded-lg px-3 py-2">{loginTotpError}</p>}
+            <button onClick={handleVerifyLoginTotp} disabled={isVerifyingTotp || loginTotpCode.length !== 6} className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-extrabold text-sm py-3 rounded-lg uppercase tracking-wider flex items-center justify-center gap-2">
+              {isVerifyingTotp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Potvrdiť
+            </button>
+            <button onClick={handleCancelTotpLogin} className="text-[10px] text-slate-600 hover:text-slate-400 underline">Späť na prihlásenie</button>
+          </div>
+        </div>
+      );
+    }
+    if (activeStationContext) {
+      const stationCfg = STATION_CONFIGS[activeStationContext];
+      return (
+        <div className="min-h-screen bg-slate-900 text-slate-100 flex items-center justify-center p-4">
+          <div className="w-full max-w-xs bg-slate-950 border border-slate-800 rounded-2xl p-8 shadow-2xl space-y-6 text-center">
+            <div className="space-y-1">
+              <div className="bg-gradient-to-br from-indigo-500 to-pink-500 p-3 rounded-xl text-white inline-flex mb-1">
+                {stationCfg && <stationCfg.icon className="h-6 w-6" />}
+              </div>
+              <h1 className="text-lg font-extrabold text-white">{stationCfg?.name || activeStationContext}</h1>
+              <p className="text-xs text-slate-500">Zadaj svoj 4-miestny PIN</p>
+            </div>
+
+            <div className="flex items-center justify-center gap-3">
+              {[0, 1, 2, 3].map(i => (
+                <div key={i} className={`w-4 h-4 rounded-full border-2 ${pinDigits.length > i ? 'bg-indigo-500 border-indigo-500' : 'border-slate-700'}`}></div>
+              ))}
+            </div>
+
+            {pinLockedUntil ? (
+              <p className="text-xs text-rose-400 bg-rose-950/30 border border-rose-900/40 rounded-lg px-3 py-2">Zamknuté, skús znova o {pinLockCountdown}s</p>
+            ) : pinError ? (
+              <p className="text-xs text-rose-400 bg-rose-950/30 border border-rose-900/40 rounded-lg px-3 py-2">{pinError}</p>
+            ) : null}
+
+            <div className="grid grid-cols-3 gap-3">
+              {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(d => (
+                <button key={d} onClick={() => handlePinDigitPress(d)} disabled={!!pinLockedUntil} className="bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-white text-xl font-bold rounded-xl py-4">{d}</button>
+              ))}
+              <button onClick={() => setActiveStationContext(null)} className="bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-bold rounded-xl py-4">Zrušiť</button>
+              <button onClick={() => handlePinDigitPress('0')} disabled={!!pinLockedUntil} className="bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-white text-xl font-bold rounded-xl py-4">0</button>
+              <button onClick={handlePinBackspace} disabled={!!pinLockedUntil} className="bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 text-xs font-bold rounded-xl py-4">⌫</button>
+            </div>
+
+            <button onClick={() => setActiveStationContext(null)} className="text-[10px] text-slate-600 hover:text-slate-400 underline">Prihlásiť sa menom a heslom namiesto toho</button>
+          </div>
+        </div>
+      );
+    }
+
+    if (mfaStep) {
+      return (
+        <div className="min-h-screen bg-slate-900 text-slate-100 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-slate-950 border border-slate-800 rounded-2xl p-8 shadow-2xl space-y-6 text-center">
+            <div className="space-y-1">
+              <div className="bg-gradient-to-br from-indigo-500 to-pink-500 p-3 rounded-xl text-white inline-flex mb-1"><Lock className="h-6 w-6" /></div>
+              <h1 className="text-lg font-extrabold text-white">Dvojfaktorové overenie</h1>
+              <p className="text-xs text-slate-500">Zadaj 6-miestny kód z appky Google Authenticator / Authy</p>
+            </div>
+            <input
+              type="text" inputMode="numeric" maxLength={6} autoFocus
+              value={mfaCode}
+              onChange={(e) => { setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6)); setMfaError(''); }}
+              onKeyDown={(e) => e.key === 'Enter' && handleMfaVerify()}
+              className="w-full bg-slate-900 border-2 border-slate-700 focus:border-indigo-500 text-white text-2xl font-mono text-center tracking-[0.5em] rounded-xl px-4 py-3"
+              placeholder="000000"
+            />
+            {mfaError && <p className="text-xs text-rose-400 bg-rose-950/30 border border-rose-900/40 rounded-lg px-3 py-2">{mfaError}</p>}
+            <button onClick={handleMfaVerify} disabled={isAuthBusy || mfaCode.length !== 6} className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-extrabold text-sm py-3 rounded-lg uppercase tracking-wider flex items-center justify-center gap-2">
+              {isAuthBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Potvrdiť
+            </button>
+            <button onClick={handleAuthLogout} className="text-[10px] text-slate-600 hover:text-slate-400 underline">Späť na prihlásenie</button>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-slate-900 text-slate-100 flex items-center justify-center p-4">
         <div className="w-full max-w-sm bg-slate-950 border border-slate-800 rounded-2xl p-8 shadow-2xl space-y-6">
           <div className="text-center space-y-1">
             <img src="/logo-atak-pbt.png" alt="ATAK x PBT" className="h-10 w-auto brightness-0 invert mx-auto mb-2" />
             <h1 className="text-lg font-extrabold text-white">TEX-MASTER ERP</h1>
-            <p className="text-xs text-slate-500">Prihláste sa svojím menom a heslom</p>
+            <p className="text-xs text-slate-500">{authScreenMode === 'login' ? 'Prihlásenie pre Master / Supervisor / Obchodníka' : 'Vytvorenie prihlasovacieho účtu'}</p>
           </div>
-          <form onSubmit={handleLogin} className="space-y-4">
+          <form onSubmit={authScreenMode === 'login' ? handleAuthLogin : handleAuthSignup} className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-400 mb-1">Meno</label>
-              <select value={loginSelectedId} onChange={(e) => { setLoginSelectedId(e.target.value); setLoginError(''); }} className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-white">
-                <option value="">-- Vyber svoje meno --</option>
-                {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.firstName} {emp.lastName}</option>)}
-              </select>
+              <label className="block text-xs font-semibold text-slate-400 mb-1">Email</label>
+              <input type="email" value={authEmail} onChange={(e) => { setAuthEmail(e.target.value); setAuthError(''); }} className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-white" autoFocus />
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-400 mb-1">Heslo</label>
-              <input type="password" value={loginPassword} onChange={(e) => { setLoginPassword(e.target.value); setLoginError(''); }} className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-white" autoFocus />
+              <input type="password" value={authPassword} onChange={(e) => { setAuthPassword(e.target.value); setAuthError(''); }} className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-white" />
             </div>
-            {loginError && <p className="text-xs text-rose-400 bg-rose-950/30 border border-rose-900/40 rounded-lg px-3 py-2">{loginError}</p>}
-            <button type="submit" disabled={isLoggingIn} className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-extrabold text-sm py-3 rounded-lg uppercase tracking-wider flex items-center justify-center gap-2">
-              {isLoggingIn ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />} Prihlásiť sa
+            {authScreenMode === 'signup' && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Zopakuj heslo</label>
+                <input type="password" value={authSignupPassword2} onChange={(e) => { setAuthSignupPassword2(e.target.value); setAuthError(''); }} className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-white" />
+              </div>
+            )}
+            {authError && <p className="text-xs text-rose-400 bg-rose-950/30 border border-rose-900/40 rounded-lg px-3 py-2">{authError}</p>}
+            <button type="submit" disabled={isAuthBusy} className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-extrabold text-sm py-3 rounded-lg uppercase tracking-wider flex items-center justify-center gap-2">
+              {isAuthBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />} {authScreenMode === 'login' ? 'Prihlásiť sa' : 'Vytvoriť účet'}
             </button>
           </form>
+          <button onClick={() => { setAuthScreenMode(authScreenMode === 'login' ? 'signup' : 'login'); setAuthError(''); }} className="w-full text-center text-[11px] text-slate-500 hover:text-slate-300 underline">
+            {authScreenMode === 'login' ? 'Ešte nemáš účet? Vytvor si ho' : 'Už máš účet? Prihlásiť sa'}
+          </button>
+          <p className="text-center text-[10px] text-slate-600">Bežný zamestnanec na stanici sa prihlasuje naskenovaním QR kódu na stroji a zadaním PIN-u.</p>
         </div>
       </div>
     );
@@ -1588,7 +2054,11 @@ export default function App() {
               {showMasterSwitcher ? 'Skryť testovací prepínač' : 'Testovať ako iný profil'}
             </button>
           )}
-          <button onClick={handleLogout} className="px-3 py-1 rounded-md font-bold border bg-rose-950/40 text-rose-400 border-rose-900/40 hover:bg-rose-900/40">Odhlásiť sa</button>
+          {activeStationContext ? (
+            <button onClick={handleQuickStationLogout} className="px-3 py-1 rounded-md font-bold border bg-rose-950/40 text-rose-400 border-rose-900/40 hover:bg-rose-900/40">Odhlásiť sa (ďalší pracovník)</button>
+          ) : (
+            <button onClick={authSession ? handleAuthLogout : handleLogout} className="px-3 py-1 rounded-md font-bold border bg-rose-950/40 text-rose-400 border-rose-900/40 hover:bg-rose-900/40">Odhlásiť sa</button>
+          )}
         </div>
       </div>
 
@@ -2673,7 +3143,7 @@ export default function App() {
                         <p className="text-xs text-slate-400">Pozícia: <strong className="text-slate-300">{emp.position || '—'}</strong></p>
                         <p className="text-[10px] text-slate-500">Dátum nástupu: <strong className="text-slate-400">{emp.entryDate || '—'}</strong></p>
                         <p className="text-[10px] text-slate-500">Telefón: <strong className="text-slate-400">{emp.phone || '—'}</strong> • Email: <strong className="text-slate-400">{emp.email || '—'}</strong></p>
-                        <p className="text-[10px] text-slate-500">Heslo: <strong className={emp.passwordHash ? 'text-emerald-400' : 'text-rose-400'}>{emp.passwordHash ? 'Nastavené' : 'Nenastavené — nemôže sa prihlásiť'}</strong></p>
+                        <p className="text-[10px] text-slate-500">Heslo: <strong className={emp.passwordHash ? 'text-emerald-400' : 'text-rose-400'}>{emp.passwordHash ? 'Nastavené' : 'Nenastavené — nemôže sa prihlásiť'}</strong> • PIN: <strong className={emp.pinHash ? 'text-emerald-400' : 'text-slate-500'}>{emp.pinHash ? 'Nastavený' : 'Nenastavený'}</strong></p>
                         <div className="flex flex-wrap gap-2 pt-1">
                           <span className="bg-indigo-950/40 text-indigo-300 text-[10px] px-2 py-0.5 rounded border border-indigo-900/20 flex items-center gap-1 font-bold"><CalendarDays className="h-3.5 w-3.5" /> Narodeniny: {emp.birthday || '—'}</span>
                           <span className="bg-purple-950/40 text-purple-300 text-[10px] px-2 py-0.5 rounded border border-purple-900/20 flex items-center gap-1 font-bold"><Gift className="h-3.5 w-3.5" /> Meniny: {emp.nameday || '—'}</span>
@@ -2734,9 +3204,51 @@ export default function App() {
                       </div>
                     </div>
                     <div>
-                      <label className="text-slate-400 block mb-0.5">{editingEmployee ? 'Nové heslo (nechaj prázdne, ak nemeníš)' : 'Prihlasovacie heslo'}</label>
-                      <input type="password" placeholder={editingEmployee ? '••••••' : 'Zvoľ heslo pre prihlásenie'} required={!editingEmployee} value={editingEmployee ? editEmpPassword : newEmpPassword} onChange={(e) => editingEmployee ? setEditEmpPassword(e.target.value) : setNewEmpPassword(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" />
+                      <label className="text-slate-400 block mb-0.5">Staré heslo (nepoužíva sa — Master/Superv./Obchodník sa prihlasujú emailom, nechaj prázdne)</label>
+                      <input type="password" placeholder="nepoužívané" value={editingEmployee ? editEmpPassword : newEmpPassword} onChange={(e) => editingEmployee ? setEditEmpPassword(e.target.value) : setNewEmpPassword(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white opacity-60" />
+                      {editingEmployee && ['master', 'supervisor', 'sales'].includes(editingEmployee.role) && (
+                        <p className="text-[10px] text-slate-500 mt-1">{editingEmployee.authUserId ? '✅ Prihlasovací účet (email) je vytvorený a prepojený.' : '⚠️ Prihlasovací účet ešte nie je vytvorený — zamestnanec si ho vytvorí sám na prihlasovacej obrazovke tlačidlom "Vytvor si ho" (podľa emailu vyššie).'}</p>
+                      )}
                     </div>
+                    <div>
+                      <label className="text-slate-400 block mb-0.5">PIN pre rýchle prihlásenie na stanici (4 číslice, voliteľné)</label>
+                      <input type="text" inputMode="numeric" pattern="\d{4}" maxLength={4} placeholder={editingEmployee ? (editingEmployee.pinHash ? '••••' : 'napr. 1234') : 'napr. 1234'} value={editingEmployee ? editEmpPin : newEmpPin} onChange={(e) => { const v = e.target.value.replace(/\D/g, '').slice(0, 4); editingEmployee ? setEditEmpPin(v) : setNewEmpPin(v); }} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" />
+                      {editingEmployee && (
+                        <p className="text-[10px] text-slate-500 mt-0.5">{editingEmployee.pinHash ? 'PIN je nastavený — nechaj prázdne, ak ho nemeníš.' : 'PIN zatiaľ nie je nastavený.'}</p>
+                      )}
+                    </div>
+                    {editingEmployee && editingEmployee.id === currentUser.id && authSession && (
+                      <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 space-y-2">
+                        <span className="text-slate-300 font-bold block">Dvojfaktorové overenie (2FA)</span>
+                        <p className="text-[10px] text-slate-500">Toto vieš nastaviť len pre svoj vlastný účet, po prihlásení — Supabase Auth to takto vyžaduje kvôli bezpečnosti (tajný kľúč nikdy neopustí server).</p>
+                        {enrolledMfaFactor ? (
+                          <div className="flex items-center justify-between">
+                            <span className="text-emerald-400 font-bold text-[11px] flex items-center gap-1">✅ Zapnuté</span>
+                            <button type="button" onClick={handleDisableAuthMfa} className="bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 px-2 py-1 rounded text-[10px] font-bold">Vypnúť 2FA</button>
+                          </div>
+                        ) : !mfaEnrollData ? (
+                          <button type="button" onClick={handleBeginAuthMfaEnroll} className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded text-[11px] font-bold">Nastaviť 2FA</button>
+                        ) : (
+                          <div className="space-y-2">
+                            <p className="text-[10px] text-slate-400">Naskenuj tento QR appkou Google Authenticator / Authy:</p>
+                            <div className="bg-white p-2 rounded-lg inline-block" dangerouslySetInnerHTML={{ __html: mfaEnrollData.totp.qr_code }} />
+                            <p className="text-[9px] text-slate-500 font-mono break-all">Ručný kľúč (ak sa QR nedá naskenovať): {mfaEnrollData.totp.secret}</p>
+                            <input type="text" inputMode="numeric" maxLength={6} placeholder="Zadaj 6-miestny kód z appky" value={mfaEnrollCode} onChange={(e) => { setMfaEnrollCode(e.target.value.replace(/\D/g, '').slice(0, 6)); setMfaEnrollError(''); }} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white font-mono tracking-widest text-center" />
+                            {mfaEnrollError && <p className="text-[10px] text-rose-400">{mfaEnrollError}</p>}
+                            <div className="flex gap-2">
+                              <button type="button" onClick={handleConfirmAuthMfaEnroll} disabled={mfaEnrollCode.length !== 6} className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold py-1.5 rounded text-[11px]">Potvrdiť a zapnúť</button>
+                              <button type="button" onClick={() => setMfaEnrollData(null)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 rounded text-[11px]">Zrušiť</button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {editingEmployee && !(editingEmployee.id === currentUser.id && authSession) && ['master', 'supervisor', 'sales'].includes(editingEmployee.role) && (
+                      <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
+                        <span className="text-slate-300 font-bold block mb-1">Dvojfaktorové overenie (2FA)</span>
+                        <p className="text-[10px] text-slate-500">{editingEmployee.authUserId ? 'Tento zamestnanec má vytvorený prihlasovací účet — 2FA si nastaví sám po prihlásení, vo svojom profile.' : 'Tento zamestnanec si ešte musí vytvoriť prihlasovací účet (email + heslo) na prihlasovacej obrazovke — potom si tam môže zapnúť aj 2FA.'}</p>
+                      </div>
+                    )}
                     <div className="flex gap-2">
                       <button type="submit" className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded">{editingEmployee ? 'Uložiť zmeny' : 'Pridať Zamestnanca'}</button>
                       {editingEmployee && <button type="button" onClick={handleCancelEditEmployee} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 rounded">Zrušiť</button>}
@@ -2774,6 +3286,20 @@ export default function App() {
                   </table>
                 </div>
               </div>
+            </div>
+
+            <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 shadow-xl print:hidden">
+              <h3 className="font-bold text-md text-white flex items-center gap-2 mb-2"><QrCode className="text-indigo-400 h-5 w-5" /> QR kódy staníc na vytlačenie</h3>
+              <p className="text-xs text-slate-400 mb-4">Vytlač a nalep na príslušný stroj/stanicu. Zamestnanec ho naskenuje fotoaparátom a zadá svoj 4-miestny PIN — appka ho rovno prihlási a otvorí frontu tejto stanice.</p>
+              <div ref={stationQrGridRef} className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {STATION_ORDER.map(sid => (
+                  <div key={sid} className="qr-item bg-white p-3 rounded-xl flex flex-col items-center border border-slate-300">
+                    <QRCodeSVG value={`${window.location.origin}${window.location.pathname}?station=${sid}`} size={100} level="M" />
+                    <span className="text-black text-[11px] font-extrabold mt-2 text-center">{STATION_CONFIGS[sid].name}</span>
+                  </div>
+                ))}
+              </div>
+              <button onClick={handlePrintStationCodes} className="mt-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Printer className="h-4 w-4" /> Vytlačiť QR kódy staníc</button>
             </div>
             )}
           </div>
