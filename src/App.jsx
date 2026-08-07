@@ -276,7 +276,26 @@ function formatDurationMinutes(mins) {
   return `${h} h ${m} min`;
 }
 
+// Vráti pole 7 dátumov (YYYY-MM-DD) pre týždeň (Po-Ne), ktorý obsahuje daný dátum. weekOffset posúva o celé týždne.
+function getWeekDates(weekOffset = 0) {
+  const today = new Date();
+  const dayOfWeek = (today.getDay() + 6) % 7; // 0 = pondelok
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - dayOfWeek + weekOffset * 7);
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    days.push(d.toISOString().slice(0, 10));
+  }
+  return days;
+}
+
+const WEEKDAY_LABELS = ['Pondelok', 'Utorok', 'Streda', 'Štvrtok', 'Piatok', 'Sobota', 'Nedeľa'];
+
 const mapCostRateFromDb = (r) => ({ stationId: r.station_id, rate: r.rate, unit: r.unit || '', note: r.note || '' });
+const mapAssignmentFromDb = (r) => ({ id: r.id, employeeId: r.employee_id, stationId: r.station_id, date: r.assignment_date });
+const mapMismatchFromDb = (r) => ({ id: r.id, employeeId: r.employee_id, employeeName: r.employee_name, stationId: r.station_id, date: r.assignment_date, createdAt: r.created_at });
 const mapCostRateToDb = (r) => ({ station_id: r.stationId, rate: r.rate, unit: r.unit, note: r.note });
 
 export default function App() {
@@ -287,6 +306,10 @@ export default function App() {
   const [materials, setMaterials] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [costRates, setCostRates] = useState([]);
+  const [stationAssignments, setStationAssignments] = useState([]);
+  const [loginMismatches, setLoginMismatches] = useState([]);
+  const [staffingWeekOffset, setStaffingWeekOffset] = useState(0);
+  const [staffingPickerCell, setStaffingPickerCell] = useState(null); // { date, stationId } | null
   const [reportPeriod, setReportPeriod] = useState('month');
   const [activeWarehouseId, setActiveWarehouseId] = useState('');
   const [editingWarehouseId, setEditingWarehouseId] = useState(null);
@@ -480,7 +503,7 @@ export default function App() {
     }
     async function loadAll() {
       try {
-        const [matRes, prodRes, tierRes, sportRes, empRes, aclRes, orderRes, whRes, rateRes] = await Promise.all([
+        const [matRes, prodRes, tierRes, sportRes, empRes, aclRes, orderRes, whRes, rateRes, assignRes, mismatchRes] = await Promise.all([
           supabase.from('materials').select('*').order('name'),
           supabase.from('products').select('*'),
           supabase.from('quality_tiers').select('*'),
@@ -489,7 +512,9 @@ export default function App() {
           supabase.from('acl_settings').select('*').eq('id', 1).maybeSingle(),
           supabase.from('orders').select('*').order('created_at', { ascending: false }),
           supabase.from('warehouses').select('*').order('name'),
-          supabase.from('cost_rates').select('*')
+          supabase.from('cost_rates').select('*'),
+          supabase.from('station_assignments').select('*'),
+          supabase.from('login_mismatches').select('*').order('created_at', { ascending: false }).limit(50)
         ]);
         const firstErr = [matRes, prodRes, tierRes, sportRes, empRes, orderRes, whRes].find(r => r.error);
         if (firstErr) throw firstErr.error;
@@ -509,6 +534,8 @@ export default function App() {
         setOrders((orderRes.data || []).map(mapOrderFromDb));
         setWarehouses(loadedWarehouses);
         setCostRates(rateRes.error ? [] : (rateRes.data || []).map(mapCostRateFromDb));
+        setStationAssignments(assignRes.error ? [] : (assignRes.data || []).map(mapAssignmentFromDb));
+        setLoginMismatches(mismatchRes.error ? [] : (mismatchRes.data || []).map(mapMismatchFromDb));
 
         if (loadedWarehouses.length > 0) {
           setActiveWarehouseId(loadedWarehouses[0].id);
@@ -545,6 +572,8 @@ export default function App() {
           return exists ? prev.map(x => (x.stationId === mapped.stationId ? mapped : x)) : [...prev, mapped];
         });
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'station_assignments' }, (payload) => applyRealtimeChange(setStationAssignments, payload, mapAssignmentFromDb))
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'login_mismatches' }, (payload) => setLoginMismatches(prev => [mapMismatchFromDb(payload.new), ...prev].slice(0, 50)))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, (payload) => applyRealtimeChange(setProducts, payload, mapProductFromDb))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'quality_tiers' }, (payload) => applyRealtimeChange(setQualityTiers, payload, mapTierFromDb))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, (payload) => applyRealtimeChange(setEmployees, payload, mapEmployeeFromDb))
@@ -815,6 +844,50 @@ export default function App() {
     setPinAttempts(0);
     setActiveTab('isolated-station');
     setActiveStationFilter(activeStationContext);
+
+    // Mäkká kontrola: je zamestnanec dnes priradený na túto stanicu? Ak nie, len sa to zaznamená (nič neblokuje).
+    const today = new Date().toISOString().slice(0, 10);
+    const isAssigned = stationAssignments.some(a => a.date === today && a.stationId === activeStationContext && a.employeeId === emp.id);
+    if (!isAssigned) {
+      await supabase.from('login_mismatches').insert({
+        id: `mm-${Date.now()}`, employee_id: emp.id, employee_name: `${emp.firstName} ${emp.lastName}`,
+        station_id: activeStationContext, assignment_date: today
+      });
+    }
+  };
+
+  // --- ROZVRH ZAMESTNANCOV NA STANICE (týždenná matica) ---
+  const handleAssignEmployee = async (date, stationId, employeeId) => {
+    if (!hasPermission('manage_profiles')) { triggerNotification('error', 'Nemáte oprávnenie upravovať rozvrh.'); return; }
+    const already = stationAssignments.some(a => a.date === date && a.stationId === stationId && a.employeeId === employeeId);
+    if (already) { setStaffingPickerCell(null); return; }
+    const { error } = await supabase.from('station_assignments').insert({ id: `sa-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, employee_id: employeeId, station_id: stationId, assignment_date: date });
+    if (error) { triggerNotification('error', error.message); return; }
+    setStaffingPickerCell(null);
+  };
+
+  const handleRemoveAssignment = async (assignmentId) => {
+    if (!hasPermission('manage_profiles')) { triggerNotification('error', 'Nemáte oprávnenie upravovať rozvrh.'); return; }
+    await supabase.from('station_assignments').delete().eq('id', assignmentId);
+  };
+
+  const handleCopyPreviousWeek = async () => {
+    if (!hasPermission('manage_profiles')) { triggerNotification('error', 'Nemáte oprávnenie upravovať rozvrh.'); return; }
+    const thisWeek = getWeekDates(staffingWeekOffset);
+    const prevWeek = getWeekDates(staffingWeekOffset - 1);
+    const prevAssignments = stationAssignments.filter(a => prevWeek.includes(a.date));
+    if (prevAssignments.length === 0) { triggerNotification('error', 'Predchádzajúci týždeň nemá žiadne priradenia na skopírovanie.'); return; }
+    const toInsert = [];
+    prevAssignments.forEach(a => {
+      const dayIndex = prevWeek.indexOf(a.date);
+      const targetDate = thisWeek[dayIndex];
+      const exists = stationAssignments.some(x => x.date === targetDate && x.stationId === a.stationId && x.employeeId === a.employeeId);
+      if (!exists) toInsert.push({ id: `sa-${Date.now()}-${Math.random().toString(36).slice(2, 6)}-${dayIndex}`, employee_id: a.employeeId, station_id: a.stationId, assignment_date: targetDate });
+    });
+    if (toInsert.length === 0) { triggerNotification('error', 'Tento týždeň je už rovnako obsadený.'); return; }
+    const { error } = await supabase.from('station_assignments').insert(toInsert);
+    if (error) { triggerNotification('error', error.message); return; }
+    triggerNotification('success', `Skopírovaných ${toInsert.length} priradení z minulého týždňa.`);
   };
 
   const handlePrintStationCodes = () => {
@@ -2127,6 +2200,9 @@ export default function App() {
                 <div className="flex items-center gap-2 bg-slate-900 p-1.5 rounded-xl border border-slate-800 w-full md:w-auto">
                   <button onClick={() => setPlannerViewMode('matrix')} className={`flex-1 md:flex-none flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${plannerViewMode === 'matrix' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}><Sliders className="h-3.5 w-3.5" /> Plánovacia Matica</button>
                   <button onClick={() => setPlannerViewMode('rows')} className={`flex-1 md:flex-none flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${plannerViewMode === 'rows' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}><Table className="h-3.5 w-3.5" /> Riadkový Zoznam</button>
+                  {hasPermission('manage_profiles') && (
+                    <button onClick={() => setPlannerViewMode('staffing')} className={`flex-1 md:flex-none flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${plannerViewMode === 'staffing' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}><CalendarDays className="h-3.5 w-3.5" /> Rozvrh Zamestnancov</button>
+                  )}
                 </div>
               </div>
 
@@ -2301,6 +2377,102 @@ export default function App() {
                   </div>
                 </div>
               )}
+
+              {plannerViewMode === 'staffing' && (() => {
+                const weekDates = getWeekDates(staffingWeekOffset);
+                const todayStr = new Date().toISOString().slice(0, 10);
+                const conflictSet = new Set(); // "date|employeeId" ak je priradený na 2+ staniciach
+                const perDayEmp = {};
+                stationAssignments.filter(a => weekDates.includes(a.date)).forEach(a => {
+                  const key = `${a.date}|${a.employeeId}`;
+                  perDayEmp[key] = (perDayEmp[key] || 0) + 1;
+                  if (perDayEmp[key] > 1) conflictSet.add(key);
+                });
+                return (
+                  <div className="space-y-4">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-slate-950 p-4 rounded-2xl border border-slate-800">
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => setStaffingWeekOffset(o => o - 1)} className="p-2 bg-slate-900 hover:bg-slate-800 rounded-lg text-slate-300"><ArrowUp className="h-4 w-4 -rotate-90" /></button>
+                        <span className="text-sm font-bold text-white px-2">{staffingWeekOffset === 0 ? 'Tento týždeň' : staffingWeekOffset === -1 ? 'Minulý týždeň' : staffingWeekOffset === 1 ? 'Budúci týždeň' : `${weekDates[0]} — ${weekDates[6]}`}</span>
+                        <button onClick={() => setStaffingWeekOffset(o => o + 1)} className="p-2 bg-slate-900 hover:bg-slate-800 rounded-lg text-slate-300"><ArrowDown className="h-4 w-4 -rotate-90" /></button>
+                      </div>
+                      <button onClick={handleCopyPreviousWeek} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Upload className="h-3.5 w-3.5" /> Kopírovať z minulého týždňa</button>
+                    </div>
+
+                    <div className="overflow-x-auto border border-slate-800 rounded-xl bg-slate-900/20">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-slate-900 border-b border-slate-800">
+                            <th className="p-3 text-xs font-bold text-slate-400 uppercase w-28 border-r border-slate-850 sticky left-0 bg-slate-900 z-10">Deň</th>
+                            {STATION_ORDER.map(sid => {
+                              const cfg = STATION_CONFIGS[sid];
+                              return (
+                                <th key={sid} className="p-3 text-xs font-bold text-slate-300 uppercase text-center border-r border-slate-850">
+                                  <div className="flex items-center justify-center gap-1.5"><cfg.icon className="h-4 w-4 text-indigo-400 shrink-0" />{cfg.name}</div>
+                                </th>
+                              );
+                            })}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800">
+                          {weekDates.map((date, idx) => (
+                            <tr key={date} className={date === todayStr ? 'bg-indigo-950/10' : ''}>
+                              <td className={`p-3 text-xs font-bold border-r border-slate-850 sticky left-0 z-10 ${date === todayStr ? 'bg-indigo-950/30 text-indigo-300' : 'bg-slate-900/40 text-slate-200'}`}>
+                                {WEEKDAY_LABELS[idx]}<br /><span className="text-[10px] text-slate-500 font-normal">{formatDeliveryDate(date)}</span>
+                              </td>
+                              {STATION_ORDER.map(sid => {
+                                const cellAssignments = stationAssignments.filter(a => a.date === date && a.stationId === sid);
+                                const isUnstaffedToday = date === todayStr && cellAssignments.length === 0;
+                                const isPickerOpen = staffingPickerCell && staffingPickerCell.date === date && staffingPickerCell.stationId === sid;
+                                return (
+                                  <td key={sid} className={`p-2 border-r border-slate-850 align-top min-w-[140px] ${isUnstaffedToday ? 'bg-rose-950/20' : ''}`}>
+                                    <div className="flex flex-col gap-1">
+                                      {cellAssignments.map(a => {
+                                        const emp = employees.find(e => e.id === a.employeeId);
+                                        const hasConflict = conflictSet.has(`${date}|${a.employeeId}`);
+                                        return (
+                                          <div key={a.id} className={`flex items-center justify-between gap-1 px-2 py-1 rounded-md text-[11px] font-bold ${hasConflict ? 'bg-amber-950/40 border border-amber-700/40 text-amber-300' : 'bg-slate-800 text-slate-200'}`}>
+                                            <span className="flex items-center gap-1 truncate">{emp?.avatar} {emp?.firstName || '?'}{hasConflict && <span title="Priradený aj na inej stanici v tento deň">⚠️</span>}</span>
+                                            <button onClick={() => handleRemoveAssignment(a.id)} className="text-slate-500 hover:text-rose-400 shrink-0"><X className="h-3 w-3" /></button>
+                                          </div>
+                                        );
+                                      })}
+                                      {isPickerOpen ? (
+                                        <select autoFocus onChange={(e) => e.target.value && handleAssignEmployee(date, sid, e.target.value)} onBlur={() => setStaffingPickerCell(null)} className="w-full bg-slate-950 border border-indigo-600 rounded p-1 text-[10px] text-white">
+                                          <option value="">-- Vyber zamestnanca --</option>
+                                          {employees.filter(e => !cellAssignments.some(a => a.employeeId === e.id)).map(e => <option key={e.id} value={e.id}>{e.avatar} {e.firstName} {e.lastName}</option>)}
+                                        </select>
+                                      ) : (
+                                        <button onClick={() => setStaffingPickerCell({ date, stationId: sid })} className="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold flex items-center gap-1 px-1"><Plus className="h-3 w-3" /> Priradiť</button>
+                                      )}
+                                    </div>
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="text-[10px] text-slate-500 italic">Červené podfarbenie = dnes na tejto stanici nie je nikto priradený. ⚠️ = zamestnanec je v ten deň priradený na viac staníc naraz.</p>
+
+                    {loginMismatches.length > 0 && (
+                      <div className="bg-slate-950 p-4 rounded-2xl border border-amber-900/30">
+                        <h4 className="font-bold text-xs text-amber-300 uppercase mb-2 flex items-center gap-1.5"><AlertTriangle className="h-4 w-4" /> Nezhody prihlásenia (posledných {loginMismatches.length})</h4>
+                        <p className="text-[10px] text-slate-500 mb-2">Zamestnanec sa prihlásil PIN-om na stanicu, kde v ten deň nebol priradený. Nič to neblokovalo, je to len na kontrolu.</p>
+                        <div className="space-y-1 max-h-[200px] overflow-y-auto">
+                          {loginMismatches.map(m => (
+                            <div key={m.id} className="text-[11px] text-slate-400 bg-slate-900 px-3 py-1.5 rounded flex justify-between">
+                              <span><strong className="text-slate-200">{m.employeeName}</strong> → {STATION_CONFIGS[m.stationId]?.name || m.stationId}</span>
+                              <span className="text-slate-600">{formatDeliveryDate(m.date)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         )}
