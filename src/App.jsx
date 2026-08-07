@@ -3288,6 +3288,7 @@ export default function App() {
                 </div>
               </div>
             </div>
+            )}
 
             <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 shadow-xl print:hidden">
               <h3 className="font-bold text-md text-white flex items-center gap-2 mb-2"><QrCode className="text-indigo-400 h-5 w-5" /> QR kódy staníc na vytlačenie</h3>
@@ -3302,7 +3303,6 @@ export default function App() {
               </div>
               <button onClick={handlePrintStationCodes} className="mt-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Printer className="h-4 w-4" /> Vytlačiť QR kódy staníc</button>
             </div>
-            )}
           </div>
         )}
 
