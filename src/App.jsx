@@ -295,6 +295,39 @@ const WEEKDAY_LABELS = ['Pondelok', 'Utorok', 'Streda', 'Štvrtok', 'Piatok', 'S
 
 const mapCostRateFromDb = (r) => ({ stationId: r.station_id, rate: r.rate, unit: r.unit || '', note: r.note || '' });
 const mapAssignmentFromDb = (r) => ({ id: r.id, employeeId: r.employee_id, stationId: r.station_id, date: r.assignment_date });
+const mapProblemFromDb = (r) => ({ id: r.id, orderId: r.order_id, itemId: r.item_id, stationId: r.station_id, employeeId: r.employee_id, employeeName: r.employee_name, category: r.category, description: r.description, status: r.status, createdAt: r.created_at, resolvedAt: r.resolved_at, resolvedBy: r.resolved_by, resolutionNote: r.resolution_note });
+
+const PROBLEM_CATEGORIES = ['Chýba materiál', 'Chyba vo výrobe/tlači', 'Poškodený materiál', 'Nesúhlasí rozmer/farba', 'Porucha stroja', 'Iné'];
+
+// Pípnutie cez Web Audio API — bez potreby zvukového súboru
+function playAlertBeep(times = 1, freq = 880) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    let t = ctx.currentTime;
+    for (let i = 0; i < times; i++) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.001, t);
+      gain.gain.exponentialRampToValueAtTime(0.18, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+      osc.start(t);
+      osc.stop(t + 0.3);
+      t += 0.38;
+    }
+  } catch (e) { /* Web Audio nedostupné (napr. veľmi starý prehliadač) */ }
+}
+
+function showDesktopNotification(title, body) {
+  if (typeof Notification === 'undefined') return;
+  if (Notification.permission === 'granted') {
+    try { new Notification(title, { body, icon: '/logo-atak-pbt.png' }); } catch (e) { /* ignorovať */ }
+  }
+}
+
 const mapMismatchFromDb = (r) => ({ id: r.id, employeeId: r.employee_id, employeeName: r.employee_name, stationId: r.station_id, date: r.assignment_date, createdAt: r.created_at });
 const mapCostRateToDb = (r) => ({ station_id: r.stationId, rate: r.rate, unit: r.unit, note: r.note });
 
@@ -308,6 +341,13 @@ export default function App() {
   const [costRates, setCostRates] = useState([]);
   const [stationAssignments, setStationAssignments] = useState([]);
   const [loginMismatches, setLoginMismatches] = useState([]);
+  const [problemReports, setProblemReports] = useState([]);
+  const [reportingProblemForItem, setReportingProblemForItem] = useState(null); // item object | null
+  const [problemCategory, setProblemCategory] = useState(PROBLEM_CATEGORIES[0]);
+  const [problemDescription, setProblemDescription] = useState('');
+  const [showResolvedProblems, setShowResolvedProblems] = useState(false);
+  const [resolvingProblem, setResolvingProblem] = useState(null);
+  const [resolutionNoteInput, setResolutionNoteInput] = useState('');
   const [staffingWeekOffset, setStaffingWeekOffset] = useState(0);
   const [staffingPickerCell, setStaffingPickerCell] = useState(null); // { date, stationId } | null
   const [reportPeriod, setReportPeriod] = useState('month');
@@ -507,7 +547,7 @@ export default function App() {
     }
     async function loadAll() {
       try {
-        const [matRes, prodRes, tierRes, sportRes, empRes, aclRes, orderRes, whRes, rateRes, assignRes, mismatchRes] = await Promise.all([
+        const [matRes, prodRes, tierRes, sportRes, empRes, aclRes, orderRes, whRes, rateRes, assignRes, mismatchRes, problemRes] = await Promise.all([
           supabase.from('materials').select('*').order('name'),
           supabase.from('products').select('*'),
           supabase.from('quality_tiers').select('*'),
@@ -518,7 +558,8 @@ export default function App() {
           supabase.from('warehouses').select('*').order('name'),
           supabase.from('cost_rates').select('*'),
           supabase.from('station_assignments').select('*'),
-          supabase.from('login_mismatches').select('*').order('created_at', { ascending: false }).limit(50)
+          supabase.from('login_mismatches').select('*').order('created_at', { ascending: false }).limit(50),
+          supabase.from('problem_reports').select('*').order('created_at', { ascending: false }).limit(200)
         ]);
         const firstErr = [matRes, prodRes, tierRes, sportRes, empRes, orderRes, whRes].find(r => r.error);
         if (firstErr) throw firstErr.error;
@@ -540,6 +581,7 @@ export default function App() {
         setCostRates(rateRes.error ? [] : (rateRes.data || []).map(mapCostRateFromDb));
         setStationAssignments(assignRes.error ? [] : (assignRes.data || []).map(mapAssignmentFromDb));
         setLoginMismatches(mismatchRes.error ? [] : (mismatchRes.data || []).map(mapMismatchFromDb));
+        setProblemReports(problemRes.error ? [] : (problemRes.data || []).map(mapProblemFromDb));
 
         if (loadedWarehouses.length > 0) {
           setActiveWarehouseId(loadedWarehouses[0].id);
@@ -578,6 +620,14 @@ export default function App() {
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'station_assignments' }, (payload) => applyRealtimeChange(setStationAssignments, payload, mapAssignmentFromDb))
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'login_mismatches' }, (payload) => setLoginMismatches(prev => [mapMismatchFromDb(payload.new), ...prev].slice(0, 50)))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'problem_reports' }, (payload) => {
+        applyRealtimeChange(setProblemReports, payload, mapProblemFromDb);
+        if (payload.eventType === 'INSERT') {
+          const p = mapProblemFromDb(payload.new);
+          playAlertBeep(2, 880);
+          showDesktopNotification('⚠️ Nový problém nahlásený', `${p.category}: ${p.description}`);
+        }
+      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, (payload) => applyRealtimeChange(setProducts, payload, mapProductFromDb))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'quality_tiers' }, (payload) => applyRealtimeChange(setQualityTiers, payload, mapTierFromDb))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, (payload) => applyRealtimeChange(setEmployees, payload, mapEmployeeFromDb))
@@ -595,6 +645,43 @@ export default function App() {
 
   const employeesRef = useRef(employees);
   useEffect(() => { employeesRef.current = employees; }, [employees]);
+
+  const problemReportsRef = useRef(problemReports);
+  useEffect(() => { problemReportsRef.current = problemReports; }, [problemReports]);
+
+  // Požiadať o povolenie desktop notifikácií, keď sa prihlási niekto, kto rieši problémy
+  useEffect(() => {
+    if (currentUser && hasPermission('view_reports') && typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, [currentUser]);
+
+  // Eskalujúce pripomienky nevyriešených problémov — čím dlhšie otvorené, tým častejšie a otravnejšie (ako pripomienka bezpečnostného pásu v aute)
+  const lastReminderRef = useRef(0);
+  useEffect(() => {
+    if (!currentUser || !hasPermission('view_reports')) return;
+    const interval = setInterval(() => {
+      const openProbs = problemReportsRef.current.filter(p => p.status === 'open');
+      if (openProbs.length === 0) return;
+      const now = Date.now();
+      const oldestMinutes = Math.max(...openProbs.map(p => (now - new Date(p.createdAt).getTime()) / 60000));
+      if (oldestMinutes >= 120) {
+        // Naliehavé (viac ako 2h) — otravná pripomienka každú 1 minútu
+        if (now - lastReminderRef.current >= 60000) {
+          playAlertBeep(4, 660);
+          showDesktopNotification('🚨 NALIEHAVÉ — nevyriešený problém', `${openProbs.length} problém(ov) čaká viac ako 2 hodiny na vyriešenie!`);
+          lastReminderRef.current = now;
+        }
+      } else if (oldestMinutes >= 30) {
+        // Čaká dlhšie (30min-2h) — jemnejšia pripomienka každých 5 minút
+        if (now - lastReminderRef.current >= 300000) {
+          playAlertBeep(1, 880);
+          lastReminderRef.current = now;
+        }
+      }
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [currentUser]);
 
   // Obnovenie sedenia Supabase Auth pri načítaní appky + reakcia na prihlásenie/odhlásenie/MFA
   useEffect(() => {
@@ -861,6 +948,42 @@ export default function App() {
   };
 
   // --- ROZVRH ZAMESTNANCOV NA STANICE (týždenná matica) ---
+  // --- HLÁSENIE PROBLÉMOV NA STANICIACH ---
+  const handleSubmitProblem = async () => {
+    if (!reportingProblemForItem) return;
+    if (!problemDescription.trim()) { alert('Napíš krátky popis problému.'); return; }
+    const item = reportingProblemForItem;
+    const { error } = await supabase.from('problem_reports').insert({
+      id: `pr-${Date.now()}`, order_id: item.orderId, item_id: item.itemId, station_id: activeStationFilter || activeStationContext || '',
+      employee_id: currentUser.id, employee_name: `${currentUser.firstName} ${currentUser.lastName}`,
+      category: problemCategory, description: problemDescription.trim(), status: 'open'
+    });
+    if (error) { triggerNotification('error', error.message); return; }
+    setReportingProblemForItem(null);
+    setProblemDescription('');
+    setProblemCategory(PROBLEM_CATEGORIES[0]);
+    triggerNotification('success', 'Problém bol nahlásený. Master/Supervisor to uvidí.');
+  };
+
+  const handleResolveProblem = async () => {
+    if (!resolvingProblem) return;
+    const { error } = await supabase.from('problem_reports').update({
+      status: 'resolved', resolved_at: new Date().toISOString(), resolved_by: `${currentUser.firstName} ${currentUser.lastName}`, resolution_note: resolutionNoteInput.trim()
+    }).eq('id', resolvingProblem.id);
+    if (error) { triggerNotification('error', error.message); return; }
+    setResolvingProblem(null);
+    setResolutionNoteInput('');
+    triggerNotification('success', 'Problém označený ako vyriešený.');
+  };
+
+  // Naliehavosť podľa toho, ako dlho je problém nevyriešený
+  const getProblemUrgency = (createdAt) => {
+    const minutesOpen = (Date.now() - new Date(createdAt).getTime()) / 60000;
+    if (minutesOpen >= 120) return { label: 'NALIEHAVÉ', color: 'bg-rose-600 text-white border-rose-500', pulse: true };
+    if (minutesOpen >= 30) return { label: 'Čaká dlhšie', color: 'bg-amber-600 text-white border-amber-500', pulse: false };
+    return { label: 'Nové', color: 'bg-sky-700 text-white border-sky-600', pulse: false };
+  };
+
   const handleAssignEmployee = async (date, stationId, employeeId) => {
     if (!hasPermission('manage_profiles')) { triggerNotification('error', 'Nemáte oprávnenie upravovať rozvrh.'); return; }
     const already = stationAssignments.some(a => a.date === date && a.stationId === stationId && a.employeeId === employeeId);
@@ -2179,6 +2302,11 @@ export default function App() {
           <span className="font-bold">Prihlásený: {currentUser.firstName} {currentUser.lastName} ({currentUser.role.toUpperCase()})</span>
         </div>
         <div className="flex flex-wrap gap-1.5 items-center">
+          {problemReports.filter(p => p.status === 'open').length > 0 && hasPermission('view_reports') && (
+            <button onClick={() => setActiveTab('problems')} className="px-3 py-1 rounded-md font-bold border bg-rose-600 text-white border-rose-500 animate-pulse flex items-center gap-1.5">
+              <AlertTriangle className="h-3.5 w-3.5" /> {problemReports.filter(p => p.status === 'open').length} nevyriešených problémov
+            </button>
+          )}
           {currentUser.role === 'master' && (
             <button onClick={() => setShowMasterSwitcher(s => !s)} className="px-3 py-1 rounded-md font-bold border bg-slate-900 text-indigo-400 border-slate-800 hover:text-white">
               {showMasterSwitcher ? 'Skryť testovací prepínač' : 'Testovať ako iný profil'}
@@ -2227,6 +2355,9 @@ export default function App() {
                 <button onClick={() => setActiveTab('reports')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'reports' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><BarChart3 className="h-3.5 w-3.5" /> Prehľady</button>
               )}
               <button onClick={() => setActiveTab('designers')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'designers' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Palette className="h-3.5 w-3.5" /> Dashboard Grafikov</button>
+              {hasPermission('view_reports') && (
+                <button onClick={() => setActiveTab('problems')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'problems' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><AlertTriangle className="h-3.5 w-3.5" /> Problémy</button>
+              )}
             </nav>
           </div>
         </div>
@@ -3023,10 +3154,11 @@ export default function App() {
                     const config = STATION_CONFIGS[activeStationFilter];
                     const currentStatusId = item.stationStatuses[activeStationFilter] || 'caka';
                     const orderColor = colorForOrder(item.orderId);
+                    const itemOpenProblems = problemReports.filter(p => p.itemId === item.itemId && p.status === 'open');
                     return (
                       <div key={item.itemId} className={`bg-slate-900/80 border-l-4 ${orderColor.border} border-t border-r border-b border-slate-800 p-5 rounded-xl flex flex-col md:flex-row justify-between gap-4`}>
                         <div className="space-y-2 flex-1">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-mono text-xs font-bold bg-indigo-600/20 text-indigo-400 px-2.5 py-0.5 rounded border border-indigo-500/30">Priorita #{index + 1}</span>
                             <span className="font-mono text-xs font-semibold text-slate-500">ID: {item.itemId}</span>
                             <CashBadge paymentType={item.paymentType} size="small" />
@@ -3036,6 +3168,10 @@ export default function App() {
                                 {item.stationMeta[activeStationFilter].assignedEmployeeName}
                               </span>
                             )}
+                            {itemOpenProblems.length > 0 && (
+                              <span className="flex items-center gap-1 bg-rose-950/50 border border-rose-700/50 rounded-full px-2 py-0.5 text-[10px] text-rose-300 font-bold"><AlertTriangle className="h-3 w-3" /> Nahlásený problém</span>
+                            )}
+                            <button onClick={() => { setReportingProblemForItem(item); setProblemCategory(PROBLEM_CATEGORIES[0]); setProblemDescription(''); }} className="ml-auto text-[10px] text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Nahlásiť problém</button>
                           </div>
                           <h3 className="font-extrabold text-base text-slate-100">{item.customer} ({item.qty} ks)</h3>
                           <p className="text-xs text-indigo-400 font-bold">{item.productName} - <span className="text-slate-100 uppercase">{item.qualityTier}</span></p>
@@ -3213,6 +3349,34 @@ export default function App() {
                   )}
                   <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded">Zaevidovať položku do skladu</button>
                 </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {reportingProblemForItem && (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-slate-900 border border-rose-800/40 p-6 rounded-2xl w-full max-w-md shadow-2xl space-y-4">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-amber-400" /> Nahlásiť problém</h3>
+                  <p className="text-xs text-slate-500 font-mono">{reportingProblemForItem.itemId} • {reportingProblemForItem.customer}</p>
+                </div>
+                <button onClick={() => setReportingProblemForItem(null)} className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white"><X className="h-5 w-5" /></button>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Kategória problému</label>
+                <select value={problemCategory} onChange={(e) => setProblemCategory(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white">
+                  {PROBLEM_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Popis problému</label>
+                <textarea rows={4} value={problemDescription} onChange={(e) => setProblemDescription(e.target.value)} placeholder="Čo presne sa deje?" className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" autoFocus />
+              </div>
+              <div className="flex gap-2">
+                <button onClick={handleSubmitProblem} className="flex-1 bg-rose-700 hover:bg-rose-800 text-white font-bold py-2.5 rounded-lg uppercase text-xs">Nahlásiť</button>
+                <button onClick={() => setReportingProblemForItem(null)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-6 rounded-lg text-xs font-bold">Zrušiť</button>
               </div>
             </div>
           </div>
@@ -3779,6 +3943,85 @@ export default function App() {
             </div>
           );
         })()}
+
+        {activeTab === 'problems' && hasPermission('view_reports') && (() => {
+          const openProblems = problemReports.filter(p => p.status === 'open').sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+          const resolvedProblems = problemReports.filter(p => p.status === 'resolved').sort((a, b) => new Date(b.resolvedAt) - new Date(a.resolvedAt));
+          const listToShow = showResolvedProblems ? resolvedProblems : openProblems;
+          return (
+            <div className="space-y-4 print:hidden animate-in fade-in duration-150">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <h2 className="text-xl font-bold text-white flex items-center gap-2"><AlertTriangle className="text-rose-400 h-5 w-5" /> Nahlásené problémy</h2>
+                <div className="flex items-center gap-2 bg-slate-900 p-1.5 rounded-xl border border-slate-800">
+                  <button onClick={() => setShowResolvedProblems(false)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${!showResolvedProblems ? 'bg-rose-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>Otvorené ({openProblems.length})</button>
+                  <button onClick={() => setShowResolvedProblems(true)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${showResolvedProblems ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>Vyriešené ({resolvedProblems.length})</button>
+                </div>
+              </div>
+
+              {typeof Notification !== 'undefined' && Notification.permission !== 'granted' && (
+                <div className="bg-amber-950/20 border border-amber-800/40 rounded-xl px-4 py-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                  <span className="text-xs text-amber-300">🔔 Desktop upozornenia a zvuk sú {Notification.permission === 'denied' ? 'zablokované v prehliadači — povoľ ich v nastaveniach stránky' : 'zatiaľ vypnuté'}. Bez toho ťa appka na nový problém neupozorní, kým nemáš otvorenú túto záložku.</span>
+                  {Notification.permission === 'default' && (
+                    <button onClick={() => Notification.requestPermission()} className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] px-3 py-1.5 rounded-lg shrink-0">Povoliť upozornenia</button>
+                  )}
+                </div>
+              )}
+
+              {listToShow.length === 0 ? (
+                <div className="bg-slate-950 border border-slate-800 rounded-2xl p-10 text-center text-slate-500 italic">{showResolvedProblems ? 'Žiadne vyriešené problémy.' : 'Žiadne otvorené problémy — všetko v poriadku! 🎉'}</div>
+              ) : (
+                <div className="space-y-3">
+                  {listToShow.map(p => {
+                    const urgency = getProblemUrgency(p.createdAt);
+                    const found = findItemByItemId(p.itemId || '');
+                    return (
+                      <div key={p.id} className={`bg-slate-950 border rounded-xl p-4 ${!showResolvedProblems ? urgency.color.replace('bg-', 'border-').split(' ')[0] : 'border-slate-800'}`}>
+                        <div className="flex flex-col sm:flex-row justify-between items-start gap-3">
+                          <div className="space-y-1.5 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {!showResolvedProblems && <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${urgency.color} ${urgency.pulse ? 'animate-pulse' : ''}`}>{urgency.label}</span>}
+                              <span className="bg-slate-800 text-slate-300 text-[10px] font-bold px-2 py-0.5 rounded">{p.category}</span>
+                              <span className="font-mono text-[10px] text-slate-500">{p.itemId} • {STATION_CONFIGS[p.stationId]?.name || p.stationId}</span>
+                            </div>
+                            <p className="text-sm text-white">{p.description}</p>
+                            {found && <p className="text-[11px] text-slate-500">Zákazka: <strong className="text-slate-300">{found.order.customer}</strong> — {found.item.productName}</p>}
+                            <p className="text-[10px] text-slate-500">Nahlásil: <strong className="text-slate-400">{p.employeeName}</strong> • {new Date(p.createdAt).toLocaleString('sk-SK')}</p>
+                            {p.status === 'resolved' && (
+                              <p className="text-[10px] text-emerald-400 mt-1">✅ Vyriešil {p.resolvedBy} • {new Date(p.resolvedAt).toLocaleString('sk-SK')}{p.resolutionNote ? ` — ${p.resolutionNote}` : ''}</p>
+                            )}
+                          </div>
+                          <div className="flex gap-2 shrink-0">
+                            {found && <button onClick={() => openOrderDetails(found.order)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold px-3 py-1.5 rounded-lg">Otvoriť zákazku</button>}
+                            {p.status === 'open' && (
+                              <button onClick={() => { setResolvingProblem(p); setResolutionNoteInput(''); }} className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg">Vyriešiť</button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {resolvingProblem && (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-slate-900 border border-emerald-800/40 p-6 rounded-2xl w-full max-w-md shadow-2xl space-y-4">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2"><Check className="h-5 w-5 text-emerald-400" /> Označiť ako vyriešené</h3>
+              <p className="text-xs text-slate-400">{resolvingProblem.category}: {resolvingProblem.description}</p>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Poznámka k riešeniu (voliteľné)</label>
+                <textarea rows={3} value={resolutionNoteInput} onChange={(e) => setResolutionNoteInput(e.target.value)} placeholder="Ako sa to vyriešilo?" className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" autoFocus />
+              </div>
+              <div className="flex gap-2">
+                <button onClick={handleResolveProblem} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg uppercase text-xs">Potvrdiť vyriešené</button>
+                <button onClick={() => setResolvingProblem(null)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-6 rounded-lg text-xs font-bold">Zrušiť</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {selectedOrderDetails && (
           <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 shadow-xl space-y-6 print:bg-white print:text-black print:border-none print:p-0 mt-6 animate-in fade-in duration-200">
