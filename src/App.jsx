@@ -348,6 +348,14 @@ export default function App() {
   const [showResolvedProblems, setShowResolvedProblems] = useState(false);
   const [resolvingProblem, setResolvingProblem] = useState(null);
   const [resolutionNoteInput, setResolutionNoteInput] = useState('');
+  const [showDeliveryNoteScanner, setShowDeliveryNoteScanner] = useState(false);
+  const [deliveryNoteImageFile, setDeliveryNoteImageFile] = useState(null);
+  const [deliveryNoteImagePreview, setDeliveryNoteImagePreview] = useState('');
+  const [isParsingDeliveryNote, setIsParsingDeliveryNote] = useState(false);
+  const [parsedDeliveryItems, setParsedDeliveryItems] = useState([]);
+  const [deliveryNoteError, setDeliveryNoteError] = useState('');
+  const [deliveryNoteWarehouseId, setDeliveryNoteWarehouseId] = useState('');
+  const [isImportingDeliveryItems, setIsImportingDeliveryItems] = useState(false);
   const [staffingWeekOffset, setStaffingWeekOffset] = useState(0);
   const [staffingPickerCell, setStaffingPickerCell] = useState(null); // { date, stationId } | null
   const [reportPeriod, setReportPeriod] = useState('month');
@@ -1133,6 +1141,76 @@ export default function App() {
     setSelectedMaterialForDetail({ ...selectedMaterialForDetail, qty: newQty, history: newHistory });
     handleCancelEditHistory();
     triggerNotification('success', 'Záznam v histórii bol opravený.');
+  };
+
+  // --- AI ROZPOZNÁVANIE DODACÍCH LISTOV ---
+  const handleDeliveryNoteFileSelect = (file) => {
+    if (!file) return;
+    setDeliveryNoteImageFile(file);
+    setDeliveryNoteImagePreview(URL.createObjectURL(file));
+    setParsedDeliveryItems([]);
+    setDeliveryNoteError('');
+  };
+
+  const handleParseDeliveryNote = async () => {
+    if (!deliveryNoteImageFile) return;
+    setIsParsingDeliveryNote(true);
+    setDeliveryNoteError('');
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(deliveryNoteImageFile);
+      });
+      const { data, error } = await supabase.functions.invoke('parse-delivery-note', {
+        body: { imageBase64: base64, mimeType: deliveryNoteImageFile.type || 'image/jpeg' }
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      const items = (data?.items || []).map((it, idx) => ({
+        tempId: `dn-${idx}`, name: it.name || '', color: it.color || '', quantity: parseFloat(it.quantity) || 0, unit: it.unit || 'm'
+      }));
+      if (items.length === 0) { setDeliveryNoteError('AI na fotke nenašla žiadne rozpoznateľné položky. Skús jasnejšiu fotku.'); }
+      setParsedDeliveryItems(items);
+    } catch (err) {
+      setDeliveryNoteError(`Chyba pri rozpoznávaní: ${err.message}`);
+    } finally {
+      setIsParsingDeliveryNote(false);
+    }
+  };
+
+  const handleUpdateParsedItem = (tempId, field, value) => {
+    setParsedDeliveryItems(prev => prev.map(it => it.tempId === tempId ? { ...it, [field]: value } : it));
+  };
+
+  const handleRemoveParsedItem = (tempId) => {
+    setParsedDeliveryItems(prev => prev.filter(it => it.tempId !== tempId));
+  };
+
+  const handleAddManualParsedRow = () => {
+    setParsedDeliveryItems(prev => [...prev, { tempId: `dn-manual-${Date.now()}`, name: '', color: '', quantity: 0, unit: 'm' }]);
+  };
+
+  const handleConfirmDeliveryImport = async () => {
+    if (!deliveryNoteWarehouseId) { alert('Vyber sklad, do ktorého sa má tovar naskladniť.'); return; }
+    const validItems = parsedDeliveryItems.filter(it => it.name.trim() && it.quantity > 0);
+    if (validItems.length === 0) { alert('Nie je čo naskladniť — skontroluj názvy a množstvá.'); return; }
+    setIsImportingDeliveryItems(true);
+    const now = getFormattedDateTime();
+    const toInsert = validItems.map((it, idx) => mapMaterialToDb({
+      id: `tex-${Date.now()}-${idx}`, name: it.name.trim(), color: it.color.trim() || 'Neuvedená', colorHex: '',
+      width: null, weight: null, pricePerM: 0, qty: it.quantity, unit: it.unit, minQty: 0, warehouseId: deliveryNoteWarehouseId,
+      history: [{ date: now, user: `${currentUser.firstName} ${currentUser.lastName}`, action: 'Príjem z dodacieho listu (AI)', change: it.quantity, note: 'Automaticky rozpoznané z fotky dodacieho listu — skontroluj správnosť.' }]
+    }));
+    const { error } = await supabase.from('materials').insert(toInsert);
+    setIsImportingDeliveryItems(false);
+    if (error) { triggerNotification('error', error.message); return; }
+    triggerNotification('success', `Naskladnených ${toInsert.length} položiek z dodacieho listu.`);
+    setShowDeliveryNoteScanner(false);
+    setDeliveryNoteImageFile(null);
+    setDeliveryNoteImagePreview('');
+    setParsedDeliveryItems([]);
   };
 
   const handleAddNewMaterial = async (e) => {
@@ -3253,6 +3331,7 @@ export default function App() {
                     <button onClick={handleExportAllWarehouses} className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-[11px] px-3 py-1.5 rounded-lg flex items-center gap-1.5"><Download className="h-3.5 w-3.5" /> Export všetkých skladov</button>
                     {hasPermission('edit_stock') && (
                       <>
+                        <button onClick={() => { setShowDeliveryNoteScanner(true); setDeliveryNoteWarehouseId(activeWarehouseId); }} className="bg-purple-700 hover:bg-purple-800 text-white font-bold text-[11px] px-3 py-1.5 rounded-lg flex items-center gap-1.5"><Camera className="h-3.5 w-3.5" /> Naskladniť podľa dodacieho listu</button>
                         <button onClick={() => importFileInputRef.current?.click()} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] px-3 py-1.5 rounded-lg flex items-center gap-1.5"><Upload className="h-3.5 w-3.5" /> Import z Excelu</button>
                         <input ref={importFileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImportFileChange} className="hidden" />
                         <button onClick={handleDownloadImportTemplate} className="bg-slate-800 hover:bg-slate-700 text-slate-400 font-bold text-[11px] px-3 py-1.5 rounded-lg flex items-center gap-1.5"><FileText className="h-3.5 w-3.5" /> Stiahnuť šablónu</button>
@@ -3350,6 +3429,78 @@ export default function App() {
                   <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded">Zaevidovať položku do skladu</button>
                 </form>
               </div>
+            </div>
+          </div>
+        )}
+
+        {showDeliveryNoteScanner && (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-slate-900 border border-purple-800/40 p-6 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl space-y-4">
+              <div className="flex justify-between items-start">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2"><Camera className="h-5 w-5 text-purple-400" /> Naskladniť podľa dodacieho listu (AI)</h3>
+                <button onClick={() => { setShowDeliveryNoteScanner(false); setParsedDeliveryItems([]); setDeliveryNoteImageFile(null); setDeliveryNoteImagePreview(''); }} className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white"><X className="h-5 w-5" /></button>
+              </div>
+
+              {!deliveryNoteImagePreview ? (
+                <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-slate-800 rounded-xl py-10 cursor-pointer hover:border-purple-600 transition-colors">
+                  <Camera className="h-8 w-8 text-slate-500" />
+                  <span className="text-sm text-slate-400 font-bold">Klikni a nahraj/odfoť dodací list</span>
+                  <input type="file" accept="image/*,.pdf" className="hidden" onChange={(e) => handleDeliveryNoteFileSelect(e.target.files[0])} />
+                </label>
+              ) : (
+                <div className="space-y-3">
+                  {deliveryNoteImageFile?.type === 'application/pdf' ? (
+                    <div className="w-full bg-slate-950 border border-slate-700 rounded-xl p-6 flex items-center gap-3">
+                      <FileText className="h-8 w-8 text-rose-400 shrink-0" />
+                      <span className="text-sm text-slate-300 truncate">{deliveryNoteImageFile.name}</span>
+                    </div>
+                  ) : (
+                    <img src={deliveryNoteImagePreview} alt="Dodací list" className="w-full max-h-64 object-contain bg-white rounded-xl border border-slate-700" />
+                  )}
+                  {parsedDeliveryItems.length === 0 && (
+                    <div className="flex gap-2">
+                      <button onClick={handleParseDeliveryNote} disabled={isParsingDeliveryNote} className="flex-1 bg-purple-700 hover:bg-purple-800 disabled:opacity-50 text-white font-bold py-2.5 rounded-lg text-sm flex items-center justify-center gap-2">
+                        {isParsingDeliveryNote ? <><Loader2 className="h-4 w-4 animate-spin" /> AI číta dodací list...</> : <>🤖 Rozpoznať položky</>}
+                      </button>
+                      <button onClick={() => { setDeliveryNoteImageFile(null); setDeliveryNoteImagePreview(''); }} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 rounded-lg text-xs font-bold">Iná fotka</button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {deliveryNoteError && <p className="text-xs text-rose-400 bg-rose-950/30 border border-rose-900/40 rounded-lg px-3 py-2">{deliveryNoteError}</p>}
+
+              {parsedDeliveryItems.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-300 uppercase">Skontroluj rozpoznané položky pred naskladnením:</span>
+                    <button onClick={handleAddManualParsedRow} className="text-[11px] text-indigo-400 hover:text-indigo-300 font-bold flex items-center gap-1"><Plus className="h-3.5 w-3.5" /> Pridať riadok ručne</button>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-500 mb-1">Naskladniť do skladu</label>
+                    <select value={deliveryNoteWarehouseId} onChange={(e) => setDeliveryNoteWarehouseId(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white">
+                      {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    {parsedDeliveryItems.map(it => (
+                      <div key={it.tempId} className="grid grid-cols-12 gap-1.5 items-center bg-slate-950 border border-slate-800 rounded-lg p-2">
+                        <input type="text" placeholder="Názov" value={it.name} onChange={(e) => handleUpdateParsedItem(it.tempId, 'name', e.target.value)} className="col-span-4 bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" />
+                        <input type="text" placeholder="Farba" value={it.color} onChange={(e) => handleUpdateParsedItem(it.tempId, 'color', e.target.value)} className="col-span-3 bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" />
+                        <input type="number" step="0.01" value={it.quantity} onChange={(e) => handleUpdateParsedItem(it.tempId, 'quantity', parseFloat(e.target.value) || 0)} className="col-span-2 bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" />
+                        <select value={it.unit} onChange={(e) => handleUpdateParsedItem(it.tempId, 'unit', e.target.value)} className="col-span-2 bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white">
+                          {UNIT_OPTIONS.map(u => <option key={u.value} value={u.value}>{u.value}</option>)}
+                        </select>
+                        <button onClick={() => handleRemoveParsedItem(it.tempId)} className="col-span-1 text-rose-400 hover:text-rose-300"><X className="h-4 w-4 mx-auto" /></button>
+                      </div>
+                    ))}
+                  </div>
+                  <button onClick={handleConfirmDeliveryImport} disabled={isImportingDeliveryItems} className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold py-2.5 rounded-lg uppercase text-xs">
+                    {isImportingDeliveryItems ? 'Naskladňujem...' : `Potvrdiť a naskladniť (${parsedDeliveryItems.filter(it => it.name.trim() && it.quantity > 0).length} položiek)`}
+                  </button>
+                  <p className="text-[10px] text-slate-600 italic">AI odhad môže byť nepresný — skontroluj názvy, farby aj množstvá pred potvrdením.</p>
+                </div>
+              )}
             </div>
           </div>
         )}
