@@ -299,6 +299,10 @@ const mapProblemFromDb = (r) => ({ id: r.id, orderId: r.order_id, itemId: r.item
 
 const PROBLEM_CATEGORIES = ['Chýba materiál', 'Chyba vo výrobe/tlači', 'Poškodený materiál', 'Nesúhlasí rozmer/farba', 'Porucha stroja', 'Iné'];
 
+const BLANK_GOODS_TYPES = ['Tričko', 'Polokošeľa', 'Mikina', 'Tepláky', 'Šiltovka', 'Ponožky', 'Vlajka', 'Iné'];
+const mapBlankGoodFromDb = (r) => ({ id: r.id, productName: r.product_name, productType: r.product_type || '', color: r.color || '', colorHex: r.color_hex || '', qty: r.qty || 0, pricePerPiece: r.price_per_piece || 0, deliveryNoteNumber: r.delivery_note_number || '', deliveryNoteDate: r.delivery_note_date || '', history: r.history || [] });
+const mapBlankGoodToDb = (b) => ({ id: b.id, product_name: b.productName, product_type: b.productType, color: b.color, color_hex: b.colorHex || null, qty: b.qty, price_per_piece: b.pricePerPiece, delivery_note_number: b.deliveryNoteNumber || null, delivery_note_date: b.deliveryNoteDate || null, history: b.history });
+
 // Pípnutie cez Web Audio API — bez potreby zvukového súboru
 function playAlertBeep(times = 1, freq = 880) {
   try {
@@ -356,6 +360,20 @@ export default function App() {
   const [deliveryNoteError, setDeliveryNoteError] = useState('');
   const [deliveryNoteWarehouseId, setDeliveryNoteWarehouseId] = useState('');
   const [isImportingDeliveryItems, setIsImportingDeliveryItems] = useState(false);
+  const [blankGoodsStock, setBlankGoodsStock] = useState([]);
+  const [selectedBlankGoodForDetail, setSelectedBlankGoodForDetail] = useState(null);
+  const [isEditingBlankGood, setIsEditingBlankGood] = useState(false);
+  const [blankGoodEditDraft, setBlankGoodEditDraft] = useState(null);
+  const [blankGoodStockCorrectionQty, setBlankGoodStockCorrectionQty] = useState('');
+  const [blankGoodStockCorrectionNote, setBlankGoodStockCorrectionNote] = useState('');
+  const [newBgName, setNewBgName] = useState('');
+  const [newBgType, setNewBgType] = useState(BLANK_GOODS_TYPES[0]);
+  const [newBgColor, setNewBgColor] = useState('Biela');
+  const [newBgColorHex, setNewBgColorHex] = useState('#FFFFFF');
+  const [newBgQty, setNewBgQty] = useState(0);
+  const [newBgPrice, setNewBgPrice] = useState(0);
+  const [newBgDeliveryNumber, setNewBgDeliveryNumber] = useState('');
+  const [newBgDeliveryDate, setNewBgDeliveryDate] = useState('');
   const [staffingWeekOffset, setStaffingWeekOffset] = useState(0);
   const [staffingPickerCell, setStaffingPickerCell] = useState(null); // { date, stationId } | null
   const [reportPeriod, setReportPeriod] = useState('month');
@@ -555,7 +573,7 @@ export default function App() {
     }
     async function loadAll() {
       try {
-        const [matRes, prodRes, tierRes, sportRes, empRes, aclRes, orderRes, whRes, rateRes, assignRes, mismatchRes, problemRes] = await Promise.all([
+        const [matRes, prodRes, tierRes, sportRes, empRes, aclRes, orderRes, whRes, rateRes, assignRes, mismatchRes, problemRes, bgRes] = await Promise.all([
           supabase.from('materials').select('*').order('name'),
           supabase.from('products').select('*'),
           supabase.from('quality_tiers').select('*'),
@@ -567,7 +585,8 @@ export default function App() {
           supabase.from('cost_rates').select('*'),
           supabase.from('station_assignments').select('*'),
           supabase.from('login_mismatches').select('*').order('created_at', { ascending: false }).limit(50),
-          supabase.from('problem_reports').select('*').order('created_at', { ascending: false }).limit(200)
+          supabase.from('problem_reports').select('*').order('created_at', { ascending: false }).limit(200),
+          supabase.from('blank_goods_stock').select('*').order('product_name')
         ]);
         const firstErr = [matRes, prodRes, tierRes, sportRes, empRes, orderRes, whRes].find(r => r.error);
         if (firstErr) throw firstErr.error;
@@ -590,6 +609,7 @@ export default function App() {
         setStationAssignments(assignRes.error ? [] : (assignRes.data || []).map(mapAssignmentFromDb));
         setLoginMismatches(mismatchRes.error ? [] : (mismatchRes.data || []).map(mapMismatchFromDb));
         setProblemReports(problemRes.error ? [] : (problemRes.data || []).map(mapProblemFromDb));
+        setBlankGoodsStock(bgRes.error ? [] : (bgRes.data || []).map(mapBlankGoodFromDb));
 
         if (loadedWarehouses.length > 0) {
           setActiveWarehouseId(loadedWarehouses[0].id);
@@ -636,6 +656,7 @@ export default function App() {
           showDesktopNotification('⚠️ Nový problém nahlásený', `${p.category}: ${p.description}`);
         }
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'blank_goods_stock' }, (payload) => applyRealtimeChange(setBlankGoodsStock, payload, mapBlankGoodFromDb))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, (payload) => applyRealtimeChange(setProducts, payload, mapProductFromDb))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'quality_tiers' }, (payload) => applyRealtimeChange(setQualityTiers, payload, mapTierFromDb))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, (payload) => applyRealtimeChange(setEmployees, payload, mapEmployeeFromDb))
@@ -1211,6 +1232,68 @@ export default function App() {
     setDeliveryNoteImageFile(null);
     setDeliveryNoteImagePreview('');
     setParsedDeliveryItems([]);
+  };
+
+  // --- VZORKOVÝ SKLAD HOTOVÝCH VÝROBKOV ---
+  const handleAddBlankGood = async (e) => {
+    e.preventDefault();
+    if (!hasPermission('edit_stock')) { triggerNotification('error', 'Nemáte prístup ku správe skladu.'); return; }
+    if (!newBgName.trim()) { alert('Zadajte názov produktu.'); return; }
+    const now = getFormattedDateTime();
+    const qty = parseInt(newBgQty) || 0;
+    const created = {
+      id: `bg-${Date.now()}`, productName: newBgName.trim(), productType: newBgType, color: newBgColor, colorHex: newBgColorHex,
+      qty, pricePerPiece: parseFloat(newBgPrice) || 0, deliveryNoteNumber: newBgDeliveryNumber.trim(), deliveryNoteDate: newBgDeliveryDate,
+      history: [{ date: now, user: `${currentUser.firstName} ${currentUser.lastName}`, action: 'Naskladnenie', change: qty, note: newBgDeliveryNumber ? `Dodací list č. ${newBgDeliveryNumber}` : 'Prvotný príjem' }]
+    };
+    const { error } = await supabase.from('blank_goods_stock').insert(mapBlankGoodToDb(created));
+    if (error) { triggerNotification('error', error.message); return; }
+    setNewBgName(''); setNewBgQty(0); setNewBgPrice(0); setNewBgDeliveryNumber(''); setNewBgDeliveryDate('');
+    triggerNotification('success', `"${created.productName}" bol naskladnený.`);
+  };
+
+  const handleStartEditBlankGood = () => { setBlankGoodEditDraft({ ...selectedBlankGoodForDetail }); setIsEditingBlankGood(true); };
+  const handleCancelEditBlankGood = () => { setIsEditingBlankGood(false); setBlankGoodEditDraft(null); };
+
+  const handleSaveBlankGoodDetails = async () => {
+    if (!hasPermission('edit_stock')) { triggerNotification('error', 'Nemáte prístup ku správe skladu.'); return; }
+    if (!blankGoodEditDraft.productName.trim()) { alert('Zadajte názov produktu.'); return; }
+    const { error } = await supabase.from('blank_goods_stock').update({
+      product_name: blankGoodEditDraft.productName, product_type: blankGoodEditDraft.productType, color: blankGoodEditDraft.color,
+      color_hex: blankGoodEditDraft.colorHex || null, price_per_piece: parseFloat(blankGoodEditDraft.pricePerPiece) || 0,
+      delivery_note_number: blankGoodEditDraft.deliveryNoteNumber || null, delivery_note_date: blankGoodEditDraft.deliveryNoteDate || null
+    }).eq('id', blankGoodEditDraft.id);
+    if (error) { triggerNotification('error', error.message); return; }
+    setSelectedBlankGoodForDetail(blankGoodEditDraft);
+    setIsEditingBlankGood(false);
+    setBlankGoodEditDraft(null);
+    triggerNotification('success', 'Údaje boli upravené.');
+  };
+
+  const handleDeleteBlankGood = async () => {
+    if (!hasPermission('edit_stock')) { triggerNotification('error', 'Nemáte prístup ku správe skladu.'); return; }
+    if (!window.confirm(`Naozaj natrvalo vymazať "${selectedBlankGoodForDetail.productName}" zo vzorkového skladu?`)) return;
+    const { error } = await supabase.from('blank_goods_stock').delete().eq('id', selectedBlankGoodForDetail.id);
+    if (error) { triggerNotification('error', error.message); return; }
+    setSelectedBlankGoodForDetail(null);
+    triggerNotification('success', 'Položka bola vymazaná.');
+  };
+
+  const handleApplyBlankGoodStockCorrection = async (e) => {
+    e.preventDefault();
+    if (!hasPermission('edit_stock')) { triggerNotification('error', 'Nemáte prístup ku správe skladu.'); return; }
+    const change = parseInt(blankGoodStockCorrectionQty);
+    if (!change) { alert('Zadajte platnú zmenu množstva (napr. 10 alebo -5).'); return; }
+    if (!blankGoodStockCorrectionNote.trim()) { alert('Napíšte dôvod zmeny.'); return; }
+    const newQty = Math.max(0, selectedBlankGoodForDetail.qty + change);
+    const now = getFormattedDateTime();
+    const newHistory = [...(selectedBlankGoodForDetail.history || []), { date: now, user: `${currentUser.firstName} ${currentUser.lastName}`, action: 'Manuálna korekcia', change, note: blankGoodStockCorrectionNote.trim() }];
+    const { error } = await supabase.from('blank_goods_stock').update({ qty: newQty, history: newHistory }).eq('id', selectedBlankGoodForDetail.id);
+    if (error) { triggerNotification('error', error.message); return; }
+    setSelectedBlankGoodForDetail({ ...selectedBlankGoodForDetail, qty: newQty, history: newHistory });
+    setBlankGoodStockCorrectionQty('');
+    setBlankGoodStockCorrectionNote('');
+    triggerNotification('success', 'Stav bol aktualizovaný.');
   };
 
   const handleAddNewMaterial = async (e) => {
@@ -2427,6 +2510,7 @@ export default function App() {
               <button onClick={() => setActiveTab('catalog')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'catalog' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Tag className="h-3.5 w-3.5" /> Katalóg Modelov</button>
               <button onClick={() => setActiveTab('isolated-station')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'isolated-station' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Sliders className="h-3.5 w-3.5" /> Samostatné Dielne</button>
               <button onClick={() => setActiveTab('materials')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'materials' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Package className="h-3.5 w-3.5" /> Sklad</button>
+              <button onClick={() => setActiveTab('blank-goods')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'blank-goods' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Shirt className="h-3.5 w-3.5" /> Vzorkový Sklad</button>
               <button onClick={() => setActiveTab('profiles')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'profiles' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Users className="h-3.5 w-3.5" /> Zamestnanci & Práva</button>
               <button onClick={() => setActiveTab('qr-terminal')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'qr-terminal' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><QrCode className="h-3.5 w-3.5" /> Čítačka QR</button>
               {hasPermission('view_reports') && (
@@ -3433,6 +3517,80 @@ export default function App() {
           </div>
         )}
 
+        {selectedBlankGoodForDetail && (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto shadow-2xl space-y-4">
+              <div className="flex justify-between items-start border-b border-slate-800 pb-3">
+                <div>
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <span className="inline-block w-4 h-4 rounded-full border border-slate-600 shrink-0" style={{ backgroundColor: selectedBlankGoodForDetail.colorHex || '#475569' }}></span>
+                    {selectedBlankGoodForDetail.productName}
+                  </h3>
+                  <p className="text-xs text-slate-400">{selectedBlankGoodForDetail.productType} • {selectedBlankGoodForDetail.color} • {selectedBlankGoodForDetail.qty} ks × {selectedBlankGoodForDetail.pricePerPiece.toFixed(2)} € = <strong className="text-emerald-400">{(selectedBlankGoodForDetail.qty * selectedBlankGoodForDetail.pricePerPiece).toFixed(2)} €</strong></p>
+                  {selectedBlankGoodForDetail.deliveryNoteNumber && <p className="text-xs text-slate-500">Dodací list č. {selectedBlankGoodForDetail.deliveryNoteNumber} • {formatDeliveryDate(selectedBlankGoodForDetail.deliveryNoteDate)}</p>}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {!isEditingBlankGood && hasPermission('edit_stock') && (
+                    <>
+                      <button onClick={handleStartEditBlankGood} className="p-1.5 rounded bg-slate-800 text-indigo-400 hover:text-white hover:bg-indigo-700"><Edit2 className="h-4 w-4" /></button>
+                      <button onClick={handleDeleteBlankGood} className="p-1.5 rounded bg-slate-800 text-rose-400 hover:text-white hover:bg-rose-700"><Trash2 className="h-4 w-4" /></button>
+                    </>
+                  )}
+                  <button onClick={() => { setSelectedBlankGoodForDetail(null); setIsEditingBlankGood(false); }} className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white"><X className="h-5 w-5" /></button>
+                </div>
+              </div>
+
+              {isEditingBlankGood && blankGoodEditDraft && (
+                <div className="bg-amber-950/20 border border-amber-800/40 p-4 rounded-xl space-y-3">
+                  <div><label className="text-[10px] text-slate-500 block mb-0.5">Názov produktu</label><input type="text" value={blankGoodEditDraft.productName} onChange={(e) => setBlankGoodEditDraft({ ...blankGoodEditDraft, productName: e.target.value })} className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" /></div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] text-slate-500 block mb-0.5">Typ</label>
+                      <select value={blankGoodEditDraft.productType} onChange={(e) => setBlankGoodEditDraft({ ...blankGoodEditDraft, productType: e.target.value })} className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white">
+                        {BLANK_GOODS_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </div>
+                    <div><label className="text-[10px] text-slate-500 block mb-0.5">Farba</label><input type="text" value={blankGoodEditDraft.color} onChange={(e) => setBlankGoodEditDraft({ ...blankGoodEditDraft, color: e.target.value })} className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" /></div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div><label className="text-[10px] text-slate-500 block mb-0.5">Cena za kus (€)</label><input type="number" step="0.01" value={blankGoodEditDraft.pricePerPiece} onChange={(e) => setBlankGoodEditDraft({ ...blankGoodEditDraft, pricePerPiece: e.target.value })} className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" /></div>
+                    <div><label className="text-[10px] text-slate-500 block mb-0.5">Číslo dodacieho listu</label><input type="text" value={blankGoodEditDraft.deliveryNoteNumber} onChange={(e) => setBlankGoodEditDraft({ ...blankGoodEditDraft, deliveryNoteNumber: e.target.value })} className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" /></div>
+                  </div>
+                  <div><label className="text-[10px] text-slate-500 block mb-0.5">Dátum dodacieho listu</label><input type="date" value={blankGoodEditDraft.deliveryNoteDate || ''} onChange={(e) => setBlankGoodEditDraft({ ...blankGoodEditDraft, deliveryNoteDate: e.target.value })} className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" /></div>
+                  <div className="flex gap-2 pt-1">
+                    <button onClick={handleSaveBlankGoodDetails} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded text-xs uppercase">Uložiť zmeny</button>
+                    <button onClick={handleCancelEditBlankGood} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 rounded text-xs">Zrušiť</button>
+                  </div>
+                </div>
+              )}
+
+              {hasPermission('edit_stock') && (
+                <form onSubmit={handleApplyBlankGoodStockCorrection} className="bg-slate-950 p-3 rounded-lg border border-slate-800 space-y-2">
+                  <span className="font-bold text-xs text-slate-200 block">Manuálna korekcia počtu kusov</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="number" required placeholder="napr. -5 alebo 20" value={blankGoodStockCorrectionQty} onChange={(e) => setBlankGoodStockCorrectionQty(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" />
+                    <input type="text" required placeholder="Dôvod zmeny" value={blankGoodStockCorrectionNote} onChange={(e) => setBlankGoodStockCorrectionNote(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" />
+                  </div>
+                  <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1.5 rounded text-xs">Potvrdiť zmenu</button>
+                </form>
+              )}
+
+              <div className="space-y-2">
+                <span className="font-bold text-xs text-slate-400 block uppercase">História</span>
+                <div className="space-y-1.5 max-h-[200px] overflow-y-auto pr-1">
+                  {(selectedBlankGoodForDetail.history || []).map((h, i) => (
+                    <div key={i} className="bg-slate-950 p-2.5 rounded border border-slate-850 text-xs">
+                      <span className="font-bold text-slate-200 block">{h.action} <span className={h.change < 0 ? 'text-rose-400' : 'text-emerald-400'}>{h.change > 0 ? `+${h.change}` : h.change} ks</span></span>
+                      <p className="text-[10px] text-slate-500">{h.date} • Zadal: {h.user}</p>
+                      {h.note && <p className="text-[10px] text-slate-400 italic mt-0.5">{h.note}</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {showDeliveryNoteScanner && (
           <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
             <div className="bg-slate-900 border border-purple-800/40 p-6 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl space-y-4">
@@ -3675,6 +3833,94 @@ export default function App() {
                     </div>
                   ))}
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'blank-goods' && (
+          <div className="space-y-6 print:hidden animate-in fade-in duration-150">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2 bg-slate-950 p-6 rounded-2xl border border-slate-800 shadow-xl space-y-4">
+                <h2 className="text-lg font-bold text-white flex items-center gap-2"><Shirt className="text-indigo-400 h-5 w-5" /> Vzorkový sklad — hotové výrobky</h2>
+                <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
+                  <table className="w-full text-left text-xs text-slate-300">
+                    <thead className="bg-slate-900 text-slate-400 uppercase tracking-wider">
+                      <tr>
+                        <th className="px-3 py-3">Produkt</th>
+                        <th className="px-3 py-3">Typ</th>
+                        <th className="px-3 py-3 text-center">Kusy</th>
+                        <th className="px-3 py-3 text-center">Cena/ks</th>
+                        <th className="px-3 py-3 text-center">Cena komplet</th>
+                        <th className="px-3 py-3">Dodací list</th>
+                        <th className="px-3 py-3 text-center">Karta</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {blankGoodsStock.length === 0 && (
+                        <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-500 italic">Vzorkový sklad je zatiaľ prázdny.</td></tr>
+                      )}
+                      {blankGoodsStock.map(item => (
+                        <tr key={item.id} className="hover:bg-slate-800/40">
+                          <td className="px-3 py-3">
+                            <div className="flex items-center gap-2">
+                              <span className="inline-block w-4 h-4 rounded-full border border-slate-600 shrink-0" style={{ backgroundColor: item.colorHex || '#475569' }} title={item.color}></span>
+                              <div><span className="font-bold text-white block">{item.productName}</span><span className="text-[10px] text-slate-400">{item.color}</span></div>
+                            </div>
+                          </td>
+                          <td className="px-3 py-3 text-slate-300">{item.productType}</td>
+                          <td className="px-3 py-3 text-center font-bold text-white">{item.qty} ks</td>
+                          <td className="px-3 py-3 text-center text-indigo-300">{item.pricePerPiece.toFixed(2)} €</td>
+                          <td className="px-3 py-3 text-center font-bold text-emerald-400">{(item.qty * item.pricePerPiece).toFixed(2)} €</td>
+                          <td className="px-3 py-3 text-slate-400">{item.deliveryNoteNumber ? `č. ${item.deliveryNoteNumber}` : '—'}{item.deliveryNoteDate ? ` • ${formatDeliveryDate(item.deliveryNoteDate)}` : ''}</td>
+                          <td className="px-3 py-3 text-center"><button onClick={() => setSelectedBlankGoodForDetail(item)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] px-2.5 py-1 rounded">Detail</button></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    {blankGoodsStock.length > 0 && (
+                      <tfoot>
+                        <tr className="bg-slate-900 font-bold">
+                          <td colSpan={4} className="px-3 py-3 text-right text-slate-400 uppercase text-[10px]">Celková hodnota vzorkového skladu:</td>
+                          <td className="px-3 py-3 text-center text-emerald-400">{blankGoodsStock.reduce((s, i) => s + i.qty * i.pricePerPiece, 0).toFixed(2)} €</td>
+                          <td colSpan={2}></td>
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
+              </div>
+
+              <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 shadow-xl space-y-4">
+                <h3 className="font-bold text-md text-white flex items-center gap-1.5"><Plus className="text-indigo-400 h-5 w-5" /> Naskladniť nový výrobok</h3>
+                <form onSubmit={handleAddBlankGood} className="space-y-3 text-xs">
+                  <div><label className="text-slate-400 block mb-0.5">Názov produktu</label><input type="text" required value={newBgName} onChange={(e) => setNewBgName(e.target.value)} placeholder="napr. Bavlnené tričko Classic" className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" /></div>
+                  <div>
+                    <label className="text-slate-400 block mb-0.5">Čo to je (typ)</label>
+                    <select value={newBgType} onChange={(e) => setNewBgType(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white">
+                      {BLANK_GOODS_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-slate-400 block mb-1">Farba</label>
+                    <div className="flex flex-wrap gap-1.5 bg-slate-900 border border-slate-800 rounded p-2 mb-2">
+                      {COLOR_PALETTE.map(c => (
+                        <button type="button" key={c.hex} title={c.name} onClick={() => { setNewBgColor(c.name); setNewBgColorHex(c.hex); }}
+                          className={`w-6 h-6 rounded-full border-2 transition-all ${newBgColorHex === c.hex ? 'border-indigo-400 scale-110' : 'border-slate-700 hover:border-slate-500'}`} style={{ backgroundColor: c.hex }} />
+                      ))}
+                    </div>
+                    <input type="text" required value={newBgColor} onChange={(e) => setNewBgColor(e.target.value)} placeholder="Názov farby" className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div><label className="text-slate-400 block mb-0.5">Kusy</label><input type="number" value={newBgQty} onChange={(e) => setNewBgQty(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" /></div>
+                    <div><label className="text-slate-400 block mb-0.5">Cena za kus (€ bez DPH)</label><input type="number" step="0.01" value={newBgPrice} onChange={(e) => setNewBgPrice(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" /></div>
+                  </div>
+                  <div className="bg-slate-900 border border-slate-800 rounded p-2 text-center text-emerald-400 font-bold">Cena komplet: {((parseFloat(newBgQty) || 0) * (parseFloat(newBgPrice) || 0)).toFixed(2)} €</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div><label className="text-slate-400 block mb-0.5">Číslo dodacieho listu</label><input type="text" value={newBgDeliveryNumber} onChange={(e) => setNewBgDeliveryNumber(e.target.value)} placeholder="napr. DL-2026-045" className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" /></div>
+                    <div><label className="text-slate-400 block mb-0.5">Dátum dodacieho listu</label><input type="date" value={newBgDeliveryDate} onChange={(e) => setNewBgDeliveryDate(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" /></div>
+                  </div>
+                  <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded">Naskladniť</button>
+                </form>
               </div>
             </div>
           </div>
