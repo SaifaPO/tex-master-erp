@@ -406,6 +406,7 @@ export default function App() {
   const [itemImageFile, setItemImageFile] = useState(null);
   const [itemImagePreview, setItemImagePreview] = useState('');
   const [isUploadingItemImage, setIsUploadingItemImage] = useState(false);
+  const [itemRozpisFile, setItemRozpisFile] = useState(null);
 
   const [pendingItems, setPendingItems] = useState([]);
 
@@ -481,6 +482,7 @@ export default function App() {
   const [addItemLayer3Mat, setAddItemLayer3Mat] = useState('');
   const [addItemImageFile, setAddItemImageFile] = useState(null);
   const [addItemImagePreview, setAddItemImagePreview] = useState('');
+  const [addItemRozpisFile, setAddItemRozpisFile] = useState(null);
 
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [newEmpFirstName, setNewEmpFirstName] = useState('');
@@ -1351,6 +1353,14 @@ export default function App() {
     if (error) triggerNotification('error', error.message);
   };
 
+  const uploadRozpisFile = async (file) => {
+    const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${file.name}`;
+    const { error } = await supabase.storage.from('item-attachments').upload(path, file);
+    if (error) throw error;
+    const { data: pub } = supabase.storage.from('item-attachments').getPublicUrl(path);
+    return { rozpisUrl: pub.publicUrl, rozpisFileName: file.name, rozpisMimeType: file.type || '' };
+  };
+
   const handleAddPendingItem = async () => {
     if (!selectedProduct) return;
     const qtyNum = parseInt(itemQty);
@@ -1375,18 +1385,31 @@ export default function App() {
       const { data: pub } = supabase.storage.from('item-images').getPublicUrl(path);
       imageUrl = pub.publicUrl;
     }
+    let rozpisData = { rozpisUrl: '', rozpisFileName: '', rozpisMimeType: '' };
+    if (itemRozpisFile) {
+      try {
+        setIsUploadingItemImage(true);
+        rozpisData = await uploadRozpisFile(itemRozpisFile);
+        setIsUploadingItemImage(false);
+      } catch (err) {
+        setIsUploadingItemImage(false);
+        triggerNotification('error', `Chyba pri nahrávaní rozpisu: ${err.message}`);
+        return;
+      }
+    }
 
     const newItem = {
       tempId: `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       productId: selectedProduct.id, productName: selectedProduct.name, customCode: selectedProduct.customCode,
       qualityTier: selectedQualityTier.name, gender: selectedGender, qty: qtyNum, activeStations,
-      notes: itemNotes, materialsNeeded: neededList, threadQtyM: selectedProduct.threadM * qtyNum, imageUrl, assignedDesignerId: selectedDesignerId
+      notes: itemNotes, materialsNeeded: neededList, threadQtyM: selectedProduct.threadM * qtyNum, imageUrl, assignedDesignerId: selectedDesignerId, ...rozpisData
     };
     setPendingItems([...pendingItems, newItem]);
     setItemQty(10);
     setItemNotes('');
     setItemImageFile(null);
     setItemImagePreview('');
+    setItemRozpisFile(null);
     setSelectedStations(buildAllStationsPreset());
     setSelectedDesignerId('');
     triggerNotification('success', `Položka "${selectedProduct.name}" pridaná do zoznamu zákazky.`);
@@ -1431,6 +1454,7 @@ export default function App() {
       return {
         itemId, productId: item.productId, productName: item.productName, customCode: item.customCode,
         qualityTier: item.qualityTier, gender: item.gender, qty: item.qty, notes: item.notes, imageUrl: item.imageUrl || '', assignedDesignerId: item.assignedDesignerId || '',
+        rozpisUrl: item.rozpisUrl || '', rozpisFileName: item.rozpisFileName || '', rozpisMimeType: item.rozpisMimeType || '',
         materialsNeeded: item.materialsNeeded, threadQtyM: item.threadQtyM, priority: sameDayCount + idx + 1,
         stationStatuses: initialStatuses, materialDeducted: (item.materialsNeeded || []).length > 0
       };
@@ -1574,6 +1598,20 @@ export default function App() {
     setOrderEditDraft(prev => ({ ...prev, items: prev.items.map(it => it.itemId === itemId ? { ...it, imageUrl: '' } : it) }));
   };
 
+  const handleDraftItemRozpisChange = async (itemId, file) => {
+    if (!file) return;
+    try {
+      const rozpisData = await uploadRozpisFile(file);
+      setOrderEditDraft(prev => ({ ...prev, items: prev.items.map(it => it.itemId === itemId ? { ...it, ...rozpisData } : it) }));
+    } catch (err) {
+      triggerNotification('error', `Chyba pri nahrávaní rozpisu: ${err.message}`);
+    }
+  };
+
+  const handleDraftItemRozpisRemove = (itemId) => {
+    setOrderEditDraft(prev => ({ ...prev, items: prev.items.map(it => it.itemId === itemId ? { ...it, rozpisUrl: '', rozpisFileName: '', rozpisMimeType: '' } : it) }));
+  };
+
   const handleRemoveDraftItem = (itemId) => {
     if (!window.confirm('Odstrániť túto položku zo zákazky? (Zmena sa uloží až po kliknutí na "Uložiť zmeny")')) return;
     setOrderEditDraft(prev => ({ ...prev, items: prev.items.filter(it => it.itemId !== itemId) }));
@@ -1612,6 +1650,11 @@ export default function App() {
       const { data: pub } = supabase.storage.from('item-images').getPublicUrl(path);
       imageUrl = pub.publicUrl;
     }
+    let rozpisData = { rozpisUrl: '', rozpisFileName: '', rozpisMimeType: '' };
+    if (addItemRozpisFile) {
+      try { rozpisData = await uploadRozpisFile(addItemRozpisFile); }
+      catch (err) { triggerNotification('error', `Chyba pri nahrávaní rozpisu: ${err.message}`); return; }
+    }
 
     const newItemId = `${orderEditDraft.id}-x${Date.now().toString().slice(-6)}`;
     const initialStatuses = {};
@@ -1619,13 +1662,13 @@ export default function App() {
 
     const newItem = {
       itemId: newItemId, productId: product.id, productName: product.name, customCode: product.customCode,
-      qualityTier: tier?.name || '', gender: addItemGender, qty: qtyNum, notes: addItemNotes, imageUrl, assignedDesignerId: addItemDesignerId,
+      qualityTier: tier?.name || '', gender: addItemGender, qty: qtyNum, notes: addItemNotes, imageUrl, assignedDesignerId: addItemDesignerId, ...rozpisData,
       materialsNeeded: neededList, threadQtyM: product.threadM * qtyNum, priority: allItems.length + 1,
       stationStatuses: initialStatuses, materialDeducted: false
     };
 
     setOrderEditDraft(prev => ({ ...prev, items: [...prev.items, newItem] }));
-    setAddItemProductId(''); setAddItemQty(10); setAddItemNotes(''); setAddItemImageFile(null); setAddItemImagePreview(''); setAddItemStations({}); setAddItemDesignerId('');
+    setAddItemProductId(''); setAddItemQty(10); setAddItemNotes(''); setAddItemImageFile(null); setAddItemImagePreview(''); setAddItemStations({}); setAddItemDesignerId(''); setAddItemRozpisFile(null);
     setShowAddItemForm(false);
     triggerNotification('success', `Položka "${product.name}" bola pridaná do zákazky. Nezabudni kliknúť na "Uložiť zmeny", inak sa pridanie neuloží.`);
   };
@@ -2619,6 +2662,21 @@ export default function App() {
                               setItemImageFile(file);
                               setItemImagePreview(URL.createObjectURL(file));
                             }} />
+                          </label>
+                        )}
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-400 mb-1">Rozpis (voliteľné) — veľkosti, špecifikácie a pod., zobrazí sa na 2. strane sprievodky</label>
+                        {itemRozpisFile ? (
+                          <div className="flex items-center justify-between gap-2 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2">
+                            <span className="text-xs text-slate-300 truncate">📎 {itemRozpisFile.name}</span>
+                            <button type="button" onClick={() => setItemRozpisFile(null)} className="text-rose-400 hover:text-rose-300 shrink-0"><X className="h-4 w-4" /></button>
+                          </div>
+                        ) : (
+                          <label className="flex flex-col items-center justify-center gap-1 border-2 border-dashed border-slate-800 rounded-lg py-4 cursor-pointer hover:border-indigo-600 transition-colors">
+                            <Upload className="h-5 w-5 text-slate-500" />
+                            <span className="text-[10px] text-slate-500">Klikni a vyber súbor (obrázok, PDF, Excel...)</span>
+                            <input type="file" accept="image/*,.pdf,.xlsx,.xls,.csv,.doc,.docx" className="hidden" onChange={(e) => { const file = e.target.files[0]; if (file) setItemRozpisFile(file); }} />
                           </label>
                         )}
                       </div>
@@ -3811,6 +3869,24 @@ export default function App() {
                         )}
                         <p className="text-[9px] text-slate-600 italic mt-1">Zmena sa uloží až po kliknutí na "Uložiť zmeny" nižšie.</p>
                       </div>
+                      <div>
+                        <label className="block text-[10px] text-slate-500 mb-1">Rozpis (2. strana sprievodky)</label>
+                        {item.rozpisUrl ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-slate-300 bg-slate-950 border border-slate-800 rounded px-2 py-1.5 truncate max-w-[140px]">📎 {item.rozpisFileName || 'súbor'}</span>
+                            <label className="inline-flex items-center gap-1.5 border border-dashed border-slate-800 rounded-lg px-2 py-1.5 cursor-pointer hover:border-indigo-600 transition-colors text-[10px] text-slate-400 font-bold">
+                              <Upload className="h-3 w-3" /> Zmeniť
+                              <input type="file" accept="image/*,.pdf,.xlsx,.xls,.csv,.doc,.docx" className="hidden" onChange={(e) => handleDraftItemRozpisChange(item.itemId, e.target.files[0])} />
+                            </label>
+                            <button type="button" onClick={() => handleDraftItemRozpisRemove(item.itemId)} className="bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 px-2 py-1 rounded text-[10px] font-bold">Odstrániť</button>
+                          </div>
+                        ) : (
+                          <label className="inline-flex items-center gap-1.5 border border-dashed border-slate-800 rounded-lg px-3 py-1.5 cursor-pointer hover:border-indigo-600 transition-colors text-[10px] text-slate-500">
+                            <Upload className="h-3.5 w-3.5" /> Nahrať rozpis
+                            <input type="file" accept="image/*,.pdf,.xlsx,.xls,.csv,.doc,.docx" className="hidden" onChange={(e) => handleDraftItemRozpisChange(item.itemId, e.target.files[0])} />
+                          </label>
+                        )}
+                      </div>
                     </div>
                   ))}
 
@@ -3930,6 +4006,20 @@ export default function App() {
                           </label>
                         )}
                       </div>
+                      <div>
+                        <label className="block text-[10px] text-slate-500 mb-1">Rozpis (voliteľné) — 2. strana sprievodky</label>
+                        {addItemRozpisFile ? (
+                          <div className="flex items-center justify-between gap-2 bg-slate-950 border border-slate-800 rounded px-2 py-1.5">
+                            <span className="text-[10px] text-slate-300 truncate">📎 {addItemRozpisFile.name}</span>
+                            <button type="button" onClick={() => setAddItemRozpisFile(null)} className="text-rose-400 hover:text-rose-300 shrink-0"><X className="h-3.5 w-3.5" /></button>
+                          </div>
+                        ) : (
+                          <label className="inline-flex items-center gap-1.5 border border-dashed border-slate-800 rounded-lg px-3 py-1.5 cursor-pointer hover:border-indigo-600 transition-colors text-[10px] text-slate-500">
+                            <Upload className="h-3.5 w-3.5" /> Nahrať rozpis
+                            <input type="file" accept="image/*,.pdf,.xlsx,.xls,.csv,.doc,.docx" className="hidden" onChange={(e) => { const f = e.target.files[0]; if (f) setAddItemRozpisFile(f); }} />
+                          </label>
+                        )}
+                      </div>
                       <div className="flex gap-2">
                         <button type="button" onClick={handleAddItemToExistingOrder} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded text-xs uppercase">Pridať položku</button>
                         <button type="button" onClick={() => setShowAddItemForm(false)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 rounded text-xs">Zrušiť</button>
@@ -3983,6 +4073,20 @@ export default function App() {
                     <img src={item.imageUrl} alt={item.productName} className="w-full h-[320px] sm:h-[380px] print:h-[140mm] object-contain bg-white rounded-xl border border-slate-300" />
                   ) : (
                     <div className="w-full h-[320px] sm:h-[380px] print:h-[140mm] rounded-xl border border-dashed border-slate-700 print:border-slate-400 flex items-center justify-center text-slate-600 print:text-slate-400 text-sm italic">Bez obrázka</div>
+                  )}
+
+                  {item.rozpisUrl && (
+                    item.rozpisMimeType?.startsWith('image/') ? (
+                      <div style={{ breakBefore: 'page' }} className="pt-6 space-y-2">
+                        <span className="font-mono text-xs text-indigo-400 font-bold block print:text-black">Rozpis — Položka #{itemIdx + 1} • {item.itemId}</span>
+                        <img src={item.rozpisUrl} alt="Rozpis" className="w-full h-[320px] sm:h-[600px] print:h-[250mm] object-contain bg-white rounded-xl border border-slate-300" />
+                      </div>
+                    ) : (
+                      <div className="print:hidden bg-slate-900 border border-slate-800 rounded-xl p-3 flex items-center justify-between gap-3">
+                        <span className="text-xs text-slate-300 flex items-center gap-2"><FileText className="h-4 w-4 text-indigo-400" /> Priložený rozpis: <strong>{item.rozpisFileName}</strong></span>
+                        <a href={item.rozpisUrl} target="_blank" rel="noopener noreferrer" className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] px-3 py-1.5 rounded-lg">Otvoriť</a>
+                      </div>
+                    )
                   )}
 
                   <div className="print:hidden space-y-2">
