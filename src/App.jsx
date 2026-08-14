@@ -4927,7 +4927,7 @@ export default function App() {
                 );
               })()}
 
-
+              {financeSubTab === 'queue' && (
                 <div className="space-y-3">
                   <p className="text-xs text-slate-400">Zákazky, ktoré sú kompletne hotové na všetkých staniciach a majú byť fakturované. Skontroluj a buď vystav faktúru, alebo prehoď na hotovosť, ak si to zákazník rozmyslel.</p>
                   {pendingReviewOrders.length === 0 ? (
