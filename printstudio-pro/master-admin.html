@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PrintStudio Pro — Master Admin</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #1e293b; }
+    ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen">
+
+<!-- LOGIN -->
+<div id="login-screen" class="min-h-screen flex items-center justify-center bg-slate-900 px-4">
+    <div class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-sm">
+        <div class="w-12 h-12 rounded-xl bg-indigo-600 text-white flex items-center justify-center mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </div>
+        <h1 class="text-xl font-extrabold text-slate-900">Master prihlásenie</h1>
+        <p class="text-xs text-slate-500 mb-6">PrintStudio Pro — správa produktov a konfigurátora</p>
+        <input id="login-user" type="text" placeholder="Používateľ" value="martin" class="w-full mb-3 px-3 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        <input id="login-pass" type="password" placeholder="Heslo (demo: master123)" class="w-full mb-4 px-3 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        <button onclick="pokusOPrihlasenie()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-xl font-semibold text-sm transition">Prihlásiť sa</button>
+        <p id="login-error" class="hidden text-xs text-red-600 mt-3">Nesprávne meno alebo heslo.</p>
+        <p class="text-[11px] text-slate-400 mt-5">V produkčnej verzii by toto prihlásenie išlo cez Supabase Auth (rola Master), rovnako ako v TEX-MASTER ERP — vrátane TOTP 2FA.</p>
+    </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard" class="hidden min-h-screen flex">
+
+    <!-- VLASTNÉ POTVRDZOVACIE OKNO (natívny confirm() je v tomto prostredí blokovaný) -->
+    <div id="confirm-modal" class="hidden fixed inset-0 bg-black/50 z-[60] flex items-center justify-center px-4">
+        <div class="bg-white rounded-2xl p-5 max-w-sm w-full shadow-2xl">
+            <p id="confirm-modal-text" class="text-sm text-slate-700 mb-5">Naozaj?</p>
+            <div class="flex gap-2 justify-end">
+                <button onclick="zatvorConfirm()" class="px-4 py-2 rounded-lg border border-slate-300 text-sm font-medium text-slate-600 hover:bg-slate-50">Zrušiť</button>
+                <button onclick="vykonajConfirm()" class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold">Potvrdiť</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFIKÁCIA (natívny alert() je tiež blokovaný) -->
+    <div id="admin-toast" class="hidden fixed top-4 left-1/2 -translate-x-1/2 z-[60] bg-slate-900 text-white text-sm px-4 py-2.5 rounded-xl shadow-lg max-w-[90vw]"></div>
+
+
+    <!-- SIDEBAR -->
+    <aside class="w-56 bg-slate-900 text-slate-300 flex flex-col shrink-0">
+        <div class="px-4 py-5 border-b border-slate-800">
+            <div class="font-bold text-white text-sm">PrintStudio Pro</div>
+            <div class="text-[11px] text-slate-500">Prihlásený: <span id="current-user-label">martin</span></div>
+        </div>
+        <nav class="flex-1 py-3 space-y-1 px-2">
+            <button onclick="switchAdminTab('kategorie')" data-tab="kategorie" class="admin-tab w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition text-left">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 shrink-0"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                Kategórie
+            </button>
+            <button onclick="switchAdminTab('produkty')" data-tab="produkty" class="admin-tab w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition text-left">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 shrink-0"><path d="M21 8l-9-5-9 5v8l9 5 9-5V8z"/><line x1="3.5" y1="8.5" x2="12" y2="13"/><line x1="20.5" y1="8.5" x2="12" y2="13"/><line x1="12" y1="22" x2="12" y2="13"/></svg>
+                Produkty (Blanks)
+            </button>
+            <button onclick="switchAdminTab('farby')" data-tab="farby" class="admin-tab w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition text-left">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 shrink-0"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
+                Farby
+            </button>
+            <button onclick="switchAdminTab('fonty')" data-tab="fonty" class="admin-tab w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition text-left">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 shrink-0"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+                Fonty
+            </button>
+            <button onclick="switchAdminTab('grafiky')" data-tab="grafiky" class="admin-tab w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition text-left">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 shrink-0"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                Grafiky (Design)
+            </button>
+            <button onclick="switchAdminTab('cennik')" data-tab="cennik" class="admin-tab w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition text-left">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 shrink-0"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                Cenník potlače
+            </button>
+        </nav>
+        <button onclick="odhlasit()" class="m-2 flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-white transition">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 shrink-0"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            Odhlásiť
+        </button>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="flex-1 p-6 overflow-y-auto max-h-screen">
+        <div class="bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-xl px-4 py-2.5 mb-5">
+            Prototyp — dáta sú len v pamäti prehliadača a po obnovení stránky sa stratia. V reálnej verzii idú do rovnakej Supabase databázy ako TEX-MASTER ERP a konfigurátor na Shopify ich číta naživo.
+        </div>
+
+        <!-- KATEGÓRIE -->
+        <section id="section-kategorie" class="admin-section hidden">
+            <div class="flex items-center justify-between mb-4">
+                <h1 class="text-xl font-extrabold text-slate-900">Kategórie</h1>
+                <button onclick="otvorFormKategoria()" class="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-xl text-sm font-semibold transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Pridať kategóriu
+                </button>
+            </div>
+            <p class="text-xs text-slate-500 mb-4">Kategórie sú to, čo zákazník uvidí ako hlavný katalóg v konfigurátore — Tričká, Mikiny, Šiltovky, Tašky...</p>
+            <div id="form-kategoria" class="hidden bg-white rounded-2xl border border-slate-200 p-5 mb-5 space-y-3 max-w-md">
+                <h3 class="font-bold text-sm text-slate-900" id="form-kategoria-title">Nová kategória</h3>
+                <div>
+                    <label class="text-xs text-slate-500 font-medium">Názov</label>
+                    <input id="k-nazov" type="text" placeholder="napr. Šiltovka" class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                </div>
+                <div class="flex gap-2 pt-1">
+                    <button onclick="ulozKategoriu()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-semibold">Uložiť</button>
+                    <button onclick="zavriFormKategoria()" class="border border-slate-300 text-slate-600 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-slate-50">Zrušiť</button>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3" id="grid-kategorie"></div>
+        </section>
+
+        <!-- PRODUKTY -->
+        <section id="section-produkty" class="admin-section hidden">
+            <div class="flex items-center justify-between mb-4">
+                <h1 class="text-xl font-extrabold text-slate-900">Produkty (Blanks)</h1>
+                <button onclick="otvorFormProdukt()" class="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-xl text-sm font-semibold transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Pridať produkt
+                </button>
+            </div>
+
+            <div id="form-produkt" class="hidden bg-white rounded-2xl border border-slate-200 p-5 mb-5 space-y-3">
+                <h3 class="font-bold text-sm text-slate-900" id="form-produkt-title">Nový produkt</h3>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-xs text-slate-500 font-medium">Kategória</label>
+                        <select id="p-kategoria" class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm"></select>
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-500 font-medium">Názov</label>
+                        <input id="p-nazov" type="text" placeholder="napr. Pánske tričko" class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-xs text-slate-500 font-medium">Pohlavie</label>
+                        <select id="p-pohlavie" class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                            <option value="muz">Muž</option>
+                            <option value="zena">Žena</option>
+                            <option value="dieta">Dieťa</option>
+                            <option value="unisex">Unisex</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-500 font-medium">Párovanie s produktom na eshope (Shopify handle)</label>
+                        <input id="p-handle" type="text" placeholder="napr. panske-tricko" class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    </div>
+                </div>
+                <div class="grid grid-cols-3 gap-3">
+                    <div>
+                        <label class="text-xs text-slate-500 font-medium">Základná cena (€)</label>
+                        <input id="p-cena" type="number" step="0.01" class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-500 font-medium">Technológia potlače</label>
+                        <select id="p-tech" class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                            <option value="sublimacia">Sublimácia</option>
+                            <option value="transfer">Transfer</option>
+                            <option value="sietotlac">Sieťotlač</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-500 font-medium">Dodávateľ blanku</label>
+                        <input id="p-dodavatel" type="text" placeholder="napr. BlankWear SK" class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    </div>
+                </div>
+                <div>
+                    <label class="text-xs text-slate-500 font-medium block mb-1.5">Zóny potlače — ktoré strany tento produkt podporuje</label>
+                    <div class="flex flex-wrap gap-2">
+                        <label class="flex items-center gap-1.5 border border-slate-200 rounded-lg px-3 py-1.5 text-xs cursor-pointer">
+                            <input type="checkbox" id="p-zona-predok" onchange="toggleZona('predok')" class="rounded"> Predok
+                        </label>
+                        <label class="flex items-center gap-1.5 border border-slate-200 rounded-lg px-3 py-1.5 text-xs cursor-pointer">
+                            <input type="checkbox" id="p-zona-chrbat" onchange="toggleZona('chrbat')" class="rounded"> Chrbát
+                        </label>
+                        <label class="flex items-center gap-1.5 border border-slate-200 rounded-lg px-3 py-1.5 text-xs cursor-pointer">
+                            <input type="checkbox" id="p-zona-lavy_rukav" onchange="toggleZona('lavy_rukav')" class="rounded"> Ľavý rukáv
+                        </label>
+                        <label class="flex items-center gap-1.5 border border-slate-200 rounded-lg px-3 py-1.5 text-xs cursor-pointer">
+                            <input type="checkbox" id="p-zona-pravy_rukav" onchange="toggleZona('pravy_rukav')" class="rounded"> Pravý rukáv
+                        </label>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label class="text-xs text-slate-500 font-medium">Veľkosti a maximálny rozmer potlače (cm) pre každú zónu</label>
+                        <button onclick="pridajVelkostRiadok()" class="text-xs text-indigo-600 font-semibold hover:text-indigo-700">+ Pridať veľkosť</button>
+                    </div>
+                    <p class="text-[11px] text-slate-400 mb-2">Napr. pánske XL môže mať predok 39×49 cm, detské S len 22×28 cm — nastav to tu pre každú veľkosť zvlášť.</p>
+                    <div class="overflow-x-auto border border-slate-200 rounded-xl">
+                        <table class="w-full text-xs" id="p-velkosti-tabulka">
+                            <thead class="bg-slate-50 text-slate-500 uppercase tracking-wide"><tr id="p-velkosti-hlavicka"></tr></thead>
+                            <tbody id="p-velkosti-telo"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div>
+                    <label class="text-xs text-slate-500 font-medium block mb-1.5">Dostupné farby</label>
+                    <div id="p-farby-checkboxy" class="flex flex-wrap gap-2"></div>
+                </div>
+                <label class="flex items-center gap-2 text-sm text-slate-700">
+                    <input id="p-aktivny" type="checkbox" checked class="rounded"> Produkt je aktívny (viditeľný v konfigurátore)
+                </label>
+                <div class="flex gap-2 pt-2">
+                    <button onclick="ulozProdukt()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-semibold">Uložiť</button>
+                    <button onclick="zavriFormProdukt()" class="border border-slate-300 text-slate-600 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-slate-50">Zrušiť</button>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                <table class="w-full text-sm">
+                    <thead class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
+                        <tr>
+                            <th class="text-left px-4 py-3">Názov</th>
+                            <th class="text-left px-4 py-3">Pohlavie</th>
+                            <th class="text-left px-4 py-3">Shopify handle</th>
+                            <th class="text-left px-4 py-3">Cena</th>
+                            <th class="text-left px-4 py-3">Zóny potlače</th>
+                            <th class="text-left px-4 py-3">Farby</th>
+                            <th class="text-left px-4 py-3">Stav</th>
+                            <th class="text-right px-4 py-3">Akcie</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-produkty"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- FARBY -->
+        <section id="section-farby" class="admin-section hidden">
+            <div class="flex items-center justify-between mb-4">
+                <h1 class="text-xl font-extrabold text-slate-900">Farby</h1>
+                <button onclick="otvorFormFarba()" class="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-xl text-sm font-semibold transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Pridať farbu
+                </button>
+            </div>
+            <div id="form-farba" class="hidden bg-white rounded-2xl border border-slate-200 p-5 mb-5 space-y-3">
+                <h3 class="font-bold text-sm text-slate-900" id="form-farba-title">Nová farba</h3>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-xs text-slate-500 font-medium">Názov</label>
+                        <input id="f-nazov" type="text" placeholder="napr. Petrolejová" class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-500 font-medium">Hex kód</label>
+                        <input id="f-hex" type="color" value="#2563eb" class="w-full mt-1 h-10 px-1 py-1 border border-slate-300 rounded-lg">
+                    </div>
+                </div>
+                <div class="flex gap-2 pt-1">
+                    <button onclick="ulozFarbu()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-semibold">Uložiť</button>
+                    <button onclick="zavriFormFarba()" class="border border-slate-300 text-slate-600 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-slate-50">Zrušiť</button>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3" id="grid-farby"></div>
+        </section>
+
+        <!-- FONTY -->
+        <section id="section-fonty" class="admin-section hidden">
+            <div class="flex items-center justify-between mb-4">
+                <h1 class="text-xl font-extrabold text-slate-900">Fonty</h1>
+                <button onclick="otvorFormFont()" class="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-xl text-sm font-semibold transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Pridať font
+                </button>
+            </div>
+            <div id="form-font" class="hidden bg-white rounded-2xl border border-slate-200 p-5 mb-5 space-y-3">
+                <h3 class="font-bold text-sm text-slate-900" id="form-font-title">Nový font</h3>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-xs text-slate-500 font-medium">Názov (CSS font-family)</label>
+                        <input id="fo-nazov" type="text" placeholder="napr. Impact" class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-500 font-medium">Použitie</label>
+                        <select id="fo-pouzitie" class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                            <option value="vsetko">Meno aj číslo aj text</option>
+                            <option value="meno">Len meno na drese</option>
+                            <option value="cislo">Len číslo na drese</option>
+                            <option value="text">Len voľný text</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex gap-2 pt-1">
+                    <button onclick="ulozFont()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-semibold">Uložiť</button>
+                    <button onclick="zavriFormFont()" class="border border-slate-300 text-slate-600 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-slate-50">Zrušiť</button>
+                </div>
+            </div>
+            <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                <table class="w-full text-sm">
+                    <thead class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
+                        <tr><th class="text-left px-4 py-3">Ukážka</th><th class="text-left px-4 py-3">Názov</th><th class="text-left px-4 py-3">Použitie</th><th class="text-right px-4 py-3">Akcie</th></tr>
+                    </thead>
+                    <tbody id="tbody-fonty"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- GRAFIKY -->
+        <section id="section-grafiky" class="admin-section hidden">
+            <div class="flex items-center justify-between mb-4">
+                <h1 class="text-xl font-extrabold text-slate-900">Grafiky (Design knižnica)</h1>
+                <button onclick="otvorFormGrafika()" class="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-xl text-sm font-semibold transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Pridať grafiku
+                </button>
+            </div>
+            <div id="form-grafika" class="hidden bg-white rounded-2xl border border-slate-200 p-5 mb-5 space-y-3">
+                <h3 class="font-bold text-sm text-slate-900">Nová grafika</h3>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-xs text-slate-500 font-medium">Názov</label>
+                        <input id="g-nazov" type="text" placeholder="napr. Vlnovka" class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-500 font-medium">Kategória</label>
+                        <input id="g-kategoria" type="text" placeholder="napr. Šport, Príroda, Logá" class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    </div>
+                </div>
+                <div>
+                    <label class="text-xs text-slate-500 font-medium block mb-1">Obrázok</label>
+                    <input id="g-subor" type="file" accept="image/*" class="text-sm">
+                </div>
+                <div class="flex gap-2 pt-1">
+                    <button onclick="ulozGrafiku()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-semibold">Uložiť</button>
+                    <button onclick="zavriFormGrafika()" class="border border-slate-300 text-slate-600 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-slate-50">Zrušiť</button>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3" id="grid-grafiky"></div>
+        </section>
+
+        <!-- CENNÍK POTLAČE -->
+        <section id="section-cennik" class="admin-section hidden">
+            <h1 class="text-xl font-extrabold text-slate-900 mb-1">Cenník potlače</h1>
+            <p class="text-xs text-slate-500 mb-5">Každá technológia má iný spôsob výpočtu ceny — plošné technológie rozhoduje len cm², pri sieťotlači a rezanom transfere ráta aj počet farieb (a pri transfere typ fólie).</p>
+
+            <!-- SUBLIMÁCIA -->
+            <div class="bg-white rounded-2xl border border-slate-200 p-5 mb-4">
+                <h3 class="font-bold text-sm text-slate-900 mb-1">Sublimácia</h3>
+                <p class="text-xs text-slate-500 mb-3">Cena = plocha (cm²) × sadzba. Počet farieb ani počet samostatných motívov cenu neovplyvňuje — je to plnofarebná digitálna tlač.</p>
+                <div class="grid grid-cols-2 gap-3 max-w-md">
+                    <div>
+                        <label class="text-xs text-slate-500 font-medium">Sadzba (€/cm²)</label>
+                        <input id="c-sublimacia-cm2" type="number" step="0.01" onchange="ulozCennik()" class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-500 font-medium">Minimálna cena úkonu (€)</label>
+                        <input id="c-sublimacia-min" type="number" step="0.1" onchange="ulozCennik()" class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    </div>
+                </div>
+            </div>
+
+            <!-- DIGITÁLNY TRANSFER -->
+            <div class="bg-white rounded-2xl border border-slate-200 p-5 mb-4">
+                <h3 class="font-bold text-sm text-slate-900 mb-1">Digitálny transfer (DTF)</h3>
+                <p class="text-xs text-slate-500 mb-3">Cena = plocha (cm²) × sadzba. Aj tu rozhoduje len celková plocha — jedno veľké logo alebo veľa malých na rovnakej ploche stojí rovnako.</p>
+                <div class="grid grid-cols-2 gap-3 max-w-md">
+                    <div>
+                        <label class="text-xs text-slate-500 font-medium">Sadzba (€/cm²)</label>
+                        <input id="c-dtf-cm2" type="number" step="0.01" onchange="ulozCennik()" class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-500 font-medium">Minimálna cena úkonu (€)</label>
+                        <input id="c-dtf-min" type="number" step="0.1" onchange="ulozCennik()" class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    </div>
+                </div>
+            </div>
+
+            <!-- SIEŤOTLAČ -->
+            <div class="bg-white rounded-2xl border border-slate-200 p-5 mb-4">
+                <h3 class="font-bold text-sm text-slate-900 mb-1">Sieťotlač</h3>
+                <p class="text-xs text-slate-500 mb-3">Cena = základ (plocha × sadzba, min. cena) + príplatok za každú ďalšiu farbu nad rámec prvej (každá farba = nové sito).</p>
+                <div class="grid grid-cols-3 gap-3 max-w-2xl">
+                    <div>
+                        <label class="text-xs text-slate-500 font-medium">Sadzba (€/cm²)</label>
+                        <input id="c-sieto-cm2" type="number" step="0.01" onchange="ulozCennik()" class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-500 font-medium">Minimálna cena úkonu (€)</label>
+                        <input id="c-sieto-min" type="number" step="0.1" onchange="ulozCennik()" class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-500 font-medium">Príplatok za ďalšiu farbu (€)</label>
+                        <input id="c-sieto-farba" type="number" step="0.1" onchange="ulozCennik()" class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    </div>
+                </div>
+            </div>
+
+            <!-- REZANÝ TRANSFER -->
+            <div class="bg-white rounded-2xl border border-slate-200 p-5 mb-4">
+                <h3 class="font-bold text-sm text-slate-900 mb-1">Rezaný transfer (fóliový vinyl)</h3>
+                <p class="text-xs text-slate-500 mb-3">Cena = plocha (cm²) × sadzba fólie × počet farieb (každá farba sa reže a lisuje zvlášť). Sadzba sa líši podľa typu fólie.</p>
+                <div class="max-w-xs mb-3">
+                    <label class="text-xs text-slate-500 font-medium">Minimálna cena úkonu (€)</label>
+                    <input id="c-rezany-min" type="number" step="0.1" onchange="ulozCennik()" class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                </div>
+                <div class="flex items-center justify-between mb-2">
+                    <label class="text-xs text-slate-500 font-medium">Typy fólie a ich sadzba (€/cm²)</label>
+                    <button onclick="pridajFoliu()" class="text-xs text-indigo-600 font-semibold hover:text-indigo-700">+ Pridať typ fólie</button>
+                </div>
+                <div id="folie-zoznam" class="space-y-2"></div>
+            </div>
+
+            <!-- TESTOVACIA KALKULAČKA -->
+            <div class="bg-slate-900 rounded-2xl p-5 text-white">
+                <h3 class="font-bold text-sm mb-1">🧮 Testovacia kalkulačka</h3>
+                <p class="text-xs text-slate-400 mb-4">Over si, akú cenu dostane zákazník pri malej aj veľkej potlači, kým to nasadíš naostro.</p>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                    <div>
+                        <label class="text-xs text-slate-400">Technológia</label>
+                        <select id="test-tech" onchange="prepocitajTest()" class="w-full mt-1 px-3 py-2 rounded-lg text-sm text-slate-900">
+                            <option value="sublimacia">Sublimácia</option>
+                            <option value="dtf">Digitálny transfer</option>
+                            <option value="sietotlac">Sieťotlač</option>
+                            <option value="rezany">Rezaný transfer</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400">Šírka (cm)</label>
+                        <input id="test-w" type="number" value="10" oninput="prepocitajTest()" class="w-full mt-1 px-3 py-2 rounded-lg text-sm text-slate-900">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400">Výška (cm)</label>
+                        <input id="test-h" type="number" value="10" oninput="prepocitajTest()" class="w-full mt-1 px-3 py-2 rounded-lg text-sm text-slate-900">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400">Počet farieb</label>
+                        <input id="test-farby" type="number" value="1" min="1" oninput="prepocitajTest()" class="w-full mt-1 px-3 py-2 rounded-lg text-sm text-slate-900">
+                    </div>
+                </div>
+                <div id="test-folia-wrap" class="mb-4 hidden max-w-xs">
+                    <label class="text-xs text-slate-400">Typ fólie</label>
+                    <select id="test-folia" onchange="prepocitajTest()" class="w-full mt-1 px-3 py-2 rounded-lg text-sm text-slate-900"></select>
+                </div>
+                <div class="flex items-center justify-between pt-3 border-t border-slate-700">
+                    <div class="text-xs text-slate-400">
+                        Plocha: <span id="test-plocha" class="text-white font-semibold">100 cm²</span>
+                        <span id="test-vzorec" class="block mt-0.5"></span>
+                    </div>
+                    <div class="text-2xl font-black text-emerald-400" id="test-vysledok">0.00 €</div>
+                </div>
+            </div>
+        </section>
+    </main>
+</div>
+
+<script>
+const ICONS = {
+    pencil: '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>',
+    trash: '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/>',
+    check: '<polyline points="20 6 9 17 4 12"/>',
+    x: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+    image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>',
+};
+function ic(name, cls) { return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="${cls}">${ICONS[name]}</svg>`; }
+
+// --- DEMO PRIHLASOVACIE ÚDAJE ---
+// --- VLASTNÉ POTVRDENIE / TOAST (namiesto natívnych confirm()/alert(), ktoré tu prehliadač blokuje) ---
+let confirmCallback = null;
+function potvrdAkciu(text, callback) {
+    document.getElementById('confirm-modal-text').innerText = text;
+    confirmCallback = callback;
+    document.getElementById('confirm-modal').classList.remove('hidden');
+}
+function zatvorConfirm() {
+    document.getElementById('confirm-modal').classList.add('hidden');
+    confirmCallback = null;
+}
+function vykonajConfirm() {
+    if (confirmCallback) confirmCallback();
+    zatvorConfirm();
+}
+let toastTimeout = null;
+function ukazToast(text) {
+    const el = document.getElementById('admin-toast');
+    el.innerText = text;
+    el.classList.remove('hidden');
+    clearTimeout(toastTimeout);
+    toastTimeout = setTimeout(() => el.classList.add('hidden'), 3000);
+}
+
+const DEMO_USER = 'martin';
+const DEMO_PASS = 'master123';
+
+function pokusOPrihlasenie() {
+    const u = document.getElementById('login-user').value.trim();
+    const p = document.getElementById('login-pass').value;
+    if (u === DEMO_USER && p === DEMO_PASS) {
+        document.getElementById('login-screen').classList.add('hidden');
+        document.getElementById('dashboard').classList.remove('hidden');
+        document.getElementById('current-user-label').innerText = u;
+        switchAdminTab('produkty');
+    } else {
+        document.getElementById('login-error').classList.remove('hidden');
+    }
+}
+function odhlasit() {
+    document.getElementById('dashboard').classList.add('hidden');
+    document.getElementById('login-screen').classList.remove('hidden');
+    document.getElementById('login-pass').value = '';
+}
+
+// --- STAV (v pamäti; v produkcii = Supabase tabuľky) ---
+let farby = [
+    { id: 1, nazov: 'Biela', hex: '#f1f2f4' },
+    { id: 2, nazov: 'Čierna', hex: '#1b1e24' },
+    { id: 3, nazov: 'Modrá', hex: '#1b4b8c' },
+    { id: 4, nazov: 'Červená', hex: '#b3202c' },
+    { id: 5, nazov: 'Sivá', hex: '#8d96a3' },
+];
+let fonty = [
+    { id: 1, nazov: 'Impact', pouzitie: 'vsetko' },
+    { id: 2, nazov: 'Arial', pouzitie: 'text' },
+    { id: 3, nazov: 'Georgia', pouzitie: 'text' },
+];
+let grafiky = [
+    { id: 1, nazov: 'Vlna', kategoria: 'Šport', dataUrl: '' },
+    { id: 2, nazov: 'Blesk', kategoria: 'Šport', dataUrl: '' },
+];
+let kategorie = [
+    { id: 1, nazov: 'Tričko' },
+    { id: 2, nazov: 'Mikina' },
+    { id: 3, nazov: 'Dres' },
+    { id: 4, nazov: 'Taška' },
+    { id: 5, nazov: 'Šiltovka' },
+];
+
+let produkty = [
+    { id: 1, kategoriaId: 1, pohlavie: 'muz', nazov: 'Pánske tričko', shopifyHandle: 'panske-tricko', basePrice: 12.90, technologia: 'transfer', dodavatel: 'BlankWear SK',
+      zony: { predok: true, chrbat: true, lavy_rukav: false, pravy_rukav: false }, farbyIds: [1,2,3,4,5], aktivny: true,
+      velkosti: [
+          { s:'S', zony:{ predok:{w:29,h:39}, chrbat:{w:29,h:39} } },
+          { s:'M', zony:{ predok:{w:33,h:43}, chrbat:{w:33,h:43} } },
+          { s:'L', zony:{ predok:{w:36,h:46}, chrbat:{w:36,h:46} } },
+          { s:'XL', zony:{ predok:{w:39,h:49}, chrbat:{w:39,h:49} } },
+      ] },
+    { id: 2, kategoriaId: 1, pohlavie: 'zena', nazov: 'Dámske tričko', shopifyHandle: 'damske-tricko', basePrice: 12.90, technologia: 'transfer', dodavatel: 'BlankWear SK',
+      zony: { predok: true, chrbat: true, lavy_rukav: false, pravy_rukav: false }, farbyIds: [1,2,4,5], aktivny: true,
+      velkosti: [
+          { s:'S', zony:{ predok:{w:24,h:32}, chrbat:{w:24,h:32} } },
+          { s:'M', zony:{ predok:{w:26,h:35}, chrbat:{w:26,h:35} } },
+          { s:'L', zony:{ predok:{w:29,h:39}, chrbat:{w:29,h:39} } },
+      ] },
+    { id: 3, kategoriaId: 1, pohlavie: 'dieta', nazov: 'Detské tričko', shopifyHandle: 'detske-tricko', basePrice: 9.90, technologia: 'transfer', dodavatel: 'BlankWear SK',
+      zony: { predok: true, chrbat: false, lavy_rukav: false, pravy_rukav: false }, farbyIds: [1,3,4], aktivny: true,
+      velkosti: [
+          { s:'110', zony:{ predok:{w:16,h:20} } },
+          { s:'128', zony:{ predok:{w:18,h:22} } },
+          { s:'146', zony:{ predok:{w:20,h:25} } },
+      ] },
+    { id: 4, kategoriaId: 3, pohlavie: 'unisex', nazov: 'Športový Dres', shopifyHandle: 'sportovy-dres', basePrice: 16.90, technologia: 'sublimacia', dodavatel: 'Textilsport s.r.o.',
+      zony: { predok: true, chrbat: true, lavy_rukav: true, pravy_rukav: true }, farbyIds: [3,4,1], aktivny: true,
+      velkosti: [
+          { s:'S', zony:{ predok:{w:26,h:36}, chrbat:{w:26,h:36}, lavy_rukav:{w:8,h:8}, pravy_rukav:{w:8,h:8} } },
+          { s:'M', zony:{ predok:{w:28,h:38}, chrbat:{w:28,h:38}, lavy_rukav:{w:9,h:9}, pravy_rukav:{w:9,h:9} } },
+          { s:'L', zony:{ predok:{w:30,h:40}, chrbat:{w:30,h:40}, lavy_rukav:{w:10,h:10}, pravy_rukav:{w:10,h:10} } },
+      ] },
+];
+
+let formZony = { predok: true, chrbat: true, lavy_rukav: false, pravy_rukav: false };
+let formVelkosti = [];
+const NAZVY_ZON = { predok: 'Predok', chrbat: 'Chrbát', lavy_rukav: 'Ľ. rukáv', pravy_rukav: 'P. rukáv' };
+const NAZVY_POHLAVIA = { muz: 'Muž', zena: 'Žena', dieta: 'Dieťa', unisex: 'Unisex' };
+
+// --- CENNÍK POTLAČE (v produkcii = tabuľka v Supabase, tu v pamäti) ---
+let cennik = {
+    sublimacia: { cena_cm2: 0.12, min_cena: 3.0 },
+    dtf:        { cena_cm2: 0.18, min_cena: 3.5 },
+    sietotlac:  { cena_cm2: 0.03, min_cena: 6.5, priplatok_farba: 1.5 },
+    rezany:     { min_cena: 4.0, folie: [
+        { id: 1, nazov: 'Štandardná biela/čierna', cena_cm2: 0.15 },
+        { id: 2, nazov: 'Flex farebná', cena_cm2: 0.20 },
+        { id: 3, nazov: 'Flock / semiš', cena_cm2: 0.28 },
+        { id: 4, nazov: 'Reflexná', cena_cm2: 0.35 },
+    ] },
+};
+
+
+let editId = { produkt: null, farba: null, font: null, kategoria: null };
+
+// --- NAVIGÁCIA ---
+function switchAdminTab(tab) {
+    document.querySelectorAll('.admin-tab').forEach(b => {
+        const active = b.dataset.tab === tab;
+        b.className = 'admin-tab w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition text-left ' + (active ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800');
+    });
+    document.querySelectorAll('.admin-section').forEach(s => s.classList.add('hidden'));
+    document.getElementById('section-' + tab).classList.remove('hidden');
+    if (tab === 'kategorie') renderKategorie();
+    if (tab === 'produkty') renderProdukty();
+    if (tab === 'farby') renderFarby();
+    if (tab === 'fonty') renderFonty();
+    if (tab === 'grafiky') renderGrafiky();
+    if (tab === 'cennik') renderCennik();
+}
+
+// --- KATEGÓRIE ---
+function otvorFormKategoria(id) {
+    editId.kategoria = id || null;
+    const k = id ? kategorie.find(x => x.id === id) : null;
+    document.getElementById('form-kategoria-title').innerText = k ? 'Upraviť kategóriu' : 'Nová kategória';
+    document.getElementById('k-nazov').value = k ? k.nazov : '';
+    document.getElementById('form-kategoria').classList.remove('hidden');
+}
+function zavriFormKategoria() { document.getElementById('form-kategoria').classList.add('hidden'); }
+function ulozKategoriu() {
+    const nazov = document.getElementById('k-nazov').value.trim();
+    if (!nazov) { ukazToast('Vyplň názov kategórie.'); return; }
+    if (editId.kategoria) {
+        kategorie.find(x => x.id === editId.kategoria).nazov = nazov;
+    } else {
+        kategorie.push({ id: Date.now(), nazov });
+    }
+    zavriFormKategoria();
+    renderKategorie();
+    ukazToast('Kategória uložená.');
+}
+function zmazKategoriu(id) {
+    const pocetProduktov = produkty.filter(p => p.kategoriaId === id).length;
+    if (pocetProduktov > 0) {
+        ukazToast(`Nedá sa zmazať — obsahuje ${pocetProduktov} produkt(y). Najprv ich presuň alebo zmaž.`);
+        return;
+    }
+    potvrdAkciu('Zmazať túto kategóriu?', () => {
+        kategorie = kategorie.filter(k => k.id !== id);
+        renderKategorie();
+        ukazToast('Kategória zmazaná.');
+    });
+}
+function renderKategorie() {
+    const grid = document.getElementById('grid-kategorie');
+    grid.innerHTML = kategorie.map(k => {
+        const pocet = produkty.filter(p => p.kategoriaId === k.id).length;
+        return `<div class="bg-white rounded-xl border border-slate-200 p-4">
+            <div class="font-bold text-sm text-slate-900">${k.nazov}</div>
+            <div class="text-xs text-slate-400 mb-3">${pocet} produkt${pocet === 1 ? '' : 'y'}</div>
+            <div class="flex gap-2">
+                <button onclick="otvorFormKategoria(${k.id})" class="text-slate-400 hover:text-indigo-600 p-1">${ic('pencil','w-4 h-4')}</button>
+                <button onclick="zmazKategoriu(${k.id})" class="text-slate-400 hover:text-red-600 p-1">${ic('trash','w-4 h-4')}</button>
+            </div>
+        </div>`;
+    }).join('') || '<p class="text-sm text-slate-400 col-span-full">Zatiaľ žiadne kategórie.</p>';
+}
+
+// --- PRODUKTY ---
+function renderFarbyCheckboxy(vybraneIds) {
+    const c = document.getElementById('p-farby-checkboxy');
+    c.innerHTML = farby.map(f => `
+        <label class="flex items-center gap-1.5 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs cursor-pointer">
+            <input type="checkbox" value="${f.id}" ${vybraneIds && vybraneIds.includes(f.id) ? 'checked' : ''} class="p-farba-cb rounded">
+            <span class="w-3 h-3 rounded-full inline-block" style="background:${f.hex}"></span> ${f.nazov}
+        </label>`).join('');
+}
+
+function otvorFormProdukt(id) {
+    editId.produkt = id || null;
+    const p = id ? produkty.find(x => x.id === id) : null;
+    document.getElementById('form-produkt-title').innerText = p ? 'Upraviť produkt' : 'Nový produkt';
+    document.getElementById('p-kategoria').innerHTML = kategorie.map(k => `<option value="${k.id}">${k.nazov}</option>`).join('');
+    if (p) document.getElementById('p-kategoria').value = p.kategoriaId;
+    document.getElementById('p-pohlavie').value = p ? p.pohlavie : 'unisex';
+    document.getElementById('p-nazov').value = p ? p.nazov : '';
+    document.getElementById('p-handle').value = p ? p.shopifyHandle : '';
+    document.getElementById('p-cena').value = p ? p.basePrice : '';
+    document.getElementById('p-tech').value = p ? p.technologia : 'sublimacia';
+    document.getElementById('p-dodavatel').value = p ? p.dodavatel : '';
+    document.getElementById('p-aktivny').checked = p ? p.aktivny : true;
+    renderFarbyCheckboxy(p ? p.farbyIds : []);
+
+    formZony = p ? { ...p.zony } : { predok: true, chrbat: true, lavy_rukav: false, pravy_rukav: false };
+    formVelkosti = p ? JSON.parse(JSON.stringify(p.velkosti)) : [];
+    ['predok','chrbat','lavy_rukav','pravy_rukav'].forEach(z => {
+        document.getElementById('p-zona-' + z).checked = !!formZony[z];
+    });
+    renderVelkostiTabulka();
+
+    document.getElementById('form-produkt').classList.remove('hidden');
+    document.getElementById('form-produkt').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function zavriFormProdukt() { document.getElementById('form-produkt').classList.add('hidden'); }
+
+function toggleZona(zona) {
+    formZony[zona] = !formZony[zona];
+    // pri zapnutí novej zóny doplň prázdne rozmery do existujúcich riadkov veľkostí
+    if (formZony[zona]) {
+        formVelkosti.forEach(v => { if (!v.zony[zona]) v.zony[zona] = { w: '', h: '' }; });
+    }
+    renderVelkostiTabulka();
+}
+
+function pridajVelkostRiadok() {
+    const zony = {};
+    Object.keys(formZony).forEach(z => { if (formZony[z]) zony[z] = { w: '', h: '' }; });
+    formVelkosti.push({ s: '', zony });
+    renderVelkostiTabulka();
+}
+function zmazVelkostRiadok(idx) {
+    formVelkosti.splice(idx, 1);
+    renderVelkostiTabulka();
+}
+function updateVelkostPole(idx, field, value) {
+    formVelkosti[idx][field] = value;
+}
+function updateZonaRozmer(idx, zona, dim, value) {
+    if (!formVelkosti[idx].zony[zona]) formVelkosti[idx].zony[zona] = { w: '', h: '' };
+    formVelkosti[idx].zony[zona][dim] = parseInt(value) || 0;
+}
+
+function renderVelkostiTabulka() {
+    const aktivneZony = Object.keys(formZony).filter(z => formZony[z]);
+    const hlavicka = document.getElementById('p-velkosti-hlavicka');
+    hlavicka.innerHTML = `<th class="text-left px-2 py-2">Veľkosť</th>` +
+        aktivneZony.map(z => `<th class="text-left px-2 py-2">${NAZVY_ZON[z]} max (š×v cm)</th>`).join('') +
+        `<th class="px-2 py-2"></th>`;
+
+    const telo = document.getElementById('p-velkosti-telo');
+    telo.innerHTML = formVelkosti.map((v, idx) => `
+        <tr class="border-t border-slate-100">
+            <td class="px-2 py-1.5"><input type="text" value="${v.s}" oninput="updateVelkostPole(${idx},'s',this.value)" placeholder="S" class="w-16 px-2 py-1 border border-slate-300 rounded-md text-xs"></td>
+            ${aktivneZony.map(z => `
+                <td class="px-2 py-1.5">
+                    <div class="flex items-center gap-1">
+                        <input type="number" value="${v.zony[z] ? v.zony[z].w : ''}" oninput="updateZonaRozmer(${idx},'${z}','w',this.value)" placeholder="š" class="w-14 px-2 py-1 border border-slate-300 rounded-md text-xs">
+                        ×
+                        <input type="number" value="${v.zony[z] ? v.zony[z].h : ''}" oninput="updateZonaRozmer(${idx},'${z}','h',this.value)" placeholder="v" class="w-14 px-2 py-1 border border-slate-300 rounded-md text-xs">
+                    </div>
+                </td>`).join('')}
+            <td class="px-2 py-1.5 text-right"><button onclick="zmazVelkostRiadok(${idx})" class="text-slate-400 hover:text-red-600 p-1">${ic('trash','w-3.5 h-3.5')}</button></td>
+        </tr>`).join('') || `<tr><td colspan="${aktivneZony.length + 2}" class="text-center text-slate-400 py-4 text-xs">Zatiaľ žiadne veľkosti — klikni na "+ Pridať veľkosť".</td></tr>`;
+}
+
+function ulozProdukt() {
+    const nazov = document.getElementById('p-nazov').value.trim();
+    if (!nazov) { ukazToast('Vyplň názov produktu.'); return; }
+    if (kategorie.length === 0) { ukazToast('Najprv vytvor aspoň jednu kategóriu.'); return; }
+    if (!Object.values(formZony).some(Boolean)) { ukazToast('Zapni aspoň jednu zónu potlače (predok, chrbát, rukáv...).'); return; }
+    if (formVelkosti.length === 0) { ukazToast('Pridaj aspoň jednu veľkosť.'); return; }
+    const farbyIds = Array.from(document.querySelectorAll('.p-farba-cb:checked')).map(cb => parseInt(cb.value));
+
+    const data = {
+        kategoriaId: parseInt(document.getElementById('p-kategoria').value),
+        pohlavie: document.getElementById('p-pohlavie').value,
+        nazov,
+        shopifyHandle: document.getElementById('p-handle').value.trim(),
+        basePrice: parseFloat(document.getElementById('p-cena').value) || 0,
+        technologia: document.getElementById('p-tech').value,
+        dodavatel: document.getElementById('p-dodavatel').value.trim(),
+        zony: { ...formZony },
+        velkosti: JSON.parse(JSON.stringify(formVelkosti)),
+        farbyIds,
+        aktivny: document.getElementById('p-aktivny').checked,
+    };
+
+    if (editId.produkt) {
+        const idx = produkty.findIndex(p => p.id === editId.produkt);
+        produkty[idx] = { ...produkty[idx], ...data };
+    } else {
+        produkty.push({ id: Date.now(), ...data });
+    }
+    zavriFormProdukt();
+    renderProdukty();
+    ukazToast('Produkt uložený.');
+}
+
+function zmazProdukt(id) {
+    potvrdAkciu('Naozaj zmazať tento produkt?', () => {
+        produkty = produkty.filter(p => p.id !== id);
+        renderProdukty();
+        ukazToast('Produkt zmazaný.');
+    });
+}
+
+function prepniAktivny(id) {
+    const p = produkty.find(x => x.id === id);
+    if (!p) return;
+    p.aktivny = !p.aktivny;
+    renderProdukty();
+    ukazToast(p.aktivny ? `${p.nazov} je teraz aktívny.` : `${p.nazov} je teraz vypnutý (skrytý v konfigurátore).`);
+}
+
+function renderProdukty() {
+    const tbody = document.getElementById('tbody-produkty');
+    if (produkty.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-slate-400 py-8 text-sm">Zatiaľ žiadne produkty.</td></tr>';
+        return;
+    }
+    let html = '';
+    kategorie.forEach(k => {
+        const produktyKategorie = produkty.filter(p => p.kategoriaId === k.id);
+        if (produktyKategorie.length === 0) return;
+        html += `<tr class="bg-slate-50"><td colspan="8" class="px-4 py-2 text-xs font-bold uppercase tracking-wide text-slate-500">${k.nazov}</td></tr>`;
+        html += produktyKategorie.map(p => riadokProduktu(p)).join('');
+    });
+    const bezKategorie = produkty.filter(p => !kategorie.some(k => k.id === p.kategoriaId));
+    if (bezKategorie.length > 0) {
+        html += `<tr class="bg-slate-50"><td colspan="8" class="px-4 py-2 text-xs font-bold uppercase tracking-wide text-slate-400">Bez kategórie</td></tr>`;
+        html += bezKategorie.map(p => riadokProduktu(p)).join('');
+    }
+    tbody.innerHTML = html;
+}
+
+function riadokProduktu(p) {
+    const farbyNazvy = p.farbyIds.map(fid => farby.find(f => f.id === fid)?.nazov).filter(Boolean).join(', ');
+    const zonyNazvy = Object.keys(p.zony).filter(z => p.zony[z]).map(z => NAZVY_ZON[z]).join(', ');
+    return `<tr class="border-t border-slate-100">
+        <td class="px-4 py-3 font-medium text-slate-900">${p.nazov}</td>
+        <td class="px-4 py-3 text-xs text-slate-500">${NAZVY_POHLAVIA[p.pohlavie] || '—'}</td>
+        <td class="px-4 py-3 text-slate-500 font-mono text-xs">${p.shopifyHandle || '—'}</td>
+        <td class="px-4 py-3">${p.basePrice.toFixed(2)} €</td>
+        <td class="px-4 py-3 text-xs text-slate-500">${zonyNazvy || '—'}</td>
+        <td class="px-4 py-3 text-xs text-slate-500">${farbyNazvy}</td>
+        <td class="px-4 py-3">
+            <button onclick="prepniAktivny(${p.id})" class="text-xs px-2 py-1 rounded-full font-semibold transition ${p.aktivny ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}">
+                ${p.aktivny ? 'Aktívny' : 'Vypnutý'}
+            </button>
+        </td>
+        <td class="px-4 py-3 text-right">
+            <button onclick="otvorFormProdukt(${p.id})" class="text-slate-400 hover:text-indigo-600 p-1.5">${ic('pencil','w-4 h-4')}</button>
+            <button onclick="zmazProdukt(${p.id})" class="text-slate-400 hover:text-red-600 p-1.5">${ic('trash','w-4 h-4')}</button>
+        </td>
+    </tr>`;
+}
+
+// --- FARBY ---
+function otvorFormFarba(id) {
+    editId.farba = id || null;
+    const f = id ? farby.find(x => x.id === id) : null;
+    document.getElementById('form-farba-title').innerText = f ? 'Upraviť farbu' : 'Nová farba';
+    document.getElementById('f-nazov').value = f ? f.nazov : '';
+    document.getElementById('f-hex').value = f ? f.hex : '#2563eb';
+    document.getElementById('form-farba').classList.remove('hidden');
+}
+function zavriFormFarba() { document.getElementById('form-farba').classList.add('hidden'); }
+function ulozFarbu() {
+    const nazov = document.getElementById('f-nazov').value.trim();
+    if (!nazov) { ukazToast('Vyplň názov farby.'); return; }
+    const hex = document.getElementById('f-hex').value;
+    if (editId.farba) {
+        const idx = farby.findIndex(f => f.id === editId.farba);
+        farby[idx] = { ...farby[idx], nazov, hex };
+    } else {
+        farby.push({ id: Date.now(), nazov, hex });
+    }
+    zavriFormFarba();
+    renderFarby();
+    ukazToast('Farba uložená.');
+}
+function zmazFarbu(id) {
+    potvrdAkciu('Zmazať túto farbu? Produkty, ktoré ju používajú, o ňu prídu.', () => {
+        farby = farby.filter(f => f.id !== id);
+        produkty.forEach(p => p.farbyIds = p.farbyIds.filter(fid => fid !== id));
+        renderFarby();
+        ukazToast('Farba zmazaná.');
+    });
+}
+function renderFarby() {
+    const grid = document.getElementById('grid-farby');
+    grid.innerHTML = farby.map(f => `
+        <div class="bg-white rounded-xl border border-slate-200 p-3 flex items-center gap-3">
+            <span class="w-9 h-9 rounded-full border border-slate-200 shrink-0" style="background:${f.hex}"></span>
+            <div class="flex-1 min-w-0">
+                <div class="font-semibold text-sm text-slate-900 truncate">${f.nazov}</div>
+                <div class="text-xs text-slate-400 font-mono">${f.hex}</div>
+            </div>
+            <button onclick="otvorFormFarba(${f.id})" class="text-slate-400 hover:text-indigo-600 p-1">${ic('pencil','w-4 h-4')}</button>
+            <button onclick="zmazFarbu(${f.id})" class="text-slate-400 hover:text-red-600 p-1">${ic('trash','w-4 h-4')}</button>
+        </div>`).join('') || '<p class="text-sm text-slate-400 col-span-full">Zatiaľ žiadne farby.</p>';
+}
+
+// --- FONTY ---
+function otvorFormFont(id) {
+    editId.font = id || null;
+    const fo = id ? fonty.find(x => x.id === id) : null;
+    document.getElementById('form-font-title').innerText = fo ? 'Upraviť font' : 'Nový font';
+    document.getElementById('fo-nazov').value = fo ? fo.nazov : '';
+    document.getElementById('fo-pouzitie').value = fo ? fo.pouzitie : 'vsetko';
+    document.getElementById('form-font').classList.remove('hidden');
+}
+function zavriFormFont() { document.getElementById('form-font').classList.add('hidden'); }
+function ulozFont() {
+    const nazov = document.getElementById('fo-nazov').value.trim();
+    if (!nazov) { ukazToast('Vyplň názov fontu (presný CSS font-family).'); return; }
+    const pouzitie = document.getElementById('fo-pouzitie').value;
+    if (editId.font) {
+        const idx = fonty.findIndex(f => f.id === editId.font);
+        fonty[idx] = { ...fonty[idx], nazov, pouzitie };
+    } else {
+        fonty.push({ id: Date.now(), nazov, pouzitie });
+    }
+    zavriFormFont();
+    renderFonty();
+    ukazToast('Font uložený.');
+}
+function zmazFont(id) {
+    potvrdAkciu('Zmazať tento font?', () => {
+        fonty = fonty.filter(f => f.id !== id);
+        renderFonty();
+        ukazToast('Font zmazaný.');
+    });
+}
+const POUZITIE_LABEL = { vsetko: 'Meno, číslo, text', meno: 'Len meno', cislo: 'Len číslo', text: 'Len voľný text' };
+function renderFonty() {
+    const tbody = document.getElementById('tbody-fonty');
+    tbody.innerHTML = fonty.map(f => `
+        <tr class="border-t border-slate-100">
+            <td class="px-4 py-3 text-xl" style="font-family:'${f.nazov}', sans-serif;">Aa 123</td>
+            <td class="px-4 py-3 font-medium text-slate-900">${f.nazov}</td>
+            <td class="px-4 py-3 text-xs text-slate-500">${POUZITIE_LABEL[f.pouzitie] || f.pouzitie}</td>
+            <td class="px-4 py-3 text-right">
+                <button onclick="otvorFormFont(${f.id})" class="text-slate-400 hover:text-indigo-600 p-1.5">${ic('pencil','w-4 h-4')}</button>
+                <button onclick="zmazFont(${f.id})" class="text-slate-400 hover:text-red-600 p-1.5">${ic('trash','w-4 h-4')}</button>
+            </td>
+        </tr>`).join('') || '<tr><td colspan="4" class="text-center text-slate-400 py-8 text-sm">Zatiaľ žiadne fonty.</td></tr>';
+}
+
+// --- GRAFIKY ---
+function otvorFormGrafika() {
+    document.getElementById('g-nazov').value = '';
+    document.getElementById('g-kategoria').value = '';
+    document.getElementById('g-subor').value = '';
+    document.getElementById('form-grafika').classList.remove('hidden');
+}
+function zavriFormGrafika() { document.getElementById('form-grafika').classList.add('hidden'); }
+function ulozGrafiku() {
+    const nazov = document.getElementById('g-nazov').value.trim();
+    const kategoria = document.getElementById('g-kategoria').value.trim();
+    if (!nazov) { ukazToast('Vyplň názov grafiky.'); return; }
+    const fileInput = document.getElementById('g-subor');
+    const file = fileInput.files[0];
+    const pridaj = (dataUrl) => {
+        grafiky.push({ id: Date.now(), nazov, kategoria, dataUrl: dataUrl || '' });
+        zavriFormGrafika();
+        renderGrafiky();
+    };
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => pridaj(e.target.result);
+        reader.readAsDataURL(file);
+    } else {
+        pridaj('');
+    }
+}
+function zmazGrafiku(id) {
+    potvrdAkciu('Zmazať túto grafiku?', () => {
+        grafiky = grafiky.filter(g => g.id !== id);
+        renderGrafiky();
+        ukazToast('Grafika zmazaná.');
+    });
+}
+function renderGrafiky() {
+    const grid = document.getElementById('grid-grafiky');
+    grid.innerHTML = grafiky.map(g => `
+        <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div class="h-24 bg-slate-100 flex items-center justify-center">
+                ${g.dataUrl ? `<img src="${g.dataUrl}" class="w-full h-full object-cover">` : ic('image','w-8 h-8 text-slate-300')}
+            </div>
+            <div class="p-2.5">
+                <div class="font-semibold text-xs text-slate-900 truncate">${g.nazov}</div>
+                <div class="text-[11px] text-slate-400">${g.kategoria || '—'}</div>
+                <div class="flex justify-end mt-1">
+                    <button onclick="zmazGrafiku(${g.id})" class="text-slate-400 hover:text-red-600 p-1">${ic('trash','w-3.5 h-3.5')}</button>
+                </div>
+            </div>
+        </div>`).join('') || '<p class="text-sm text-slate-400 col-span-full">Zatiaľ žiadne grafiky.</p>';
+}
+
+// --- CENNÍK POTLAČE ---
+function renderCennik() {
+    document.getElementById('c-sublimacia-cm2').value = cennik.sublimacia.cena_cm2;
+    document.getElementById('c-sublimacia-min').value = cennik.sublimacia.min_cena;
+    document.getElementById('c-dtf-cm2').value = cennik.dtf.cena_cm2;
+    document.getElementById('c-dtf-min').value = cennik.dtf.min_cena;
+    document.getElementById('c-sieto-cm2').value = cennik.sietotlac.cena_cm2;
+    document.getElementById('c-sieto-min').value = cennik.sietotlac.min_cena;
+    document.getElementById('c-sieto-farba').value = cennik.sietotlac.priplatok_farba;
+    document.getElementById('c-rezany-min').value = cennik.rezany.min_cena;
+    renderFolie();
+    naplnTestFolie();
+    prepocitajTest();
+}
+
+function ulozCennik() {
+    cennik.sublimacia.cena_cm2 = parseFloat(document.getElementById('c-sublimacia-cm2').value) || 0;
+    cennik.sublimacia.min_cena = parseFloat(document.getElementById('c-sublimacia-min').value) || 0;
+    cennik.dtf.cena_cm2 = parseFloat(document.getElementById('c-dtf-cm2').value) || 0;
+    cennik.dtf.min_cena = parseFloat(document.getElementById('c-dtf-min').value) || 0;
+    cennik.sietotlac.cena_cm2 = parseFloat(document.getElementById('c-sieto-cm2').value) || 0;
+    cennik.sietotlac.min_cena = parseFloat(document.getElementById('c-sieto-min').value) || 0;
+    cennik.sietotlac.priplatok_farba = parseFloat(document.getElementById('c-sieto-farba').value) || 0;
+    cennik.rezany.min_cena = parseFloat(document.getElementById('c-rezany-min').value) || 0;
+    prepocitajTest();
+}
+
+function renderFolie() {
+    const c = document.getElementById('folie-zoznam');
+    c.innerHTML = cennik.rezany.folie.map(f => `
+        <div class="flex items-center gap-2">
+            <input type="text" value="${f.nazov}" oninput="upravFoliu(${f.id},'nazov',this.value)" class="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm">
+            <div class="flex items-center gap-1 text-xs text-slate-500 shrink-0">
+                <input type="number" step="0.01" value="${f.cena_cm2}" oninput="upravFoliu(${f.id},'cena_cm2',this.value)" class="w-20 px-2 py-2 border border-slate-300 rounded-lg text-sm"> €/cm²
+            </div>
+            <button onclick="zmazFoliu(${f.id})" class="text-slate-400 hover:text-red-600 p-1.5 shrink-0">${ic('trash','w-4 h-4')}</button>
+        </div>`).join('');
+}
+function pridajFoliu() {
+    cennik.rezany.folie.push({ id: Date.now(), nazov: 'Nová fólia', cena_cm2: 0.15 });
+    renderFolie();
+    naplnTestFolie();
+}
+function upravFoliu(id, pole, hodnota) {
+    const f = cennik.rezany.folie.find(x => x.id === id);
+    if (!f) return;
+    f[pole] = pole === 'cena_cm2' ? (parseFloat(hodnota) || 0) : hodnota;
+    naplnTestFolie();
+    prepocitajTest();
+}
+function zmazFoliu(id) {
+    potvrdAkciu('Zmazať tento typ fólie?', () => {
+        cennik.rezany.folie = cennik.rezany.folie.filter(f => f.id !== id);
+        renderFolie();
+        naplnTestFolie();
+        ukazToast('Fólia zmazaná.');
+    });
+}
+
+function naplnTestFolie() {
+    const sel = document.getElementById('test-folia');
+    const aktualna = sel.value;
+    sel.innerHTML = cennik.rezany.folie.map(f => `<option value="${f.id}">${f.nazov} (${f.cena_cm2.toFixed(2)} €/cm²)</option>`).join('');
+    if (aktualna) sel.value = aktualna;
+}
+
+// Vypočíta cenu potlače pre danú technológiu — presne rovnaká logika, akú by mal používať zákaznícky konfigurátor.
+function vypocitajCenuPotlace(tech, plochaCm2, pocetFarieb, foliaId) {
+    if (tech === 'sublimacia') {
+        return { cena: Math.max(plochaCm2 * cennik.sublimacia.cena_cm2, cennik.sublimacia.min_cena),
+                 vzorec: `max(${plochaCm2} cm² × ${cennik.sublimacia.cena_cm2} €, min. ${cennik.sublimacia.min_cena} €) — farby ani počet motívov cenu neovplyvňujú` };
+    }
+    if (tech === 'dtf') {
+        return { cena: Math.max(plochaCm2 * cennik.dtf.cena_cm2, cennik.dtf.min_cena),
+                 vzorec: `max(${plochaCm2} cm² × ${cennik.dtf.cena_cm2} €, min. ${cennik.dtf.min_cena} €) — rozhoduje len celková plocha` };
+    }
+    if (tech === 'sietotlac') {
+        const zaklad = Math.max(plochaCm2 * cennik.sietotlac.cena_cm2, cennik.sietotlac.min_cena);
+        const priplatok = Math.max(0, pocetFarieb - 1) * cennik.sietotlac.priplatok_farba;
+        return { cena: zaklad + priplatok,
+                 vzorec: `max(${plochaCm2} cm² × ${cennik.sietotlac.cena_cm2} €, min. ${cennik.sietotlac.min_cena} €) + ${Math.max(0,pocetFarieb-1)} × ${cennik.sietotlac.priplatok_farba} € za ďalšie farby` };
+    }
+    if (tech === 'rezany') {
+        const folia = cennik.rezany.folie.find(f => f.id === foliaId) || cennik.rezany.folie[0];
+        const sadzba = folia ? folia.cena_cm2 : 0;
+        const cena = Math.max(plochaCm2 * sadzba * pocetFarieb, cennik.rezany.min_cena);
+        return { cena, vzorec: `max(${plochaCm2} cm² × ${sadzba} €/cm² (${folia ? folia.nazov : '—'}) × ${pocetFarieb} farieb, min. ${cennik.rezany.min_cena} €)` };
+    }
+    return { cena: 0, vzorec: '' };
+}
+
+function prepocitajTest() {
+    const tech = document.getElementById('test-tech').value;
+    const w = parseFloat(document.getElementById('test-w').value) || 0;
+    const h = parseFloat(document.getElementById('test-h').value) || 0;
+    const farby = parseInt(document.getElementById('test-farby').value) || 1;
+    const foliaWrap = document.getElementById('test-folia-wrap');
+    foliaWrap.classList.toggle('hidden', tech !== 'rezany');
+    const foliaId = tech === 'rezany' ? parseInt(document.getElementById('test-folia').value) : null;
+
+    const plocha = Math.round(w * h * 10) / 10;
+    document.getElementById('test-plocha').innerText = `${plocha} cm²`;
+
+    const vysledok = vypocitajCenuPotlace(tech, plocha, farby, foliaId);
+    document.getElementById('test-vysledok').innerText = `${vysledok.cena.toFixed(2)} €`;
+    document.getElementById('test-vzorec').innerText = vysledok.vzorec;
+}
+</script>
+</body>
+</html>

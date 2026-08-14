@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generátor a Návrhár Potlače Textilu</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+    <style>
+        .canvas-container-outer {
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+        }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col">
+
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="bg-indigo-600 text-white p-2 rounded-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6"><path d="M16 3l4 3v4h-3v9a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2v-9H4V6l4-3 4 2 4-2z"/></svg>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg leading-tight text-slate-900">PrintStudio Pro</h1>
+                    <p class="text-xs text-slate-500">Konfigurátor a tvorca potlače</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <button onclick="zobrazKatalog()" id="btn-katalog" class="hidden text-slate-600 hover:text-indigo-600 hover:bg-slate-100 px-3 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+                    <span class="hidden sm:inline">Katalóg</span>
+                </button>
+                <button onclick="clearCanvas()" class="text-slate-600 hover:text-red-600 hover:bg-slate-100 px-3 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
+                    <span class="hidden sm:inline">Vyčistiť</span>
+                </button>
+                <button onclick="downloadDesign()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-2 shadow-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    <span>Stiahnuť návrh</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- KATALÓG — hlavná obrazovka, keď appka nie je otvorená priamo z konkrétneho produktu na eshope -->
+    <div id="katalog-view" class="flex-1 max-w-5xl w-full mx-auto p-4 sm:p-6">
+        <div id="katalog-kategorie">
+            <h2 class="text-xl font-extrabold text-slate-900 mb-1">Čo chceš potlačiť?</h2>
+            <p class="text-sm text-slate-500 mb-5">Vyber kategóriu a potom konkrétny produkt zo skladu.</p>
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-4" id="katalog-kategorie-grid"></div>
+        </div>
+        <div id="katalog-produkty" class="hidden">
+            <button onclick="renderKatalogKategorie()" class="flex items-center gap-1.5 text-sm text-slate-500 hover:text-indigo-600 mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+                Späť na kategórie
+            </button>
+            <h2 class="text-xl font-extrabold text-slate-900 mb-5" id="katalog-produkty-nadpis">Produkty</h2>
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-4" id="katalog-produkty-grid"></div>
+        </div>
+    </div>
+
+    <div id="designer-view" class="hidden flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- ĽAVÝ PANEL -->
+        <div class="lg:col-span-5 flex flex-col bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden h-[760px]">
+
+            <div class="flex border-b border-slate-200 bg-slate-50/80 p-1 gap-1">
+                <button onclick="switchTab('product')" id="tab-product" class="tab-btn active flex-1 py-2.5 px-2 text-xs font-semibold rounded-xl flex flex-col items-center gap-1 transition text-indigo-600 bg-white shadow-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg><span>Produkt</span>
+                </button>
+                <button onclick="switchTab('text')" id="tab-text" class="tab-btn flex-1 py-2.5 px-2 text-xs font-semibold rounded-xl flex flex-col items-center gap-1 transition text-slate-600 hover:bg-white/50">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg><span>Text</span>
+                </button>
+                <button onclick="switchTab('sports')" id="tab-sports" class="tab-btn flex-1 py-2.5 px-2 text-xs font-semibold rounded-xl flex flex-col items-center gap-1 transition text-slate-600 hover:bg-white/50">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M5 4H3v2a4 4 0 0 0 4 4"/><path d="M19 4h2v2a4 4 0 0 1-4 4"/></svg><span>Dresy Expres</span>
+                </button>
+                <button onclick="switchTab('graphics')" id="tab-graphics" class="tab-btn flex-1 py-2.5 px-2 text-xs font-semibold rounded-xl flex flex-col items-center gap-1 transition text-slate-600 hover:bg-white/50">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg><span>Obrázky</span>
+                </button>
+                <button onclick="switchTab('ai')" id="tab-ai" class="tab-btn flex-1 py-2.5 px-2 text-xs font-semibold rounded-xl flex flex-col items-center gap-1 transition text-slate-600 hover:bg-white/50">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M12 2l1.8 4.9L19 8.6l-5.2 1.7L12 15l-1.8-4.7L5 8.6l5.2-1.7L12 2z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15z"/></svg><span>AI Generátor</span>
+                </button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-5 space-y-6">
+
+                <!-- 1. PRODUKT -->
+                <div id="content-product" class="tab-content space-y-6">
+                    <div class="bg-indigo-50/60 border border-indigo-100 rounded-xl p-3 flex items-center justify-between gap-2">
+                        <div>
+                            <p class="text-xs text-indigo-700">Práve navrhuješ</p>
+                            <p class="text-sm font-bold text-indigo-900" id="aktualny-produkt-nazov">—</p>
+                        </div>
+                        <button onclick="zobrazKatalog()" class="text-xs font-semibold text-indigo-600 border border-indigo-200 rounded-lg px-3 py-1.5 hover:bg-white transition whitespace-nowrap">Zmeniť produkt</button>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Farba textilu</label>
+                        <div class="flex flex-wrap gap-3" id="color-picker-container"></div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Veľkosť</label>
+                        <div class="flex flex-wrap gap-2" id="size-picker-container"></div>
+                    </div>
+
+                    <div class="pt-4 border-t border-slate-100">
+                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Kde chcem potlač — dá sa naraz na viac miest</label>
+                        <div class="grid grid-cols-2 gap-2" id="zona-picker-container"></div>
+                    </div>
+                </div>
+
+                <!-- 2. TEXT -->
+                <div id="content-text" class="tab-content hidden space-y-5">
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Pridať vlastný text</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="custom-text-input" placeholder="Zadajte váš text..." class="flex-1 px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm">
+                            <button onclick="addText()" class="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-indigo-700 transition">Pridať</button>
+                        </div>
+                    </div>
+                    <div id="text-controls" class="space-y-4 pt-4 border-t border-slate-100 opacity-50 pointer-events-none">
+                        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">Úprava označeného textu</h4>
+                        <div>
+                            <label class="block text-xs text-slate-600 mb-1">Písmo (Font)</label>
+                            <select id="font-family-select" onchange="updateTextProperty('fontFamily', this.value)" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm">
+                                <option value="Arial">Arial</option>
+                                <option value="Impact">Impact (Športový)</option>
+                                <option value="Courier New">Courier (Strojopis)</option>
+                                <option value="Georgia">Georgia (Elegancia)</option>
+                                <option value="Verdana">Verdana</option>
+                                <option value="Trebuchet MS">Trebuchet MS</option>
+                            </select>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs text-slate-600 mb-1">Farba textu</label>
+                                <input type="color" id="text-color-picker" onchange="updateTextProperty('fill', this.value)" class="w-full h-10 p-1 border border-slate-300 rounded-xl cursor-pointer">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-slate-600 mb-1">Veľkosť</label>
+                                <input type="number" id="text-size-input" min="10" max="150" value="30" onchange="updateTextProperty('fontSize', parseInt(this.value))" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm">
+                            </div>
+                        </div>
+                        <div class="flex gap-2 pt-2">
+                            <button onclick="toggleFontWeight()" class="flex-1 border border-slate-300 py-2 rounded-xl font-bold text-sm hover:bg-slate-50">B</button>
+                            <button onclick="toggleFontStyle()" class="flex-1 border border-slate-300 py-2 rounded-xl italic text-sm hover:bg-slate-50">I</button>
+                            <button onclick="alignText('left')" class="flex-1 border border-slate-300 py-2 rounded-xl text-sm hover:bg-slate-50 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><line x1="21" y1="6" x2="3" y2="6"/><line x1="15" y1="12" x2="3" y2="12"/><line x1="17" y1="18" x2="3" y2="18"/></svg></button>
+                            <button onclick="alignText('center')" class="flex-1 border border-slate-300 py-2 rounded-xl text-sm hover:bg-slate-50 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><line x1="21" y1="6" x2="3" y2="6"/><line x1="17" y1="12" x2="7" y2="12"/><line x1="19" y1="18" x2="5" y2="18"/></svg></button>
+                            <button onclick="alignText('right')" class="flex-1 border border-slate-300 py-2 rounded-xl text-sm hover:bg-slate-50 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="12" x2="9" y2="12"/><line x1="21" y1="18" x2="7" y2="18"/></svg></button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. DRESY -->
+                <div id="content-sports" class="tab-content hidden space-y-5">
+                    <div class="bg-indigo-50/60 p-4 rounded-xl border border-indigo-100">
+                        <h3 class="text-sm font-bold text-indigo-900 mb-1 flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-indigo-600"><path d="M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6l8-4z"/></svg> Dresy Expres
+                        </h3>
+                        <p class="text-xs text-indigo-700">Vyplň, čo potrebuješ — meno a číslo pôjdu na chrbát, liga a sponzor na predok. Ostatné polia môžeš nechať prázdne.</p>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Meno na drese</label>
+                        <input type="text" id="jersey-name" placeholder="napr. HRONSKÝ" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold uppercase">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Číslo dresu</label>
+                        <input type="number" id="jersey-number" placeholder="10" min="0" max="99" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Farba mena a čísla</label>
+                        <div class="flex gap-2">
+                            <button onclick="applyJerseyStyle('#ffffff')" class="w-8 h-8 rounded-full border border-slate-300 bg-white shadow-sm"></button>
+                            <button onclick="applyJerseyStyle('#000000')" class="w-8 h-8 rounded-full border border-slate-300 bg-black"></button>
+                            <button onclick="applyJerseyStyle('#facc15')" class="w-8 h-8 rounded-full border border-slate-300 bg-yellow-400"></button>
+                            <button onclick="applyJerseyStyle('#ef4444')" class="w-8 h-8 rounded-full border border-slate-300 bg-red-500"></button>
+                        </div>
+                    </div>
+                    <div class="pt-3 border-t border-slate-100">
+                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Liga / súťaž — logo na srdce</label>
+                        <label class="flex items-center gap-2 border-2 border-dashed border-slate-300 rounded-xl px-3 py-2.5 text-xs text-slate-500 cursor-pointer hover:border-indigo-400">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 shrink-0"><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"/><polyline points="8 16 12 12 16 16"/><line x1="12" y1="12" x2="12" y2="21"/></svg>
+                            <span id="jersey-liga-label">Nahrať logo ligy</span>
+                            <input type="file" id="jersey-liga-file" accept="image/*" class="hidden" onchange="oznacSubor('jersey-liga-file','jersey-liga-label','logo ligy')">
+                        </label>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Sponzor — logo na hrudi</label>
+                        <label class="flex items-center gap-2 border-2 border-dashed border-slate-300 rounded-xl px-3 py-2.5 text-xs text-slate-500 cursor-pointer hover:border-indigo-400">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 shrink-0"><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"/><polyline points="8 16 12 12 16 16"/><line x1="12" y1="12" x2="12" y2="21"/></svg>
+                            <span id="jersey-sponzor-hrud-label">Nahrať logo sponzora</span>
+                            <input type="file" id="jersey-sponzor-hrud-file" accept="image/*" class="hidden" onchange="oznacSubor('jersey-sponzor-hrud-file','jersey-sponzor-hrud-label','logo sponzora (hruď)')">
+                        </label>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Sponzor — logo pod číslom</label>
+                        <label class="flex items-center gap-2 border-2 border-dashed border-slate-300 rounded-xl px-3 py-2.5 text-xs text-slate-500 cursor-pointer hover:border-indigo-400">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 shrink-0"><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"/><polyline points="8 16 12 12 16 16"/><line x1="12" y1="12" x2="12" y2="21"/></svg>
+                            <span id="jersey-sponzor-cislo-label">Nahrať logo sponzora</span>
+                            <input type="file" id="jersey-sponzor-cislo-file" accept="image/*" class="hidden" onchange="oznacSubor('jersey-sponzor-cislo-file','jersey-sponzor-cislo-label','logo sponzora (pod číslom)')">
+                        </label>
+                    </div>
+                    <button onclick="aplikujDresExpres()" class="w-full bg-indigo-600 text-white py-3 rounded-xl font-semibold text-sm hover:bg-indigo-700 transition flex items-center justify-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><circle cx="12" cy="12" r="10"/><polyline points="8 12 11 15 16 9"/></svg> Aplikovať na dres
+                    </button>
+                </div>
+
+                <!-- 4. OBRÁZKY -->
+                <div id="content-graphics" class="tab-content hidden space-y-6">
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Nahrať vlastný obrázok / logo</label>
+                        <label class="border-2 border-dashed border-slate-300 hover:border-indigo-500 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition bg-slate-50/50 hover:bg-indigo-50/30">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-8 h-8 text-slate-400 mb-1"><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"/><polyline points="8 16 12 12 16 16"/><line x1="12" y1="12" x2="12" y2="21"/></svg>
+                            <span class="text-xs font-semibold text-slate-600">Kliknite pre výber súboru</span>
+                            <span class="text-[10px] text-slate-400 mt-1">PNG, JPG alebo SVG (Max 5MB)</span>
+                            <input type="file" id="image-upload" accept="image/*" class="hidden" onchange="handleImageUpload(event)">
+                        </label>
+                        <div id="ai-vylepsenie-panel" class="hidden mt-2 bg-indigo-50/60 border border-indigo-100 rounded-xl p-3">
+                            <div class="flex items-start gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-indigo-600 mt-0.5 shrink-0"><path d="M12 2l1.8 4.9L19 8.6l-5.2 1.7L12 15l-1.8-4.7L5 8.6l5.2-1.7L12 2z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15z"/></svg>
+                                <div class="flex-1">
+                                    <p class="text-xs text-indigo-900 font-semibold">Obrázok vyzerá v nižšej kvalite alebo má pozadie</p>
+                                    <p class="text-[11px] text-indigo-700 mt-0.5">Necháme ho pripraviť pre tlač — odstránime pozadie a zvýšime kvalitu.</p>
+                                    <button onclick="vylepsiObrazokAI()" id="ai-vylepsit-btn" class="mt-2 flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5"><path d="M12 2l1.8 4.9L19 8.6l-5.2 1.7L12 15l-1.8-4.7L5 8.6l5.2-1.7L12 2z"/></svg>
+                                        Pripraviť obrázok pre tlač (AI)
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Vstavané vektory & ikony</label>
+                        <div class="grid grid-cols-4 gap-3">
+                            <button onclick="addClipArt('star')" class="p-3 border border-slate-200 rounded-xl hover:bg-slate-50 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6 text-amber-500"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></button>
+                            <button onclick="addClipArt('heart')" class="p-3 border border-slate-200 rounded-xl hover:bg-slate-50 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6 text-red-500"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l8.72-8.72 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button>
+                            <button onclick="addClipArt('flame')" class="p-3 border border-slate-200 rounded-xl hover:bg-slate-50 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6 text-orange-500"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3c0-1 1-2 1-3z"/></svg></button>
+                            <button onclick="addClipArt('zap')" class="p-3 border border-slate-200 rounded-xl hover:bg-slate-50 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6 text-yellow-500"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. AI -->
+                <div id="content-ai" class="tab-content hidden space-y-4">
+                    <div class="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-4 rounded-xl shadow-sm">
+                        <div class="flex items-center gap-2 mb-1"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M12 2l1.8 4.9L19 8.6l-5.2 1.7L12 15l-1.8-4.7L5 8.6l5.2-1.7L12 2z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15z"/></svg><h3 class="font-bold text-sm">AI Motívy</h3></div>
+                        <p class="text-xs opacity-90">Táto ukážka negeneruje reálne obrázky (bez API kľúča) — v produkcii by sa napojila na Anthropic API alebo interný obrázkový generátor.</p>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Popis motívu (Prompt)</label>
+                        <textarea id="ai-prompt" rows="3" placeholder="napr. Roztomilá mačka v astronautickom obleku, retro štýl..." class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"></textarea>
+                    </div>
+                    <button disabled class="w-full bg-slate-300 text-white py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 cursor-not-allowed">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8L19 13"/><path d="M15 9h0"/><path d="M17.8 6.2L19 5"/><path d="M3 21l9-9"/><path d="M12.2 6.2L11 5"/></svg> Generovanie (vyžaduje napojenie API)
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- PRAVÝ PANEL -->
+        <div class="lg:col-span-7 flex flex-col gap-4">
+            <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex-1 flex flex-col items-center justify-center relative min-h-[520px]">
+                <div class="absolute top-4 left-4 bg-slate-100 text-slate-700 text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 border border-slate-200">
+                    <span class="w-2 h-2 rounded-full bg-indigo-600"></span>
+                    <span id="current-view-label">Predná strana</span>
+                </div>
+                <div class="absolute top-4 right-4 flex items-center gap-2">
+                    <button onclick="bringForward()" title="Posunúť dopredu" class="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></button>
+                    <button onclick="deleteSelected()" title="Odstrániť vybrané" class="p-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-semibold transition"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
+                </div>
+                <div class="relative w-[380px] h-[460px] canvas-container-outer rounded-2xl overflow-hidden bg-slate-100 flex items-center justify-center">
+                    <div id="product-mockup" class="absolute inset-0 flex items-center justify-center pointer-events-none transition-all duration-300"></div>
+                    <div class="absolute w-[240px] h-[340px] border-2 border-dashed border-indigo-400/50 pointer-events-none rounded-lg flex items-start justify-center">
+                        <span class="text-[10px] text-indigo-400 font-medium tracking-widest uppercase bg-white/80 px-2 py-0.5 rounded mt-1">Tlačová Zóna · <span id="zone-cm-label">30×42 cm</span></span>
+                    </div>
+                    <canvas id="tshirt-canvas" width="240" height="340" class="z-10"></canvas>
+                    <div id="live-size-badge" class="hidden absolute bottom-3 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-xs font-bold px-3 py-1.5 rounded-full z-20 shadow-lg">
+                        <span id="live-size-text">0 × 0 cm</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CENA A KOŠÍK -->
+            <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div>
+                        <span class="text-xs text-slate-500 font-medium block">Cena za kus s potlačou</span>
+                        <div class="flex items-baseline gap-1">
+                            <span class="text-2xl font-black text-slate-900" id="total-price">14.90 €</span>
+                        </div>
+                    </div>
+                    <div class="flex gap-3 w-full sm:w-auto">
+                        <div class="flex items-center border border-slate-200 rounded-xl bg-slate-50 p-1">
+                            <button onclick="updateQuantity(-1)" class="w-8 h-8 flex items-center justify-center text-slate-600 hover:bg-white rounded-lg font-bold text-sm transition">-</button>
+                            <span id="quantity-val" class="w-12 text-center font-bold text-sm">1 ks</span>
+                            <button onclick="updateQuantity(1)" class="w-8 h-8 flex items-center justify-center text-slate-600 hover:bg-white rounded-lg font-bold text-sm transition">+</button>
+                        </div>
+                        <button onclick="pridatDoKosika()" class="flex-1 sm:flex-initial bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl font-bold text-sm transition flex items-center justify-center gap-2 shadow-sm">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg><span>Pridať do košíka</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="mt-3 pt-3 border-t border-slate-100 text-right">
+                    <span class="text-xs text-slate-500">Spolu za </span>
+                    <span class="text-sm font-bold text-slate-800" id="quantity-total-label">1 ks</span>
+                    <span class="text-lg font-black text-indigo-600 ml-2" id="grand-total">14.90 €</span>
+                </div>
+            </div>
+
+            <!-- POTVRDENIE KOŠÍKA (zákaznícky pohľad) -->
+            <div id="cart-confirmation" class="hidden bg-emerald-50 border border-emerald-200 rounded-2xl p-5">
+                <div class="flex items-center gap-2 text-emerald-800 font-bold text-sm mb-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><circle cx="12" cy="12" r="10"/><polyline points="8 12 11 15 16 9"/></svg>
+                    Pridané do košíka
+                </div>
+                <p class="text-xs text-emerald-700" id="cart-confirmation-text">Váš návrh bol uložený spolu s objednávkou.</p>
+            </div>
+
+            <!-- TECHNICKÝ PANEL — len pre teba, nie pre zákazníka -->
+            <div class="bg-slate-900 rounded-2xl p-4 text-slate-300">
+                <button onclick="toggleTechPanel()" class="w-full flex items-center justify-between text-xs font-semibold text-slate-400">
+                    <span>⚙ Technické detaily (Shopify cart payload) — vidí len vývojár</span>
+                    <span id="tech-panel-toggle-label">zobraziť</span>
+                </button>
+                <pre id="tech-panel-content" class="hidden mt-3 text-[10px] leading-relaxed overflow-x-auto bg-black/30 rounded-lg p-3">Zatiaľ nič — pridaj produkt do košíka.</pre>
+            </div>
+        </div>
+    </div>
+
+    <script>
+const ICONS = {"shirt": "<path d=\"M16 3l4 3v4h-3v9a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2v-9H4V6l4-3 4 2 4-2z\"/>", "trash-2": "<polyline points=\"3 6 5 6 21 6\"/><path d=\"M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6\"/><path d=\"M10 11v6\"/><path d=\"M14 11v6\"/><path d=\"M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2\"/>", "trash": "<polyline points=\"3 6 5 6 21 6\"/><path d=\"M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6\"/>", "download": "<path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\"/><polyline points=\"7 10 12 15 17 10\"/><line x1=\"12\" y1=\"15\" x2=\"12\" y2=\"3\"/>", "shopping-bag": "<path d=\"M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z\"/><line x1=\"3\" y1=\"6\" x2=\"21\" y2=\"6\"/><path d=\"M16 10a4 4 0 0 1-8 0\"/>", "type": "<polyline points=\"4 7 4 4 20 4 20 7\"/><line x1=\"9\" y1=\"20\" x2=\"15\" y2=\"20\"/><line x1=\"12\" y1=\"4\" x2=\"12\" y2=\"20\"/>", "trophy": "<path d=\"M8 21h8\"/><path d=\"M12 17v4\"/><path d=\"M7 4h10v5a5 5 0 0 1-10 0V4z\"/><path d=\"M5 4H3v2a4 4 0 0 0 4 4\"/><path d=\"M19 4h2v2a4 4 0 0 1-4 4\"/>", "image": "<rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\"/><circle cx=\"8.5\" cy=\"8.5\" r=\"1.5\"/><polyline points=\"21 15 16 10 5 21\"/>", "sparkles": "<path d=\"M12 2l1.8 4.9L19 8.6l-5.2 1.7L12 15l-1.8-4.7L5 8.6l5.2-1.7L12 2z\"/><path d=\"M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15z\"/>", "shield": "<path d=\"M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6l8-4z\"/>", "check-circle": "<circle cx=\"12\" cy=\"12\" r=\"10\"/><polyline points=\"8 12 11 15 16 9\"/>", "upload-cloud": "<path d=\"M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25\"/><polyline points=\"8 16 12 12 16 16\"/><line x1=\"12\" y1=\"12\" x2=\"12\" y2=\"21\"/>", "star": "<path d=\"M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z\"/>", "heart": "<path d=\"M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l8.72-8.72 1.06-1.06a5.5 5.5 0 0 0 0-7.78z\"/>", "flame": "<path d=\"M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3c0-1 1-2 1-3z\"/>", "zap": "<polygon points=\"13 2 3 14 12 14 11 22 21 10 12 10 13 2\"/>", "square": "<rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\"/>", "send": "<line x1=\"22\" y1=\"2\" x2=\"11\" y2=\"13\"/><polygon points=\"22 2 15 22 11 13 2 9 22 2\"/>", "clipboard-list": "<rect x=\"8\" y=\"2\" width=\"8\" height=\"4\" rx=\"1\"/><path d=\"M9 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-3\"/><line x1=\"9\" y1=\"12\" x2=\"15\" y2=\"12\"/><line x1=\"9\" y1=\"16\" x2=\"15\" y2=\"16\"/>", "check": "<polyline points=\"20 6 9 17 4 12\"/>", "x": "<line x1=\"18\" y1=\"6\" x2=\"6\" y2=\"18\"/><line x1=\"6\" y1=\"6\" x2=\"18\" y2=\"18\"/>", "alert-triangle": "<path d=\"M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z\"/><line x1=\"12\" y1=\"9\" x2=\"12\" y2=\"13\"/><line x1=\"12\" y1=\"17\" x2=\"12.01\" y2=\"17\"/>", "package-check": "<path d=\"M21 8l-9-5-9 5v8l9 5 9-5V8z\"/><path d=\"M3.3 7.6L12 12.5l8.7-4.9\"/><path d=\"M12 22V12.5\"/>", "layers": "<polygon points=\"12 2 2 7 12 12 22 7 12 2\"/><polyline points=\"2 17 12 22 22 17\"/><polyline points=\"2 12 12 17 22 12\"/>", "align-left": "<line x1=\"21\" y1=\"6\" x2=\"3\" y2=\"6\"/><line x1=\"15\" y1=\"12\" x2=\"3\" y2=\"12\"/><line x1=\"17\" y1=\"18\" x2=\"3\" y2=\"18\"/>", "align-center": "<line x1=\"21\" y1=\"6\" x2=\"3\" y2=\"6\"/><line x1=\"17\" y1=\"12\" x2=\"7\" y2=\"12\"/><line x1=\"19\" y1=\"18\" x2=\"5\" y2=\"18\"/>", "align-right": "<line x1=\"21\" y1=\"6\" x2=\"3\" y2=\"6\"/><line x1=\"21\" y1=\"12\" x2=\"9\" y2=\"12\"/><line x1=\"21\" y1=\"18\" x2=\"7\" y2=\"18\"/>", "wand-2": "<path d=\"M15 4V2\"/><path d=\"M15 16v-2\"/><path d=\"M8 9h2\"/><path d=\"M20 9h2\"/><path d=\"M17.8 11.8L19 13\"/><path d=\"M15 9h0\"/><path d=\"M17.8 6.2L19 5\"/><path d=\"M3 21l9-9\"/><path d=\"M12.2 6.2L11 5\"/>", "box": "<path d=\"M21 8l-9-5-9 5v8l9 5 9-5V8z\"/><line x1=\"3.5\" y1=\"8.5\" x2=\"12\" y2=\"13\"/><line x1=\"20.5\" y1=\"8.5\" x2=\"12\" y2=\"13\"/><line x1=\"12\" y1=\"22\" x2=\"12\" y2=\"13\"/>", "award": "<circle cx=\"12\" cy=\"8\" r=\"6\"/><path d=\"M9 13l-2 8 5-3 5 3-2-8\"/>"};
+        function ic(name, cls) { return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="${cls}">${ICONS[name]}</svg>`; }
+        let canvas;
+        let currentProduct = 'panske_tricko';
+        let currentColor = '#ffffff';
+        let currentSize = '';
+        let currentZona = 'predok';
+        let quantity = 1;
+        let kosik = [];
+        let poslednyDesignId = null;
+
+        const SCALE_PX_PER_CM = 8; // 240px zóna ≈ 30cm šírka
+
+        const ZONY = { predok: 'Predok', chrbat: 'Chrbát', lavy_rukav: 'Ľavý rukáv', pravy_rukav: 'Pravý rukáv' };
+        const canvasState = { predok: null, chrbat: null, lavy_rukav: null, pravy_rukav: null };
+
+        // Interná cenová tabuľka — rovnaká logika ako v Master Admin karte "Cenník potlače".
+        // Plošné technológie (sublimácia, DTF) riešia len cm². Sieťotlač a rezaný transfer
+        // navyše zohľadňujú počet farieb (sieťotlač = nové sito na farbu, rezaný transfer = nová fólia na farbu).
+        const CENNIK = {
+            sublimacia: { cena_cm2: 0.12, min_cena: 3.0 },
+            dtf:        { cena_cm2: 0.18, min_cena: 3.5 },
+            sietotlac:  { cena_cm2: 0.03, min_cena: 6.5, priplatok_farba: 1.5 },
+            rezany:     { cena_cm2: 0.15, min_cena: 4.0 }, // predvolená fólia
+        };
+
+        function vypocitajCenuPotlace(tech, plochaCm2, pocetFarieb) {
+            if (plochaCm2 <= 0) return 0;
+            if (tech === 'sublimacia') return Math.max(plochaCm2 * CENNIK.sublimacia.cena_cm2, CENNIK.sublimacia.min_cena);
+            if (tech === 'dtf') return Math.max(plochaCm2 * CENNIK.dtf.cena_cm2, CENNIK.dtf.min_cena);
+            if (tech === 'sietotlac') {
+                const zaklad = Math.max(plochaCm2 * CENNIK.sietotlac.cena_cm2, CENNIK.sietotlac.min_cena);
+                return zaklad + Math.max(0, pocetFarieb - 1) * CENNIK.sietotlac.priplatok_farba;
+            }
+            if (tech === 'rezany') return Math.max(plochaCm2 * CENNIK.rezany.cena_cm2 * pocetFarieb, CENNIK.rezany.min_cena);
+            return 0;
+        }
+
+        const kategorie = [
+            { id: 1, nazov: 'Tričko' },
+            { id: 2, nazov: 'Mikina' },
+            { id: 3, nazov: 'Dres' },
+            { id: 4, nazov: 'Taška' },
+            { id: 5, nazov: 'Šiltovka' },
+        ];
+        const NAZVY_POHLAVIA = { muz: 'Muž', zena: 'Žena', dieta: 'Dieťa', unisex: 'Unisex' };
+
+        const products = {
+            panske_tricko: {
+                name: "Pánske tričko", basePrice: 12.90, kategoriaId: 1, pohlavie: 'muz',
+                colors: [
+                    { name: "Biela", hex: "#ffffff" }, { name: "Čierna", hex: "#1e293b" },
+                    { name: "Sivá", hex: "#94a3b8" }, { name: "Modrá", hex: "#2563eb" }, { name: "Červená", hex: "#dc2626" }
+                ],
+                sizes: ["S","M","L","XL","XXL"],
+                technologia: "dtf",
+                zony: ['predok','chrbat'],
+                shopifyVariantPrefix: "panske-tricko", shopifyHandle: "panske-tricko",
+                svg: (color) => `<svg viewBox="0 0 100 100" class="w-full h-full" style="fill: ${color}; filter: drop-shadow(0px 4px 10px rgba(0,0,0,0.15));">
+                    <path d="M 30 10 L 40 15 C 45 18 55 18 60 15 L 70 10 L 90 25 L 80 40 L 75 35 L 75 88 L 25 88 L 25 35 L 20 40 L 10 25 Z" stroke="#cbd5e1" stroke-width="1.5"/>
+                </svg>`
+            },
+            damske_tricko: {
+                name: "Dámske tričko", basePrice: 12.90, kategoriaId: 1, pohlavie: 'zena',
+                colors: [
+                    { name: "Biela", hex: "#ffffff" }, { name: "Čierna", hex: "#1e293b" },
+                    { name: "Červená", hex: "#dc2626" }, { name: "Sivá", hex: "#94a3b8" }
+                ],
+                sizes: ["S","M","L"],
+                technologia: "dtf",
+                zony: ['predok','chrbat'],
+                shopifyVariantPrefix: "damske-tricko", shopifyHandle: "damske-tricko",
+                svg: (color) => `<svg viewBox="0 0 100 100" class="w-full h-full" style="fill: ${color}; filter: drop-shadow(0px 4px 10px rgba(0,0,0,0.15));">
+                    <path d="M 32 10 L 40 16 C 45 19 55 19 60 16 L 68 10 L 88 24 L 78 38 L 74 34 L 74 88 L 26 88 L 26 34 L 22 38 L 12 24 Z" stroke="#cbd5e1" stroke-width="1.5"/>
+                </svg>`
+            },
+            detske_tricko: {
+                name: "Detské tričko", basePrice: 9.90, kategoriaId: 1, pohlavie: 'dieta',
+                colors: [
+                    { name: "Biela", hex: "#ffffff" }, { name: "Žltá", hex: "#facc15" }, { name: "Modrá", hex: "#2563eb" }
+                ],
+                sizes: ["110","128","146"],
+                technologia: "dtf",
+                zony: ['predok'],
+                shopifyVariantPrefix: "detske-tricko", shopifyHandle: "detske-tricko",
+                svg: (color) => `<svg viewBox="0 0 100 100" class="w-full h-full" style="fill: ${color}; filter: drop-shadow(0px 4px 10px rgba(0,0,0,0.15));">
+                    <path d="M 34 14 L 42 19 C 46 21 54 21 58 19 L 66 14 L 84 26 L 76 38 L 72 34 L 72 86 L 28 86 L 28 34 L 24 38 L 16 26 Z" stroke="#cbd5e1" stroke-width="1.5"/>
+                </svg>`
+            },
+            dres: {
+                name: "Športový Dres", basePrice: 16.90, kategoriaId: 3, pohlavie: 'unisex',
+                colors: [
+                    { name: "Žltá", hex: "#facc15" }, { name: "Modrá", hex: "#1d4ed8" },
+                    { name: "Zelená", hex: "#15803d" }, { name: "Biela", hex: "#ffffff" }
+                ],
+                sizes: ["S","M","L","XL"],
+                technologia: "sublimacia",
+                zony: ['predok','chrbat','lavy_rukav','pravy_rukav'],
+                shopifyVariantPrefix: "sportovy-dres", shopifyHandle: "sportovy-dres",
+                svg: (color) => `<svg viewBox="0 0 100 100" class="w-full h-full" style="fill: ${color}; filter: drop-shadow(0px 4px 10px rgba(0,0,0,0.15));">
+                    <path d="M 28 8 L 42 14 C 47 16 53 16 58 14 L 72 8 L 92 22 L 82 38 L 76 32 L 76 90 L 24 90 L 24 32 L 18 38 L 8 22 Z" stroke="#94a3b8" stroke-width="1.5"/>
+                </svg>`
+            },
+            mikina: {
+                name: "Mikina s kapucňou", basePrice: 24.90, kategoriaId: 2, pohlavie: 'unisex',
+                colors: [
+                    { name: "Čierna", hex: "#0f172a" }, { name: "Sivá", hex: "#64748b" }, { name: "Tmavomodrá", hex: "#1e3a8a" }
+                ],
+                sizes: ["S","M","L","XL"],
+                technologia: "dtf",
+                zony: ['predok','chrbat','lavy_rukav','pravy_rukav'],
+                shopifyVariantPrefix: "mikina", shopifyHandle: "mikina-s-kapucnou",
+                svg: (color) => `<svg viewBox="0 0 100 100" class="w-full h-full" style="fill: ${color}; filter: drop-shadow(0px 4px 10px rgba(0,0,0,0.15));">
+                    <path d="M 25 12 C 35 5 65 5 75 12 L 92 28 L 80 42 L 75 38 L 75 88 L 25 88 L 25 38 L 20 42 L 8 28 Z" stroke="#475569" stroke-width="1.5"/>
+                </svg>`
+            },
+            taska: {
+                name: "Plátenná Taška", basePrice: 8.90, kategoriaId: 4, pohlavie: 'unisex',
+                colors: [
+                    { name: "Prírodná", hex: "#fef3c7" }, { name: "Biela", hex: "#ffffff" }, { name: "Čierna", hex: "#1c1917" }
+                ],
+                sizes: ["Univerzálna"],
+                technologia: "sietotlac",
+                zony: ['predok'],
+                shopifyVariantPrefix: "taska", shopifyHandle: "platenna-taska",
+                svg: (color) => `<svg viewBox="0 0 100 100" class="w-full h-full" style="fill: ${color}; filter: drop-shadow(0px 4px 10px rgba(0,0,0,0.15));">
+                    <path d="M 35 10 C 35 25 65 25 65 10 M 20 30 L 80 30 L 78 90 L 22 90 Z" stroke="#78350f" stroke-width="1.5"/>
+                </svg>`
+            },
+            siltovka: {
+                name: "Šiltovka", basePrice: 11.50, kategoriaId: 5, pohlavie: 'unisex',
+                colors: [
+                    { name: "Čierna", hex: "#1c1917" }, { name: "Biela", hex: "#ffffff" }, { name: "Námornícka", hex: "#1e3a8a" }
+                ],
+                sizes: ["Univerzálna"],
+                technologia: "rezany",
+                zony: ['predok'],
+                shopifyVariantPrefix: "siltovka", shopifyHandle: "siltovka",
+                svg: (color) => `<svg viewBox="0 0 100 100" class="w-full h-full" style="fill: ${color}; filter: drop-shadow(0px 4px 10px rgba(0,0,0,0.15));">
+                    <path d="M 20 55 Q 50 25 80 55 L 95 60 Q 60 50 50 50 Q 40 50 5 60 Z"/>
+                    <circle cx="50" cy="42" r="22"/>
+                </svg>`
+            }
+        };
+
+        window.onload = function() {
+                        canvas = new fabric.Canvas('tshirt-canvas');
+            canvas.on('selection:created', handleSelection);
+            canvas.on('selection:updated', handleSelection);
+            canvas.on('selection:cleared', handleSelectionCleared);
+            canvas.on('object:added', updatePrice);
+            canvas.on('object:removed', updatePrice);
+            canvas.on('object:modified', updatePrice);
+            canvas.on('object:scaling', (e) => zobrazZivyRozmer(e.target));
+            canvas.on('object:moving', (e) => zobrazZivyRozmer(e.target));
+
+            // Ak appku otvoríme z konkrétnej produktovej karty na eshope (?produkt=shopify-handle),
+            // preskočíme katalóg a rovno otvoríme dizajnér s týmto produktom.
+            const handleZUrl = new URLSearchParams(window.location.search).get('produkt');
+            const zhodaKluc = handleZUrl ? Object.keys(products).find(k => products[k].shopifyHandle === handleZUrl) : null;
+            if (zhodaKluc) {
+                otvorDizajner(zhodaKluc);
+            } else {
+                zobrazKatalog();
+            }
+        };
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active', 'text-indigo-600', 'bg-white', 'shadow-sm');
+                btn.classList.add('text-slate-600');
+            });
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.add('hidden'));
+            const activeBtn = document.getElementById(`tab-${tabId}`);
+            activeBtn.classList.add('active', 'text-indigo-600', 'bg-white', 'shadow-sm');
+            activeBtn.classList.remove('text-slate-600');
+            document.getElementById(`content-${tabId}`).classList.remove('hidden');
+        }
+
+        // --- KATALÓG (hlavná obrazovka) ---
+        function zobrazKatalog() {
+            document.getElementById('designer-view').classList.add('hidden');
+            document.getElementById('katalog-view').classList.remove('hidden');
+            document.getElementById('btn-katalog').classList.add('hidden');
+            renderKatalogKategorie();
+        }
+
+        function renderKatalogKategorie() {
+            document.getElementById('katalog-produkty').classList.add('hidden');
+            document.getElementById('katalog-kategorie').classList.remove('hidden');
+            const grid = document.getElementById('katalog-kategorie-grid');
+            grid.innerHTML = kategorie.map(k => {
+                const pocet = Object.values(products).filter(p => p.kategoriaId === k.id).length;
+                if (pocet === 0) return '';
+                return `<button onclick="renderKatalogProdukty(${k.id})" class="bg-white border border-slate-200 rounded-2xl p-5 text-left hover:border-indigo-400 hover:shadow-sm transition">
+                    <div class="font-bold text-slate-900">${k.nazov}</div>
+                    <div class="text-xs text-slate-400 mt-1">${pocet} produkt${pocet === 1 ? '' : 'y'}</div>
+                </button>`;
+            }).join('');
+        }
+
+        function renderKatalogProdukty(kategoriaId) {
+            const kat = kategorie.find(k => k.id === kategoriaId);
+            document.getElementById('katalog-kategorie').classList.add('hidden');
+            document.getElementById('katalog-produkty').classList.remove('hidden');
+            document.getElementById('katalog-produkty-nadpis').innerText = kat.nazov;
+            const grid = document.getElementById('katalog-produkty-grid');
+            grid.innerHTML = Object.entries(products).filter(([key, p]) => p.kategoriaId === kategoriaId).map(([key, p]) => `
+                <button onclick="otvorDizajner('${key}')" class="bg-white border border-slate-200 rounded-2xl p-4 text-left hover:border-indigo-400 hover:shadow-sm transition">
+                    <div class="w-full h-20 rounded-lg mb-2 flex items-center justify-center bg-slate-50">${p.svg(p.colors[0].hex)}</div>
+                    <div class="font-semibold text-sm text-slate-900">${p.name}</div>
+                    <div class="text-xs text-slate-400">${NAZVY_POHLAVIA[p.pohlavie] || ''} · ${p.basePrice.toFixed(2)} €</div>
+                </button>`).join('');
+        }
+
+        // Otvorí dizajnér pre konkrétny produkt — volá sa z katalógu aj z priameho ?produkt= vstupu z eshopu
+        function otvorDizajner(prodKey) {
+            document.getElementById('katalog-view').classList.add('hidden');
+            document.getElementById('designer-view').classList.remove('hidden');
+            document.getElementById('btn-katalog').classList.remove('hidden');
+            selectProduct(prodKey);
+        }
+
+        function selectProduct(prodKey) {
+            currentProduct = prodKey;
+            currentColor = products[prodKey].colors[0].hex;
+            currentSize = products[prodKey].sizes[0];
+            currentZona = products[prodKey].zony[0];
+            Object.keys(canvasState).forEach(z => canvasState[z] = null);
+            document.getElementById('aktualny-produkt-nazov').innerText = products[prodKey].name;
+            renderColors();
+            renderSizes();
+            renderZonyPicker();
+            if (canvas) canvas.clear();
+            updateMockup();
+            updatePrice();
+        }
+
+        function renderColors() {
+            const container = document.getElementById('color-picker-container');
+            container.innerHTML = '';
+            products[currentProduct].colors.forEach(col => {
+                const btn = document.createElement('button');
+                btn.className = `w-8 h-8 rounded-full border-2 transition ${currentColor === col.hex ? 'border-indigo-600 scale-110 shadow' : 'border-slate-300 hover:scale-105'}`;
+                btn.style.backgroundColor = col.hex;
+                btn.title = col.name;
+                btn.onclick = () => { currentColor = col.hex; renderColors(); updateMockup(); };
+                container.appendChild(btn);
+            });
+        }
+
+        function renderSizes() {
+            const container = document.getElementById('size-picker-container');
+            container.innerHTML = '';
+            products[currentProduct].sizes.forEach(size => {
+                const btn = document.createElement('button');
+                btn.className = `px-3 py-1.5 rounded-lg text-xs font-semibold border-2 transition ${currentSize === size ? 'border-indigo-600 bg-indigo-50 text-indigo-600' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`;
+                btn.textContent = size;
+                btn.onclick = () => { currentSize = size; renderSizes(); updatePrice(); };
+                container.appendChild(btn);
+            });
+        }
+
+        // Zóny sú vlastnosťou produktu (nastavuje sa v admine) — zákazník vidí len tie, čo daný produkt podporuje,
+        // a môže si v rámci jednej objednávky navrhnúť potlač na viacero z nich naraz.
+        function renderZonyPicker() {
+            const container = document.getElementById('zona-picker-container');
+            container.innerHTML = '';
+            products[currentProduct].zony.forEach(zonaKey => {
+                const pocetPrvkov = zonaKey === currentZona ? pocetObjektovVZone(zonaKey, true) : pocetObjektovVZone(zonaKey, false);
+                const btn = document.createElement('button');
+                btn.className = `py-2 px-3 rounded-xl border-2 text-xs font-semibold flex items-center justify-between transition ${currentZona === zonaKey ? 'border-indigo-600 bg-indigo-50 text-indigo-600' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`;
+                btn.innerHTML = `<span>${ZONY[zonaKey]}</span>` + (pocetPrvkov > 0 ? `<span class="ml-1 w-4 h-4 rounded-full bg-emerald-500 text-white text-[10px] flex items-center justify-center">${pocetPrvkov}</span>` : '');
+                btn.onclick = () => switchView(zonaKey);
+                container.appendChild(btn);
+            });
+        }
+
+        function pocetObjektovVZone(zonaKey, jeAktivna) {
+            if (jeAktivna) return canvas.getObjects().length;
+            if (canvasState[zonaKey]) {
+                try { return (JSON.parse(canvasState[zonaKey]).objects || []).length; } catch (e) { return 0; }
+            }
+            return 0;
+        }
+
+        function updateMockup() {
+            document.getElementById('product-mockup').innerHTML = products[currentProduct].svg(currentColor);
+        }
+
+        function switchView(zona, onReady) {
+            if (currentZona === zona) { if (onReady) onReady(); return; }
+            canvasState[currentZona] = JSON.stringify(canvas);
+            currentZona = zona;
+            document.getElementById('current-view-label').innerText = ZONY[zona];
+            renderZonyPicker();
+            canvas.clear();
+            if (canvasState[zona]) {
+                canvas.loadFromJSON(canvasState[zona], () => { canvas.renderAll(); updatePrice(); if (onReady) onReady(); });
+            } else {
+                updatePrice();
+                if (onReady) onReady();
+            }
+        }
+
+        function addText() {
+            const input = document.getElementById('custom-text-input');
+            const textVal = input.value.trim();
+            if (!textVal) return;
+            const text = new fabric.Text(textVal, {
+                left: 50, top: 100, fontFamily: 'Arial', fill: '#000000', fontSize: 28,
+                cornerColor: '#4f46e5', cornerSize: 8, transparentCorners: false
+            });
+            canvas.add(text);
+            canvas.setActiveObject(text);
+            input.value = '';
+        }
+
+        function handleSelection(e) {
+            const obj = e.selected[0];
+            if (obj && obj.type === 'text') {
+                const controls = document.getElementById('text-controls');
+                controls.classList.remove('opacity-50', 'pointer-events-none');
+                document.getElementById('font-family-select').value = obj.fontFamily;
+                document.getElementById('text-color-picker').value = obj.fill;
+                document.getElementById('text-size-input').value = obj.fontSize;
+            }
+            zobrazZivyRozmer(obj);
+        }
+
+        function handleSelectionCleared() {
+            document.getElementById('text-controls').classList.add('opacity-50', 'pointer-events-none');
+            document.getElementById('live-size-badge').classList.add('hidden');
+        }
+
+        // Naživo ukazuje skutočnú šírku × výšku prvku v cm, podľa reálnej mierky tlačovej zóny —
+        // aktualizuje sa pri každom ťahaní rohu (škálovaní) aj pri výbere prvku.
+        function zobrazZivyRozmer(obj) {
+            if (!obj) return;
+            const badge = document.getElementById('live-size-badge');
+            const text = document.getElementById('live-size-text');
+            const wCm = (obj.width * obj.scaleX) / SCALE_PX_PER_CM;
+            const hCm = (obj.height * obj.scaleY) / SCALE_PX_PER_CM;
+            text.innerText = `${wCm.toFixed(1)} × ${hCm.toFixed(1)} cm`;
+            badge.classList.remove('hidden');
+
+            // upozornenie, ak prvok presahuje maximálnu tlačovú zónu produktu
+            const zonaW = 240 / SCALE_PX_PER_CM;
+            const zonaH = 340 / SCALE_PX_PER_CM;
+            if (wCm > zonaW || hCm > zonaH) {
+                badge.classList.remove('bg-slate-900');
+                badge.classList.add('bg-red-600');
+            } else {
+                badge.classList.remove('bg-red-600');
+                badge.classList.add('bg-slate-900');
+            }
+        }
+
+        function updateTextProperty(prop, value) {
+            const activeObj = canvas.getActiveObject();
+            if (activeObj && activeObj.type === 'text') { activeObj.set(prop, value); canvas.requestRenderAll(); updatePrice(); }
+        }
+        function toggleFontWeight() {
+            const o = canvas.getActiveObject();
+            if (o && o.type === 'text') { o.set('fontWeight', o.fontWeight === 'bold' ? 'normal' : 'bold'); canvas.requestRenderAll(); }
+        }
+        function toggleFontStyle() {
+            const o = canvas.getActiveObject();
+            if (o && o.type === 'text') { o.set('fontStyle', o.fontStyle === 'italic' ? 'normal' : 'italic'); canvas.requestRenderAll(); }
+        }
+        function alignText(alignment) {
+            const o = canvas.getActiveObject();
+            if (o && o.type === 'text') { o.set('textAlign', alignment); canvas.requestRenderAll(); }
+        }
+
+        function oznacSubor(inputId, labelId, popis) {
+            const file = document.getElementById(inputId).files[0];
+            document.getElementById(labelId).innerText = file ? `✓ ${file.name}` : `Nahrať ${popis}`;
+        }
+
+        // Dresy Expres — vyplnené polia sa naraz aplikujú na správne zóny:
+        // meno + číslo + sponzor pod číslom idú na chrbát, liga + sponzor na hrudi idú na predok.
+        function aplikujDresExpres() {
+            const name = document.getElementById('jersey-name').value.trim();
+            const number = document.getElementById('jersey-number').value.trim();
+            const ligaFile = document.getElementById('jersey-liga-file').files[0];
+            const sponzorHrudFile = document.getElementById('jersey-sponzor-hrud-file').files[0];
+            const sponzorCisloFile = document.getElementById('jersey-sponzor-cislo-file').files[0];
+
+            if (!name && !number && !ligaFile && !sponzorHrudFile && !sponzorCisloFile) return;
+
+            const pridajObrazok = (file, left, top, sirkaPx) => {
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    fabric.Image.fromURL(e.target.result, (img) => {
+                        img.scaleToWidth(sirkaPx);
+                        img.set({ left, top, originX: 'center', cornerColor: '#4f46e5', cornerSize: 8, transparentCorners: false });
+                        canvas.add(img);
+                        updatePrice();
+                    });
+                };
+                reader.readAsDataURL(file);
+            };
+
+            // CHRBÁT: meno + číslo + sponzor pod číslom — čaká, kým sa zóna naplno prepne, až potom kreslí
+            if ((name || number || sponzorCisloFile) && products[currentProduct].zony.includes('chrbat')) {
+                switchView('chrbat', () => {
+                    if (name || number) canvas.clear();
+                    if (name) {
+                        canvas.add(new fabric.Text(name.toUpperCase(), {
+                            left: 120, top: 60, originX: 'center', fontFamily: 'Impact', fontSize: 26,
+                            fill: '#ffffff', stroke: '#000000', strokeWidth: 1
+                        }));
+                    }
+                    if (number) {
+                        canvas.add(new fabric.Text(number, {
+                            left: 120, top: 110, originX: 'center', fontFamily: 'Impact', fontSize: 80,
+                            fill: '#ffffff', stroke: '#000000', strokeWidth: 2
+                        }));
+                    }
+                    canvas.renderAll();
+                    updatePrice();
+                    pridajObrazok(sponzorCisloFile, 120, 220, 90);
+                });
+            }
+
+            // PREDOK: liga na srdce (malé, vľavo hore) + sponzor na hrudi (stred) — nemaže existujúci návrh
+            if ((ligaFile || sponzorHrudFile) && products[currentProduct].zony.includes('predok')) {
+                switchView('predok', () => {
+                    pridajObrazok(ligaFile, 40, 25, 30);
+                    pridajObrazok(sponzorHrudFile, 120, 130, 100);
+                });
+            }
+        }
+
+        function applyJerseyStyle(color) {
+            canvas.getObjects().forEach(obj => { if (obj.type === 'text') obj.set('fill', color); });
+            canvas.renderAll();
+            updatePrice();
+        }
+
+        function handleImageUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(f) {
+                fabric.Image.fromURL(f.target.result, function(img) {
+                    img.scaleToWidth(120);
+                    img.set({ left: 60, top: 80, cornerColor: '#4f46e5', cornerSize: 8, transparentCorners: false });
+                    canvas.add(img);
+                    canvas.setActiveObject(img);
+                    updatePrice();
+                });
+            };
+            reader.readAsDataURL(file);
+            // Po nahratí ponúkneme AI úpravu — v tomto prototype je to simulácia (pozri vysvetlenie v chate),
+            // v ostrej verzii by tu Supabase Edge Function volala reálnu službu na odstránenie pozadia/upscaling.
+            document.getElementById('ai-vylepsenie-panel').classList.remove('hidden');
+        }
+
+        function vylepsiObrazokAI() {
+            const btn = document.getElementById('ai-vylepsit-btn');
+            const povodnyObsah = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = 'Spracúva sa…';
+            btn.classList.add('opacity-70');
+            setTimeout(() => {
+                btn.innerHTML = '✓ Pripravené (ukážka)';
+                btn.classList.remove('opacity-70');
+                btn.classList.add('bg-emerald-600');
+                setTimeout(() => {
+                    document.getElementById('ai-vylepsenie-panel').classList.add('hidden');
+                    btn.disabled = false;
+                    btn.innerHTML = povodnyObsah;
+                    btn.classList.remove('bg-emerald-600');
+                }, 1800);
+            }, 1500);
+        }
+
+        function addClipArt(type) {
+            let svgPath = "", color = "#1e293b";
+            switch(type) {
+                case 'star': svgPath = "M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"; color = "#f59e0b"; break;
+                case 'heart': svgPath = "M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l8.72-8.72 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"; color = "#ef4444"; break;
+                case 'flame': svgPath = "M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3c0-1 1-2 1-3z"; color = "#f97316"; break;
+                case 'zap': svgPath = "M13 2L3 14h9l-1 8 10-12h-9l1-8z"; color = "#eab308"; break;
+                default: svgPath = "M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z";
+            }
+            const path = new fabric.Path(svgPath, {
+                fill: color, left: 80, top: 90, scaleX: 3, scaleY: 3,
+                cornerColor: '#4f46e5', cornerSize: 8, transparentCorners: false
+            });
+            canvas.add(path);
+            canvas.setActiveObject(path);
+        }
+
+        function deleteSelected() {
+            const activeObjects = canvas.getActiveObjects();
+            if (activeObjects.length) {
+                activeObjects.forEach(obj => canvas.remove(obj));
+                canvas.discardActiveObject();
+                canvas.requestRenderAll();
+                updatePrice();
+            }
+        }
+        function bringForward() {
+            const o = canvas.getActiveObject();
+            if (o) canvas.bringForward(o);
+        }
+        function clearCanvas() {
+            if (confirm("Naozaj chcete vymazať potlač na tejto zóne (" + ZONY[currentZona] + ")?")) { canvas.clear(); updatePrice(); }
+        }
+        function downloadDesign() {
+            const dataURL = canvas.toDataURL({ format: 'png', quality: 1.0 });
+            const link = document.createElement('a');
+            link.download = `potlac-${currentProduct}-${currentZona}.png`;
+            link.href = dataURL;
+            link.click();
+        }
+
+        // --- PLOCHA POTLAČE (cm²) NAPRIEČ VŠETKÝMI ZÓNAMI ---
+        function plochaObjektovCm2(objects) {
+            return objects.reduce((sum, o) => {
+                const wPx = (o.width || 0) * (o.scaleX || 1);
+                const hPx = (o.height || 0) * (o.scaleY || 1);
+                const wCm = wPx / SCALE_PX_PER_CM;
+                const hCm = hPx / SCALE_PX_PER_CM;
+                return sum + (wCm * hCm);
+            }, 0);
+        }
+
+        // Vráti objekty zo všetkých zón produktu (aktívnu zónu berie živú z plátna, ostatné z uloženého stavu)
+        function vsetkyObjektyVsetkychZon() {
+            let vsetky = [...canvas.getObjects()];
+            products[currentProduct].zony.forEach(zona => {
+                if (zona === currentZona) return;
+                if (canvasState[zona]) {
+                    try {
+                        const parsed = JSON.parse(canvasState[zona]);
+                        if (parsed.objects) vsetky = vsetky.concat(parsed.objects);
+                    } catch (e) {}
+                }
+            });
+            return vsetky;
+        }
+
+        function celkovaPlochaCm2() {
+            return plochaObjektovCm2(vsetkyObjektyVsetkychZon());
+        }
+
+        function pocetVsetkychObjektov() {
+            return vsetkyObjektyVsetkychZon().length;
+        }
+
+        // Počet farieb — rozhoduje pri sieťotlači (nové sito) a rezanom transfere (nová fólia).
+        // Počíta unikátne farby textu a tvarov naprieč všetkými zónami; nahraté obrázky sa rátajú ako 1 farba (plnofarebná predloha).
+        function pocetPouzitychFarieb() {
+            const farby = new Set();
+            let maObrazok = false;
+            vsetkyObjektyVsetkychZon().forEach(o => {
+                if (o.type === 'image') { maObrazok = true; return; }
+                if (o.fill) farby.add(o.fill);
+                if (o.stroke) farby.add(o.stroke);
+            });
+            if (maObrazok) farby.add('__obrazok__');
+            return Math.max(1, farby.size);
+        }
+
+        // --- CENOTVORBA ---
+        // Cena je pre zákazníka len jedno číslo — vzorec (plošný vs. plošný+farby) je interný,
+        // rovnaká logika ako v Master Admin karte "Cenník potlače".
+        function updatePrice() {
+            const basePrice = products[currentProduct].basePrice;
+            const plochaCm2 = celkovaPlochaCm2();
+            const pocetFarieb = pocetPouzitychFarieb();
+            const tech = products[currentProduct].technologia;
+            const cenaPotlace = vypocitajCenuPotlace(tech, plochaCm2, pocetFarieb);
+
+            const cenaKus = basePrice + cenaPotlace;
+            const total = cenaKus * quantity;
+
+            document.getElementById('total-price').innerText = `${cenaKus.toFixed(2)} €`;
+            document.getElementById('grand-total').innerText = `${total.toFixed(2)} €`;
+            document.getElementById('quantity-total-label').innerText = `${quantity} ks`;
+            renderZonyPicker();
+        }
+
+        function updateQuantity(delta) {
+            quantity = Math.max(1, quantity + delta);
+            document.getElementById('quantity-val').innerText = `${quantity} ks`;
+            updatePrice();
+        }
+
+        // --- KOŠÍK / SHOPIFY ---
+        // Toto simuluje presne to, čo by reálna appka poslala do Shopify cart/add.js.
+        // Do jednej položky sa spája potlač zo všetkých zón naraz (predok+chrbát+rukávy) — jeden produkt, jedna objednávka.
+        function pridatDoKosika() {
+            const p = products[currentProduct];
+            const plochaCm2 = celkovaPlochaCm2();
+            const pocetObjektov = pocetVsetkychObjektov();
+            const pocetFarieb = pocetPouzitychFarieb();
+            const cenaKus = parseFloat(document.getElementById('total-price').innerText);
+            poslednyDesignId = 'design_' + Date.now();
+
+            // uisti sa, že aj aktuálne rozpracovaná zóna je uložená do stavu pred odoslaním
+            canvasState[currentZona] = JSON.stringify(canvas);
+
+            const pouziteZony = p.zony.filter(z => {
+                if (z === currentZona) return canvas.getObjects().length > 0;
+                if (!canvasState[z]) return false;
+                try { return (JSON.parse(canvasState[z]).objects || []).length > 0; } catch (e) { return false; }
+            });
+
+            let nahladDataUrl = '';
+            try { nahladDataUrl = canvas.toDataURL({ format: 'png', quality: 0.6 }); } catch (e) {}
+
+            const tlacoveSubory = {};
+            pouziteZony.forEach(z => { tlacoveSubory['_tlacovy_subor_' + z] = `https://tvoj-storage.example/designs/${poslednyDesignId}_${z}.png`; });
+
+            const shopifyPayload = {
+                items: [{
+                    id: `<VARIANT_ID pre ${p.shopifyVariantPrefix}-${currentSize}-${currentColor}>`,
+                    quantity: quantity,
+                    properties: {
+                        "Farba": currentColor,
+                        "Veľkosť": currentSize,
+                        "_design_id": poslednyDesignId,
+                        "_potlacene_zony": pouziteZony.map(z => ZONY[z]).join(', '),
+                        "_pocet_prvkov_potlace": pocetObjektov,
+                        "_plocha_cm2_spolu": Math.round(plochaCm2),
+                        "_pocet_farieb": pocetFarieb,
+                        ...tlacoveSubory,
+                        "_nahlad_base64_skratene": nahladDataUrl ? nahladDataUrl.slice(0, 40) + '…' : '(žiadna grafika)'
+                    }
+                }]
+            };
+
+            kosik.push({ produkt: p.name, velkost: currentSize, pocetKs: quantity, cena: (cenaKus * quantity).toFixed(2) });
+
+            const confirmEl = document.getElementById('cart-confirmation');
+            confirmEl.classList.remove('hidden');
+            document.getElementById('cart-confirmation-text').innerText =
+                `${p.name} · ${currentSize} · potlač: ${pouziteZony.map(z => ZONY[z]).join(', ') || '—'} · ${quantity} ks — ${(cenaKus * quantity).toFixed(2)} €`;
+
+            const techPanel = document.getElementById('tech-panel-content');
+            techPanel.textContent = JSON.stringify(shopifyPayload, null, 2);
+        }
+
+        function toggleTechPanel() {
+            const content = document.getElementById('tech-panel-content');
+            const label = document.getElementById('tech-panel-toggle-label');
+            const hidden = content.classList.toggle('hidden');
+            label.innerText = hidden ? 'zobraziť' : 'skryť';
+        }
+    </script>
+</body>
+</html>

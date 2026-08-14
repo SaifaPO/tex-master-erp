@@ -2,12 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
 import { QRCodeSVG } from 'qrcode.react';
+import { encode as encodeBySquare, CurrencyCode, PaymentOptions } from 'bysquare/pay';
 import { Html5Qrcode } from 'html5-qrcode';
 import { 
   ClipboardList, Package, Cpu, QrCode, Plus, User, Clock, Layers, Search, Check, X, Calendar,
   Palette, Scissors, Printer, Sliders, Sparkles, ZoomIn, ZoomOut, FileText, PlusCircle, Table,
   Shield, Users, Lock, Edit2, Trash2, Tag, Scale, CalendarDays, FileEdit, Gift, Loader2, AlertTriangle,
-  Shirt, Box, Banknote, GripVertical, Download, Upload, ArrowUp, ArrowDown, BarChart3, Camera
+  Shirt, Box, Banknote, GripVertical, Download, Upload, ArrowUp, ArrowDown, BarChart3, Camera, Bot
 } from 'lucide-react';
 
 // ============================================================
@@ -165,8 +166,8 @@ const mapTierToDb = (t) => ({ id: t.id, name: t.name, fit: t.fit, ventilation: t
 const mapEmployeeFromDb = (r) => ({ id: r.id, firstName: r.first_name, lastName: r.last_name, birthday: r.birthday, nameday: r.nameday, entryDate: r.entry_date, role: r.role, position: r.position, passwordHash: r.password_hash || '', phone: r.phone || '', email: r.email || '', avatar: r.avatar || '', pinHash: r.pin_hash || '', totpSecret: r.totp_secret || '', totpEnabled: !!r.totp_enabled, authUserId: r.auth_user_id || '' });
 const mapEmployeeToDb = (e) => ({ id: e.id, first_name: e.firstName, last_name: e.lastName, birthday: e.birthday, nameday: e.nameday, entry_date: e.entryDate, role: e.role, position: e.position, password_hash: e.passwordHash || null, phone: e.phone || null, email: e.email || null, avatar: e.avatar || null, pin_hash: e.pinHash || null, totp_secret: e.totpSecret || null, totp_enabled: !!e.totpEnabled, auth_user_id: e.authUserId || null });
 
-const mapOrderFromDb = (r) => ({ id: r.id, customer: r.customer, createdAt: r.created_at, deliveryDate: r.scheduled_day, driveLink: r.drive_link, notes: r.notes, paymentType: r.payment_type || 'faktura', items: r.items || [] });
-const mapOrderToDb = (o) => ({ id: o.id, customer: o.customer, created_at: o.createdAt, scheduled_day: o.deliveryDate, drive_link: o.driveLink, notes: o.notes, payment_type: o.paymentType, items: o.items });
+const mapOrderFromDb = (r) => ({ id: r.id, customer: r.customer, createdAt: r.created_at, deliveryDate: r.scheduled_day, driveLink: r.drive_link, notes: r.notes, paymentType: r.payment_type || 'faktura', items: r.items || [], orderLog: r.order_log || [], legacyOrderNumber: r.legacy_order_number || '', companyBrand: r.company_brand || 'ATAK', orderNumber: r.order_number || '', accountingStatus: r.accounting_status || null });
+const mapOrderToDb = (o) => ({ id: o.id, customer: o.customer, created_at: o.createdAt, scheduled_day: o.deliveryDate, drive_link: o.driveLink, notes: o.notes, payment_type: o.paymentType, items: o.items, order_log: o.orderLog || [], legacy_order_number: o.legacyOrderNumber || null, company_brand: o.companyBrand || 'ATAK', order_number: o.orderNumber || null, accounting_status: o.accountingStatus || null });
 
 function applyRealtimeChange(setter, payload, mapFn) {
   setter(prev => {
@@ -242,7 +243,7 @@ function flattenOrderItems(ordersList) {
   const flat = [];
   ordersList.forEach(order => {
     (order.items || []).forEach(item => {
-      flat.push({ ...item, orderId: order.id, customer: order.customer, deliveryDate: order.deliveryDate, createdAt: order.createdAt, driveLink: order.driveLink, orderNotes: order.notes, paymentType: order.paymentType });
+      flat.push({ ...item, orderId: order.id, orderNumber: order.orderNumber, companyBrand: order.companyBrand, customer: order.customer, deliveryDate: order.deliveryDate, productionDate: item.productionDate || order.deliveryDate, createdAt: order.createdAt, driveLink: order.driveLink, orderNotes: order.notes, paymentType: order.paymentType });
     });
   });
   return flat;
@@ -302,6 +303,10 @@ const mapCostRateFromDb = (r) => ({ stationId: r.station_id, rate: r.rate, unit:
 const mapAssignmentFromDb = (r) => ({ id: r.id, employeeId: r.employee_id, stationId: r.station_id, date: r.assignment_date });
 const mapProblemFromDb = (r) => ({ id: r.id, orderId: r.order_id, itemId: r.item_id, stationId: r.station_id, employeeId: r.employee_id, employeeName: r.employee_name, category: r.category, description: r.description, status: r.status, createdAt: r.created_at, resolvedAt: r.resolved_at, resolvedBy: r.resolved_by, resolutionNote: r.resolution_note });
 
+const mapCompanySettingsFromDb = (r) => ({ companyName: r.company_name || '', address: r.address || '', ico: r.ico || '', dic: r.dic || '', icDph: r.ic_dph || '', iban: r.iban || '', bankName: r.bank_name || '', defaultVatRate: r.default_vat_rate ?? 20, nextInvoiceNumber: r.next_invoice_number ?? 1, invoiceNumberPrefix: r.invoice_number_prefix || '', nextPpdNumber: r.next_ppd_number ?? 1, nextVpdNumber: r.next_vpd_number ?? 1 });
+const mapInvoiceFromDb = (r) => ({ id: r.id, invoiceNumber: r.invoice_number, orderId: r.order_id, customerName: r.customer_name || '', customerAddress: r.customer_address || '', customerIco: r.customer_ico || '', customerDic: r.customer_dic || '', customerIcDph: r.customer_ic_dph || '', issueDate: r.issue_date, deliveryDate: r.delivery_date, dueDate: r.due_date, variableSymbol: r.variable_symbol || '', items: r.items || [], subtotal: r.subtotal || 0, vatTotal: r.vat_total || 0, total: r.total || 0, status: r.status, paidAt: r.paid_at, notes: r.notes || '', createdBy: r.created_by || '', createdAt: r.created_at, corrections: r.corrections || [], customerType: r.customer_type || 'sk_platca' });
+const mapInvoiceToDb = (inv) => ({ id: inv.id, invoice_number: inv.invoiceNumber, order_id: inv.orderId || null, customer_name: inv.customerName, customer_address: inv.customerAddress, customer_ico: inv.customerIco, customer_dic: inv.customerDic, customer_ic_dph: inv.customerIcDph, issue_date: inv.issueDate, delivery_date: inv.deliveryDate, due_date: inv.dueDate, variable_symbol: inv.variableSymbol, items: inv.items, subtotal: inv.subtotal, vat_total: inv.vatTotal, total: inv.total, status: inv.status, notes: inv.notes, created_by: inv.createdBy, corrections: inv.corrections || [], customer_type: inv.customerType || 'sk_platca' });
+
 const PROBLEM_CATEGORIES = ['Chýba materiál', 'Chyba vo výrobe/tlači', 'Poškodený materiál', 'Nesúhlasí rozmer/farba', 'Porucha stroja', 'Iné'];
 
 const BLANK_GOODS_TYPES = ['Tričko', 'Polokošeľa', 'Mikina', 'Tepláky', 'Šiltovka', 'Ponožky', 'Vlajka', 'Iné'];
@@ -335,7 +340,65 @@ function showDesktopNotification(title, body) {
   }
 }
 
+// Spoľahlivé stiahnutie súboru (Save As) — bežný <a href> odkaz na cudziu doménu (Supabase Storage)
+// vie prehliadač namiesto stiahnutia len otvoriť, preto súbor stiahneme cez fetch a spustíme download z blobu.
+async function downloadFile(url, filename, onError) {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('Súbor sa nepodarilo načítať.');
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = filename || 'subor';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+  } catch (e) {
+    if (onError) onError(e);
+    else window.open(url, '_blank');
+  }
+}
+
 const mapMismatchFromDb = (r) => ({ id: r.id, employeeId: r.employee_id, employeeName: r.employee_name, stationId: r.station_id, date: r.assignment_date, createdAt: r.created_at });
+
+const mapBankTxFromDb = (r) => ({ id: r.id, date: r.tx_date, sender: r.sender || '', amount: r.amount || 0, variableSymbol: r.variable_symbol || '', matched: !!r.matched, invoiceId: r.invoice_id || null, importedAt: r.imported_at });
+const mapJournalFromDb = (r) => ({ id: r.id, date: r.entry_date, description: r.description, mdAccount: r.md_account, dalAccount: r.dal_account, amount: r.amount || 0, invoiceId: r.invoice_id || null, createdAt: r.created_at });
+
+const mapTaxDeadlineFromDb = (r) => ({ id: r.id, title: r.title, dueDate: r.due_date, note: r.note || '', createdBy: r.created_by || '' });
+const mapCashDocFromDb = (r) => ({ id: r.id, docNumber: r.doc_number, docType: r.doc_type, date: r.doc_date, description: r.description || '', amount: r.amount || 0, category: r.category || '', createdBy: r.created_by || '', createdAt: r.created_at });
+
+// Zákazka je "kompletne hotová" ak je hotová každá aktívna stanica na každej položke
+function isOrderFullyComplete(order) {
+  if (!order.items || order.items.length === 0) return false;
+  return order.items.every(item => {
+    const entries = Object.values(item.stationStatuses || {});
+    return entries.length > 0 && entries.every(v => v === 'hotove');
+  });
+}
+
+// Zisti, či navrhovaná spotreba materiálu (needList) prekračuje dostupnú zásobu na sklade,
+// alebo by po odpočítaní zostalo menej než minimálne množstvo (na tesno — treba doobjednať).
+// reservedMap = koľko z daného materiálu už "rezervujú" ostatné rozpracované položky v tej istej zákazke.
+function computeStockWarnings(neededList, materialsList, reservedMap = {}) {
+  const warnings = [];
+  (neededList || []).forEach(needed => {
+    if (!needed.materialId) return;
+    const mat = materialsList.find(m => m.id === needed.materialId);
+    if (!mat) return;
+    const alreadyReserved = reservedMap[needed.materialId] || 0;
+    const availableNow = mat.qty - alreadyReserved;
+    const afterThisItem = parseFloat((availableNow - needed.qtyNeeded).toFixed(2));
+    if (afterThisItem < 0) {
+      warnings.push({ materialId: mat.id, name: `${mat.name} (${mat.color})`, unit: mat.unit, needed: needed.qtyNeeded, available: availableNow, status: 'insufficient', shortBy: Math.abs(afterThisItem) });
+    } else if (afterThisItem <= (mat.minQty || 0)) {
+      warnings.push({ materialId: mat.id, name: `${mat.name} (${mat.color})`, unit: mat.unit, needed: needed.qtyNeeded, available: availableNow, status: 'low', remaining: afterThisItem });
+    }
+  });
+  return warnings;
+}
+
 const mapCostRateToDb = (r) => ({ station_id: r.stationId, rate: r.rate, unit: r.unit, note: r.note });
 
 export default function App() {
@@ -355,6 +418,46 @@ export default function App() {
   const [showResolvedProblems, setShowResolvedProblems] = useState(false);
   const [resolvingProblem, setResolvingProblem] = useState(null);
   const [resolutionNoteInput, setResolutionNoteInput] = useState('');
+  const [companySettings, setCompanySettings] = useState({ companyName: '', address: '', ico: '', dic: '', icDph: '', iban: '', bankName: '', defaultVatRate: 20, nextInvoiceNumber: 1, invoiceNumberPrefix: '' });
+  const [companySettingsDraft, setCompanySettingsDraft] = useState(null);
+  const [invoices, setInvoices] = useState([]);
+  const [selectedInvoiceForDetail, setSelectedInvoiceForDetail] = useState(null);
+  const [showNewInvoiceForm, setShowNewInvoiceForm] = useState(false);
+  const [newInvoiceOrderId, setNewInvoiceOrderId] = useState('');
+  const [newInvoiceCustomerName, setNewInvoiceCustomerName] = useState('');
+  const [newInvoiceCustomerAddress, setNewInvoiceCustomerAddress] = useState('');
+  const [newInvoiceCustomerIco, setNewInvoiceCustomerIco] = useState('');
+  const [newInvoiceCustomerDic, setNewInvoiceCustomerDic] = useState('');
+  const [newInvoiceCustomerIcDph, setNewInvoiceCustomerIcDph] = useState('');
+  const [newInvoiceCustomerType, setNewInvoiceCustomerType] = useState('sk_platca');
+  const [newInvoiceDueDate, setNewInvoiceDueDate] = useState('');
+  const [newInvoiceNotes, setNewInvoiceNotes] = useState('');
+  const [newInvoiceItems, setNewInvoiceItems] = useState([]);
+  const [invoiceStatusFilter, setInvoiceStatusFilter] = useState('all');
+  const [bankTransactions, setBankTransactions] = useState([]);
+  const [journalEntries, setJournalEntries] = useState([]);
+  const [isImportingBankStatement, setIsImportingBankStatement] = useState(false);
+  const [isAutoMatching, setIsAutoMatching] = useState(false);
+  const [aiChat, setAiChat] = useState([{ sender: 'bot', text: 'Ahoj! Som tvoj AI účtovný asistent. Mám prístup k tvojim aktuálnym faktúram a platbám. S čím ti dnes pomôžem?' }]);
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [financeSubTab, setFinanceSubTab] = useState('overview');
+  const [taxDeadlines, setTaxDeadlines] = useState([]);
+  const [newDeadlineTitle, setNewDeadlineTitle] = useState('');
+  const [newDeadlineDate, setNewDeadlineDate] = useState('');
+  const [newDeadlineNote, setNewDeadlineNote] = useState('');
+  const [editingDeadline, setEditingDeadline] = useState(null);
+  const [cashDocuments, setCashDocuments] = useState([]);
+  const [showCashDocForm, setShowCashDocForm] = useState(false);
+  const [newCashDocType, setNewCashDocType] = useState('prijem');
+  const [newCashDocDate, setNewCashDocDate] = useState('');
+  const [newCashDocDescription, setNewCashDocDescription] = useState('');
+  const [newCashDocAmount, setNewCashDocAmount] = useState('');
+  const [newCashDocCategory, setNewCashDocCategory] = useState('');
+  const [correctingInvoice, setCorrectingInvoice] = useState(null);
+  const [correctionDraft, setCorrectionDraft] = useState(null);
+  const [correctionReason, setCorrectionReason] = useState('');
+  const [manualMatchingTx, setManualMatchingTx] = useState(null);
   const [showDeliveryNoteScanner, setShowDeliveryNoteScanner] = useState(false);
   const [deliveryNoteImageFile, setDeliveryNoteImageFile] = useState(null);
   const [deliveryNoteImagePreview, setDeliveryNoteImagePreview] = useState('');
@@ -368,6 +471,7 @@ export default function App() {
   const [newMatDeliveryDate, setNewMatDeliveryDate] = useState('');
   const [staffingWeekOffset, setStaffingWeekOffset] = useState(0);
   const [staffingPickerCell, setStaffingPickerCell] = useState(null); // { date, stationId } | null
+  const [recentlyMovedItemId, setRecentlyMovedItemId] = useState(null);
   const [reportPeriod, setReportPeriod] = useState('month');
   const [activeWarehouseId, setActiveWarehouseId] = useState('');
   const [editingWarehouseId, setEditingWarehouseId] = useState(null);
@@ -449,6 +553,10 @@ export default function App() {
   });
   const [newOrderPaymentType, setNewOrderPaymentType] = useState('faktura');
   const [orderDriveLink, setOrderDriveLink] = useState('https://drive.google.com/');
+  const [newOrderLegacyNumber, setNewOrderLegacyNumber] = useState('');
+  const [newOrderCompany, setNewOrderCompany] = useState('ATAK');
+  const [newOrderLogEntry, setNewOrderLogEntry] = useState('');
+  const [archiveSearchQuery, setArchiveSearchQuery] = useState('');
   const [orderNotes, setOrderNotes] = useState('');
 
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -565,7 +673,7 @@ export default function App() {
     }
     async function loadAll() {
       try {
-        const [matRes, prodRes, tierRes, sportRes, empRes, aclRes, orderRes, whRes, rateRes, assignRes, mismatchRes, problemRes] = await Promise.all([
+        const [matRes, prodRes, tierRes, sportRes, empRes, aclRes, orderRes, whRes, rateRes, assignRes, mismatchRes, problemRes, companyRes, invoiceRes, bankRes, journalRes, deadlineRes, cashDocRes] = await Promise.all([
           supabase.from('materials').select('*').order('name'),
           supabase.from('products').select('*'),
           supabase.from('quality_tiers').select('*'),
@@ -577,7 +685,13 @@ export default function App() {
           supabase.from('cost_rates').select('*'),
           supabase.from('station_assignments').select('*'),
           supabase.from('login_mismatches').select('*').order('created_at', { ascending: false }).limit(50),
-          supabase.from('problem_reports').select('*').order('created_at', { ascending: false }).limit(200)
+          supabase.from('problem_reports').select('*').order('created_at', { ascending: false }).limit(200),
+          supabase.from('company_settings').select('*').eq('id', 1).maybeSingle(),
+          supabase.from('invoices').select('*').order('created_at', { ascending: false }),
+          supabase.from('bank_transactions').select('*').order('imported_at', { ascending: false }),
+          supabase.from('journal_entries').select('*').order('entry_date', { ascending: false }),
+          supabase.from('tax_deadlines').select('*').order('due_date'),
+          supabase.from('cash_documents').select('*').order('doc_date', { ascending: false })
         ]);
         const firstErr = [matRes, prodRes, tierRes, sportRes, empRes, orderRes, whRes].find(r => r.error);
         if (firstErr) throw firstErr.error;
@@ -600,6 +714,12 @@ export default function App() {
         setStationAssignments(assignRes.error ? [] : (assignRes.data || []).map(mapAssignmentFromDb));
         setLoginMismatches(mismatchRes.error ? [] : (mismatchRes.data || []).map(mapMismatchFromDb));
         setProblemReports(problemRes.error ? [] : (problemRes.data || []).map(mapProblemFromDb));
+        if (companyRes.data) setCompanySettings(mapCompanySettingsFromDb(companyRes.data));
+        setInvoices(invoiceRes.error ? [] : (invoiceRes.data || []).map(mapInvoiceFromDb));
+        setBankTransactions(bankRes.error ? [] : (bankRes.data || []).map(mapBankTxFromDb));
+        setJournalEntries(journalRes.error ? [] : (journalRes.data || []).map(mapJournalFromDb));
+        setTaxDeadlines(deadlineRes.error ? [] : (deadlineRes.data || []).map(mapTaxDeadlineFromDb));
+        setCashDocuments(cashDocRes.error ? [] : (cashDocRes.data || []).map(mapCashDocFromDb));
 
         if (loadedWarehouses.length > 0) {
           setActiveWarehouseId(loadedWarehouses[0].id);
@@ -646,6 +766,12 @@ export default function App() {
           showDesktopNotification('⚠️ Nový problém nahlásený', `${p.category}: ${p.description}`);
         }
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices' }, (payload) => applyRealtimeChange(setInvoices, payload, mapInvoiceFromDb))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bank_transactions' }, (payload) => applyRealtimeChange(setBankTransactions, payload, mapBankTxFromDb))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'journal_entries' }, (payload) => applyRealtimeChange(setJournalEntries, payload, mapJournalFromDb))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tax_deadlines' }, (payload) => applyRealtimeChange(setTaxDeadlines, payload, mapTaxDeadlineFromDb))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cash_documents' }, (payload) => applyRealtimeChange(setCashDocuments, payload, mapCashDocFromDb))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings' }, (payload) => { if (payload.new) setCompanySettings(mapCompanySettingsFromDb(payload.new)); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, (payload) => applyRealtimeChange(setProducts, payload, mapProductFromDb))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'quality_tiers' }, (payload) => applyRealtimeChange(setQualityTiers, payload, mapTierFromDb))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, (payload) => applyRealtimeChange(setEmployees, payload, mapEmployeeFromDb))
@@ -1229,6 +1355,299 @@ export default function App() {
   };
 
 
+  // --- FAKTURAČNÝ MODUL ---
+  const handleStartEditCompanySettings = () => setCompanySettingsDraft({ ...companySettings });
+  const handleCancelEditCompanySettings = () => setCompanySettingsDraft(null);
+
+  const handleSaveCompanySettings = async () => {
+    if (!hasPermission('manage_profiles')) { triggerNotification('error', 'Nemáte oprávnenie na túto úpravu.'); return; }
+    const { error } = await supabase.from('company_settings').update({
+      company_name: companySettingsDraft.companyName, address: companySettingsDraft.address, ico: companySettingsDraft.ico,
+      dic: companySettingsDraft.dic, ic_dph: companySettingsDraft.icDph, iban: companySettingsDraft.iban, bank_name: companySettingsDraft.bankName,
+      default_vat_rate: parseFloat(companySettingsDraft.defaultVatRate) || 0, invoice_number_prefix: companySettingsDraft.invoiceNumberPrefix
+    }).eq('id', 1);
+    if (error) { triggerNotification('error', error.message); return; }
+    setCompanySettings(companySettingsDraft);
+    setCompanySettingsDraft(null);
+    triggerNotification('success', 'Nastavenia firmy boli uložené.');
+  };
+
+  const handleStartNewInvoice = (order) => {
+    setShowNewInvoiceForm(true);
+    if (order) {
+      setNewInvoiceOrderId(order.id);
+      setNewInvoiceCustomerName(order.customer);
+      setNewInvoiceItems(order.items.map(it => ({ tempId: it.itemId, description: `${it.productName} (${it.qualityTier}, ${genderLabel(it.gender)})`, qty: it.qty, unitPrice: 0, vatRate: companySettings.defaultVatRate })));
+    } else {
+      setNewInvoiceOrderId('');
+      setNewInvoiceCustomerName('');
+      setNewInvoiceItems([{ tempId: `li-${Date.now()}`, description: '', qty: 1, unitPrice: 0, vatRate: companySettings.defaultVatRate }]);
+    }
+    setNewInvoiceCustomerAddress(''); setNewInvoiceCustomerIco(''); setNewInvoiceCustomerDic(''); setNewInvoiceCustomerIcDph(''); setNewInvoiceCustomerType('sk_platca');
+    const due = new Date(); due.setDate(due.getDate() + 14);
+    setNewInvoiceDueDate(due.toISOString().slice(0, 10));
+    setNewInvoiceNotes('');
+  };
+
+  const handleAddInvoiceLineItem = () => setNewInvoiceItems(prev => [...prev, { tempId: `li-${Date.now()}`, description: '', qty: 1, unitPrice: 0, vatRate: companySettings.defaultVatRate }]);
+  const handleUpdateInvoiceLineItem = (tempId, field, value) => setNewInvoiceItems(prev => prev.map(it => it.tempId === tempId ? { ...it, [field]: value } : it));
+  const handleRemoveInvoiceLineItem = (tempId) => setNewInvoiceItems(prev => prev.filter(it => it.tempId !== tempId));
+
+  const calcInvoiceTotals = (items) => {
+    let subtotal = 0, vatTotal = 0;
+    items.forEach(it => {
+      const lineBase = (parseFloat(it.qty) || 0) * (parseFloat(it.unitPrice) || 0);
+      subtotal += lineBase;
+      vatTotal += lineBase * ((parseFloat(it.vatRate) || 0) / 100);
+    });
+    return { subtotal: parseFloat(subtotal.toFixed(2)), vatTotal: parseFloat(vatTotal.toFixed(2)), total: parseFloat((subtotal + vatTotal).toFixed(2)) };
+  };
+
+  const handleConfirmNewInvoice = async () => {
+    if (!hasPermission('create_order')) { triggerNotification('error', 'Nemáte oprávnenie vystavovať faktúry.'); return; }
+    if (!newInvoiceCustomerName.trim()) { alert('Zadajte odberateľa.'); return; }
+    const validItems = newInvoiceItems.filter(it => it.description.trim() && parseFloat(it.qty) > 0);
+    if (validItems.length === 0) { alert('Pridajte aspoň jednu položku s popisom a množstvom.'); return; }
+
+    const year = new Date().getFullYear();
+    const seq = companySettings.nextInvoiceNumber;
+    const invoiceNumber = `${companySettings.invoiceNumberPrefix || year}${String(seq).padStart(4, '0')}`;
+    const totals = calcInvoiceTotals(validItems);
+    const now = new Date();
+    const created = {
+      id: `inv-${Date.now()}`, invoiceNumber, orderId: newInvoiceOrderId || null,
+      customerName: newInvoiceCustomerName.trim(), customerAddress: newInvoiceCustomerAddress.trim(), customerIco: newInvoiceCustomerIco.trim(),
+      customerDic: newInvoiceCustomerDic.trim(), customerIcDph: newInvoiceCustomerIcDph.trim(), customerType: newInvoiceCustomerType,
+      issueDate: now.toISOString().slice(0, 10), deliveryDate: now.toISOString().slice(0, 10), dueDate: newInvoiceDueDate,
+      variableSymbol: invoiceNumber.replace(/\D/g, '').slice(-10),
+      items: validItems.map(it => ({ description: it.description, qty: parseFloat(it.qty), unitPrice: parseFloat(it.unitPrice) || 0, vatRate: parseFloat(it.vatRate) || 0 })),
+      ...totals, status: 'issued', notes: newInvoiceNotes.trim(), createdBy: `${currentUser.firstName} ${currentUser.lastName}`, corrections: []
+    };
+    const { error } = await supabase.from('invoices').insert(mapInvoiceToDb(created));
+    if (error) { triggerNotification('error', error.message); return; }
+    await supabase.from('company_settings').update({ next_invoice_number: seq + 1 }).eq('id', 1);
+    await supabase.from('journal_entries').insert({
+      id: `j-${Date.now()}`, entry_date: created.issueDate, description: `Vystavená faktúra ${invoiceNumber} — ${created.customerName}`,
+      md_account: '311 - Odberatelia', dal_account: '601 - Tržby z predaja', amount: created.total, invoice_id: created.id
+    });
+    if (newInvoiceOrderId) {
+      await supabase.from('orders').update({ accounting_status: 'invoiced' }).eq('id', newInvoiceOrderId);
+    }
+    setShowNewInvoiceForm(false);
+    setSelectedInvoiceForDetail(created);
+    triggerNotification('success', `Faktúra č. ${invoiceNumber} bola vystavená.`);
+  };
+
+  const handleMarkInvoicePaid = async (invoice) => {
+    if (!hasPermission('create_order')) { triggerNotification('error', 'Nemáte oprávnenie na túto úpravu.'); return; }
+    const { error } = await supabase.from('invoices').update({ status: 'paid', paid_at: new Date().toISOString() }).eq('id', invoice.id);
+    if (error) { triggerNotification('error', error.message); return; }
+    await supabase.from('journal_entries').insert({
+      id: `j-${Date.now()}`, entry_date: new Date().toISOString().slice(0, 10), description: `Úhrada faktúry ${invoice.invoiceNumber} — ${invoice.customerName}`,
+      md_account: '221 - Bankové účty', dal_account: '311 - Odberatelia', amount: invoice.total, invoice_id: invoice.id
+    });
+    setSelectedInvoiceForDetail(prev => prev && prev.id === invoice.id ? { ...prev, status: 'paid', paidAt: new Date().toISOString() } : prev);
+    triggerNotification('success', 'Faktúra označená ako uhradená.');
+  };
+
+  const generateBySquareQr = (invoice) => {
+    if (!companySettings.iban) return null;
+    try {
+      return encodeBySquare({
+        payments: [{
+          type: PaymentOptions.PaymentOrder,
+          amount: invoice.total,
+          variableSymbol: invoice.variableSymbol,
+          currencyCode: CurrencyCode.EUR,
+          beneficiary: { name: companySettings.companyName || 'Odberateľ' },
+          bankAccounts: [{ iban: companySettings.iban }],
+        }],
+      });
+    } catch (e) {
+      return null;
+    }
+  };
+
+  // --- FRONTA PRE ÚČTOVNÍKA ---
+  const handleSwitchOrderToCash = async (order) => {
+    if (!hasPermission('create_order')) { triggerNotification('error', 'Nemáte oprávnenie na túto úpravu.'); return; }
+    if (!window.confirm(`Prehodiť zákazku ${order.orderNumber || order.id} na platbu v hotovosti? Faktúra sa pre ňu už nebude vystavovať.`)) return;
+    const { error } = await supabase.from('orders').update({ payment_type: 'hotovost', accounting_status: 'resolved_cash' }).eq('id', order.id);
+    if (error) { triggerNotification('error', error.message); return; }
+    triggerNotification('success', 'Zákazka bola prehodená na hotovosť.');
+  };
+
+  const handleDismissFromAccountingQueue = async (order) => {
+    if (!hasPermission('create_order')) { triggerNotification('error', 'Nemáte oprávnenie na túto úpravu.'); return; }
+    const { error } = await supabase.from('orders').update({ accounting_status: 'resolved_other' }).eq('id', order.id);
+    if (error) { triggerNotification('error', error.message); return; }
+  };
+
+  // --- BANKOVÝ VÝPIS A AUTOMATICKÉ PÁROVANIE PLATIEB ---
+  const handleImportBankStatement = async (file) => {
+    if (!file) return;
+    setIsImportingBankStatement(true);
+    try {
+      const data = await file.arrayBuffer();
+      const wb = XLSX.read(data);
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+      if (rows.length === 0) { triggerNotification('error', 'Súbor neobsahuje žiadne riadky.'); return; }
+
+      const findCol = (row, keywords) => {
+        const key = Object.keys(row).find(k => keywords.some(kw => k.toLowerCase().includes(kw)));
+        return key ? row[key] : '';
+      };
+
+      const toInsert = rows.map((row, idx) => {
+        const dateRaw = findCol(row, ['dátum', 'datum', 'date']);
+        const amountRaw = findCol(row, ['suma', 'amount', 'čiastka', 'ciastka']);
+        const vsRaw = findCol(row, ['variab', 'vs', 'symbol']);
+        const senderRaw = findCol(row, ['odosielateľ', 'odosielatel', 'sender', 'popis', 'description', 'názov', 'nazov']);
+        let dateVal = dateRaw;
+        if (dateRaw instanceof Date) dateVal = dateRaw.toISOString().slice(0, 10);
+        return {
+          id: `btx-${Date.now()}-${idx}`, tx_date: dateVal || null, sender: String(senderRaw || '').trim(),
+          amount: parseFloat(String(amountRaw).replace(',', '.').replace(/[^\d.-]/g, '')) || 0,
+          variable_symbol: String(vsRaw || '').trim(), matched: false, invoice_id: null
+        };
+      }).filter(r => r.amount > 0);
+
+      if (toInsert.length === 0) { triggerNotification('error', 'Nepodarilo sa rozpoznať žiadne platné riadky (skontroluj, či výpis má stĺpce Dátum, Suma, Variabilný symbol).'); return; }
+      const { error } = await supabase.from('bank_transactions').insert(toInsert);
+      if (error) { triggerNotification('error', error.message); return; }
+      triggerNotification('success', `Naimportovaných ${toInsert.length} bankových transakcií.`);
+    } catch (err) {
+      triggerNotification('error', `Chyba pri čítaní súboru: ${err.message}`);
+    } finally {
+      setIsImportingBankStatement(false);
+    }
+  };
+
+  const handleAutoMatchPayments = async () => {
+    setIsAutoMatching(true);
+    let matchedCount = 0;
+    for (const tx of bankTransactions.filter(t => !t.matched)) {
+      const found = invoices.find(inv => inv.status !== 'paid' && inv.variableSymbol === tx.variableSymbol && Math.abs(inv.total - tx.amount) < 0.01);
+      if (found) {
+        await supabase.from('invoices').update({ status: 'paid', paid_at: new Date().toISOString() }).eq('id', found.id);
+        await supabase.from('bank_transactions').update({ matched: true, invoice_id: found.id }).eq('id', tx.id);
+        await supabase.from('journal_entries').insert({
+          id: `j-${Date.now()}-${matchedCount}`, entry_date: tx.date || new Date().toISOString().slice(0, 10), description: `Úhrada faktúry ${found.invoiceNumber} — spárované z bankového výpisu`,
+          md_account: '221 - Bankové účty', dal_account: '311 - Odberatelia', amount: found.total, invoice_id: found.id
+        });
+        matchedCount++;
+      }
+    }
+    setIsAutoMatching(false);
+    triggerNotification(matchedCount > 0 ? 'success' : 'error', matchedCount > 0 ? `Spárovaných ${matchedCount} platieb s faktúrami.` : 'Nenašli sa žiadne nové zhody (skontroluj variabilné symboly a sumy).');
+  };
+
+  // --- AI ÚČTOVNÝ ASISTENT ---
+  const handleAskAiAccountant = async (question) => {
+    if (!question.trim()) return;
+    const newChat = [...aiChat, { sender: 'user', text: question }];
+    setAiChat(newChat);
+    setAiPrompt('');
+    setIsAiLoading(true);
+
+    const unpaidTotal = invoices.filter(i => i.status !== 'paid').reduce((s, i) => s + i.total, 0);
+    const vatTotal = invoices.reduce((s, i) => s + i.vatTotal, 0);
+    const context = `Firma: ${companySettings.companyName || 'neuvedené'}. Celkový počet faktúr: ${invoices.length}. Neuhradené faktúry v hodnote: ${unpaidTotal.toFixed(2)} €. Súčet DPH za všetky faktúry: ${vatTotal.toFixed(2)} €. Zoznam posledných faktúr: ${JSON.stringify(invoices.slice(0, 15).map(i => ({ cislo: i.invoiceNumber, odberateľ: i.customerName, suma: i.total, stav: i.status, splatnosť: i.dueDate })))}`;
+
+    try {
+      const { data, error } = await supabase.functions.invoke('ai-accountant', { body: { question, context } });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setAiChat([...newChat, { sender: 'bot', text: data.answer }]);
+    } catch (err) {
+      setAiChat([...newChat, { sender: 'bot', text: `Prepáč, nastala chyba: ${err.message}` }]);
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
+  // --- DAŇOVÉ TERMÍNY (vlastné, editovateľné) ---
+  const handleAddTaxDeadline = async () => {
+    if (!hasPermission('create_order')) { triggerNotification('error', 'Nemáte oprávnenie.'); return; }
+    if (!newDeadlineTitle.trim() || !newDeadlineDate) { alert('Vyplňte názov aj dátum termínu.'); return; }
+    const { error } = await supabase.from('tax_deadlines').insert({ id: `td-${Date.now()}`, title: newDeadlineTitle.trim(), due_date: newDeadlineDate, note: newDeadlineNote.trim(), created_by: `${currentUser.firstName} ${currentUser.lastName}` });
+    if (error) { triggerNotification('error', error.message); return; }
+    setNewDeadlineTitle(''); setNewDeadlineDate(''); setNewDeadlineNote('');
+    triggerNotification('success', 'Termín bol pridaný.');
+  };
+
+  const handleSaveEditDeadline = async () => {
+    if (!editingDeadline) return;
+    const { error } = await supabase.from('tax_deadlines').update({ title: editingDeadline.title, due_date: editingDeadline.dueDate, note: editingDeadline.note }).eq('id', editingDeadline.id);
+    if (error) { triggerNotification('error', error.message); return; }
+    setEditingDeadline(null);
+    triggerNotification('success', 'Termín bol upravený.');
+  };
+
+  const handleDeleteTaxDeadline = async (id) => {
+    if (!hasPermission('create_order')) { triggerNotification('error', 'Nemáte oprávnenie.'); return; }
+    if (!window.confirm('Naozaj vymazať tento termín?')) return;
+    await supabase.from('tax_deadlines').delete().eq('id', id);
+  };
+
+  // --- POKLADNIČNÉ DOKLADY (PPD/VPD) ---
+  const handleAddCashDocument = async () => {
+    if (!hasPermission('create_order')) { triggerNotification('error', 'Nemáte oprávnenie.'); return; }
+    const amount = parseFloat(newCashDocAmount);
+    if (!newCashDocDate || !amount || amount <= 0) { alert('Vyplňte dátum a kladnú sumu.'); return; }
+    const isPrijem = newCashDocType === 'prijem';
+    const seq = isPrijem ? companySettings.nextPpdNumber : companySettings.nextVpdNumber;
+    const docNumber = `${isPrijem ? 'PPD' : 'VPD'}-${String(seq).padStart(4, '0')}`;
+    const created = { id: `cd-${Date.now()}`, doc_number: docNumber, doc_type: newCashDocType, doc_date: newCashDocDate, description: newCashDocDescription.trim(), amount, category: newCashDocCategory.trim(), created_by: `${currentUser.firstName} ${currentUser.lastName}` };
+    const { error } = await supabase.from('cash_documents').insert(created);
+    if (error) { triggerNotification('error', error.message); return; }
+    await supabase.from('company_settings').update(isPrijem ? { next_ppd_number: seq + 1 } : { next_vpd_number: seq + 1 }).eq('id', 1);
+    await supabase.from('journal_entries').insert({
+      id: `j-${Date.now()}`, entry_date: newCashDocDate, description: `${docNumber} — ${newCashDocDescription.trim()}`,
+      md_account: isPrijem ? '211 - Pokladňa' : '5xx - Náklady', dal_account: isPrijem ? '6xx - Výnosy' : '211 - Pokladňa', amount
+    });
+    setShowCashDocForm(false);
+    setNewCashDocDate(''); setNewCashDocDescription(''); setNewCashDocAmount(''); setNewCashDocCategory('');
+    triggerNotification('success', `Doklad ${docNumber} bol vytvorený.`);
+  };
+
+  // --- OPRAVA FAKTÚRY (s povinným dôvodom, auditný záznam) ---
+  const handleStartCorrectInvoice = (invoice) => { setCorrectingInvoice(invoice); setCorrectionDraft({ ...invoice }); setCorrectionReason(''); };
+  const handleCancelCorrectInvoice = () => { setCorrectingInvoice(null); setCorrectionDraft(null); setCorrectionReason(''); };
+
+  const handleSaveInvoiceCorrection = async () => {
+    if (!hasPermission('create_order')) { triggerNotification('error', 'Nemáte oprávnenie.'); return; }
+    if (!correctionReason.trim()) { alert('Musíš napísať dôvod opravy — bez dôvodu sa faktúra nedá upraviť.'); return; }
+    const totals = calcInvoiceTotals(correctionDraft.items);
+    const finalDraft = { ...correctionDraft, ...totals };
+    const correctionEntry = {
+      date: getFormattedDateTime(), author: `${currentUser.firstName} ${currentUser.lastName}`, reason: correctionReason.trim(),
+      before: { customerName: correctingInvoice.customerName, customerIco: correctingInvoice.customerIco, total: correctingInvoice.total, items: correctingInvoice.items },
+      after: { customerName: finalDraft.customerName, customerIco: finalDraft.customerIco, total: finalDraft.total, items: finalDraft.items }
+    };
+    finalDraft.corrections = [...(correctingInvoice.corrections || []), correctionEntry];
+    const { error } = await supabase.from('invoices').update(mapInvoiceToDb(finalDraft)).eq('id', finalDraft.id);
+    if (error) { triggerNotification('error', error.message); return; }
+    setSelectedInvoiceForDetail(finalDraft);
+    handleCancelCorrectInvoice();
+    triggerNotification('success', 'Faktúra bola opravená, zmena je zaznamenaná v histórii.');
+  };
+
+  // --- MANUÁLNE PÁROVANIE PLATBY ---
+  const handleManualMatchPayment = async (tx, invoiceId) => {
+    if (!invoiceId) return;
+    const invoice = invoices.find(i => i.id === invoiceId);
+    if (!invoice) return;
+    await supabase.from('invoices').update({ status: 'paid', paid_at: new Date().toISOString() }).eq('id', invoiceId);
+    await supabase.from('bank_transactions').update({ matched: true, invoice_id: invoiceId }).eq('id', tx.id);
+    await supabase.from('journal_entries').insert({
+      id: `j-${Date.now()}`, entry_date: tx.date || new Date().toISOString().slice(0, 10), description: `Úhrada faktúry ${invoice.invoiceNumber} — ručne spárované`,
+      md_account: '221 - Bankové účty', dal_account: '311 - Odberatelia', amount: invoice.total, invoice_id: invoice.id
+    });
+    setManualMatchingTx(null);
+    triggerNotification('success', `Platba spárovaná s faktúrou ${invoice.invoiceNumber}.`);
+  };
+
   const handleAddNewMaterial = async (e) => {
     e.preventDefault();
     if (!hasPermission('edit_stock')) { triggerNotification('error', 'Nemáte prístup ku správe skladu.'); return; }
@@ -1679,14 +2098,21 @@ export default function App() {
         itemId, productId: item.productId, productName: item.productName, customCode: item.customCode,
         qualityTier: item.qualityTier, gender: item.gender, qty: item.qty, notes: item.notes, imageUrl: item.imageUrl || '', assignedDesignerId: item.assignedDesignerId || '',
         rozpisUrl: item.rozpisUrl || '', rozpisFileName: item.rozpisFileName || '', rozpisMimeType: item.rozpisMimeType || '',
-        materialsNeeded: item.materialsNeeded, threadQtyM: item.threadQtyM, priority: sameDayCount + idx + 1,
+        materialsNeeded: item.materialsNeeded, threadQtyM: item.threadQtyM, priority: sameDayCount + idx + 1, productionDate: newOrderDeliveryDate,
         stationStatuses: initialStatuses, materialDeducted: (item.materialsNeeded || []).length > 0
       };
     });
 
-    const created = { id: orderId, customer: newOrderCustomer, createdAt: now, deliveryDate: newOrderDeliveryDate, driveLink: orderDriveLink, notes: orderNotes, paymentType: newOrderPaymentType, items: itemsWithMeta };
+    const fullYear = new Date().getFullYear();
+    const shortYear = String(fullYear).slice(-2);
+    const { data: counterData } = await supabase.from('order_number_counters').select('*').eq('company', newOrderCompany).eq('year', fullYear).maybeSingle();
+    const nextNum = counterData?.next_number || 1;
+    const orderNumber = `${newOrderCompany}-${String(nextNum).padStart(4, '0')}-${shortYear}`;
+
+    const created = { id: orderId, customer: newOrderCustomer, createdAt: now, deliveryDate: newOrderDeliveryDate, driveLink: orderDriveLink, notes: orderNotes, paymentType: newOrderPaymentType, items: itemsWithMeta, orderLog: [], legacyOrderNumber: newOrderLegacyNumber.trim(), companyBrand: newOrderCompany, orderNumber };
     const { error } = await supabase.from('orders').insert(mapOrderToDb(created));
     if (error) { triggerNotification('error', `Chyba: ${error.message}`); return; }
+    await supabase.from('order_number_counters').upsert({ company: newOrderCompany, year: fullYear, next_number: nextNum + 1 }, { onConflict: 'company,year' });
 
     for (const mu of materialUpdates) {
       await supabase.from('materials').update({ qty: mu.qty, history: mu.history }).eq('id', mu.id);
@@ -1697,9 +2123,11 @@ export default function App() {
     setNewOrderCustomer('');
     setOrderNotes('');
     setOrderDriveLink('https://drive.google.com/');
+    setNewOrderLegacyNumber('');
     setNewOrderPaymentType('faktura');
+    setNewOrderCompany('ATAK');
     setPendingItems([]);
-    triggerNotification('success', `Zákazka ${orderId} bola zaradená do výroby (${itemsWithMeta.length} položiek) a materiál bol odpočítaný zo skladu.`);
+    triggerNotification('success', `Zákazka ${orderNumber} bola zaradená do výroby (${itemsWithMeta.length} položiek) a materiál bol odpočítaný zo skladu.`);
   };
 
   const handleMovePriority = async (item, direction) => {
@@ -1708,6 +2136,9 @@ export default function App() {
     const currentIndex = group.findIndex(i => i.itemId === item.itemId);
     const targetIndex = currentIndex + direction;
     if (targetIndex < 0 || targetIndex >= group.length) return;
+
+    setRecentlyMovedItemId(item.itemId);
+    setTimeout(() => setRecentlyMovedItemId(prev => (prev === item.itemId ? null : prev)), 600);
 
     const reordered = [...group];
     [reordered[currentIndex], reordered[targetIndex]] = [reordered[targetIndex], reordered[currentIndex]];
@@ -1726,7 +2157,6 @@ export default function App() {
       });
       await supabase.from('orders').update({ items: newItems }).eq('id', orderId);
     }
-    triggerNotification('success', 'Poradie priorít bolo upravené.');
   };
 
   // Presun myšou (drag & drop) — funguje popri šípkach, hodí sa hlavne na počítači/myš.
@@ -1841,6 +2271,28 @@ export default function App() {
     setOrderEditDraft(prev => ({ ...prev, items: prev.items.filter(it => it.itemId !== itemId) }));
   };
 
+  // --- TRVALÝ DENNÍK ZÁKAZKY (append-only, nedá sa mazať ani upravovať) ---
+  const handleAddOrderLogEntry = async (order, text) => {
+    if (!text.trim()) return;
+    const now = getFormattedDateTime();
+    const newLog = [...(order.orderLog || []), { date: now, author: `${currentUser.firstName} ${currentUser.lastName}`, text: text.trim() }];
+    const { error } = await supabase.from('orders').update({ order_log: newLog }).eq('id', order.id);
+    if (error) { triggerNotification('error', error.message); return; }
+    if (selectedOrderDetails?.id === order.id) setSelectedOrderDetails({ ...order, orderLog: newLog });
+    setNewOrderLogEntry('');
+    triggerNotification('success', 'Poznámka bola pridaná do denníka zákazky.');
+  };
+
+  const handleMoveProductionDate = async (orderId, itemId, newDate) => {
+    if (!hasPermission('edit_priority')) { triggerNotification('error', 'Nemáte oprávnenie meniť plán výroby.'); return; }
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+    const updatedItems = order.items.map(item => item.itemId === itemId ? { ...item, productionDate: newDate } : item);
+    const { error } = await supabase.from('orders').update({ items: updatedItems }).eq('id', orderId);
+    if (error) { triggerNotification('error', error.message); return; }
+    if (selectedOrderDetails?.id === orderId) setSelectedOrderDetails({ ...order, items: updatedItems });
+  };
+
   const handleReassignDesigner = async (orderId, itemId, newDesignerId) => {
     if (!hasPermission('update_status') && !hasPermission('manage_profiles')) { triggerNotification('error', 'Nemáte oprávnenie meniť priradenie.'); return; }
     const order = orders.find(o => o.id === orderId);
@@ -1887,7 +2339,7 @@ export default function App() {
     const newItem = {
       itemId: newItemId, productId: product.id, productName: product.name, customCode: product.customCode,
       qualityTier: tier?.name || '', gender: addItemGender, qty: qtyNum, notes: addItemNotes, imageUrl, assignedDesignerId: addItemDesignerId, ...rozpisData,
-      materialsNeeded: neededList, threadQtyM: product.threadM * qtyNum, priority: allItems.length + 1,
+      materialsNeeded: neededList, threadQtyM: product.threadM * qtyNum, priority: allItems.length + 1, productionDate: orderEditDraft.deliveryDate,
       stationStatuses: initialStatuses, materialDeducted: false
     };
 
@@ -2058,7 +2510,11 @@ export default function App() {
       return { ...item, stationStatuses: { ...item.stationStatuses, [stationId]: statusId }, stationMeta: { ...item.stationMeta, [stationId]: newMeta }, materialDeducted: isDeductedNow };
     });
 
-    const { error: orderErr } = await supabase.from('orders').update({ items: updatedItems }).eq('id', orderId);
+    const updatePayload = { items: updatedItems };
+    if (order.paymentType === 'faktura' && !order.accountingStatus && isOrderFullyComplete({ ...order, items: updatedItems })) {
+      updatePayload.accounting_status = 'pending_review';
+    }
+    const { error: orderErr } = await supabase.from('orders').update(updatePayload).eq('id', orderId);
     if (orderErr) { triggerNotification('error', orderErr.message); return; }
 
     for (const mu of materialUpdates) {
@@ -2210,11 +2666,11 @@ export default function App() {
   const getPlannerDates = () => {
     const set = new Set();
     const today = new Date();
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 14; i++) {
       const d = new Date(today); d.setDate(today.getDate() + i);
       set.add(d.toISOString().slice(0, 10));
     }
-    allItems.forEach(it => { if (it.deliveryDate) set.add(it.deliveryDate); });
+    allItems.forEach(it => { if (it.productionDate) set.add(it.productionDate); });
     return Array.from(set).sort();
   };
   const plannerDates = getPlannerDates();
@@ -2459,6 +2915,10 @@ export default function App() {
               {hasPermission('view_reports') && (
                 <button onClick={() => setActiveTab('problems')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'problems' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><AlertTriangle className="h-3.5 w-3.5" /> Problémy</button>
               )}
+              {hasPermission('create_order') && (
+                <button onClick={() => setActiveTab('invoices')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'invoices' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><FileEdit className="h-3.5 w-3.5" /> Financie{orders.filter(o => o.accountingStatus === 'pending_review').length > 0 && <span className="bg-amber-500 text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full ml-1">{orders.filter(o => o.accountingStatus === 'pending_review').length}</span>}</button>
+              )}
+              <button onClick={() => setActiveTab('archive')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'archive' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Search className="h-3.5 w-3.5" /> História Zákaziek</button>
             </nav>
           </div>
         </div>
@@ -2529,7 +2989,7 @@ export default function App() {
                             </td>
                             {STATION_ORDER.map(stationId => {
                               const config = STATION_CONFIGS[stationId];
-                              const dayItems = allItems.filter(it => it.deliveryDate === date && it.stationStatuses[stationId] && it.stationStatuses[stationId] !== 'neaktivne').sort((a, b) => a.priority - b.priority);
+                              const dayItems = allItems.filter(it => it.productionDate === date && it.stationStatuses[stationId] && it.stationStatuses[stationId] !== 'neaktivne').sort((a, b) => a.priority - b.priority);
                               return (
                                 <td key={stationId} className="p-1 border-r border-slate-850 align-top min-h-[110px] bg-slate-950/15">
                                   <div className="grid grid-cols-1 gap-1">
@@ -2555,6 +3015,19 @@ export default function App() {
                                           </div>
                                           <p className="font-extrabold text-slate-100 truncate">{item.customer}</p>
                                           <p className="text-[9px] text-slate-300 truncate">{item.productName} ({item.qualityTier})</p>
+                                          <div className={`text-[8px] px-1 py-0.5 rounded ${isUrgentDate(item.deliveryDate) ? 'bg-rose-950/60 text-rose-300 font-bold' : 'bg-slate-950/60 text-slate-500'}`}>
+                                            Termín: {formatDeliveryDate(item.deliveryDate)}
+                                          </div>
+                                          {hasPermission('edit_priority') && (
+                                            <input
+                                              type="date"
+                                              value={item.productionDate || ''}
+                                              onClick={(e) => e.stopPropagation()}
+                                              onChange={(e) => handleMoveProductionDate(item.orderId, item.itemId, e.target.value)}
+                                              className="text-[8px] bg-slate-950 border border-slate-800 rounded px-1 py-0.5 text-slate-400 w-full"
+                                              title="Presunúť na iný deň výroby"
+                                            />
+                                          )}
                                           <select
                                             value={statusId}
                                             onClick={(e) => e.stopPropagation()}
@@ -2610,7 +3083,8 @@ export default function App() {
                           <th className="px-4 py-3">Odberateľ</th>
                           <th className="px-4 py-3">Produkt (Vyhotovenie)</th>
                           <th className="px-4 py-3 text-center">Ks</th>
-                          <th className="px-4 py-3 text-center">Termín</th>
+                          <th className="px-4 py-3 text-center">Termín (deadline)</th>
+                          <th className="px-4 py-3 text-center">Deň výroby</th>
                           <th className="px-4 py-3 text-center">Aktuálne štádium</th>
                           <th className="px-4 py-3 text-center">Akcie</th>
                         </tr>
@@ -2623,6 +3097,7 @@ export default function App() {
                           const stage = currentStageLabel(item);
                           const orderColor = colorForOrder(item.orderId);
                           const canReorder = hasPermission('edit_priority');
+                          const justMoved = recentlyMovedItemId === item.itemId;
                           return (
                             <tr 
                               key={item.itemId} 
@@ -2630,16 +3105,16 @@ export default function App() {
                               onDragStart={() => setDraggedRowItem(item)}
                               onDragOver={(e) => { if (canReorder) e.preventDefault(); }}
                               onDrop={() => canReorder && handleDragDropReorder(draggedRowItem, item)}
-                              className={`hover:bg-slate-800/40 border-l-4 ${orderColor.border} ${canReorder ? 'cursor-move' : ''}`}
+                              className={`transition-colors duration-500 ${justMoved ? 'bg-indigo-600/30' : 'hover:bg-slate-800/40'} border-l-4 ${orderColor.border} ${canReorder ? 'cursor-move' : ''}`}
                             >
                               <td className="px-4 py-3 text-center">
                                 <div className="flex items-center gap-1 justify-center">
                                   {canReorder && (
                                     <>
-                                      <GripVertical className="h-3.5 w-3.5 text-slate-600 shrink-0" />
-                                      <div className="flex flex-col gap-0.5">
-                                        <button onClick={() => handleMovePriority(item, -1)} className="p-0.5 bg-slate-800 hover:bg-indigo-700 rounded text-slate-400 hover:text-white"><ArrowUp className="h-3 w-3" /></button>
-                                        <button onClick={() => handleMovePriority(item, 1)} className="p-0.5 bg-slate-800 hover:bg-indigo-700 rounded text-slate-400 hover:text-white"><ArrowDown className="h-3 w-3" /></button>
+                                      <GripVertical className="h-3.5 w-3.5 text-slate-600 shrink-0 hidden sm:block" />
+                                      <div className="flex flex-col gap-1">
+                                        <button onClick={() => handleMovePriority(item, -1)} className="p-1.5 bg-slate-800 hover:bg-indigo-700 active:bg-indigo-500 active:scale-90 rounded text-slate-400 hover:text-white transition-transform duration-100 touch-manipulation"><ArrowUp className="h-3.5 w-3.5" /></button>
+                                        <button onClick={() => handleMovePriority(item, 1)} className="p-1.5 bg-slate-800 hover:bg-indigo-700 active:bg-indigo-500 active:scale-90 rounded text-slate-400 hover:text-white transition-transform duration-100 touch-manipulation"><ArrowDown className="h-3.5 w-3.5" /></button>
                                       </div>
                                     </>
                                   )}
@@ -2647,11 +3122,18 @@ export default function App() {
                                 </div>
                               </td>
                               <td className="px-4 py-3 font-mono font-bold text-indigo-400">{item.itemId}</td>
-                              <td className="px-4 py-3 font-mono text-slate-400">{item.orderId}</td>
+                              <td className="px-4 py-3 font-mono text-slate-400">{item.orderNumber || item.orderId} <span className={`ml-1 text-[9px] font-extrabold px-1 py-0.5 rounded ${item.companyBrand === 'PBT' ? 'bg-purple-950/50 text-purple-300' : 'bg-emerald-950/50 text-emerald-300'}`}>{item.companyBrand || 'ATAK'}</span></td>
                               <td className="px-4 py-3 font-bold text-white flex items-center gap-1.5"><CashBadge paymentType={item.paymentType} size="small" /> {item.customer}</td>
                               <td className="px-4 py-3 text-slate-300">{item.productName} (<span className="text-indigo-400">{item.qualityTier}</span>)</td>
                               <td className="px-4 py-3 text-center font-bold text-white">{item.qty}</td>
                               <td className="px-4 py-3 text-center"><span className={`px-2 py-0.5 rounded font-bold ${isUrgentDate(item.deliveryDate) ? 'bg-rose-600 text-white animate-pulse' : 'bg-slate-800'}`}>{formatDeliveryDate(item.deliveryDate)}</span></td>
+                              <td className="px-4 py-3 text-center">
+                                {hasPermission('edit_priority') ? (
+                                  <input type="date" value={item.productionDate || ''} onChange={(e) => handleMoveProductionDate(item.orderId, item.itemId, e.target.value)} className={`bg-slate-950 border rounded px-1.5 py-1 text-[11px] ${isUrgentDate(item.productionDate) ? 'border-indigo-500 text-indigo-300 font-bold' : 'border-slate-800 text-slate-400'}`} />
+                                ) : (
+                                  <span className="text-slate-400">{formatDeliveryDate(item.productionDate)}</span>
+                                )}
+                              </td>
                               <td className="px-4 py-3 text-center">
                                 <span className={`px-2 py-0.5 rounded font-bold ${stage.done ? 'bg-emerald-900/40 text-emerald-300' : 'bg-amber-900/40 text-amber-300'}`}>{stage.label}</span>
                               </td>
@@ -2792,11 +3274,22 @@ export default function App() {
                       <input type="date" value={newOrderDeliveryDate} onChange={(e) => setNewOrderDeliveryDate(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white" />
                     </div>
                     <div>
+                      <label className="block text-xs font-semibold text-slate-400 mb-1">Firma</label>
+                      <div className="grid grid-cols-2 gap-1">
+                        <button type="button" onClick={() => setNewOrderCompany('ATAK')} className={`py-2 text-center text-xs font-bold rounded transition-colors ${newOrderCompany === 'ATAK' ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-white'}`}>ATAK</button>
+                        <button type="button" onClick={() => setNewOrderCompany('PBT')} className={`py-2 text-center text-xs font-bold rounded transition-colors ${newOrderCompany === 'PBT' ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-white'}`}>PBT</button>
+                      </div>
+                    </div>
+                    <div>
                       <label className="block text-xs font-semibold text-slate-400 mb-1">Spôsob platby</label>
                       <div className="grid grid-cols-2 gap-1">
                         <button type="button" onClick={() => setNewOrderPaymentType('faktura')} className={`py-2 text-center text-xs font-bold rounded transition-colors ${newOrderPaymentType === 'faktura' ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-white'}`}>Faktúra</button>
                         <button type="button" onClick={() => setNewOrderPaymentType('hotovost')} className={`py-2 text-center text-xs font-bold rounded transition-colors flex items-center justify-center gap-1.5 ${newOrderPaymentType === 'hotovost' ? 'bg-rose-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-white'}`}><Banknote className="h-3.5 w-3.5" /> Hotovosť ($)</button>
                       </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-400 mb-1">Staré číslo zákazky (voliteľné, ak je to opakovanie)</label>
+                      <input type="text" value={newOrderLegacyNumber} onChange={(e) => setNewOrderLegacyNumber(e.target.value)} placeholder="napr. ZAK-2024-0087" className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white" />
                     </div>
                     <div className="md:col-span-2">
                       <label className="block text-xs font-semibold text-slate-400 mb-1">Odkaz na podklady (Google Drive, Uschovňa, WeTransfer... hocijaký odkaz)</label>
@@ -2947,6 +3440,32 @@ export default function App() {
                           <p className="text-[11px] text-slate-500 italic">Tento model nemá priradenú žiadnu látku zo skladu (napr. tričko/mikina len na dotlač).</p>
                         )}
                       </div>
+                      {(() => {
+                        if (!selectedProduct) return null;
+                        const qtyNum = parseInt(itemQty) || 0;
+                        const livePreview = [
+                          selectedProduct.layer1 ? { layerName: 'Primárna látka', materialId: selectedLayer1Mat, qtyNeeded: calculateLayerConsumption(selectedProduct, selectedGender, 'layer1', qtyNum) } : null,
+                          selectedProduct.layer2 && selectedLayer2Mat ? { layerName: 'Sekundárna látka', materialId: selectedLayer2Mat, qtyNeeded: calculateLayerConsumption(selectedProduct, selectedGender, 'layer2', qtyNum) } : null,
+                          selectedProduct.layer3 && selectedLayer3Mat ? { layerName: 'Terciárna látka', materialId: selectedLayer3Mat, qtyNeeded: calculateLayerConsumption(selectedProduct, selectedGender, 'layer3', qtyNum) } : null,
+                        ].filter(Boolean);
+                        const reservedMap = {};
+                        pendingItems.forEach(pi => (pi.materialsNeeded || []).forEach(n => { reservedMap[n.materialId] = (reservedMap[n.materialId] || 0) + n.qtyNeeded; }));
+                        const warnings = computeStockWarnings(livePreview, materials, reservedMap);
+                        if (warnings.length === 0) return null;
+                        return (
+                          <div className="bg-rose-950/40 border-2 border-rose-600 rounded-xl p-3 space-y-1.5 animate-in fade-in">
+                            <p className="text-xs font-extrabold text-rose-300 flex items-center gap-1.5"><AlertTriangle className="h-4 w-4" /> Pozor — nedostatok materiálu na sklade!</p>
+                            {warnings.map(w => (
+                              <p key={w.materialId} className="text-[11px] text-rose-200">
+                                <strong>{w.name}</strong>: {w.status === 'insufficient'
+                                  ? <>potrebné {w.needed} {w.unit}, na sklade je len {w.available} {w.unit} (chýba {w.shortBy} {w.unit})</>
+                                  : <>po tejto zákazke ostane už len {w.remaining} {w.unit} — na tesno, treba doobjednať</>}
+                              </p>
+                            ))}
+                            <p className="text-[10px] text-rose-400 italic">Treba doobjednať materiál, alebo vybrať alternatívnu látku vyššie.</p>
+                          </div>
+                        );
+                      })()}
                       <button type="button" onClick={handleAddPendingItem} disabled={isUploadingItemImage} className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-extrabold text-xs py-2.5 rounded-lg uppercase tracking-wider flex items-center justify-center gap-1.5">{isUploadingItemImage ? (<><Loader2 className="h-4 w-4 animate-spin" /> Nahrávam obrázok...</>) : (<><Plus className="h-4 w-4" /> Pridať položku do zoznamu</>)}</button>
                     </div>
                   </div>
@@ -4235,6 +4754,649 @@ export default function App() {
           </div>
         )}
 
+        {activeTab === 'invoices' && hasPermission('create_order') && (() => {
+          const filteredInvoices = invoices.filter(inv => invoiceStatusFilter === 'all' || inv.status === invoiceStatusFilter);
+          const pendingReviewOrders = orders.filter(o => o.accountingStatus === 'pending_review');
+          return (
+            <div className="space-y-6 print:hidden animate-in fade-in duration-150">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <h2 className="text-xl font-bold text-white flex items-center gap-2"><Banknote className="text-emerald-400 h-5 w-5" /> Financie</h2>
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={() => { setCompanySettingsDraft({ ...companySettings }); }} className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs px-3 py-2 rounded-lg flex items-center gap-1.5"><Lock className="h-3.5 w-3.5" /> Nastavenia firmy</button>
+                  <button onClick={() => handleStartNewInvoice(null)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Plus className="h-4 w-4" /> Vystaviť novú faktúru</button>
+                </div>
+              </div>
+
+              {!companySettings.iban && (
+                <div className="bg-amber-950/20 border border-amber-800/40 rounded-xl px-4 py-3 text-xs text-amber-300">
+                  ⚠️ Ešte nemáš vyplnené údaje firmy (IBAN a pod.) — QR platba na faktúrach nebude fungovať, kým to nedoplníš cez "Nastavenia firmy".
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 bg-slate-900 p-1.5 rounded-xl border border-slate-800 w-fit overflow-x-auto">
+                <button onClick={() => setFinanceSubTab('overview')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'overview' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Prehľad</button>
+                <button onClick={() => setFinanceSubTab('queue')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'queue' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Fronta pre účtovníka {pendingReviewOrders.length > 0 && `(${pendingReviewOrders.length})`}</button>
+                <button onClick={() => setFinanceSubTab('invoices')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'invoices' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Faktúry</button>
+                <button onClick={() => setFinanceSubTab('cash')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'cash' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Pokladňa</button>
+                <button onClick={() => setFinanceSubTab('bank')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'bank' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Banka</button>
+                <button onClick={() => setFinanceSubTab('journal')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'journal' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Účtovný denník</button>
+                <button onClick={() => setFinanceSubTab('ai')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap flex items-center gap-1 ${financeSubTab === 'ai' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}><Bot className="h-3.5 w-3.5" /> AI Asistent</button>
+              </div>
+
+              {financeSubTab === 'overview' && (() => {
+                const now = new Date();
+                const thisMonthKey = `${now.getFullYear()}-${now.getMonth()}`;
+                const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                const lastMonthKey = `${lastMonthDate.getFullYear()}-${lastMonthDate.getMonth()}`;
+                const sumForMonth = (key) => invoices.filter(i => { const d = new Date(i.issueDate); return `${d.getFullYear()}-${d.getMonth()}` === key; }).reduce((s, i) => s + i.total, 0);
+                const thisMonthTotal = sumForMonth(thisMonthKey);
+                const lastMonthTotal = sumForMonth(lastMonthKey);
+                const monthChange = lastMonthTotal > 0 ? (((thisMonthTotal - lastMonthTotal) / lastMonthTotal) * 100) : null;
+
+                const byYear = {};
+                invoices.forEach(inv => {
+                  const y = new Date(inv.issueDate).getFullYear();
+                  if (!byYear[y]) byYear[y] = { income: 0, vat: 0, count: 0 };
+                  byYear[y].income += inv.total;
+                  byYear[y].vat += inv.vatTotal;
+                  byYear[y].count += 1;
+                });
+                const years = Object.keys(byYear).map(Number).sort((a, b) => b - a);
+                const thisYear = now.getFullYear();
+                const lastYear = thisYear - 1;
+                const yearChange = byYear[lastYear]?.income > 0 ? (((byYear[thisYear]?.income || 0) - byYear[lastYear].income) / byYear[lastYear].income) * 100 : null;
+
+                const avgGrowth = (span) => {
+                  const start = thisYear - span;
+                  if (!byYear[start] || byYear[start].income === 0 || !byYear[thisYear]) return null;
+                  const totalGrowth = ((byYear[thisYear].income - byYear[start].income) / byYear[start].income) * 100;
+                  return totalGrowth / span;
+                };
+                const avg5 = avgGrowth(5);
+                const avg10 = avgGrowth(10);
+
+                const byCustomerType = {};
+                invoices.forEach(inv => {
+                  const t = inv.customerType || 'sk_platca';
+                  if (!byCustomerType[t]) byCustomerType[t] = { total: 0, vat: 0, count: 0 };
+                  byCustomerType[t].total += inv.total;
+                  byCustomerType[t].vat += inv.vatTotal;
+                  byCustomerType[t].count += 1;
+                });
+                const customerTypeLabels = { sk_platca: 'SK — platca DPH', sk_neplatca: 'SK — neplatca DPH', eu_platca: 'EÚ — platca DPH', eu_neplatca: 'EÚ — neplatca DPH', tretia_krajina: 'Tretia krajina' };
+
+                const upcomingDeadlines = taxDeadlines.slice().sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+
+                return (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl">
+                        <span className="text-[10px] text-slate-500 uppercase font-bold">Tento mesiac</span>
+                        <p className="text-xl font-bold text-white">{thisMonthTotal.toFixed(2)} €</p>
+                        {monthChange !== null && <p className={`text-[11px] font-bold ${monthChange >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{monthChange >= 0 ? '+' : ''}{monthChange.toFixed(1)}% oproti minulému mesiacu</p>}
+                      </div>
+                      <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl">
+                        <span className="text-[10px] text-slate-500 uppercase font-bold">Tento rok</span>
+                        <p className="text-xl font-bold text-white">{(byYear[thisYear]?.income || 0).toFixed(2)} €</p>
+                        {yearChange !== null && <p className={`text-[11px] font-bold ${yearChange >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{yearChange >= 0 ? '+' : ''}{yearChange.toFixed(1)}% oproti minulému roku</p>}
+                      </div>
+                      <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl">
+                        <span className="text-[10px] text-slate-500 uppercase font-bold">Priemerný rast (5 rokov)</span>
+                        <p className="text-xl font-bold text-white">{avg5 !== null ? `${avg5 >= 0 ? '+' : ''}${avg5.toFixed(1)}% ročne` : 'nedostatok histórie'}</p>
+                      </div>
+                      <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl">
+                        <span className="text-[10px] text-slate-500 uppercase font-bold">Priemerný rast (10 rokov)</span>
+                        <p className="text-xl font-bold text-white">{avg10 !== null ? `${avg10 >= 0 ? '+' : ''}${avg10.toFixed(1)}% ročne` : 'nedostatok histórie'}</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
+                        <h3 className="text-sm font-bold text-white mb-3">Príjmy a DPH podľa roka</h3>
+                        {years.length === 0 ? <p className="text-xs text-slate-500 italic">Zatiaľ žiadne dáta.</p> : (
+                          <table className="w-full text-xs text-slate-300">
+                            <thead className="text-slate-500 border-b border-slate-800"><tr><th className="text-left py-1.5">Rok</th><th className="text-right py-1.5">Príjmy</th><th className="text-right py-1.5">DPH</th><th className="text-right py-1.5">Faktúr</th></tr></thead>
+                            <tbody className="divide-y divide-slate-800/60">
+                              {years.map(y => (
+                                <tr key={y}><td className="py-1.5 font-bold text-white">{y}</td><td className="py-1.5 text-right">{byYear[y].income.toFixed(2)} €</td><td className="py-1.5 text-right text-amber-400">{byYear[y].vat.toFixed(2)} €</td><td className="py-1.5 text-right">{byYear[y].count}</td></tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
+                      </div>
+
+                      <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
+                        <h3 className="text-sm font-bold text-white mb-1">DPH podľa typu odberateľa (orientačné)</h3>
+                        <p className="text-[10px] text-slate-500 mb-3">⚠️ Over si presné zaradenie do KV DPH so svojím účtovníkom — pravidlá pre neplatcov a EÚ sa líšia.</p>
+                        {Object.keys(byCustomerType).length === 0 ? <p className="text-xs text-slate-500 italic">Zatiaľ žiadne dáta.</p> : (
+                          <table className="w-full text-xs text-slate-300">
+                            <thead className="text-slate-500 border-b border-slate-800"><tr><th className="text-left py-1.5">Typ</th><th className="text-right py-1.5">Suma</th><th className="text-right py-1.5">DPH</th><th className="text-right py-1.5">Faktúr</th></tr></thead>
+                            <tbody className="divide-y divide-slate-800/60">
+                              {Object.entries(byCustomerType).map(([type, v]) => (
+                                <tr key={type}><td className="py-1.5">{customerTypeLabels[type] || type}</td><td className="py-1.5 text-right font-bold text-white">{v.total.toFixed(2)} €</td><td className="py-1.5 text-right text-amber-400">{v.vat.toFixed(2)} €</td><td className="py-1.5 text-right">{v.count}</td></tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-bold text-white">Daňové termíny</h3>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-4 bg-slate-900 p-3 rounded-lg">
+                        <input type="text" placeholder="Názov termínu" value={newDeadlineTitle} onChange={(e) => setNewDeadlineTitle(e.target.value)} className="bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" />
+                        <input type="date" value={newDeadlineDate} onChange={(e) => setNewDeadlineDate(e.target.value)} className="bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" />
+                        <div className="flex gap-2">
+                          <input type="text" placeholder="Poznámka (voliteľné)" value={newDeadlineNote} onChange={(e) => setNewDeadlineNote(e.target.value)} className="flex-1 bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" />
+                          <button onClick={handleAddTaxDeadline} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 rounded text-xs shrink-0">Pridať</button>
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        {upcomingDeadlines.length === 0 && <p className="text-xs text-slate-500 italic">Žiadne termíny pridané.</p>}
+                        {upcomingDeadlines.map(d => (
+                          <div key={d.id} className="bg-slate-900 border border-slate-800 rounded-lg p-2.5">
+                            {editingDeadline?.id === d.id ? (
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                <input type="text" value={editingDeadline.title} onChange={(e) => setEditingDeadline({ ...editingDeadline, title: e.target.value })} className="bg-slate-950 border border-slate-800 rounded p-1.5 text-xs text-white" />
+                                <input type="date" value={editingDeadline.dueDate} onChange={(e) => setEditingDeadline({ ...editingDeadline, dueDate: e.target.value })} className="bg-slate-950 border border-slate-800 rounded p-1.5 text-xs text-white" />
+                                <div className="flex gap-1">
+                                  <button onClick={handleSaveEditDeadline} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded text-[11px]">Uložiť</button>
+                                  <button onClick={() => setEditingDeadline(null)} className="bg-slate-800 text-slate-300 px-2 rounded text-[11px]">Zrušiť</button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${isUrgentDate(d.dueDate) ? 'bg-rose-600 text-white' : 'bg-slate-800 text-slate-300'}`}>{formatDeliveryDate(d.dueDate)}</span>
+                                  <span className="text-xs font-bold text-white">{d.title}</span>
+                                  {d.note && <span className="text-[11px] text-slate-500">— {d.note}</span>}
+                                </div>
+                                <div className="flex gap-1 shrink-0">
+                                  <button onClick={() => setEditingDeadline({ ...d })} className="p-1 text-indigo-400 hover:text-indigo-300"><Edit2 className="h-3.5 w-3.5" /></button>
+                                  <button onClick={() => handleDeleteTaxDeadline(d.id)} className="p-1 text-rose-400 hover:text-rose-300"><Trash2 className="h-3.5 w-3.5" /></button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+
+                <div className="space-y-3">
+                  <p className="text-xs text-slate-400">Zákazky, ktoré sú kompletne hotové na všetkých staniciach a majú byť fakturované. Skontroluj a buď vystav faktúru, alebo prehoď na hotovosť, ak si to zákazník rozmyslel.</p>
+                  {pendingReviewOrders.length === 0 ? (
+                    <div className="bg-slate-950 border border-slate-800 rounded-2xl p-10 text-center text-slate-500 italic">Fronta je prázdna — nič nečaká na spracovanie. 🎉</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {pendingReviewOrders.map(o => (
+                        <div key={o.id} className="bg-slate-950 border border-amber-800/30 rounded-xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-bold text-indigo-400">{o.orderNumber || o.id}</span>
+                              <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded ${o.companyBrand === 'PBT' ? 'bg-purple-950/50 text-purple-300' : 'bg-emerald-950/50 text-emerald-300'}`}>{o.companyBrand}</span>
+                            </div>
+                            <p className="font-bold text-white text-sm">{o.customer}</p>
+                            <p className="text-[11px] text-slate-500">{(o.items || []).map(it => it.productName).join(', ')}</p>
+                          </div>
+                          <div className="flex gap-2 shrink-0">
+                            <button onClick={() => openOrderDetails(o)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-[11px] px-3 py-2 rounded-lg">Otvoriť zákazku</button>
+                            <button onClick={() => handleSwitchOrderToCash(o)} className="bg-rose-800 hover:bg-rose-900 text-white font-bold text-[11px] px-3 py-2 rounded-lg flex items-center gap-1"><Banknote className="h-3.5 w-3.5" /> Prehodiť na hotovosť</button>
+                            <button onClick={() => handleStartNewInvoice(o)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] px-3 py-2 rounded-lg flex items-center gap-1"><FileEdit className="h-3.5 w-3.5" /> Vystaviť faktúru</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {financeSubTab === 'invoices' && (
+                <>
+                  <div className="flex items-center gap-2 bg-slate-900 p-1.5 rounded-xl border border-slate-800 w-fit">
+                    <button onClick={() => setInvoiceStatusFilter('all')} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${invoiceStatusFilter === 'all' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Všetky ({invoices.length})</button>
+                    <button onClick={() => setInvoiceStatusFilter('issued')} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${invoiceStatusFilter === 'issued' ? 'bg-amber-600 text-white' : 'text-slate-400'}`}>Neuhradené ({invoices.filter(i => i.status === 'issued').length})</button>
+                    <button onClick={() => setInvoiceStatusFilter('paid')} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${invoiceStatusFilter === 'paid' ? 'bg-emerald-600 text-white' : 'text-slate-400'}`}>Uhradené ({invoices.filter(i => i.status === 'paid').length})</button>
+                  </div>
+
+                  <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
+                    <table className="w-full text-left text-xs text-slate-300">
+                      <thead className="bg-slate-900 text-slate-400 uppercase tracking-wider">
+                        <tr><th className="px-3 py-3">Číslo faktúry</th><th className="px-3 py-3">Odberateľ</th><th className="px-3 py-3 text-center">Vystavená</th><th className="px-3 py-3 text-center">Splatnosť</th><th className="px-3 py-3 text-center">Suma s DPH</th><th className="px-3 py-3 text-center">Stav</th><th className="px-3 py-3 text-center">Karta</th></tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800">
+                        {filteredInvoices.length === 0 && (<tr><td colSpan={7} className="px-4 py-8 text-center text-slate-500 italic">Žiadne faktúry.</td></tr>)}
+                        {filteredInvoices.map(inv => (
+                          <tr key={inv.id} className="hover:bg-slate-800/40">
+                            <td className="px-3 py-3 font-mono font-bold text-indigo-400">{inv.invoiceNumber}</td>
+                            <td className="px-3 py-3 font-bold text-white">{inv.customerName}</td>
+                            <td className="px-3 py-3 text-center">{formatDeliveryDate(inv.issueDate)}</td>
+                            <td className="px-3 py-3 text-center">{formatDeliveryDate(inv.dueDate)}</td>
+                            <td className="px-3 py-3 text-center font-bold text-emerald-400">{inv.total.toFixed(2)} €</td>
+                            <td className="px-3 py-3 text-center"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${inv.status === 'paid' ? 'bg-emerald-950/40 text-emerald-300' : 'bg-amber-950/40 text-amber-300'}`}>{inv.status === 'paid' ? 'Uhradená' : 'Neuhradená'}</span></td>
+                            <td className="px-3 py-3 text-center"><button onClick={() => setSelectedInvoiceForDetail(inv)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] px-2.5 py-1 rounded">Detail</button></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+
+              {financeSubTab === 'bank' && (
+                <div className="space-y-4">
+                  <div className="bg-slate-950 border border-slate-800 rounded-xl p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div>
+                      <h3 className="text-sm font-bold text-white">Bankový výpis</h3>
+                      <p className="text-xs text-slate-400">Nahraj CSV/Excel výpis z banky (musí mať stĺpce s dátumom, sumou a variabilným symbolom) a nechaj appku spárovať platby s faktúrami automaticky.</p>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <label className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs px-4 py-2 rounded-lg cursor-pointer flex items-center gap-1.5">
+                        <Upload className="h-3.5 w-3.5" /> {isImportingBankStatement ? 'Nahrávam...' : 'Importovať výpis'}
+                        <input type="file" accept=".csv,.xlsx,.xls" className="hidden" disabled={isImportingBankStatement} onChange={(e) => handleImportBankStatement(e.target.files[0])} />
+                      </label>
+                      <button onClick={handleAutoMatchPayments} disabled={isAutoMatching} className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5" /> {isAutoMatching ? 'Párujem...' : 'Spustiť párovanie'}</button>
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
+                    <table className="w-full text-left text-xs text-slate-300">
+                      <thead className="bg-slate-900 text-slate-400 uppercase tracking-wider">
+                        <tr><th className="px-3 py-3">Dátum</th><th className="px-3 py-3">Odosielateľ</th><th className="px-3 py-3 text-center">Suma</th><th className="px-3 py-3 text-center">VS</th><th className="px-3 py-3 text-center">Stav</th><th className="px-3 py-3 text-center">Akcia</th></tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800">
+                        {bankTransactions.length === 0 && (<tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500 italic">Žiadne bankové transakcie zatiaľ neboli nahraté.</td></tr>)}
+                        {bankTransactions.map(tx => (
+                          <tr key={tx.id} className="hover:bg-slate-800/40">
+                            <td className="px-3 py-3">{tx.date}</td>
+                            <td className="px-3 py-3 font-bold text-white">{tx.sender}</td>
+                            <td className="px-3 py-3 text-center font-mono">{tx.amount.toFixed(2)} €</td>
+                            <td className="px-3 py-3 text-center font-mono text-slate-400">{tx.variableSymbol}</td>
+                            <td className="px-3 py-3 text-center">{tx.matched ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-950/40 text-emerald-300">Spárované</span> : <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-950/40 text-amber-300">Nespárované</span>}</td>
+                            <td className="px-3 py-3 text-center">
+                              {!tx.matched && (
+                                manualMatchingTx?.id === tx.id ? (
+                                  <select autoFocus onChange={(e) => handleManualMatchPayment(tx, e.target.value)} onBlur={() => setManualMatchingTx(null)} className="bg-slate-950 border border-indigo-600 rounded p-1 text-[10px] text-white">
+                                    <option value="">-- Vyber faktúru --</option>
+                                    {invoices.filter(i => i.status !== 'paid').map(i => <option key={i.id} value={i.id}>{i.invoiceNumber} — {i.customerName} ({i.total.toFixed(2)} €)</option>)}
+                                  </select>
+                                ) : (
+                                  <button onClick={() => setManualMatchingTx(tx)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] px-2.5 py-1 rounded">Spárovať ručne</button>
+                                )
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {financeSubTab === 'cash' && (
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <p className="text-xs text-slate-400">Príjmové (PPD) a výdavkové (VPD) pokladničné doklady.</p>
+                    <button onClick={() => setShowCashDocForm(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Plus className="h-4 w-4" /> Nový doklad</button>
+                  </div>
+                  <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
+                    <table className="w-full text-left text-xs text-slate-300">
+                      <thead className="bg-slate-900 text-slate-400 uppercase tracking-wider">
+                        <tr><th className="px-3 py-3">Doklad</th><th className="px-3 py-3">Dátum</th><th className="px-3 py-3">Popis</th><th className="px-3 py-3">Kategória</th><th className="px-3 py-3 text-right">Suma</th></tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800">
+                        {cashDocuments.length === 0 && (<tr><td colSpan={5} className="px-4 py-8 text-center text-slate-500 italic">Žiadne pokladničné doklady.</td></tr>)}
+                        {cashDocuments.map(d => (
+                          <tr key={d.id} className="hover:bg-slate-800/40">
+                            <td className="px-3 py-3 font-mono font-bold text-indigo-400">{d.docNumber}</td>
+                            <td className="px-3 py-3">{d.date}</td>
+                            <td className="px-3 py-3 font-bold text-white">{d.description}</td>
+                            <td className="px-3 py-3 text-slate-400">{d.category || '—'}</td>
+                            <td className={`px-3 py-3 text-right font-bold ${d.docType === 'prijem' ? 'text-emerald-400' : 'text-rose-400'}`}>{d.docType === 'prijem' ? '+' : '-'}{d.amount.toFixed(2)} €</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {financeSubTab === 'journal' && (
+                <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
+                  <table className="w-full text-left text-xs text-slate-300">
+                    <thead className="bg-slate-900 text-slate-400 uppercase tracking-wider">
+                      <tr><th className="px-3 py-3">Dátum</th><th className="px-3 py-3">Popis</th><th className="px-3 py-3">MD</th><th className="px-3 py-3">Dal</th><th className="px-3 py-3 text-right">Suma</th></tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {journalEntries.length === 0 && (<tr><td colSpan={5} className="px-4 py-8 text-center text-slate-500 italic">Denník je zatiaľ prázdny.</td></tr>)}
+                      {journalEntries.map(j => (
+                        <tr key={j.id} className="hover:bg-slate-800/40">
+                          <td className="px-3 py-3">{j.date}</td>
+                          <td className="px-3 py-3 font-bold text-white">{j.description}</td>
+                          <td className="px-3 py-3 font-mono text-emerald-400">{j.mdAccount}</td>
+                          <td className="px-3 py-3 font-mono text-rose-400">{j.dalAccount}</td>
+                          <td className="px-3 py-3 text-right font-bold">{j.amount.toFixed(2)} €</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {financeSubTab === 'ai' && (
+                <div className="bg-slate-950 border border-slate-800 rounded-xl h-[560px] flex flex-col overflow-hidden">
+                  <div className="p-4 bg-slate-900 border-b border-slate-800 flex items-center gap-3">
+                    <div className="p-2 bg-indigo-600 rounded-lg text-white"><Bot className="w-5 h-5" /></div>
+                    <div>
+                      <h3 className="font-bold text-sm text-white">AI Účtovný Asistent</h3>
+                      <p className="text-xs text-slate-400">Pozná tvoje aktuálne faktúry a platby</p>
+                    </div>
+                  </div>
+                  <div className="flex-1 p-4 overflow-y-auto space-y-3">
+                    {aiChat.map((msg, idx) => (
+                      <div key={idx} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[80%] rounded-2xl p-3 text-xs leading-relaxed whitespace-pre-line ${msg.sender === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none'}`}>{msg.text}</div>
+                      </div>
+                    ))}
+                    {isAiLoading && (
+                      <div className="flex justify-start"><div className="bg-slate-900 border border-slate-800 text-slate-400 rounded-2xl p-3 text-xs flex items-center gap-2"><Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" /> Premýšľam...</div></div>
+                    )}
+                  </div>
+                  <form onSubmit={(e) => { e.preventDefault(); handleAskAiAccountant(aiPrompt); }} className="p-3 bg-slate-900 border-t border-slate-800 flex gap-2">
+                    <input type="text" value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} placeholder="Opýtaj sa napr. koľko DPH máš zaplatiť..." className="flex-1 bg-slate-950 border border-slate-800 text-xs text-white rounded-lg px-3 py-2.5 focus:outline-none focus:border-indigo-500" />
+                    <button type="submit" disabled={isAiLoading || !aiPrompt.trim()} className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white px-4 py-2.5 rounded-lg text-xs font-semibold">Odoslať</button>
+                  </form>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {activeTab === 'archive' && (() => {
+          const query = archiveSearchQuery.trim().toLowerCase();
+          const results = orders.filter(o => {
+            if (!query) return true;
+            const haystack = [
+              o.id, o.orderNumber || '', o.legacyOrderNumber || '', o.customer, o.notes || '', o.companyBrand || '',
+              ...(o.items || []).map(it => `${it.productName} ${it.notes || ''} ${it.itemId}`),
+              ...(o.orderLog || []).map(e => e.text)
+            ].join(' ').toLowerCase();
+            return haystack.includes(query);
+          }).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+          return (
+            <div className="space-y-4 print:hidden animate-in fade-in duration-150">
+              <h2 className="text-xl font-bold text-white flex items-center gap-2"><Search className="text-indigo-400 h-5 w-5" /> História Zákaziek</h2>
+              <p className="text-xs text-slate-400 -mt-2">Vyhľadaj podľa mena odberateľa, čísla zákazky (aj starého), názvu produktu alebo čohokoľvek zapísaného v denníku zákazky.</p>
+              <input type="text" value={archiveSearchQuery} onChange={(e) => setArchiveSearchQuery(e.target.value)} placeholder="Hľadať... napr. meno klienta, staré číslo, kľúčové slovo z poznámky" className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white" autoFocus />
+              <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
+                <table className="w-full text-left text-xs text-slate-300">
+                  <thead className="bg-slate-900 text-slate-400 uppercase tracking-wider">
+                    <tr><th className="px-3 py-3">Číslo</th><th className="px-3 py-3">Firma</th><th className="px-3 py-3">Odberateľ</th><th className="px-3 py-3">Staré č.</th><th className="px-3 py-3">Vytvorená</th><th className="px-3 py-3">Produkty</th><th className="px-3 py-3 text-center">Denník</th><th className="px-3 py-3 text-center">Karta</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {results.length === 0 && (<tr><td colSpan={8} className="px-4 py-8 text-center text-slate-500 italic">Nič nenájdené.</td></tr>)}
+                    {results.map(o => (
+                      <tr key={o.id} className="hover:bg-slate-800/40">
+                        <td className="px-3 py-3 font-mono font-bold text-indigo-400">{o.orderNumber || o.id}</td>
+                        <td className="px-3 py-3"><span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded ${o.companyBrand === 'PBT' ? 'bg-purple-950/50 text-purple-300' : 'bg-emerald-950/50 text-emerald-300'}`}>{o.companyBrand || 'ATAK'}</span></td>
+                        <td className="px-3 py-3 font-bold text-white">{o.customer}</td>
+                        <td className="px-3 py-3 text-slate-400">{o.legacyOrderNumber || '—'}</td>
+                        <td className="px-3 py-3 text-slate-400">{o.createdAt}</td>
+                        <td className="px-3 py-3 text-slate-400">{(o.items || []).map(it => it.productName).join(', ')}</td>
+                        <td className="px-3 py-3 text-center">{(o.orderLog || []).length > 0 && <span className="bg-indigo-950/40 text-indigo-300 text-[10px] font-bold px-2 py-0.5 rounded-full">{o.orderLog.length} zápis(y)</span>}</td>
+                        <td className="px-3 py-3 text-center"><button onClick={() => openOrderDetails(o)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] px-2.5 py-1 rounded">Otvoriť</button></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        })()}
+
+        {companySettingsDraft && (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl space-y-4">
+              <div className="flex justify-between items-start">
+                <h3 className="text-lg font-bold text-white">Nastavenia firmy (pre hlavičku faktúr a QR platbu)</h3>
+                <button onClick={handleCancelEditCompanySettings} className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white"><X className="h-5 w-5" /></button>
+              </div>
+              <div className="space-y-3 text-xs">
+                <div><label className="text-slate-400 block mb-0.5">Názov firmy</label><input type="text" value={companySettingsDraft.companyName} onChange={(e) => setCompanySettingsDraft({ ...companySettingsDraft, companyName: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" /></div>
+                <div><label className="text-slate-400 block mb-0.5">Adresa (sídlo)</label><input type="text" value={companySettingsDraft.address} onChange={(e) => setCompanySettingsDraft({ ...companySettingsDraft, address: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" /></div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div><label className="text-slate-400 block mb-0.5">IČO</label><input type="text" value={companySettingsDraft.ico} onChange={(e) => setCompanySettingsDraft({ ...companySettingsDraft, ico: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" /></div>
+                  <div><label className="text-slate-400 block mb-0.5">DIČ</label><input type="text" value={companySettingsDraft.dic} onChange={(e) => setCompanySettingsDraft({ ...companySettingsDraft, dic: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" /></div>
+                  <div><label className="text-slate-400 block mb-0.5">IČ DPH</label><input type="text" value={companySettingsDraft.icDph} onChange={(e) => setCompanySettingsDraft({ ...companySettingsDraft, icDph: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" placeholder="ak si platca DPH" /></div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div><label className="text-slate-400 block mb-0.5">IBAN</label><input type="text" value={companySettingsDraft.iban} onChange={(e) => setCompanySettingsDraft({ ...companySettingsDraft, iban: e.target.value.toUpperCase() })} placeholder="SK.." className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white font-mono" /></div>
+                  <div><label className="text-slate-400 block mb-0.5">Názov banky</label><input type="text" value={companySettingsDraft.bankName} onChange={(e) => setCompanySettingsDraft({ ...companySettingsDraft, bankName: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" /></div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div><label className="text-slate-400 block mb-0.5">Predvolená sadzba DPH (%)</label><input type="number" value={companySettingsDraft.defaultVatRate} onChange={(e) => setCompanySettingsDraft({ ...companySettingsDraft, defaultVatRate: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" /></div>
+                  <div><label className="text-slate-400 block mb-0.5">Predpona čísla faktúry</label><input type="text" value={companySettingsDraft.invoiceNumberPrefix} onChange={(e) => setCompanySettingsDraft({ ...companySettingsDraft, invoiceNumberPrefix: e.target.value })} placeholder={`napr. ${new Date().getFullYear()}`} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" /></div>
+                </div>
+                <p className="text-[10px] text-slate-500">Ďalšie číslo faktúry, ktoré sa použije: <strong className="text-slate-300">{companySettingsDraft.invoiceNumberPrefix || new Date().getFullYear()}{String(companySettingsDraft.nextInvoiceNumber).padStart(4, '0')}</strong></p>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={handleSaveCompanySettings} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg uppercase text-xs">Uložiť</button>
+                <button onClick={handleCancelEditCompanySettings} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-6 rounded-lg text-xs font-bold">Zrušiť</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showCashDocForm && (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl w-full max-w-sm shadow-2xl space-y-4">
+              <div className="flex justify-between items-start">
+                <h3 className="text-lg font-bold text-white">Nový pokladničný doklad</h3>
+                <button onClick={() => setShowCashDocForm(false)} className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white"><X className="h-5 w-5" /></button>
+              </div>
+              <div className="grid grid-cols-2 gap-1">
+                <button onClick={() => setNewCashDocType('prijem')} className={`py-2 text-xs font-bold rounded ${newCashDocType === 'prijem' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Príjmový (PPD)</button>
+                <button onClick={() => setNewCashDocType('vydaj')} className={`py-2 text-xs font-bold rounded ${newCashDocType === 'vydaj' ? 'bg-rose-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Výdavkový (VPD)</button>
+              </div>
+              <div><label className="text-xs text-slate-400 block mb-0.5">Dátum</label><input type="date" value={newCashDocDate} onChange={(e) => setNewCashDocDate(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" /></div>
+              <div><label className="text-xs text-slate-400 block mb-0.5">Popis</label><input type="text" value={newCashDocDescription} onChange={(e) => setNewCashDocDescription(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" /></div>
+              <div><label className="text-xs text-slate-400 block mb-0.5">Kategória (voliteľné)</label><input type="text" value={newCashDocCategory} onChange={(e) => setNewCashDocCategory(e.target.value)} placeholder="napr. kancelárske potreby" className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" /></div>
+              <div><label className="text-xs text-slate-400 block mb-0.5">Suma (€)</label><input type="number" step="0.01" value={newCashDocAmount} onChange={(e) => setNewCashDocAmount(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" /></div>
+              <button onClick={handleAddCashDocument} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-lg uppercase text-xs">Vytvoriť doklad</button>
+            </div>
+          </div>
+        )}
+
+        {correctingInvoice && correctionDraft && (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-slate-900 border border-amber-700/50 p-6 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl space-y-4">
+              <div className="flex justify-between items-start">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2"><Edit2 className="h-5 w-5 text-amber-400" /> Opraviť faktúru {correctingInvoice.invoiceNumber}</h3>
+                <button onClick={handleCancelCorrectInvoice} className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white"><X className="h-5 w-5" /></button>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div><label className="text-slate-400 block mb-0.5">Odberateľ</label><input type="text" value={correctionDraft.customerName} onChange={(e) => setCorrectionDraft({ ...correctionDraft, customerName: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" /></div>
+                <div><label className="text-slate-400 block mb-0.5">IČO</label><input type="text" value={correctionDraft.customerIco} onChange={(e) => setCorrectionDraft({ ...correctionDraft, customerIco: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" /></div>
+              </div>
+              <div className="space-y-2">
+                {correctionDraft.items.map((it, i) => (
+                  <div key={i} className="grid grid-cols-12 gap-1.5 items-center bg-slate-950 border border-slate-800 rounded p-2">
+                    <input type="text" value={it.description} onChange={(e) => { const items = [...correctionDraft.items]; items[i] = { ...it, description: e.target.value }; setCorrectionDraft({ ...correctionDraft, items }); }} className="col-span-6 bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" />
+                    <input type="number" value={it.qty} onChange={(e) => { const items = [...correctionDraft.items]; items[i] = { ...it, qty: parseFloat(e.target.value) || 0 }; setCorrectionDraft({ ...correctionDraft, items }); }} className="col-span-2 bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" />
+                    <input type="number" step="0.01" value={it.unitPrice} onChange={(e) => { const items = [...correctionDraft.items]; items[i] = { ...it, unitPrice: parseFloat(e.target.value) || 0 }; setCorrectionDraft({ ...correctionDraft, items }); }} className="col-span-4 bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" />
+                  </div>
+                ))}
+              </div>
+              <div>
+                <label className="text-xs font-bold text-rose-400 block mb-0.5">Dôvod opravy (povinné)</label>
+                <input type="text" required value={correctionReason} onChange={(e) => setCorrectionReason(e.target.value)} placeholder="napr. Zákazník nahlásil zlé IČO" className="w-full bg-slate-950 border border-rose-800/50 rounded p-2 text-xs text-white" />
+              </div>
+              <div className="flex gap-2">
+                <button onClick={handleSaveInvoiceCorrection} className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-bold py-2.5 rounded-lg uppercase text-xs">Uložiť opravu</button>
+                <button onClick={handleCancelCorrectInvoice} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-6 rounded-lg text-xs font-bold">Zrušiť</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showNewInvoiceForm && (() => {
+          const totals = calcInvoiceTotals(newInvoiceItems);
+          return (
+            <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+              <div className="bg-slate-900 border border-emerald-800/40 p-6 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl space-y-4">
+                <div className="flex justify-between items-start">
+                  <h3 className="text-lg font-bold text-white">Nová faktúra{newInvoiceOrderId ? ` — zákazka ${newInvoiceOrderId}` : ''}</h3>
+                  <button onClick={() => setShowNewInvoiceForm(false)} className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white"><X className="h-5 w-5" /></button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div><label className="text-slate-400 block mb-0.5">Odberateľ (názov)</label><input type="text" value={newInvoiceCustomerName} onChange={(e) => setNewInvoiceCustomerName(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" /></div>
+                  <div><label className="text-slate-400 block mb-0.5">Adresa odberateľa</label><input type="text" value={newInvoiceCustomerAddress} onChange={(e) => setNewInvoiceCustomerAddress(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" /></div>
+                  <div><label className="text-slate-400 block mb-0.5">IČO</label><input type="text" value={newInvoiceCustomerIco} onChange={(e) => setNewInvoiceCustomerIco(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" /></div>
+                  <div><label className="text-slate-400 block mb-0.5">DIČ</label><input type="text" value={newInvoiceCustomerDic} onChange={(e) => setNewInvoiceCustomerDic(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" /></div>
+                  <div><label className="text-slate-400 block mb-0.5">IČ DPH (ak je)</label><input type="text" value={newInvoiceCustomerIcDph} onChange={(e) => setNewInvoiceCustomerIcDph(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" /></div>
+                  <div>
+                    <label className="text-slate-400 block mb-0.5">Typ odberateľa (pre KV DPH)</label>
+                    <select value={newInvoiceCustomerType} onChange={(e) => setNewInvoiceCustomerType(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
+                      <option value="sk_platca">SK — platca DPH</option>
+                      <option value="sk_neplatca">SK — neplatca DPH</option>
+                      <option value="eu_platca">EÚ — platca DPH (IČ DPH)</option>
+                      <option value="eu_neplatca">EÚ — neplatca DPH</option>
+                      <option value="tretia_krajina">Tretia krajina (mimo EÚ)</option>
+                    </select>
+                  </div>
+                  <div><label className="text-slate-400 block mb-0.5">Dátum splatnosti</label><input type="date" value={newInvoiceDueDate} onChange={(e) => setNewInvoiceDueDate(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" /></div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-300 uppercase">Položky faktúry</span>
+                    <button onClick={handleAddInvoiceLineItem} className="text-[11px] text-indigo-400 hover:text-indigo-300 font-bold flex items-center gap-1"><Plus className="h-3.5 w-3.5" /> Pridať položku</button>
+                  </div>
+                  {newInvoiceItems.map(it => (
+                    <div key={it.tempId} className="grid grid-cols-12 gap-1.5 items-center bg-slate-950 border border-slate-800 rounded-lg p-2">
+                      <input type="text" placeholder="Popis položky" value={it.description} onChange={(e) => handleUpdateInvoiceLineItem(it.tempId, 'description', e.target.value)} className="col-span-5 bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" />
+                      <input type="number" placeholder="Ks" value={it.qty} onChange={(e) => handleUpdateInvoiceLineItem(it.tempId, 'qty', e.target.value)} className="col-span-2 bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" />
+                      <input type="number" step="0.01" placeholder="Cena/ks bez DPH" value={it.unitPrice} onChange={(e) => handleUpdateInvoiceLineItem(it.tempId, 'unitPrice', e.target.value)} className="col-span-2 bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" />
+                      <select value={it.vatRate} onChange={(e) => handleUpdateInvoiceLineItem(it.tempId, 'vatRate', e.target.value)} className="col-span-2 bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white">
+                        <option value={20}>20% DPH</option>
+                        <option value={10}>10% DPH</option>
+                        <option value={0}>0% DPH</option>
+                      </select>
+                      <button onClick={() => handleRemoveInvoiceLineItem(it.tempId)} className="col-span-1 text-rose-400 hover:text-rose-300"><X className="h-4 w-4 mx-auto" /></button>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs space-y-1">
+                  <div className="flex justify-between"><span className="text-slate-400">Základ bez DPH:</span><strong className="text-white">{totals.subtotal.toFixed(2)} €</strong></div>
+                  <div className="flex justify-between"><span className="text-slate-400">DPH:</span><strong className="text-white">{totals.vatTotal.toFixed(2)} €</strong></div>
+                  <div className="flex justify-between text-sm pt-1 border-t border-slate-800"><span className="text-slate-300 font-bold">Spolu k úhrade:</span><strong className="text-emerald-400">{totals.total.toFixed(2)} €</strong></div>
+                </div>
+
+                <div><label className="text-slate-400 block mb-0.5 text-xs">Poznámka (voliteľné)</label><textarea rows={2} value={newInvoiceNotes} onChange={(e) => setNewInvoiceNotes(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" /></div>
+
+                <button onClick={handleConfirmNewInvoice} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg uppercase text-xs">Vystaviť faktúru</button>
+              </div>
+            </div>
+          );
+        })()}
+
+        {selectedInvoiceForDetail && (
+          <div className="fixed inset-0 bg-slate-950/95 z-50 overflow-y-auto print:relative print:inset-auto print:bg-white">
+            <div className="max-w-3xl mx-auto bg-white text-black p-8 my-6 rounded-xl print:my-0 print:rounded-none print:shadow-none shadow-2xl">
+              <div className="flex justify-between items-start mb-6 print:hidden">
+                <div className="flex gap-2">
+                  {selectedInvoiceForDetail.status !== 'paid' && (
+                    <button onClick={() => handleMarkInvoicePaid(selectedInvoiceForDetail)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Check className="h-4 w-4" /> Označiť ako uhradenú</button>
+                  )}
+                  <button onClick={() => handleStartCorrectInvoice(selectedInvoiceForDetail)} className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Edit2 className="h-4 w-4" /> Opraviť</button>
+                  <button onClick={() => window.print()} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Printer className="h-4 w-4" /> Tlačiť / PDF</button>
+                </div>
+                <button onClick={() => setSelectedInvoiceForDetail(null)} className="p-1 rounded bg-slate-200 text-slate-600 hover:text-slate-900"><X className="h-5 w-5" /></button>
+              </div>
+
+              <div className="flex justify-between items-start border-b-2 border-slate-800 pb-4 mb-4">
+                <div>
+                  <h1 className="text-2xl font-extrabold">FAKTÚRA</h1>
+                  <p className="text-sm text-slate-600">č. {selectedInvoiceForDetail.invoiceNumber}</p>
+                  {selectedInvoiceForDetail.status === 'paid' && <span className="inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">UHRADENÁ</span>}
+                </div>
+                <img src="/logo-atak-pbt.png" alt="Logo" className="h-10" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-6 mb-6 text-xs">
+                <div>
+                  <span className="font-bold text-slate-500 uppercase text-[10px] block mb-1">Dodávateľ</span>
+                  <p className="font-bold">{companySettings.companyName || '—'}</p>
+                  <p>{companySettings.address}</p>
+                  <p>IČO: {companySettings.ico} {companySettings.dic && `• DIČ: ${companySettings.dic}`}</p>
+                  {companySettings.icDph && <p>IČ DPH: {companySettings.icDph}</p>}
+                </div>
+                <div>
+                  <span className="font-bold text-slate-500 uppercase text-[10px] block mb-1">Odberateľ</span>
+                  <p className="font-bold">{selectedInvoiceForDetail.customerName}</p>
+                  <p>{selectedInvoiceForDetail.customerAddress}</p>
+                  {selectedInvoiceForDetail.customerIco && <p>IČO: {selectedInvoiceForDetail.customerIco} {selectedInvoiceForDetail.customerDic && `• DIČ: ${selectedInvoiceForDetail.customerDic}`}</p>}
+                  {selectedInvoiceForDetail.customerIcDph && <p>IČ DPH: {selectedInvoiceForDetail.customerIcDph}</p>}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-4 gap-2 mb-6 text-xs bg-slate-50 p-3 rounded">
+                <div><span className="text-slate-500 block">Dátum vystavenia</span><strong>{formatDeliveryDate(selectedInvoiceForDetail.issueDate)}</strong></div>
+                <div><span className="text-slate-500 block">Dátum dodania</span><strong>{formatDeliveryDate(selectedInvoiceForDetail.deliveryDate)}</strong></div>
+                <div><span className="text-slate-500 block">Splatnosť</span><strong>{formatDeliveryDate(selectedInvoiceForDetail.dueDate)}</strong></div>
+                <div><span className="text-slate-500 block">Variabilný symbol</span><strong>{selectedInvoiceForDetail.variableSymbol}</strong></div>
+              </div>
+
+              <table className="w-full text-xs mb-6">
+                <thead><tr className="border-b border-slate-300 text-slate-500"><th className="text-left py-1.5">Popis</th><th className="text-center py-1.5">Ks</th><th className="text-right py-1.5">Cena/ks</th><th className="text-right py-1.5">DPH</th><th className="text-right py-1.5">Spolu s DPH</th></tr></thead>
+                <tbody>
+                  {selectedInvoiceForDetail.items.map((it, i) => (
+                    <tr key={i} className="border-b border-slate-100"><td className="py-1.5">{it.description}</td><td className="text-center py-1.5">{it.qty}</td><td className="text-right py-1.5">{it.unitPrice.toFixed(2)} €</td><td className="text-right py-1.5">{it.vatRate}%</td><td className="text-right py-1.5 font-bold">{(it.qty * it.unitPrice * (1 + it.vatRate / 100)).toFixed(2)} €</td></tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <div className="flex justify-between items-start gap-6">
+                <div className="text-xs space-y-1">
+                  <p><span className="text-slate-500">Banka:</span> {companySettings.bankName}</p>
+                  <p><span className="text-slate-500">IBAN:</span> <strong className="font-mono">{companySettings.iban}</strong></p>
+                  <p><span className="text-slate-500">Variabilný symbol:</span> <strong>{selectedInvoiceForDetail.variableSymbol}</strong></p>
+                  {selectedInvoiceForDetail.notes && <p className="italic text-slate-600 mt-2">{selectedInvoiceForDetail.notes}</p>}
+                </div>
+                <div className="text-right space-y-1 text-xs shrink-0">
+                  <p>Základ: <strong>{selectedInvoiceForDetail.subtotal.toFixed(2)} €</strong></p>
+                  <p>DPH: <strong>{selectedInvoiceForDetail.vatTotal.toFixed(2)} €</strong></p>
+                  <p className="text-lg font-extrabold border-t border-slate-800 pt-1 mt-1">{selectedInvoiceForDetail.total.toFixed(2)} €</p>
+                </div>
+                {companySettings.iban && generateBySquareQr(selectedInvoiceForDetail) && (
+                  <div className="text-center shrink-0">
+                    <QRCodeSVG value={generateBySquareQr(selectedInvoiceForDetail)} size={100} level="M" />
+                    <p className="text-[9px] text-slate-500 mt-1">PAY by square</p>
+                  </div>
+                )}
+              </div>
+
+              {(selectedInvoiceForDetail.corrections || []).length > 0 && (
+                <div className="print:hidden mt-6 pt-4 border-t border-slate-200 space-y-2">
+                  <h4 className="text-xs font-bold text-amber-700 uppercase">História opráv</h4>
+                  {selectedInvoiceForDetail.corrections.map((c, i) => (
+                    <div key={i} className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-[11px] text-slate-700">
+                      <p><strong>{c.author}</strong> • {c.date}</p>
+                      <p className="italic">Dôvod: {c.reason}</p>
+                      <p className="text-slate-500">Pôvodne: {c.before.customerName}, {c.before.total?.toFixed?.(2)} € → Opravené: {c.after.customerName}, {c.after.total?.toFixed?.(2)} €</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {selectedOrderDetails && (
           <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 shadow-xl space-y-6 print:bg-white print:text-black print:border-none print:p-0 mt-6 animate-in fade-in duration-200">
             <div className="flex justify-between items-center border-b border-slate-800 pb-4 print:hidden">
@@ -4245,6 +5407,9 @@ export default function App() {
                 )}
                 {hasPermission('delete_order') && (
                   <button onClick={handleDeleteOrder} className="bg-rose-700 hover:bg-rose-800 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Trash2 className="h-4 w-4" /> Zmazať zákazku</button>
+                )}
+                {hasPermission('create_order') && (
+                  <button onClick={() => { setActiveTab('invoices'); handleStartNewInvoice(selectedOrderDetails); }} className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Banknote className="h-4 w-4" /> Vystaviť faktúru</button>
                 )}
                 <button onClick={() => window.print()} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Printer className="h-4 w-4" /> Tlačiť (A4)</button>
                 <button onClick={() => openOrderDetails(null)} className="bg-slate-800 hover:bg-slate-750 text-slate-400 px-3 py-2 rounded-lg text-xs">Zatvoriť</button>
@@ -4279,6 +5444,10 @@ export default function App() {
                   <label className="block text-xs font-semibold text-slate-400 mb-1">Poznámka k celej zákazke</label>
                   <textarea rows={2} value={orderEditDraft.notes || ''} onChange={(e) => setOrderEditDraft({ ...orderEditDraft, notes: e.target.value })} className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white" />
                 </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Staré číslo zákazky (voliteľné)</label>
+                  <input type="text" value={orderEditDraft.legacyOrderNumber || ''} onChange={(e) => setOrderEditDraft({ ...orderEditDraft, legacyOrderNumber: e.target.value })} className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white" />
+                </div>
 
                 <div className="space-y-3 pt-2 border-t border-amber-900/30">
                   <span className="text-xs font-bold text-amber-300 uppercase block">Položky v zákazke</span>
@@ -4310,6 +5479,7 @@ export default function App() {
                         {item.imageUrl ? (
                           <div className="flex items-center gap-2">
                             <img src={item.imageUrl} alt="" className="w-16 h-16 object-cover rounded-lg border border-slate-800" />
+                            <button type="button" onClick={() => downloadFile(item.imageUrl, `${item.itemId}-nahlad.jpg`)} className="p-1.5 rounded bg-slate-800 text-slate-400 hover:text-white" title="Stiahnuť"><Download className="h-3.5 w-3.5" /></button>
                             <label className="inline-flex items-center gap-1.5 border border-dashed border-slate-800 rounded-lg px-2 py-1.5 cursor-pointer hover:border-indigo-600 transition-colors text-[10px] text-slate-400 font-bold">
                               <Upload className="h-3 w-3" /> Zmeniť obrázok
                               <input type="file" accept="image/*" className="hidden" onChange={(e) => handleDraftItemImageChange(item.itemId, e.target.files[0])} />
@@ -4329,6 +5499,7 @@ export default function App() {
                         {item.rozpisUrl ? (
                           <div className="flex items-center gap-2">
                             <span className="text-[10px] text-slate-300 bg-slate-950 border border-slate-800 rounded px-2 py-1.5 truncate max-w-[140px]">📎 {item.rozpisFileName || 'súbor'}</span>
+                            <button type="button" onClick={() => downloadFile(item.rozpisUrl, item.rozpisFileName || 'rozpis')} className="p-1.5 rounded bg-slate-800 text-slate-400 hover:text-white" title="Stiahnuť"><Download className="h-3.5 w-3.5" /></button>
                             <label className="inline-flex items-center gap-1.5 border border-dashed border-slate-800 rounded-lg px-2 py-1.5 cursor-pointer hover:border-indigo-600 transition-colors text-[10px] text-slate-400 font-bold">
                               <Upload className="h-3 w-3" /> Zmeniť
                               <input type="file" accept="image/*,.pdf,.xlsx,.xls,.csv,.doc,.docx" className="hidden" onChange={(e) => handleDraftItemRozpisChange(item.itemId, e.target.files[0])} />
@@ -4475,6 +5646,30 @@ export default function App() {
                           </label>
                         )}
                       </div>
+                      {(() => {
+                        const prod = products.find(p => p.id === addItemProductId);
+                        if (!prod) return null;
+                        const qtyNum = parseInt(addItemQty) || 0;
+                        const livePreview = [
+                          prod.layer1 ? { layerName: 'Primárna látka', materialId: addItemLayer1Mat, qtyNeeded: calculateLayerConsumption(prod, addItemGender, 'layer1', qtyNum) } : null,
+                          prod.layer2 && addItemLayer2Mat ? { layerName: 'Sekundárna látka', materialId: addItemLayer2Mat, qtyNeeded: calculateLayerConsumption(prod, addItemGender, 'layer2', qtyNum) } : null,
+                          prod.layer3 && addItemLayer3Mat ? { layerName: 'Terciárna látka', materialId: addItemLayer3Mat, qtyNeeded: calculateLayerConsumption(prod, addItemGender, 'layer3', qtyNum) } : null,
+                        ].filter(Boolean);
+                        const warnings = computeStockWarnings(livePreview, materials, {});
+                        if (warnings.length === 0) return null;
+                        return (
+                          <div className="bg-rose-950/40 border-2 border-rose-600 rounded-xl p-3 space-y-1.5">
+                            <p className="text-xs font-extrabold text-rose-300 flex items-center gap-1.5"><AlertTriangle className="h-4 w-4" /> Pozor — nedostatok materiálu na sklade!</p>
+                            {warnings.map(w => (
+                              <p key={w.materialId} className="text-[11px] text-rose-200">
+                                <strong>{w.name}</strong>: {w.status === 'insufficient'
+                                  ? <>potrebné {w.needed} {w.unit}, na sklade je len {w.available} {w.unit} (chýba {w.shortBy} {w.unit})</>
+                                  : <>po tejto položke ostane už len {w.remaining} {w.unit} — na tesno, treba doobjednať</>}
+                              </p>
+                            ))}
+                          </div>
+                        );
+                      })()}
                       <div className="flex gap-2">
                         <button type="button" onClick={handleAddItemToExistingOrder} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded text-xs uppercase">Pridať položku</button>
                         <button type="button" onClick={() => setShowAddItemForm(false)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 rounded text-xs">Zrušiť</button>
@@ -4492,20 +5687,51 @@ export default function App() {
             <div className="bg-slate-900/50 p-8 rounded-xl border border-slate-800 print:bg-white print:text-black print:p-0 print:border-none">
               <div className="flex flex-col sm:flex-row justify-between items-start gap-6 border-b-2 border-slate-800 pb-6 print:border-b-2 print:border-black">
                 <div className="space-y-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs font-bold uppercase tracking-widest bg-indigo-600 text-white px-2.5 py-1 rounded print:bg-black print:text-white font-mono">SPRIEVODNÝ LIST VÝROBY</span>
-                    <span className="font-mono text-sm font-bold text-slate-400 print:text-black">ID: {selectedOrderDetails.id}</span>
+                    {selectedOrderDetails.companyBrand && (
+                      <span className={`text-xs font-extrabold uppercase tracking-widest px-2.5 py-1 rounded print:text-black print:border print:border-black ${selectedOrderDetails.companyBrand === 'PBT' ? 'bg-purple-600 text-white' : 'bg-emerald-600 text-white'}`}>{selectedOrderDetails.companyBrand}</span>
+                    )}
                     <CashBadge paymentType={selectedOrderDetails.paymentType} />
                   </div>
+                  {selectedOrderDetails.orderNumber && <p className="font-mono text-lg font-extrabold text-white print:text-black">{selectedOrderDetails.orderNumber}</p>}
+                  <p className="font-mono text-[11px] text-slate-500 print:text-black">interné ID: {selectedOrderDetails.id}</p>
                   <h1 className="text-2xl font-extrabold text-white print:text-black">{selectedOrderDetails.customer}</h1>
                   <p className="text-sm text-slate-400 print:text-black">Vytvorené: <strong className="text-white print:text-black">{selectedOrderDetails.createdAt}</strong> • Termín dodania: <strong className={isUrgentDate(selectedOrderDetails.deliveryDate) ? 'text-rose-400 print:text-black bg-rose-950/50 px-1.5 py-0.5 rounded print:bg-transparent' : 'text-indigo-400 print:text-black'}>{formatDeliveryDate(selectedOrderDetails.deliveryDate)}</strong></p>
                   <p className="text-sm text-slate-400 print:text-black">Platba: <strong className="text-white print:text-black">{selectedOrderDetails.paymentType === 'hotovost' ? 'Hotovosť' : 'Faktúra'}</strong></p>
+                  {selectedOrderDetails.legacyOrderNumber && <p className="text-sm text-slate-400 print:text-black">Staré číslo zákazky: <strong className="text-white print:text-black">{selectedOrderDetails.legacyOrderNumber}</strong></p>}
                   {selectedOrderDetails.notes && <p className="text-sm text-slate-400 print:text-black">Poznámka: <strong className="text-white print:text-black">{selectedOrderDetails.notes}</strong></p>}
                   {selectedOrderDetails.driveLink && (
                     <p className="text-sm text-slate-400 print:text-black">
                       Podklady: <a href={selectedOrderDetails.driveLink} target="_blank" rel="noopener noreferrer" className="text-indigo-400 print:text-black underline break-all">{selectedOrderDetails.driveLink}</a>
                     </p>
                   )}
+                </div>
+              </div>
+
+              <div className="print:hidden bg-slate-900/60 border border-slate-800 rounded-xl p-4 space-y-3">
+                <h4 className="font-extrabold text-[11px] uppercase tracking-wider text-slate-400 flex items-center gap-1.5"><FileEdit className="h-3.5 w-3.5" /> Denník zákazky — trvalé poznámky (nedajú sa mazať ani upravovať)</h4>
+                <div className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1">
+                  {(selectedOrderDetails.orderLog || []).length === 0 && (
+                    <p className="text-xs text-slate-600 italic">Zatiaľ žiadne záznamy. Sem zapisuj detaily, ktoré sa oplatí zapamätať pre budúce opakovanie tejto zákazky.</p>
+                  )}
+                  {(selectedOrderDetails.orderLog || []).map((entry, i) => (
+                    <div key={i} className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2">
+                      <p className="text-xs text-slate-200">{entry.text}</p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">{entry.author} • {entry.date}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newOrderLogEntry}
+                    onChange={(e) => setNewOrderLogEntry(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddOrderLogEntry(selectedOrderDetails, newOrderLogEntry)}
+                    placeholder="napr. Zákazník chce logo o 2cm menšie ako štandard, farba na mieru miešaná..."
+                    className="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white"
+                  />
+                  <button onClick={() => handleAddOrderLogEntry(selectedOrderDetails, newOrderLogEntry)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-lg shrink-0">Zapísať natrvalo</button>
                 </div>
               </div>
 
@@ -4525,7 +5751,10 @@ export default function App() {
                   </div>
 
                   {item.imageUrl ? (
-                    <img src={item.imageUrl} alt={item.productName} className="w-full h-[320px] sm:h-[380px] print:h-[140mm] object-contain bg-white rounded-xl border border-slate-300" />
+                    <div className="relative">
+                      <img src={item.imageUrl} alt={item.productName} className="w-full h-[320px] sm:h-[380px] print:h-[140mm] object-contain bg-white rounded-xl border border-slate-300" />
+                      <button onClick={() => downloadFile(item.imageUrl, `${item.itemId}-nahlad.jpg`, () => triggerNotification('error', 'Stiahnutie zlyhalo, skús otvoriť obrázok priamo.'))} className="print:hidden absolute top-2 right-2 bg-slate-950/80 hover:bg-slate-900 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 backdrop-blur"><Download className="h-3.5 w-3.5" /> Stiahnuť</button>
+                    </div>
                   ) : (
                     <div className="w-full h-[320px] sm:h-[380px] print:h-[140mm] rounded-xl border border-dashed border-slate-700 print:border-slate-400 flex items-center justify-center text-slate-600 print:text-slate-400 text-sm italic">Bez obrázka</div>
                   )}
@@ -4533,13 +5762,20 @@ export default function App() {
                   {item.rozpisUrl && (
                     item.rozpisMimeType?.startsWith('image/') ? (
                       <div style={{ breakBefore: 'page' }} className="pt-6 space-y-2">
-                        <span className="font-mono text-xs text-indigo-400 font-bold block print:text-black">Rozpis — Položka #{itemIdx + 1} • {item.itemId}</span>
+                        <div className="flex items-center justify-between print:hidden">
+                          <span className="font-mono text-xs text-indigo-400 font-bold block">Rozpis — Položka #{itemIdx + 1} • {item.itemId}</span>
+                          <button onClick={() => downloadFile(item.rozpisUrl, item.rozpisFileName || `${item.itemId}-rozpis.jpg`, () => triggerNotification('error', 'Stiahnutie zlyhalo, skús otvoriť obrázok priamo.'))} className="bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5"><Download className="h-3.5 w-3.5" /> Stiahnuť</button>
+                        </div>
+                        <span className="font-mono text-xs text-indigo-400 font-bold hidden print:block">Rozpis — Položka #{itemIdx + 1} • {item.itemId}</span>
                         <img src={item.rozpisUrl} alt="Rozpis" className="w-full h-[320px] sm:h-[600px] print:h-[250mm] object-contain bg-white rounded-xl border border-slate-300" />
                       </div>
                     ) : (
                       <div className="print:hidden bg-slate-900 border border-slate-800 rounded-xl p-3 flex items-center justify-between gap-3">
                         <span className="text-xs text-slate-300 flex items-center gap-2"><FileText className="h-4 w-4 text-indigo-400" /> Priložený rozpis: <strong>{item.rozpisFileName}</strong></span>
-                        <a href={item.rozpisUrl} target="_blank" rel="noopener noreferrer" className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] px-3 py-1.5 rounded-lg">Otvoriť</a>
+                        <div className="flex gap-2 shrink-0">
+                          <button onClick={() => downloadFile(item.rozpisUrl, item.rozpisFileName || 'rozpis', () => window.open(item.rozpisUrl, '_blank'))} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] px-3 py-1.5 rounded-lg flex items-center gap-1.5"><Download className="h-3.5 w-3.5" /> Stiahnuť</button>
+                          <a href={item.rozpisUrl} target="_blank" rel="noopener noreferrer" className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-[11px] px-3 py-1.5 rounded-lg">Otvoriť</a>
+                        </div>
                       </div>
                     )
                   )}
