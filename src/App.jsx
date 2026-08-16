@@ -8,7 +8,7 @@ import {
   ClipboardList, Package, Cpu, QrCode, Plus, User, Clock, Layers, Search, Check, X, Calendar,
   Palette, Scissors, Printer, Sliders, Sparkles, ZoomIn, ZoomOut, FileText, PlusCircle, Table,
   Shield, Users, Lock, Edit2, Trash2, Tag, Scale, CalendarDays, FileEdit, Gift, Loader2, AlertTriangle,
-  Shirt, Box, Banknote, GripVertical, Download, Upload, ArrowUp, ArrowDown, BarChart3, Camera, Bot, Zap, Star, RefreshCw
+  Shirt, Box, Banknote, GripVertical, Download, Upload, ArrowUp, ArrowDown, BarChart3, Camera, Bot, Zap, Star, RefreshCw, BookOpen
 } from 'lucide-react';
 
 // ============================================================
@@ -504,6 +504,118 @@ function loadBarColor(percent) {
   if (percent >= 100) return 'bg-rose-600';
   if (percent >= 70) return 'bg-amber-500';
   return 'bg-emerald-600';
+}
+
+// --- MANUÁL PRE UŽÍVATEĽOV (priamo v appke, podľa role) ---
+const MANUAL_EMPLOYEE = `# TEX-MASTER ERP — rýchly štart pre zamestnanca na dielni
+
+## 1. Prihlásenie
+Naskenuj QR kód na svojej stanici (alebo otvor odkaz, čo dostaneš od Mastra) a zadaj svoj **4-miestny PIN**. Appka ťa automaticky prehodí na tvoju stanicu.
+
+## 2. Čo vidíš na obrazovke
+Zoznam zákaziek, ktoré čakajú na tvojej stanici, zoradené podľa priority (najvyššia hore). Pri každej vidíš počet kusov, produkt, farbu a fotku (ak je).
+
+## 3. Ako meniť stav zákazky
+Klikni na rozbaľovacie pole pri zákazke a vyber správny stav (napr. "V príprave", "Hotové"). Appka si sama zapamätá, kto a kedy na tom pracoval.
+
+## 4. Nahlásenie problému
+Ak niečo nesedí (chýba materiál, chyba vo výrobe, poškodený materiál...), klikni **"Nahlásiť problém"** priamo pri zákazke. Vyber kategóriu, napíš krátky popis, pokojne pridaj aj fotku. Master to hneď uvidí.
+
+## 5. Odhlásenie
+Tlačidlo **"Odhlásiť sa (ďalší pracovník)"** hore — použi ho, keď na stanici preberá prácu niekto iný. Zostane nastavená rovnaká stanica, len sa vypýta nový PIN.
+
+---
+*Ak si nie si niečím istý, opýtaj sa Mastra alebo Supervisora.*`;
+
+const MANUAL_OFFICE = `# TEX-MASTER ERP — rýchly štart pre Supervisora / Obchodníka
+
+## 1. Prihlásenie
+Email + heslo. Ak máš zapnuté 2FA, appka si vypýta aj 6-miestny kód z appky Google Authenticator/Authy.
+
+Ak ešte nemáš účet: "Ešte nemáš účet? Vytvor si ho" — potrebuješ aj **registračný kód od Mastra** (osobne, nie verejne).
+
+## 2. Horná lišta
+- Meno + rola vľavo hore
+- Odznak s počtom problémov (červený, blikajúci) — klik ťa prehodí na zoznam
+- Odhlásiť sa vpravo hore
+
+## 3. Hlavné záložky
+
+### 📋 Zákazky
+Vytváranie nových zákazok — zákazník, firma (ATAK/PBT/ADY), termín, položky, stanice. Appka ťa upozorní, ak chýba materiál. **⚡ Expresné pridanie** hore slúži na rýchle zaevidovanie donesenej dotlačovky (ADY).
+
+### 📅 Plánovacia Matica
+Dni v riadkoch, stanice v stĺpcoch. Farebný pruh = vyťaženie stanice. Karty vieš presúvať ťahaním alebo cez dátumové políčko. Prepínače hore: Riadkový Zoznam (priority), Rozvrh Zamestnancov (kto je kde, dochádzka).
+
+### 📦 Sklad
+Materiály podľa skladov. Naskladnenie podľa fotky dodacieho listu (AI), Excel export/import.
+
+### 🎨 Dashboard Grafikov
+Kto z grafikov má čo rozrobené.
+
+### ⚠️ Problémy
+Nahlásené problémy z dielne, zoradené podľa naliehavosti.
+
+### 💰 Financie *(ak máš prístup)*
+Faktúry, banka, pokladňa, denník, daňové termíny, AI účtovný asistent, fronta pre účtovníka.
+
+### 🔍 História Zákaziek
+Vyhľadávanie naprieč všetkými zákazkami, aj starými.
+
+## 4. Sprievodka (detail zákazky)
+Fotka, rozpis, stav na staniciach, **Denník zákazky** (trvalé poznámky), tlačidlo na vystavenie faktúry.
+
+---
+*Bežní zamestnanci na dielni sa prihlasujú cez QR + PIN, nie menom.*`;
+
+const MANUAL_MASTER = MANUAL_OFFICE + `
+
+---
+
+## 5. Naviac ako Master
+
+### Nastavenia firmy (Financie)
+IBAN, IČO/DIČ, sadzba DPH, predpona čísla faktúry — potrebné pre QR platby na faktúrach.
+
+### Kapacita výroby (Plánovacia Matica)
+Nastavíš orientačný výkon každej stanice (m/hod, ks/min, alebo časy na produkt) — appka podľa toho počíta farebné pruhy vyťaženia.
+
+### Rozvrh Zamestnancov — štandardné osadenie
+Nastavíš, kto je "štandardne" na ktorej stanici (⭐) — appka to ukazuje každý deň automaticky, kým to nezmeníš. Dočasnú náhradu (dovolenka/PN) pridávaš len na jeden deň.
+
+### Zamestnanci & Práva
+Pridávanie zamestnancov, PIN, 2FA, prístupové práva (ACL), a hlavne **registračné kódy** — bez tvojho kódu si nikto cudzí nevytvorí účet, aj keby poznal e-mail.
+
+### Zálohy (Financie)
+Automatické každú noc, dá sa spustiť aj manuálne. Stiahnuteľné priamo tu.
+
+### Zabezpečenie
+Mazanie dát a citlivé finančné tabuľky sú chránené len pre Master/Supervisor účty. PIN prihlásenie na dielni má z technických dôvodov nižšiu úroveň zabezpečenia — over si to s appkou, ak máš otázky.`;
+
+function renderManualText(text) {
+  const lines = text.split('\n');
+  return lines.map((line, i) => {
+    const bold = (s) => s.split(/(\*\*[^*]+\*\*)/g).map((part, j) => part.startsWith('**') && part.endsWith('**') ? <strong key={j} className="text-white">{part.slice(2, -2)}</strong> : part);
+    if (line.startsWith('# ')) return <h2 key={i} className="text-xl font-extrabold text-white mt-5 mb-2 first:mt-0">{line.slice(2)}</h2>;
+    if (line.startsWith('## ')) return <h3 key={i} className="text-base font-bold text-indigo-400 mt-4 mb-1.5">{line.slice(3)}</h3>;
+    if (line.startsWith('### ')) return <h4 key={i} className="text-sm font-bold text-slate-200 mt-3 mb-1">{line.slice(4)}</h4>;
+    if (line.trim() === '---') return <hr key={i} className="border-slate-800 my-3" />;
+    if (line.startsWith('- ')) return <li key={i} className="text-sm text-slate-300 ml-4 list-disc mb-0.5">{bold(line.slice(2))}</li>;
+    if (line.trim() === '') return <div key={i} className="h-1" />;
+    return <p key={i} className="text-sm text-slate-300 mb-1.5 leading-relaxed">{bold(line)}</p>;
+  });
+}
+
+function downloadManualFile(text, filename) {
+  const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function companyBrandBadgeClass(brand, variant = 'soft') {
@@ -3399,6 +3511,7 @@ export default function App() {
                 <button onClick={() => setActiveTab('invoices')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'invoices' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><FileEdit className="h-3.5 w-3.5" /> Financie{orders.filter(o => o.accountingStatus === 'pending_review').length > 0 && <span className="bg-amber-500 text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full ml-1">{orders.filter(o => o.accountingStatus === 'pending_review').length}</span>}</button>
               )}
               <button onClick={() => setActiveTab('archive')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'archive' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Search className="h-3.5 w-3.5" /> História Zákaziek</button>
+              <button onClick={() => setActiveTab('manual')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'manual' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><BookOpen className="h-3.5 w-3.5" /> Manuál</button>
             </nav>
           </div>
         </div>
@@ -6056,6 +6169,22 @@ export default function App() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          );
+        })()}
+
+        {activeTab === 'manual' && (() => {
+          const manualText = currentUser.role === 'master' ? MANUAL_MASTER : currentUser.role === 'employee' ? MANUAL_EMPLOYEE : MANUAL_OFFICE;
+          const fileName = currentUser.role === 'master' ? 'manual-master.md' : currentUser.role === 'employee' ? 'manual-zamestnanec.md' : 'manual-supervisor.md';
+          return (
+            <div className="space-y-4 print:hidden animate-in fade-in duration-150">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <h2 className="text-xl font-bold text-white flex items-center gap-2"><BookOpen className="text-indigo-400 h-5 w-5" /> Manuál</h2>
+                <button onClick={() => downloadManualFile(manualText, fileName)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Download className="h-3.5 w-3.5" /> Stiahnuť ako súbor</button>
+              </div>
+              <div className="bg-slate-950 border border-slate-800 rounded-2xl p-6 max-w-3xl">
+                {renderManualText(manualText)}
               </div>
             </div>
           );
