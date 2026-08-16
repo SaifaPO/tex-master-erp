@@ -685,6 +685,7 @@ export default function App() {
   const [rowDateFilter, setRowDateFilter] = useState('vsetko');
   const [draggedRowItem, setDraggedRowItem] = useState(null);
   const [draggedMatrixCard, setDraggedMatrixCard] = useState(null);
+  const [dragOverMatrixCell, setDragOverMatrixCell] = useState(null); // { date, stationId } | null
   const [showExpressDotlackovka, setShowExpressDotlackovka] = useState(false);
   const [expressCustomerName, setExpressCustomerName] = useState('');
   const [expressNeededDate, setExpressNeededDate] = useState('');
@@ -2571,7 +2572,9 @@ export default function App() {
           if (item.stationStatuses[sid] && item.stationStatuses[sid] !== 'neaktivne') newDates[sid] = newDate;
         });
       }
-      return { ...item, stationDates: newDates, productionDate: newDate };
+      return stationId
+        ? { ...item, stationDates: newDates }
+        : { ...item, stationDates: newDates, productionDate: newDate };
     });
     const { error } = await supabase.from('orders').update({ items: updatedItems }).eq('id', orderId);
     if (error) { triggerNotification('error', error.message); return; }
@@ -3264,16 +3267,28 @@ export default function App() {
                               return (
                                 <td
                                   key={stationId}
-                                  onDragOver={(e) => { if (hasPermission('edit_priority') && draggedMatrixCard) e.preventDefault(); }}
+                                  onDragEnter={(e) => { if (hasPermission('edit_priority') && draggedMatrixCard?.stationId === stationId) { e.preventDefault(); setDragOverMatrixCell({ date, stationId }); } }}
+                                  onDragOver={(e) => { if (hasPermission('edit_priority') && draggedMatrixCard?.stationId === stationId) e.preventDefault(); }}
+                                  onDragLeave={() => setDragOverMatrixCell(prev => (prev && prev.date === date && prev.stationId === stationId ? null : prev))}
                                   onDrop={(e) => {
                                     e.preventDefault();
+                                    setDragOverMatrixCell(null);
                                     if (!hasPermission('edit_priority') || !draggedMatrixCard) return;
                                     if (draggedMatrixCard.stationId !== stationId) return; // presun len v rámci rovnakého stĺpca (stanice)
                                     handleMoveProductionDate(draggedMatrixCard.orderId, draggedMatrixCard.itemId, stationId, date);
                                     setDraggedMatrixCard(null);
                                   }}
-                                  className={`p-1 border-r border-slate-850 align-top min-h-[110px] bg-slate-950/15 transition-colors ${draggedMatrixCard?.stationId === stationId ? 'outline outline-1 outline-dashed outline-indigo-700/40' : ''}`}
+                                  className={`p-1 border-r border-slate-850 align-top min-h-[110px] transition-all duration-150 ${
+                                    dragOverMatrixCell?.date === date && dragOverMatrixCell?.stationId === stationId
+                                      ? 'bg-indigo-950/50 ring-2 ring-inset ring-indigo-500'
+                                      : draggedMatrixCard?.stationId === stationId ? 'bg-slate-950/40 outline outline-1 outline-dashed outline-indigo-700/40' : 'bg-slate-950/15'
+                                  }`}
                                 >
+                                  {dragOverMatrixCell?.date === date && dragOverMatrixCell?.stationId === stationId && draggedMatrixCard && (
+                                    <div className="h-8 mb-1 rounded-lg border-2 border-dashed border-indigo-400 bg-indigo-500/10 flex items-center justify-center animate-pulse">
+                                      <span className="text-[9px] text-indigo-300 font-bold">⬇ Sem sa presunie</span>
+                                    </div>
+                                  )}
                                   {load && load.capacityMinutes > 0 && (
                                     <div className="mb-1 px-0.5" title={`Vyťaženie: ${Math.round(load.percent)}% (${Math.round(load.usedMinutes)} / ${Math.round(load.capacityMinutes)} min)`}>
                                       <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
@@ -3287,12 +3302,14 @@ export default function App() {
                                       const statusId = item.stationStatuses[stationId];
                                       const statusCfg = config.statuses.find(s => s.id === statusId) || config.statuses[0];
                                       const orderColor = colorForOrder(item.orderId);
+                                      const isBeingDragged = draggedMatrixCard?.itemId === item.itemId && draggedMatrixCard?.stationId === stationId;
                                       return (
                                         <div 
                                           key={item.itemId} 
+                                          style={isBeingDragged ? { opacity: 0.35 } : undefined}
                                           draggable={hasPermission('edit_priority')}
                                           onDragStart={() => setDraggedMatrixCard({ orderId: item.orderId, itemId: item.itemId, stationId })}
-                                          onDragEnd={() => setDraggedMatrixCard(null)}
+                                          onDragEnd={() => { setDraggedMatrixCard(null); setDragOverMatrixCell(null); }}
                                           onClick={() => openOrderDetails(orders.find(o => o.id === item.orderId))} 
                                           className={`bg-slate-900 hover:bg-slate-800 border-l-4 ${orderColor.border} border-t border-r border-b border-slate-750 p-2 rounded cursor-pointer transition-all flex flex-col justify-between text-[10px] space-y-1 shadow hover:scale-[1.02] transform ${hasPermission('edit_priority') ? 'active:cursor-grabbing' : ''}`}
                                         >
