@@ -8,7 +8,7 @@ import {
   ClipboardList, Package, Cpu, QrCode, Plus, User, Clock, Layers, Search, Check, X, Calendar,
   Palette, Scissors, Printer, Sliders, Sparkles, ZoomIn, ZoomOut, FileText, PlusCircle, Table,
   Shield, Users, Lock, Edit2, Trash2, Tag, Scale, CalendarDays, FileEdit, Gift, Loader2, AlertTriangle,
-  Shirt, Box, Banknote, GripVertical, Download, Upload, ArrowUp, ArrowDown, BarChart3, Camera, Bot, Zap, Star
+  Shirt, Box, Banknote, GripVertical, Download, Upload, ArrowUp, ArrowDown, BarChart3, Camera, Bot, Zap, Star, RefreshCw
 } from 'lucide-react';
 
 // ============================================================
@@ -307,6 +307,7 @@ const mapAssignmentFromDb = (r) => ({ id: r.id, employeeId: r.employee_id, stati
 const mapStationDefaultFromDb = (r) => ({ stationId: r.station_id, employeeId: r.employee_id });
 const mapStationExclusionFromDb = (r) => ({ id: r.id, stationId: r.station_id, date: r.exclusion_date, reason: r.reason || '' });
 const mapCheckinFromDb = (r) => ({ id: r.id, employeeId: r.employee_id, date: r.checkin_date, checkedInAt: r.checked_in_at, stationId: r.station_id });
+const mapAttendanceFromDb = (r) => ({ id: r.id, employeeId: r.employee_id, employeeNameRaw: r.employee_name_raw, date: r.record_date, timeIn: r.time_in, timeOut: r.time_out, syncedAt: r.synced_at });
 const mapProblemFromDb = (r) => ({ id: r.id, orderId: r.order_id, itemId: r.item_id, stationId: r.station_id, employeeId: r.employee_id, employeeName: r.employee_name, category: r.category, description: r.description, status: r.status, createdAt: r.created_at, resolvedAt: r.resolved_at, resolvedBy: r.resolved_by, resolutionNote: r.resolution_note });
 
 const mapCompanySettingsFromDb = (r) => ({ companyName: r.company_name || '', address: r.address || '', ico: r.ico || '', dic: r.dic || '', icDph: r.ic_dph || '', iban: r.iban || '', bankName: r.bank_name || '', defaultVatRate: r.default_vat_rate ?? 20, nextInvoiceNumber: r.next_invoice_number ?? 1, invoiceNumberPrefix: r.invoice_number_prefix || '', nextPpdNumber: r.next_ppd_number ?? 1, nextVpdNumber: r.next_vpd_number ?? 1 });
@@ -557,6 +558,9 @@ export default function App() {
   const [stationDefaults, setStationDefaults] = useState([]);
   const [stationExclusions, setStationExclusions] = useState([]);
   const [employeeCheckins, setEmployeeCheckins] = useState([]);
+  const [attendanceRecords, setAttendanceRecords] = useState([]);
+  const [isSyncingAttendance, setIsSyncingAttendance] = useState(false);
+  const [lastAttendanceSync, setLastAttendanceSync] = useState(null);
   const [loginMismatches, setLoginMismatches] = useState([]);
   const [problemReports, setProblemReports] = useState([]);
   const [reportingProblemForItem, setReportingProblemForItem] = useState(null); // item object | null
@@ -840,7 +844,7 @@ export default function App() {
     }
     async function loadAll() {
       try {
-        const [matRes, prodRes, tierRes, sportRes, empRes, aclRes, orderRes, whRes, rateRes, assignRes, mismatchRes, problemRes, companyRes, invoiceRes, bankRes, journalRes, deadlineRes, cashDocRes, capacityRes, productTimesRes, stationDefaultRes, stationExclusionRes, checkinRes] = await Promise.all([
+        const [matRes, prodRes, tierRes, sportRes, empRes, aclRes, orderRes, whRes, rateRes, assignRes, mismatchRes, problemRes, companyRes, invoiceRes, bankRes, journalRes, deadlineRes, cashDocRes, capacityRes, productTimesRes, stationDefaultRes, stationExclusionRes, checkinRes, attendanceRes] = await Promise.all([
           supabase.from('materials').select('*').order('name'),
           supabase.from('products').select('*'),
           supabase.from('quality_tiers').select('*'),
@@ -854,6 +858,7 @@ export default function App() {
           supabase.from('station_default_assignments').select('*'),
           supabase.from('station_default_exclusions').select('*'),
           supabase.from('employee_checkins').select('*').eq('checkin_date', new Date().toISOString().slice(0, 10)),
+          supabase.from('attendance_records').select('*').eq('record_date', new Date().toISOString().slice(0, 10)),
           supabase.from('login_mismatches').select('*').order('created_at', { ascending: false }).limit(50),
           supabase.from('problem_reports').select('*').order('created_at', { ascending: false }).limit(200),
           supabase.from('company_settings').select('*').eq('id', 1).maybeSingle(),
@@ -887,6 +892,7 @@ export default function App() {
         setStationDefaults(stationDefaultRes.error ? [] : (stationDefaultRes.data || []).map(mapStationDefaultFromDb));
         setStationExclusions(stationExclusionRes.error ? [] : (stationExclusionRes.data || []).map(mapStationExclusionFromDb));
         setEmployeeCheckins(checkinRes.error ? [] : (checkinRes.data || []).map(mapCheckinFromDb));
+        setAttendanceRecords(attendanceRes.error ? [] : (attendanceRes.data || []).map(mapAttendanceFromDb));
         setLoginMismatches(mismatchRes.error ? [] : (mismatchRes.data || []).map(mapMismatchFromDb));
         setProblemReports(problemRes.error ? [] : (problemRes.data || []).map(mapProblemFromDb));
         if (companyRes.data) setCompanySettings(mapCompanySettingsFromDb(companyRes.data));
@@ -940,6 +946,11 @@ export default function App() {
         const c = mapCheckinFromDb(payload.new);
         if (c.date === new Date().toISOString().slice(0, 10)) setEmployeeCheckins(prev => prev.some(x => x.id === c.id) ? prev : [...prev, c]);
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_records' }, (payload) => {
+        const today = new Date().toISOString().slice(0, 10);
+        if (payload.eventType !== 'DELETE' && payload.new?.record_date !== today) return;
+        applyRealtimeChange(setAttendanceRecords, payload, mapAttendanceFromDb);
+      })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'login_mismatches' }, (payload) => setLoginMismatches(prev => [mapMismatchFromDb(payload.new), ...prev].slice(0, 50)))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'problem_reports' }, (payload) => {
         applyRealtimeChange(setProblemReports, payload, mapProblemFromDb);
@@ -973,6 +984,14 @@ export default function App() {
   }, []);
 
   const employeesRef = useRef(employees);
+
+  useEffect(() => {
+    if (plannerViewMode === 'staffing' && isAuthenticated && hasPermission('manage_profiles')) {
+      handleSyncAttendance();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plannerViewMode]);
+
   useEffect(() => { employeesRef.current = employees; }, [employees]);
 
   const problemReportsRef = useRef(problemReports);
@@ -1342,6 +1361,22 @@ export default function App() {
   const handleRestoreDefaultForDay = async (exclusionId) => {
     if (!hasPermission('manage_profiles')) { triggerNotification('error', 'Nemáte oprávnenie upravovať rozvrh.'); return; }
     await supabase.from('station_default_exclusions').delete().eq('id', exclusionId);
+  };
+
+  // --- SYNCHRONIZÁCIA DOCHÁDZKY Z GOOGLE SHEETS ---
+  const handleSyncAttendance = async () => {
+    setIsSyncingAttendance(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-attendance', { body: {} });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setLastAttendanceSync(new Date());
+      triggerNotification('success', `Dochádzka synchronizovaná (${data.synced} zamestnancov${data.unmatched ? `, ${data.unmatched} nespárovaných mien` : ''}).`);
+    } catch (err) {
+      triggerNotification('error', `Synchronizácia zlyhala: ${err.message}`);
+    } finally {
+      setIsSyncingAttendance(false);
+    }
   };
 
   const handleAssignEmployee = async (date, stationId, employeeId) => {
@@ -3589,6 +3624,12 @@ export default function App() {
                         <span className="text-sm font-bold text-white px-2">{staffingWeekOffset === 0 ? 'Tento týždeň' : staffingWeekOffset === -1 ? 'Minulý týždeň' : staffingWeekOffset === 1 ? 'Budúci týždeň' : `${weekDates[0]} — ${weekDates[6]}`}</span>
                         <button onClick={() => setStaffingWeekOffset(o => o + 1)} className="p-2 bg-slate-900 hover:bg-slate-800 rounded-lg text-slate-300"><ArrowDown className="h-4 w-4 -rotate-90" /></button>
                       </div>
+                      <div className="flex items-center gap-2">
+                        <button onClick={handleSyncAttendance} disabled={isSyncingAttendance} className="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 font-bold text-xs px-3 py-2 rounded-lg flex items-center gap-1.5">
+                          {isSyncingAttendance ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Synchronizovať dochádzku
+                        </button>
+                        {lastAttendanceSync && <span className="text-[10px] text-slate-500">naposledy {lastAttendanceSync.toLocaleTimeString('sk-SK', { hour: '2-digit', minute: '2-digit' })}</span>}
+                      </div>
                       <button onClick={handleCopyPreviousWeek} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Upload className="h-3.5 w-3.5" /> Kopírovať z minulého týždňa</button>
                     </div>
 
@@ -3640,6 +3681,7 @@ export default function App() {
                                 const defaultEmp = defaultAssignment ? employees.find(e => e.id === defaultAssignment.employeeId) : null;
                                 const isUnstaffedToday = date === todayStr && cellAssignments.length === 0 && (!defaultEmp || exclusion);
                                 const isPickerOpen = staffingPickerCell && staffingPickerCell.date === date && staffingPickerCell.stationId === sid;
+                                const attendanceToday = date === todayStr && defaultEmp ? attendanceRecords.find(a => a.employeeId === defaultEmp.id) : null;
                                 const checkin = date === todayStr && defaultEmp ? employeeCheckins.find(c => c.employeeId === defaultEmp.id) : null;
                                 const someoneAssignedHere = (defaultEmp && !exclusion) || cellAssignments.length > 0;
                                 const hasScheduledWork = allItems.some(it => getItemStationDate(it, sid) === date && it.stationStatuses?.[sid] && it.stationStatuses[sid] !== 'neaktivne' && it.stationStatuses[sid] !== 'hotove');
@@ -3659,7 +3701,9 @@ export default function App() {
                                         </div>
                                       )}
                                       {date === todayStr && defaultEmp && !exclusion && (
-                                        checkin ? (
+                                        attendanceToday ? (
+                                          <span className="text-[9px] text-emerald-400 px-2">📋 Dochádzka: {attendanceToday.timeIn || '—'}{attendanceToday.timeOut ? ` – ${attendanceToday.timeOut}` : ''}</span>
+                                        ) : checkin ? (
                                           <span className="text-[9px] text-emerald-400 px-2">✅ Prihlásený o {new Date(checkin.checkedInAt).toLocaleTimeString('sk-SK', { hour: '2-digit', minute: '2-digit' })}</span>
                                         ) : (
                                           <span className="text-[9px] text-slate-500 px-2">❔ Zatiaľ sa dnes neprihlásil</span>
