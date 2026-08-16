@@ -709,6 +709,12 @@ export default function App() {
   const [capacityConfigs, setCapacityConfigs] = useState([]);
   const [stationProductTimes, setStationProductTimes] = useState([]);
   const [showCapacitySettings, setShowCapacitySettings] = useState(false);
+  const [showBackupsPanel, setShowBackupsPanel] = useState(false);
+  const [backupFolders, setBackupFolders] = useState([]);
+  const [expandedBackupDate, setExpandedBackupDate] = useState(null);
+  const [backupFiles, setBackupFiles] = useState([]);
+  const [isBackingUpNow, setIsBackingUpNow] = useState(false);
+  const [isLoadingBackups, setIsLoadingBackups] = useState(false);
   const [capacityDraft, setCapacityDraft] = useState(null);
   const [productTimesDraft, setProductTimesDraft] = useState(null);
   const [newProductTimeLabel, setNewProductTimeLabel] = useState({});
@@ -1364,6 +1370,45 @@ export default function App() {
   };
 
   // --- SYNCHRONIZÁCIA DOCHÁDZKY Z GOOGLE SHEETS ---
+  // --- ZÁLOHY ---
+  const handleOpenBackupsPanel = async () => {
+    setShowBackupsPanel(true);
+    setIsLoadingBackups(true);
+    const { data, error } = await supabase.storage.from('backups').list('', { sortBy: { column: 'name', order: 'desc' } });
+    setIsLoadingBackups(false);
+    if (error) { triggerNotification('error', `Nepodarilo sa načítať zoznam záloh: ${error.message}`); return; }
+    setBackupFolders((data || []).filter(f => /^\d{4}-\d{2}-\d{2}$/.test(f.name)));
+  };
+
+  const handleExpandBackupDate = async (dateName) => {
+    if (expandedBackupDate === dateName) { setExpandedBackupDate(null); return; }
+    setExpandedBackupDate(dateName);
+    const { data, error } = await supabase.storage.from('backups').list(dateName);
+    if (error) { triggerNotification('error', error.message); return; }
+    setBackupFiles(data || []);
+  };
+
+  const handleDownloadBackupFile = async (dateName, fileName) => {
+    const { data, error } = await supabase.storage.from('backups').createSignedUrl(`${dateName}/${fileName}`, 60);
+    if (error) { triggerNotification('error', error.message); return; }
+    downloadFile(data.signedUrl, fileName);
+  };
+
+  const handleTriggerBackupNow = async () => {
+    setIsBackingUpNow(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('nightly-backup', { body: {} });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      triggerNotification('success', `Záloha za ${data.date} bola vytvorená.`);
+      handleOpenBackupsPanel();
+    } catch (err) {
+      triggerNotification('error', `Záloha zlyhala: ${err.message}`);
+    } finally {
+      setIsBackingUpNow(false);
+    }
+  };
+
   const handleSyncAttendance = async () => {
     setIsSyncingAttendance(true);
     try {
@@ -4519,6 +4564,47 @@ export default function App() {
           </div>
         )}
 
+        {showBackupsPanel && (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-2xl space-y-4">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="text-lg font-bold text-white">Zálohy databázy</h3>
+                  <p className="text-xs text-slate-500">Automaticky každú noc o 3:00, uchovávané 30 dní.</p>
+                </div>
+                <button onClick={() => setShowBackupsPanel(false)} className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white"><X className="h-5 w-5" /></button>
+              </div>
+
+              <button onClick={handleTriggerBackupNow} disabled={isBackingUpNow} className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold py-2.5 rounded-lg text-xs flex items-center justify-center gap-2">
+                {isBackingUpNow ? <><Loader2 className="h-4 w-4 animate-spin" /> Zálohujem...</> : <><Download className="h-4 w-4" /> Zálohovať teraz</>}
+              </button>
+
+              <div className="space-y-2">
+                {isLoadingBackups && <p className="text-xs text-slate-500 italic">Načítavam...</p>}
+                {!isLoadingBackups && backupFolders.length === 0 && <p className="text-xs text-slate-500 italic">Zatiaľ žiadne zálohy. Klikni "Zálohovať teraz" na vytvorenie prvej.</p>}
+                {backupFolders.map(f => (
+                  <div key={f.name} className="bg-slate-950 border border-slate-800 rounded-lg overflow-hidden">
+                    <button onClick={() => handleExpandBackupDate(f.name)} className="w-full flex items-center justify-between px-3 py-2 text-xs font-bold text-white hover:bg-slate-900">
+                      <span>{formatDeliveryDate(f.name)}</span>
+                      <span className="text-slate-500">{expandedBackupDate === f.name ? '▲' : '▼'}</span>
+                    </button>
+                    {expandedBackupDate === f.name && (
+                      <div className="px-3 pb-2 space-y-1">
+                        {backupFiles.map(bf => (
+                          <div key={bf.name} className="flex items-center justify-between text-[11px] text-slate-400 bg-slate-900 px-2 py-1.5 rounded">
+                            <span className="font-mono">{bf.name}</span>
+                            <button onClick={() => handleDownloadBackupFile(f.name, bf.name)} className="text-indigo-400 hover:text-indigo-300 font-bold flex items-center gap-1"><Download className="h-3 w-3" /> Stiahnuť</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {showCapacitySettings && capacityDraft && productTimesDraft && (
           <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
             <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl w-full max-w-3xl max-h-[92vh] overflow-y-auto shadow-2xl space-y-4">
@@ -5483,6 +5569,9 @@ export default function App() {
                 <h2 className="text-xl font-bold text-white flex items-center gap-2"><Banknote className="text-emerald-400 h-5 w-5" /> Financie</h2>
                 <div className="flex flex-wrap gap-2">
                   <button onClick={() => { setCompanySettingsDraft({ ...companySettings }); }} className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs px-3 py-2 rounded-lg flex items-center gap-1.5"><Lock className="h-3.5 w-3.5" /> Nastavenia firmy</button>
+                  {currentUser.role === 'master' && (
+                    <button onClick={handleOpenBackupsPanel} className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs px-3 py-2 rounded-lg flex items-center gap-1.5"><Download className="h-3.5 w-3.5" /> Zálohy</button>
+                  )}
                   <button onClick={() => handleStartNewInvoice(null)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Plus className="h-4 w-4" /> Vystaviť novú faktúru</button>
                 </div>
               </div>
