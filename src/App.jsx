@@ -3268,8 +3268,16 @@ export default function App() {
                                 <td
                                   key={stationId}
                                   onDragEnter={(e) => { if (hasPermission('edit_priority') && draggedMatrixCard?.stationId === stationId) { e.preventDefault(); setDragOverMatrixCell({ date, stationId }); } }}
-                                  onDragOver={(e) => { if (hasPermission('edit_priority') && draggedMatrixCard?.stationId === stationId) e.preventDefault(); }}
-                                  onDragLeave={() => setDragOverMatrixCell(prev => (prev && prev.date === date && prev.stationId === stationId ? null : prev))}
+                                  onDragOver={(e) => {
+                                    if (!hasPermission('edit_priority') || draggedMatrixCard?.stationId !== stationId) return;
+                                    e.preventDefault();
+                                    setDragOverMatrixCell(prev => (prev && prev.date === date && prev.stationId === stationId ? prev : { date, stationId }));
+                                  }}
+                                  onDragLeave={(e) => {
+                                    // Prehliadač vie vyvolať "leave" aj pri prechode nad vnoreným prvkom vnútri tej istej bunky (napr. keď sa objaví/zmizne rámček) — to ignorujeme, aby to neblikalo
+                                    if (e.currentTarget.contains(e.relatedTarget)) return;
+                                    setDragOverMatrixCell(prev => (prev && prev.date === date && prev.stationId === stationId ? null : prev));
+                                  }}
                                   onDrop={(e) => {
                                     e.preventDefault();
                                     setDragOverMatrixCell(null);
@@ -3285,7 +3293,7 @@ export default function App() {
                                   }`}
                                 >
                                   {dragOverMatrixCell?.date === date && dragOverMatrixCell?.stationId === stationId && draggedMatrixCard && (
-                                    <div className="h-8 mb-1 rounded-lg border-2 border-dashed border-indigo-400 bg-indigo-500/10 flex items-center justify-center animate-pulse">
+                                    <div className="h-8 mb-1 rounded-lg border-2 border-dashed border-indigo-400 bg-indigo-500/10 flex items-center justify-center animate-pulse pointer-events-none">
                                       <span className="text-[9px] text-indigo-300 font-bold">⬇ Sem sa presunie</span>
                                     </div>
                                   )}
