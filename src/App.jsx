@@ -8,7 +8,7 @@ import {
   ClipboardList, Package, Cpu, QrCode, Plus, User, Clock, Layers, Search, Check, X, Calendar,
   Palette, Scissors, Printer, Sliders, Sparkles, ZoomIn, ZoomOut, FileText, PlusCircle, Table,
   Shield, Users, Lock, Edit2, Trash2, Tag, Scale, CalendarDays, FileEdit, Gift, Loader2, AlertTriangle,
-  Shirt, Box, Banknote, GripVertical, Download, Upload, ArrowUp, ArrowDown, BarChart3, Camera, Bot, Zap
+  Shirt, Box, Banknote, GripVertical, Download, Upload, ArrowUp, ArrowDown, BarChart3, Camera, Bot, Zap, Star
 } from 'lucide-react';
 
 // ============================================================
@@ -304,6 +304,8 @@ const WEEKDAY_LABELS = ['Pondelok', 'Utorok', 'Streda', 'Štvrtok', 'Piatok', 'S
 
 const mapCostRateFromDb = (r) => ({ stationId: r.station_id, rate: r.rate, unit: r.unit || '', note: r.note || '' });
 const mapAssignmentFromDb = (r) => ({ id: r.id, employeeId: r.employee_id, stationId: r.station_id, date: r.assignment_date });
+const mapStationDefaultFromDb = (r) => ({ stationId: r.station_id, employeeId: r.employee_id });
+const mapStationExclusionFromDb = (r) => ({ id: r.id, stationId: r.station_id, date: r.exclusion_date, reason: r.reason || '' });
 const mapProblemFromDb = (r) => ({ id: r.id, orderId: r.order_id, itemId: r.item_id, stationId: r.station_id, employeeId: r.employee_id, employeeName: r.employee_name, category: r.category, description: r.description, status: r.status, createdAt: r.created_at, resolvedAt: r.resolved_at, resolvedBy: r.resolved_by, resolutionNote: r.resolution_note });
 
 const mapCompanySettingsFromDb = (r) => ({ companyName: r.company_name || '', address: r.address || '', ico: r.ico || '', dic: r.dic || '', icDph: r.ic_dph || '', iban: r.iban || '', bankName: r.bank_name || '', defaultVatRate: r.default_vat_rate ?? 20, nextInvoiceNumber: r.next_invoice_number ?? 1, invoiceNumberPrefix: r.invoice_number_prefix || '', nextPpdNumber: r.next_ppd_number ?? 1, nextVpdNumber: r.next_vpd_number ?? 1 });
@@ -551,6 +553,8 @@ export default function App() {
   const [warehouses, setWarehouses] = useState([]);
   const [costRates, setCostRates] = useState([]);
   const [stationAssignments, setStationAssignments] = useState([]);
+  const [stationDefaults, setStationDefaults] = useState([]);
+  const [stationExclusions, setStationExclusions] = useState([]);
   const [loginMismatches, setLoginMismatches] = useState([]);
   const [problemReports, setProblemReports] = useState([]);
   const [reportingProblemForItem, setReportingProblemForItem] = useState(null); // item object | null
@@ -834,7 +838,7 @@ export default function App() {
     }
     async function loadAll() {
       try {
-        const [matRes, prodRes, tierRes, sportRes, empRes, aclRes, orderRes, whRes, rateRes, assignRes, mismatchRes, problemRes, companyRes, invoiceRes, bankRes, journalRes, deadlineRes, cashDocRes, capacityRes, productTimesRes] = await Promise.all([
+        const [matRes, prodRes, tierRes, sportRes, empRes, aclRes, orderRes, whRes, rateRes, assignRes, mismatchRes, problemRes, companyRes, invoiceRes, bankRes, journalRes, deadlineRes, cashDocRes, capacityRes, productTimesRes, stationDefaultRes, stationExclusionRes] = await Promise.all([
           supabase.from('materials').select('*').order('name'),
           supabase.from('products').select('*'),
           supabase.from('quality_tiers').select('*'),
@@ -845,6 +849,8 @@ export default function App() {
           supabase.from('warehouses').select('*').order('name'),
           supabase.from('cost_rates').select('*'),
           supabase.from('station_assignments').select('*'),
+          supabase.from('station_default_assignments').select('*'),
+          supabase.from('station_default_exclusions').select('*'),
           supabase.from('login_mismatches').select('*').order('created_at', { ascending: false }).limit(50),
           supabase.from('problem_reports').select('*').order('created_at', { ascending: false }).limit(200),
           supabase.from('company_settings').select('*').eq('id', 1).maybeSingle(),
@@ -875,6 +881,8 @@ export default function App() {
         setWarehouses(loadedWarehouses);
         setCostRates(rateRes.error ? [] : (rateRes.data || []).map(mapCostRateFromDb));
         setStationAssignments(assignRes.error ? [] : (assignRes.data || []).map(mapAssignmentFromDb));
+        setStationDefaults(stationDefaultRes.error ? [] : (stationDefaultRes.data || []).map(mapStationDefaultFromDb));
+        setStationExclusions(stationExclusionRes.error ? [] : (stationExclusionRes.data || []).map(mapStationExclusionFromDb));
         setLoginMismatches(mismatchRes.error ? [] : (mismatchRes.data || []).map(mapMismatchFromDb));
         setProblemReports(problemRes.error ? [] : (problemRes.data || []).map(mapProblemFromDb));
         if (companyRes.data) setCompanySettings(mapCompanySettingsFromDb(companyRes.data));
@@ -922,6 +930,8 @@ export default function App() {
         });
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'station_assignments' }, (payload) => applyRealtimeChange(setStationAssignments, payload, mapAssignmentFromDb))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'station_default_assignments' }, (payload) => applyRealtimeChange(setStationDefaults, payload, mapStationDefaultFromDb, 'stationId'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'station_default_exclusions' }, (payload) => applyRealtimeChange(setStationExclusions, payload, mapStationExclusionFromDb))
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'login_mismatches' }, (payload) => setLoginMismatches(prev => [mapMismatchFromDb(payload.new), ...prev].slice(0, 50)))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'problem_reports' }, (payload) => {
         applyRealtimeChange(setProblemReports, payload, mapProblemFromDb);
@@ -1249,7 +1259,9 @@ export default function App() {
 
     // Mäkká kontrola: je zamestnanec dnes priradený na túto stanicu? Ak nie, len sa to zaznamená (nič neblokuje).
     const today = new Date().toISOString().slice(0, 10);
-    const isAssigned = stationAssignments.some(a => a.date === today && a.stationId === activeStationContext && a.employeeId === emp.id);
+    const hasExclusionToday = stationExclusions.some(ex => ex.date === today && ex.stationId === activeStationContext);
+    const isDefaultForStation = !hasExclusionToday && stationDefaults.some(d => d.stationId === activeStationContext && d.employeeId === emp.id);
+    const isAssigned = isDefaultForStation || stationAssignments.some(a => a.date === today && a.stationId === activeStationContext && a.employeeId === emp.id);
     if (!isAssigned) {
       await supabase.from('login_mismatches').insert({
         id: `mm-${Date.now()}`, employee_id: emp.id, employee_name: `${emp.firstName} ${emp.lastName}`,
@@ -1293,6 +1305,31 @@ export default function App() {
     if (minutesOpen >= 120) return { label: 'NALIEHAVÉ', color: 'bg-rose-600 text-white border-rose-500', pulse: true };
     if (minutesOpen >= 30) return { label: 'Čaká dlhšie', color: 'bg-amber-600 text-white border-amber-500', pulse: false };
     return { label: 'Nové', color: 'bg-sky-700 text-white border-sky-600', pulse: false };
+  };
+
+  // --- ŠTANDARDNÁ (STÁLA) OSOBA NA STANICU ---
+  const handleSetStationDefault = async (stationId, employeeId) => {
+    if (!hasPermission('manage_profiles')) { triggerNotification('error', 'Nemáte oprávnenie upravovať rozvrh.'); return; }
+    if (!employeeId) {
+      await supabase.from('station_default_assignments').delete().eq('station_id', stationId);
+      triggerNotification('success', 'Štandardná osoba pre túto stanicu bola zrušená.');
+      return;
+    }
+    const { error } = await supabase.from('station_default_assignments').upsert({ station_id: stationId, employee_id: employeeId });
+    if (error) { triggerNotification('error', error.message); return; }
+    triggerNotification('success', 'Štandardná osoba bola nastavená — platí odteraz pre všetky dni.');
+  };
+
+  const handleMarkDefaultAbsentToday = async (date, stationId) => {
+    if (!hasPermission('manage_profiles')) { triggerNotification('error', 'Nemáte oprávnenie upravovať rozvrh.'); return; }
+    const already = stationExclusions.some(e => e.date === date && e.stationId === stationId);
+    if (already) return;
+    await supabase.from('station_default_exclusions').insert({ id: `se-${Date.now()}`, station_id: stationId, exclusion_date: date });
+  };
+
+  const handleRestoreDefaultForDay = async (exclusionId) => {
+    if (!hasPermission('manage_profiles')) { triggerNotification('error', 'Nemáte oprávnenie upravovať rozvrh.'); return; }
+    await supabase.from('station_default_exclusions').delete().eq('id', exclusionId);
   };
 
   const handleAssignEmployee = async (date, stationId, employeeId) => {
@@ -2554,6 +2591,41 @@ export default function App() {
     triggerNotification('success', 'Poznámka bola pridaná do denníka zákazky.');
   };
 
+  // Presun karty ťahaním na presné miesto (pred/za konkrétnu inú kartu, alebo na koniec dňa) — mení aj deň danej stanice, aj poradie (prioritu)
+  const handleMoveAndReorder = async (dragged, stationId, newDate, targetItemId, position) => {
+    if (!hasPermission('edit_priority')) { triggerNotification('error', 'Nemáte oprávnenie meniť plán výroby.'); return; }
+    const group = allItems.slice().sort((a, b) => a.priority - b.priority);
+    const withoutDragged = group.filter(i => i.itemId !== dragged.itemId);
+    let insertIndex = withoutDragged.length; // predvolene na koniec
+    if (targetItemId) {
+      const idx = withoutDragged.findIndex(i => i.itemId === targetItemId);
+      if (idx !== -1) insertIndex = position === 'before' ? idx : idx + 1;
+    }
+    const draggedFull = group.find(i => i.itemId === dragged.itemId);
+    if (!draggedFull) return;
+    withoutDragged.splice(insertIndex, 0, draggedFull);
+    const withNewPriority = withoutDragged.map((it, idx) => ({ itemId: it.itemId, orderId: it.orderId, priority: idx + 1 }));
+
+    const byOrder = {};
+    withNewPriority.forEach(r => { (byOrder[r.orderId] = byOrder[r.orderId] || []).push(r); });
+
+    for (const orderId of Object.keys(byOrder)) {
+      const order = orders.find(o => o.id === orderId);
+      if (!order) continue;
+      const updates = byOrder[orderId];
+      const newItems = order.items.map(it => {
+        const upd = updates.find(u => u.itemId === it.itemId);
+        if (!upd) return it;
+        let patched = { ...it, priority: upd.priority };
+        if (it.itemId === dragged.itemId) {
+          patched = { ...patched, stationDates: { ...(it.stationDates || {}), [stationId]: newDate } };
+        }
+        return patched;
+      });
+      await supabase.from('orders').update({ items: newItems }).eq('id', orderId);
+    }
+  };
+
   const handleMoveProductionDate = async (orderId, itemId, stationId, newDate) => {
     if (!hasPermission('edit_priority')) { triggerNotification('error', 'Nemáte oprávnenie meniť plán výroby.'); return; }
     const order = orders.find(o => o.id === orderId);
@@ -3264,39 +3336,36 @@ export default function App() {
                               const config = STATION_CONFIGS[stationId];
                               const dayItems = allItems.filter(it => getItemStationDate(it, stationId) === date && it.stationStatuses[stationId] && it.stationStatuses[stationId] !== 'neaktivne').sort((a, b) => a.priority - b.priority);
                               const load = showCapacityBars ? computeStationLoad(date, stationId, allItems, capacityByStation, productTimesByStation) : null;
+                              const isHoveringThisCell = dragOverMatrixCell?.date === date && dragOverMatrixCell?.stationId === stationId;
                               return (
                                 <td
                                   key={stationId}
-                                  onDragEnter={(e) => { if (hasPermission('edit_priority') && draggedMatrixCard?.stationId === stationId) { e.preventDefault(); setDragOverMatrixCell({ date, stationId }); } }}
+                                  onDragEnter={(e) => { if (hasPermission('edit_priority') && draggedMatrixCard?.stationId === stationId) e.preventDefault(); }}
                                   onDragOver={(e) => {
                                     if (!hasPermission('edit_priority') || draggedMatrixCard?.stationId !== stationId) return;
                                     e.preventDefault();
-                                    setDragOverMatrixCell(prev => (prev && prev.date === date && prev.stationId === stationId ? prev : { date, stationId }));
+                                    // Bunka bez konkrétnej karty pod kurzorom = presun na koniec dňa (toto card-level handler nižšie prepíše presnejšie, ak je nad kartou)
+                                    setDragOverMatrixCell(prev => (prev && prev.date === date && prev.stationId === stationId && prev.targetItemId != null ? prev : { date, stationId, targetItemId: null, position: 'after' }));
                                   }}
                                   onDragLeave={(e) => {
-                                    // Prehliadač vie vyvolať "leave" aj pri prechode nad vnoreným prvkom vnútri tej istej bunky (napr. keď sa objaví/zmizne rámček) — to ignorujeme, aby to neblikalo
                                     if (e.currentTarget.contains(e.relatedTarget)) return;
                                     setDragOverMatrixCell(prev => (prev && prev.date === date && prev.stationId === stationId ? null : prev));
                                   }}
                                   onDrop={(e) => {
                                     e.preventDefault();
+                                    const target = dragOverMatrixCell;
                                     setDragOverMatrixCell(null);
                                     if (!hasPermission('edit_priority') || !draggedMatrixCard) return;
                                     if (draggedMatrixCard.stationId !== stationId) return; // presun len v rámci rovnakého stĺpca (stanice)
-                                    handleMoveProductionDate(draggedMatrixCard.orderId, draggedMatrixCard.itemId, stationId, date);
+                                    handleMoveAndReorder(draggedMatrixCard, stationId, date, target?.targetItemId || null, target?.position || 'after');
                                     setDraggedMatrixCard(null);
                                   }}
                                   className={`p-1 border-r border-slate-850 align-top min-h-[110px] transition-all duration-150 ${
-                                    dragOverMatrixCell?.date === date && dragOverMatrixCell?.stationId === stationId
+                                    isHoveringThisCell
                                       ? 'bg-indigo-950/50 ring-2 ring-inset ring-indigo-500'
                                       : draggedMatrixCard?.stationId === stationId ? 'bg-slate-950/40 outline outline-1 outline-dashed outline-indigo-700/40' : 'bg-slate-950/15'
                                   }`}
                                 >
-                                  {dragOverMatrixCell?.date === date && dragOverMatrixCell?.stationId === stationId && draggedMatrixCard && (
-                                    <div className="h-8 mb-1 rounded-lg border-2 border-dashed border-indigo-400 bg-indigo-500/10 flex items-center justify-center animate-pulse pointer-events-none">
-                                      <span className="text-[9px] text-indigo-300 font-bold">⬇ Sem sa presunie</span>
-                                    </div>
-                                  )}
                                   {load && load.capacityMinutes > 0 && (
                                     <div className="mb-1 px-0.5" title={`Vyťaženie: ${Math.round(load.percent)}% (${Math.round(load.usedMinutes)} / ${Math.round(load.capacityMinutes)} min)`}>
                                       <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
@@ -3306,58 +3375,81 @@ export default function App() {
                                     </div>
                                   )}
                                   <div className="grid grid-cols-1 gap-1">
+                                    {isHoveringThisCell && dayItems.length === 0 && (
+                                      <div className="h-8 rounded-lg border-2 border-dashed border-indigo-400 bg-indigo-500/10 flex items-center justify-center animate-pulse pointer-events-none">
+                                        <span className="text-[9px] text-indigo-300 font-bold">⬇ Sem sa presunie</span>
+                                      </div>
+                                    )}
                                     {dayItems.map(item => {
                                       const statusId = item.stationStatuses[stationId];
                                       const statusCfg = config.statuses.find(s => s.id === statusId) || config.statuses[0];
                                       const orderColor = colorForOrder(item.orderId);
                                       const isBeingDragged = draggedMatrixCard?.itemId === item.itemId && draggedMatrixCard?.stationId === stationId;
+                                      const showPlaceholderBefore = isHoveringThisCell && dragOverMatrixCell?.targetItemId === item.itemId && dragOverMatrixCell?.position === 'before';
+                                      const showPlaceholderAfter = isHoveringThisCell && dragOverMatrixCell?.targetItemId === item.itemId && dragOverMatrixCell?.position === 'after';
                                       return (
-                                        <div 
-                                          key={item.itemId} 
-                                          style={isBeingDragged ? { opacity: 0.35 } : undefined}
-                                          draggable={hasPermission('edit_priority')}
-                                          onDragStart={() => setDraggedMatrixCard({ orderId: item.orderId, itemId: item.itemId, stationId })}
-                                          onDragEnd={() => { setDraggedMatrixCard(null); setDragOverMatrixCell(null); }}
-                                          onClick={() => openOrderDetails(orders.find(o => o.id === item.orderId))} 
-                                          className={`bg-slate-900 hover:bg-slate-800 border-l-4 ${orderColor.border} border-t border-r border-b border-slate-750 p-2 rounded cursor-pointer transition-all flex flex-col justify-between text-[10px] space-y-1 shadow hover:scale-[1.02] transform ${hasPermission('edit_priority') ? 'active:cursor-grabbing' : ''}`}
-                                        >
-                                          <div className="flex items-center justify-between">
-                                            <span className="font-mono font-bold text-indigo-400">#{item.priority} • {item.itemId}</span>
-                                            <div className="flex items-center gap-1">
-                                              {item.stationMeta?.[stationId]?.assignedEmployeeAvatar && (
-                                                <span title={item.stationMeta[stationId].assignedEmployeeName} className="text-sm leading-none cursor-help">{item.stationMeta[stationId].assignedEmployeeAvatar}</span>
-                                              )}
-                                              <CashBadge paymentType={item.paymentType} size="small" />
-                                              <span className="text-slate-400 font-bold">{item.qty}ks</span>
-                                            </div>
-                                          </div>
-                                          <p className="font-extrabold text-slate-100 truncate">{item.customer}</p>
-                                          <p className="text-[9px] text-slate-300 truncate">{item.productName} ({item.qualityTier})</p>
-                                          <div className={`text-[8px] px-1 py-0.5 rounded ${isUrgentDate(item.deliveryDate) ? 'bg-rose-950/60 text-rose-300 font-bold' : 'bg-slate-950/60 text-slate-500'}`}>
-                                            Termín: {formatDeliveryDate(item.deliveryDate)}
-                                          </div>
-                                          {hasPermission('edit_priority') && (
-                                            <input
-                                              type="date"
-                                              value={getItemStationDate(item, stationId) || ''}
-                                              onClick={(e) => e.stopPropagation()}
-                                              onChange={(e) => handleMoveProductionDate(item.orderId, item.itemId, stationId, e.target.value)}
-                                              className="text-[8px] bg-slate-950 border border-slate-800 rounded px-1 py-0.5 text-slate-400 w-full"
-                                              title="Presunúť túto stanicu na iný deň (alebo pretiahni kartu do iného riadku)"
-                                            />
+                                        <React.Fragment key={item.itemId}>
+                                          {showPlaceholderBefore && (
+                                            <div className="h-2 rounded-full bg-indigo-400 animate-pulse pointer-events-none" />
                                           )}
-                                          <select
-                                            value={statusId}
-                                            onClick={(e) => e.stopPropagation()}
-                                            onChange={(e) => updateStationStatus(item.orderId, item.itemId, stationId, e.target.value)}
-                                            disabled={!hasPermission('update_status')}
-                                            className={`text-[9px] px-1 py-0.5 rounded text-center font-bold ${statusCfg.color} truncate w-full focus:outline-none`}
+                                          <div
+                                            style={isBeingDragged ? { opacity: 0.35 } : undefined}
+                                            draggable={hasPermission('edit_priority')}
+                                            onDragStart={() => setDraggedMatrixCard({ orderId: item.orderId, itemId: item.itemId, stationId })}
+                                            onDragEnd={() => { setDraggedMatrixCard(null); setDragOverMatrixCell(null); }}
+                                            onDragOver={(e) => {
+                                              if (!hasPermission('edit_priority') || draggedMatrixCard?.stationId !== stationId || draggedMatrixCard?.itemId === item.itemId) return;
+                                              e.preventDefault();
+                                              e.stopPropagation();
+                                              const rect = e.currentTarget.getBoundingClientRect();
+                                              const isTopHalf = (e.clientY - rect.top) < rect.height / 2;
+                                              const pos = isTopHalf ? 'before' : 'after';
+                                              setDragOverMatrixCell(prev => (prev && prev.targetItemId === item.itemId && prev.position === pos ? prev : { date, stationId, targetItemId: item.itemId, position: pos }));
+                                            }}
+                                            onClick={() => openOrderDetails(orders.find(o => o.id === item.orderId))}
+                                            className={`bg-slate-900 hover:bg-slate-800 border-l-4 ${orderColor.border} border-t border-r border-b border-slate-750 p-2 rounded cursor-pointer transition-all flex flex-col justify-between text-[10px] space-y-1 shadow hover:scale-[1.02] transform ${hasPermission('edit_priority') ? 'active:cursor-grabbing' : ''}`}
                                           >
-                                            {config.statuses.filter(s => s.id !== 'neaktivne').map(st => (
-                                              <option key={st.id} value={st.id} className="bg-slate-900 text-slate-300">{st.label}</option>
-                                            ))}
-                                          </select>
-                                        </div>
+                                            <div className="flex items-center justify-between">
+                                              <span className="font-mono font-bold text-indigo-400">#{item.priority} • {item.itemId}</span>
+                                              <div className="flex items-center gap-1">
+                                                {item.stationMeta?.[stationId]?.assignedEmployeeAvatar && (
+                                                  <span title={item.stationMeta[stationId].assignedEmployeeName} className="text-sm leading-none cursor-help">{item.stationMeta[stationId].assignedEmployeeAvatar}</span>
+                                                )}
+                                                <CashBadge paymentType={item.paymentType} size="small" />
+                                                <span className="text-slate-400 font-bold">{item.qty}ks</span>
+                                              </div>
+                                            </div>
+                                            <p className="font-extrabold text-slate-100 truncate">{item.customer}</p>
+                                            <p className="text-[9px] text-slate-300 truncate">{item.productName} ({item.qualityTier})</p>
+                                            <div className={`text-[8px] px-1 py-0.5 rounded ${isUrgentDate(item.deliveryDate) ? 'bg-rose-950/60 text-rose-300 font-bold' : 'bg-slate-950/60 text-slate-500'}`}>
+                                              Termín: {formatDeliveryDate(item.deliveryDate)}
+                                            </div>
+                                            {hasPermission('edit_priority') && (
+                                              <input
+                                                type="date"
+                                                value={getItemStationDate(item, stationId) || ''}
+                                                onClick={(e) => e.stopPropagation()}
+                                                onChange={(e) => handleMoveProductionDate(item.orderId, item.itemId, stationId, e.target.value)}
+                                                className="text-[8px] bg-slate-950 border border-slate-800 rounded px-1 py-0.5 text-slate-400 w-full"
+                                                title="Presunúť túto stanicu na iný deň (alebo pretiahni kartu — pusti hore/dole nad inou kartou pre presné poradie)"
+                                              />
+                                            )}
+                                            <select
+                                              value={statusId}
+                                              onClick={(e) => e.stopPropagation()}
+                                              onChange={(e) => updateStationStatus(item.orderId, item.itemId, stationId, e.target.value)}
+                                              disabled={!hasPermission('update_status')}
+                                              className={`text-[9px] px-1 py-0.5 rounded text-center font-bold ${statusCfg.color} truncate w-full focus:outline-none`}
+                                            >
+                                              {config.statuses.filter(s => s.id !== 'neaktivne').map(st => (
+                                                <option key={st.id} value={st.id} className="bg-slate-900 text-slate-300">{st.label}</option>
+                                              ))}
+                                            </select>
+                                          </div>
+                                          {showPlaceholderAfter && (
+                                            <div className="h-2 rounded-full bg-indigo-400 animate-pulse pointer-events-none" />
+                                          )}
+                                        </React.Fragment>
                                       );
                                     })}
                                   </div>
@@ -3488,6 +3580,26 @@ export default function App() {
                       <button onClick={handleCopyPreviousWeek} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Upload className="h-3.5 w-3.5" /> Kopírovať z minulého týždňa</button>
                     </div>
 
+                    <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2">
+                      <h4 className="font-bold text-sm text-white flex items-center gap-2"><Star className="h-4 w-4 text-amber-400" /> Štandardné osadenie staníc</h4>
+                      <p className="text-[11px] text-slate-500">Tu nastav osobu, ktorá na danej stanici pracuje bežne — appka ju automaticky zobrazí každý deň, kým to nezmeníš. Náhradu na jeden konkrétny deň (dovolenka/PN) prideľuješ priamo v tabuľke nižšie.</p>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {STATION_ORDER.map(sid => {
+                          const cfg = STATION_CONFIGS[sid];
+                          const current = stationDefaults.find(d => d.stationId === sid);
+                          return (
+                            <div key={sid} className="bg-slate-900 border border-slate-800 rounded-lg p-2">
+                              <span className="text-[10px] text-slate-500 font-bold flex items-center gap-1 mb-1"><cfg.icon className="h-3 w-3" /> {cfg.name}</span>
+                              <select value={current?.employeeId || ''} onChange={(e) => handleSetStationDefault(sid, e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-[11px] text-white">
+                                <option value="">— nenastavené —</option>
+                                {employees.map(e => <option key={e.id} value={e.id}>{e.avatar} {e.firstName} {e.lastName}</option>)}
+                              </select>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
                     <div className="overflow-x-auto border border-slate-800 rounded-xl bg-slate-900/20">
                       <table className="w-full text-left border-collapse">
                         <thead>
@@ -3511,11 +3623,26 @@ export default function App() {
                               </td>
                               {STATION_ORDER.map(sid => {
                                 const cellAssignments = stationAssignments.filter(a => a.date === date && a.stationId === sid);
-                                const isUnstaffedToday = date === todayStr && cellAssignments.length === 0;
+                                const defaultAssignment = stationDefaults.find(d => d.stationId === sid && d.employeeId);
+                                const exclusion = stationExclusions.find(ex => ex.date === date && ex.stationId === sid);
+                                const defaultEmp = defaultAssignment ? employees.find(e => e.id === defaultAssignment.employeeId) : null;
+                                const isUnstaffedToday = date === todayStr && cellAssignments.length === 0 && (!defaultEmp || exclusion);
                                 const isPickerOpen = staffingPickerCell && staffingPickerCell.date === date && staffingPickerCell.stationId === sid;
                                 return (
                                   <td key={sid} className={`p-2 border-r border-slate-850 align-top min-w-[140px] ${isUnstaffedToday ? 'bg-rose-950/20' : ''}`}>
                                     <div className="flex flex-col gap-1">
+                                      {defaultEmp && !exclusion && (
+                                        <div className="flex items-center justify-between gap-1 px-2 py-1 rounded-md text-[11px] font-bold bg-indigo-950/40 border border-indigo-800/40 text-indigo-200">
+                                          <span className="flex items-center gap-1 truncate"><Star className="h-3 w-3 text-amber-400 shrink-0" /> {defaultEmp.avatar} {defaultEmp.firstName}</span>
+                                          <button onClick={() => handleMarkDefaultAbsentToday(date, sid)} className="text-[9px] text-slate-400 hover:text-rose-400 shrink-0 underline">dnes chýba</button>
+                                        </div>
+                                      )}
+                                      {defaultEmp && exclusion && (
+                                        <div className="flex items-center justify-between gap-1 px-2 py-1 rounded-md text-[10px] bg-slate-900 border border-dashed border-slate-700 text-slate-500">
+                                          <span className="truncate italic">⭐ {defaultEmp.firstName} dnes chýba</span>
+                                          <button onClick={() => handleRestoreDefaultForDay(exclusion.id)} className="text-indigo-400 hover:text-indigo-300 shrink-0 underline">vrátiť</button>
+                                        </div>
+                                      )}
                                       {cellAssignments.map(a => {
                                         const emp = employees.find(e => e.id === a.employeeId);
                                         const hasConflict = conflictSet.has(`${date}|${a.employeeId}`);
@@ -3532,7 +3659,7 @@ export default function App() {
                                           {employees.filter(e => !cellAssignments.some(a => a.employeeId === e.id)).map(e => <option key={e.id} value={e.id}>{e.avatar} {e.firstName} {e.lastName}</option>)}
                                         </select>
                                       ) : (
-                                        <button onClick={() => setStaffingPickerCell({ date, stationId: sid })} className="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold flex items-center gap-1 px-1"><Plus className="h-3 w-3" /> Priradiť</button>
+                                        <button onClick={() => setStaffingPickerCell({ date, stationId: sid })} className="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold flex items-center gap-1 px-1"><Plus className="h-3 w-3" /> {exclusion ? 'Pridať náhradu' : 'Pridať navyše'}</button>
                                       )}
                                     </div>
                                   </td>
