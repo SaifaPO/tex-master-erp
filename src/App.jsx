@@ -306,6 +306,7 @@ const mapCostRateFromDb = (r) => ({ stationId: r.station_id, rate: r.rate, unit:
 const mapAssignmentFromDb = (r) => ({ id: r.id, employeeId: r.employee_id, stationId: r.station_id, date: r.assignment_date });
 const mapStationDefaultFromDb = (r) => ({ stationId: r.station_id, employeeId: r.employee_id });
 const mapStationExclusionFromDb = (r) => ({ id: r.id, stationId: r.station_id, date: r.exclusion_date, reason: r.reason || '' });
+const mapCheckinFromDb = (r) => ({ id: r.id, employeeId: r.employee_id, date: r.checkin_date, checkedInAt: r.checked_in_at, stationId: r.station_id });
 const mapProblemFromDb = (r) => ({ id: r.id, orderId: r.order_id, itemId: r.item_id, stationId: r.station_id, employeeId: r.employee_id, employeeName: r.employee_name, category: r.category, description: r.description, status: r.status, createdAt: r.created_at, resolvedAt: r.resolved_at, resolvedBy: r.resolved_by, resolutionNote: r.resolution_note });
 
 const mapCompanySettingsFromDb = (r) => ({ companyName: r.company_name || '', address: r.address || '', ico: r.ico || '', dic: r.dic || '', icDph: r.ic_dph || '', iban: r.iban || '', bankName: r.bank_name || '', defaultVatRate: r.default_vat_rate ?? 20, nextInvoiceNumber: r.next_invoice_number ?? 1, invoiceNumberPrefix: r.invoice_number_prefix || '', nextPpdNumber: r.next_ppd_number ?? 1, nextVpdNumber: r.next_vpd_number ?? 1 });
@@ -555,6 +556,7 @@ export default function App() {
   const [stationAssignments, setStationAssignments] = useState([]);
   const [stationDefaults, setStationDefaults] = useState([]);
   const [stationExclusions, setStationExclusions] = useState([]);
+  const [employeeCheckins, setEmployeeCheckins] = useState([]);
   const [loginMismatches, setLoginMismatches] = useState([]);
   const [problemReports, setProblemReports] = useState([]);
   const [reportingProblemForItem, setReportingProblemForItem] = useState(null); // item object | null
@@ -838,7 +840,7 @@ export default function App() {
     }
     async function loadAll() {
       try {
-        const [matRes, prodRes, tierRes, sportRes, empRes, aclRes, orderRes, whRes, rateRes, assignRes, mismatchRes, problemRes, companyRes, invoiceRes, bankRes, journalRes, deadlineRes, cashDocRes, capacityRes, productTimesRes, stationDefaultRes, stationExclusionRes] = await Promise.all([
+        const [matRes, prodRes, tierRes, sportRes, empRes, aclRes, orderRes, whRes, rateRes, assignRes, mismatchRes, problemRes, companyRes, invoiceRes, bankRes, journalRes, deadlineRes, cashDocRes, capacityRes, productTimesRes, stationDefaultRes, stationExclusionRes, checkinRes] = await Promise.all([
           supabase.from('materials').select('*').order('name'),
           supabase.from('products').select('*'),
           supabase.from('quality_tiers').select('*'),
@@ -851,6 +853,7 @@ export default function App() {
           supabase.from('station_assignments').select('*'),
           supabase.from('station_default_assignments').select('*'),
           supabase.from('station_default_exclusions').select('*'),
+          supabase.from('employee_checkins').select('*').eq('checkin_date', new Date().toISOString().slice(0, 10)),
           supabase.from('login_mismatches').select('*').order('created_at', { ascending: false }).limit(50),
           supabase.from('problem_reports').select('*').order('created_at', { ascending: false }).limit(200),
           supabase.from('company_settings').select('*').eq('id', 1).maybeSingle(),
@@ -883,6 +886,7 @@ export default function App() {
         setStationAssignments(assignRes.error ? [] : (assignRes.data || []).map(mapAssignmentFromDb));
         setStationDefaults(stationDefaultRes.error ? [] : (stationDefaultRes.data || []).map(mapStationDefaultFromDb));
         setStationExclusions(stationExclusionRes.error ? [] : (stationExclusionRes.data || []).map(mapStationExclusionFromDb));
+        setEmployeeCheckins(checkinRes.error ? [] : (checkinRes.data || []).map(mapCheckinFromDb));
         setLoginMismatches(mismatchRes.error ? [] : (mismatchRes.data || []).map(mapMismatchFromDb));
         setProblemReports(problemRes.error ? [] : (problemRes.data || []).map(mapProblemFromDb));
         if (companyRes.data) setCompanySettings(mapCompanySettingsFromDb(companyRes.data));
@@ -932,6 +936,10 @@ export default function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'station_assignments' }, (payload) => applyRealtimeChange(setStationAssignments, payload, mapAssignmentFromDb))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'station_default_assignments' }, (payload) => applyRealtimeChange(setStationDefaults, payload, mapStationDefaultFromDb, 'stationId'))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'station_default_exclusions' }, (payload) => applyRealtimeChange(setStationExclusions, payload, mapStationExclusionFromDb))
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'employee_checkins' }, (payload) => {
+        const c = mapCheckinFromDb(payload.new);
+        if (c.date === new Date().toISOString().slice(0, 10)) setEmployeeCheckins(prev => prev.some(x => x.id === c.id) ? prev : [...prev, c]);
+      })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'login_mismatches' }, (payload) => setLoginMismatches(prev => [mapMismatchFromDb(payload.new), ...prev].slice(0, 50)))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'problem_reports' }, (payload) => {
         applyRealtimeChange(setProblemReports, payload, mapProblemFromDb);
@@ -1267,6 +1275,10 @@ export default function App() {
         id: `mm-${Date.now()}`, employee_id: emp.id, employee_name: `${emp.firstName} ${emp.lastName}`,
         station_id: activeStationContext, assignment_date: today
       });
+    }
+    // Zaznamenanie príchodu — prvé prihlásenie tento deň (jednoduchá náhrada za dochádzkový systém)
+    if (!employeeCheckins.some(c => c.employeeId === emp.id && c.date === today)) {
+      await supabase.from('employee_checkins').insert({ id: `chk-${Date.now()}`, employee_id: emp.id, checkin_date: today, station_id: activeStationContext });
     }
   };
 
@@ -3628,14 +3640,30 @@ export default function App() {
                                 const defaultEmp = defaultAssignment ? employees.find(e => e.id === defaultAssignment.employeeId) : null;
                                 const isUnstaffedToday = date === todayStr && cellAssignments.length === 0 && (!defaultEmp || exclusion);
                                 const isPickerOpen = staffingPickerCell && staffingPickerCell.date === date && staffingPickerCell.stationId === sid;
+                                const checkin = date === todayStr && defaultEmp ? employeeCheckins.find(c => c.employeeId === defaultEmp.id) : null;
+                                const someoneAssignedHere = (defaultEmp && !exclusion) || cellAssignments.length > 0;
+                                const hasScheduledWork = allItems.some(it => getItemStationDate(it, sid) === date && it.stationStatuses?.[sid] && it.stationStatuses[sid] !== 'neaktivne' && it.stationStatuses[sid] !== 'hotove');
+                                const isIdle = someoneAssignedHere && !hasScheduledWork;
                                 return (
-                                  <td key={sid} className={`p-2 border-r border-slate-850 align-top min-w-[140px] ${isUnstaffedToday ? 'bg-rose-950/20' : ''}`}>
+                                  <td key={sid} className={`p-2 border-r border-slate-850 align-top min-w-[140px] ${isUnstaffedToday ? 'bg-rose-950/20' : isIdle ? 'bg-amber-950/10' : ''}`}>
                                     <div className="flex flex-col gap-1">
+                                      {isIdle && (
+                                        <div className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold bg-amber-950/40 border border-amber-700/40 text-amber-300">
+                                          <AlertTriangle className="h-3 w-3 shrink-0" /> Žiadna práca — presuň inam
+                                        </div>
+                                      )}
                                       {defaultEmp && !exclusion && (
                                         <div className="flex items-center justify-between gap-1 px-2 py-1 rounded-md text-[11px] font-bold bg-indigo-950/40 border border-indigo-800/40 text-indigo-200">
                                           <span className="flex items-center gap-1 truncate"><Star className="h-3 w-3 text-amber-400 shrink-0" /> {defaultEmp.avatar} {defaultEmp.firstName}</span>
                                           <button onClick={() => handleMarkDefaultAbsentToday(date, sid)} className="text-[9px] text-slate-400 hover:text-rose-400 shrink-0 underline">dnes chýba</button>
                                         </div>
+                                      )}
+                                      {date === todayStr && defaultEmp && !exclusion && (
+                                        checkin ? (
+                                          <span className="text-[9px] text-emerald-400 px-2">✅ Prihlásený o {new Date(checkin.checkedInAt).toLocaleTimeString('sk-SK', { hour: '2-digit', minute: '2-digit' })}</span>
+                                        ) : (
+                                          <span className="text-[9px] text-slate-500 px-2">❔ Zatiaľ sa dnes neprihlásil</span>
+                                        )
                                       )}
                                       {defaultEmp && exclusion && (
                                         <div className="flex items-center justify-between gap-1 px-2 py-1 rounded-md text-[10px] bg-slate-900 border border-dashed border-slate-700 text-slate-500">
