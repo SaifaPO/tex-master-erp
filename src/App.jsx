@@ -8,7 +8,7 @@ import {
   ClipboardList, Package, Cpu, QrCode, Plus, User, Clock, Layers, Search, Check, X, Calendar,
   Palette, Scissors, Printer, Sliders, Sparkles, ZoomIn, ZoomOut, FileText, PlusCircle, Table,
   Shield, Users, Lock, Edit2, Trash2, Tag, Scale, CalendarDays, FileEdit, Gift, Loader2, AlertTriangle,
-  Shirt, Box, Banknote, GripVertical, Download, Upload, ArrowUp, ArrowDown, BarChart3, Camera, Bot
+  Shirt, Box, Banknote, GripVertical, Download, Upload, ArrowUp, ArrowDown, BarChart3, Camera, Bot, Zap
 } from 'lucide-react';
 
 // ============================================================
@@ -163,18 +163,21 @@ const mapProductToDb = (p) => ({ id: p.id, custom_code: p.customCode, name: p.na
 const mapTierFromDb = (r) => ({ id: r.id, name: r.name, fit: r.fit, ventilation: r.ventilation, desc: r.description });
 const mapTierToDb = (t) => ({ id: t.id, name: t.name, fit: t.fit, ventilation: t.ventilation, description: t.desc });
 
-const mapEmployeeFromDb = (r) => ({ id: r.id, firstName: r.first_name, lastName: r.last_name, birthday: r.birthday, nameday: r.nameday, entryDate: r.entry_date, role: r.role, position: r.position, passwordHash: r.password_hash || '', phone: r.phone || '', email: r.email || '', avatar: r.avatar || '', pinHash: r.pin_hash || '', totpSecret: r.totp_secret || '', totpEnabled: !!r.totp_enabled, authUserId: r.auth_user_id || '' });
-const mapEmployeeToDb = (e) => ({ id: e.id, first_name: e.firstName, last_name: e.lastName, birthday: e.birthday, nameday: e.nameday, entry_date: e.entryDate, role: e.role, position: e.position, password_hash: e.passwordHash || null, phone: e.phone || null, email: e.email || null, avatar: e.avatar || null, pin_hash: e.pinHash || null, totp_secret: e.totpSecret || null, totp_enabled: !!e.totpEnabled, auth_user_id: e.authUserId || null });
+const mapEmployeeFromDb = (r) => ({ id: r.id, firstName: r.first_name, lastName: r.last_name, birthday: r.birthday, nameday: r.nameday, entryDate: r.entry_date, role: r.role, position: r.position, passwordHash: r.password_hash || '', phone: r.phone || '', email: r.email || '', avatar: r.avatar || '', pinHash: r.pin_hash || '', authUserId: r.auth_user_id || '' });
+const mapEmployeeToDb = (e) => ({ id: e.id, first_name: e.firstName, last_name: e.lastName, birthday: e.birthday, nameday: e.nameday, entry_date: e.entryDate, role: e.role, position: e.position, password_hash: e.passwordHash || null, phone: e.phone || null, email: e.email || null, avatar: e.avatar || null, pin_hash: e.pinHash || null, auth_user_id: e.authUserId || null });
 
 const mapOrderFromDb = (r) => ({ id: r.id, customer: r.customer, createdAt: r.created_at, deliveryDate: r.scheduled_day, driveLink: r.drive_link, notes: r.notes, paymentType: r.payment_type || 'faktura', items: r.items || [], orderLog: r.order_log || [], legacyOrderNumber: r.legacy_order_number || '', companyBrand: r.company_brand || 'ATAK', orderNumber: r.order_number || '', accountingStatus: r.accounting_status || null });
 const mapOrderToDb = (o) => ({ id: o.id, customer: o.customer, created_at: o.createdAt, scheduled_day: o.deliveryDate, drive_link: o.driveLink, notes: o.notes, payment_type: o.paymentType, items: o.items, order_log: o.orderLog || [], legacy_order_number: o.legacyOrderNumber || null, company_brand: o.companyBrand || 'ATAK', order_number: o.orderNumber || null, accounting_status: o.accountingStatus || null });
 
-function applyRealtimeChange(setter, payload, mapFn) {
+function applyRealtimeChange(setter, payload, mapFn, keyField = 'id') {
   setter(prev => {
-    if (payload.eventType === 'DELETE') return prev.filter(x => x.id !== payload.old.id);
+    if (payload.eventType === 'DELETE') {
+      const deletedKey = mapFn(payload.old)[keyField];
+      return prev.filter(x => x[keyField] !== deletedKey);
+    }
     const mapped = mapFn(payload.new);
-    const exists = prev.some(x => x.id === mapped.id);
-    return exists ? prev.map(x => (x.id === mapped.id ? mapped : x)) : [...prev, mapped];
+    const exists = prev.some(x => x[keyField] === mapped[keyField]);
+    return exists ? prev.map(x => (x[keyField] === mapped[keyField] ? mapped : x)) : [...prev, mapped];
   });
 }
 
@@ -311,6 +314,55 @@ const PROBLEM_CATEGORIES = ['Chýba materiál', 'Chyba vo výrobe/tlači', 'Poš
 
 const BLANK_GOODS_TYPES = ['Tričko', 'Polokošeľa', 'Mikina', 'Tepláky', 'Šiltovka', 'Ponožky', 'Vlajka', 'Iné'];
 
+const SK_MONTHS = ['Január', 'Február', 'Marec', 'Apríl', 'Máj', 'Jún', 'Júl', 'August', 'September', 'Október', 'November', 'December'];
+
+// Slovenský meninový kalendár (bežné mená) — pre automatický návrh menín podľa krstného mena
+const SK_NAMEDAY_CALENDAR = {
+  'Alžbeta': '5. Marec', 'Kazimír': '4. Marec', 'Bohumil': '9. Marec', 'Gregor': '12. Marec', 'Vladimír': '15. Marec', 'Jozef': '19. Marec', 'Marián': '22. Marec',
+  'Miroslava': '23. Marec', 'Kvetoslava': '27. Marec', 'Ľudovít': '29. Marec', 'Hugo': '1. Apríl', 'Richard': '3. Apríl', 'Irena': '5. Apríl', 'Miroslav': '7. Apríl',
+  'Ctibor': '9. Apríl', 'Július': '12. Apríl', 'Justína': '14. Apríl', 'Rudolf': '17. Apríl', 'Jela': '20. Apríl', 'Ervín': '23. Apríl', 'Juraj': '24. Apríl',
+  'Marek': '25. Apríl', 'Jaroslava': '26. Apríl', 'Anastázia': '28. Apríl', 'Zita': '27. Apríl', 'Filip': '1. Máj', 'Žigmund': '2. Máj', 'Galina': '3. Máj',
+  'Florián': '4. Máj', 'Lesana': '5. Máj', 'Hermína': '6. Máj', 'Monika': '7. Máj', 'Ida': '8. Máj', 'Roland': '9. Máj', 'Viktória': '10. Máj', 'Blažena': '11. Máj',
+  'Pankrác': '12. Máj', 'Servác': '13. Máj', 'Bonifác': '14. Máj', 'Žofia': '15. Máj', 'Svetlana': '16. Máj', 'Gizela': '17. Máj', 'Viola': '18. Máj', 'Gertrúda': '19. Máj',
+  'Bernard': '20. Máj', 'Zina': '21. Máj', 'Júlia': '22. Máj', 'Želmíra': '23. Máj', 'Ela': '24. Máj', 'Urban': '25. Máj', 'Dušan': '26. Máj', 'Iveta': '27. Máj',
+  'Viliam': '28. Máj', 'Vilma': '28. Máj', 'Petra': '29. Máj', 'Ferdinand': '30. Máj', 'Petronela': '31. Máj', 'Žaneta': '1. Jún', 'Xénia': '2. Jún', 'Karolína': '3. Jún',
+  'Laura': '4. Jún', 'Laura': '4. Jún', 'Norbert': '6. Jún', 'Róbert': '7. Jún', 'Medard': '8. Jún', 'Stanislava': '9. Jún', 'Margaréta': '10. Jún', 'Dobroslava': '11. Jún',
+  'Zlatko': '12. Jún', 'Anton': '13. Jún', 'Vasil': '14. Jún', 'Vít': '15. Jún', 'Blanka': '16. Jún', 'Adolf': '17. Jún', 'Vratislav': '18. Jún', 'Alfréd': '19. Jún',
+  'Valéria': '20. Jún', 'Alojz': '21. Jún', 'Paulína': '22. Jún', 'Sidónia': '23. Jún', 'Ján': '24. Jún', 'Tadeáš': '25. Jún', 'Adriána': '26. Jún', 'Ladislav': '27. Jún',
+  'Beáta': '28. Jún', 'Peter': '29. Jún', 'Pavol': '29. Jún', 'Melánia': '30. Jún', 'Diana': '1. Júl', 'Berta': '2. Júl', 'Miloslav': '3. Júl', 'Prokop': '4. Júl',
+  'Cyril': '5. Júl', 'Metod': '5. Júl', 'Patrik': '6. Júl', 'Oliver': '7. Júl', 'Ivan': '8. Júl', 'Lujza': '9. Júl', 'Amália': '10. Júl', 'Milota': '11. Júl',
+  'Nina': '12. Júl', 'Margita': '13. Júl', 'Kamil': '14. Júl', 'Henrich': '15. Júl', 'Drahomíra': '16. Júl', 'Bohuslav': '17. Júl', 'Kamila': '18. Júl', 'Dušana': '19. Júl',
+  'Iľja': '20. Júl', 'Daniel': '21. Júl', 'Magdaléna': '22. Júl', 'Oľga': '23. Júl', 'Vladmíra': '24. Júl', 'Jakub': '25. Júl', 'Anna': '26. Júl', 'Božena': '27. Júl',
+  'Krištof': '28. Júl', 'Marta': '29. Júl', 'Libuša': '30. Júl', 'Ignác': '31. Júl', 'Gustáv': '1. August', 'Vasilisa': '2. August', 'Jerguš': '3. August',
+  'Dominik': '4. August', 'Hortenzia': '5. August', 'Oskar': '6. August', 'Štefánia': '7. August', 'Oswald': '8. August', 'Ľubomíra': '9. August', 'Vavrinec': '10. August',
+  'Zuzana': '11. August', 'Darina': '12. August', 'Ľubomír': '13. August', 'Mojmír': '14. August', 'Marcela': '15. August', 'Leonard': '16. August', 'Milica': '17. August',
+  'Elena': '18. August', 'Lýdia': '19. August', 'Anabela': '20. August', 'Jana': '21. August', 'Tichomír': '22. August', 'Filip': '23. August', 'Bartolomej': '24. August',
+  'Ľudovít': '25. August', 'Samuel': '26. August', 'Silvia': '27. August', 'Augustín': '28. August', 'Nikola': '29. August', 'Ružena': '30. August', 'Nora': '31. August',
+  'Drahoslava': '1. September', 'Linda': '2. September', 'Belo': '3. September', 'Rozália': '4. September', 'Regína': '5. September', 'Alica': '6. September', 'Marianna': '7. September',
+  'Miriam': '8. September', 'Martina': '9. September', 'Oleg': '10. September', 'Bystrík': '11. September', 'Mária': '12. September', 'Ctibor': '13. September', 'Ľudomil': '14. September',
+  'Jolana': '15. September', 'Ľudmila': '16. September', 'Olympia': '17. September', 'Eugénia': '18. September', 'Konštantín': '19. September', 'Ľuboslava': '20. September',
+  'Matúš': '21. September', 'Móric': '22. September', 'Zdenka': '23. September', 'Ľuboš': '24. September', 'Vladislav': '25. September', 'Edita': '26. September', 'Cyprián': '27. September',
+  'Václav': '28. September', 'Michal': '29. September', 'Jarolím': '30. September', 'Arnold': '1. Október', 'Levoslav': '2. Október', 'Stela': '3. Október', 'František': '4. Október',
+  'Viera': '5. Október', 'Natália': '6. Október', 'Eliška': '7. Október', 'Brigita': '8. Október', 'Dionýz': '9. Október', 'Slavomíra': '10. Október', 'Valentína': '11. Október',
+  'Maximilián': '12. Október', 'Koloman': '13. Október', 'Boris': '14. Október', 'Terézia': '15. Október', 'Vladimíra': '16. Október', 'Hedviga': '17. Október', 'Lukáš': '18. Október',
+  'Kristián': '19. Október', 'Vendelín': '20. Október', 'Uršuľa': '21. Október', 'Sergej': '22. Október', 'Alojzia': '23. Október', 'Kvetoslav': '24. Október', 'Aurel': '25. Október',
+  'Demeter': '26. Október', 'Sabína': '27. Október', 'Dobromila': '28. Október', 'Klára': '29. Október', 'Simona': '30. Október', 'Sergej': '31. Október', 'Denisa': '1. November',
+  'Pribina': '2. November', 'Hubert': '3. November', 'Karol': '4. November', 'Imrich': '5. November', 'Renáta': '6. November', 'René': '7. November', 'Bohumír': '8. November',
+  'Teodor': '9. November', 'Tibor': '10. November', 'Martin': '11. November', 'Svätopluk': '12. November', 'Stanislav': '13. November', 'Irma': '14. November', 'Leopold': '15. November',
+  'Agnesa': '16. November', 'Klaudia': '17. November', 'Eugen': '18. November', 'Alžbeta': '19. November', 'Félix': '20. November', 'Elvíra': '21. November', 'Cecília': '22. November',
+  'Klement': '23. November', 'Emília': '24. November', 'Katarína': '25. November', 'Kornel': '26. November', 'Milan': '27. November', 'Henrieta': '28. November', 'Vratko': '29. November',
+  'Ondrej': '30. November', 'Edmund': '1. December', 'Bibiána': '2. December', 'Oldrich': '3. December', 'Barbora': '4. December', 'Oto': '5. December', 'Mikuláš': '6. December',
+  'Ambróz': '7. December', 'Marína': '8. December', 'Izabela': '9. December', 'Radúz': '10. December', 'Hilda': '11. December', 'Otília': '12. December', 'Lucia': '13. December',
+  'Branislava': '14. December', 'Ivica': '15. December', 'Albína': '16. December', 'Kornélia': '17. December', 'Sláva': '18. December', 'Judita': '19. December', 'Dagmara': '20. December',
+  'Bohdana': '21. December', 'Adela': '22. December', 'Nadežda': '23. December', 'Adam': '24. December', 'Eva': '24. December', 'Silvester': '31. December',
+};
+
+function suggestNameday(firstName) {
+  if (!firstName) return '';
+  const key = firstName.trim();
+  return SK_NAMEDAY_CALENDAR[key] || '';
+}
+
 // Pípnutie cez Web Audio API — bez potreby zvukového súboru
 function playAlertBeep(times = 1, freq = 880) {
   try {
@@ -361,6 +413,18 @@ async function downloadFile(url, filename, onError) {
   }
 }
 
+// Vytlačiť / uložiť ako PDF s navrhovaným názvom súboru podľa čísla zákazky/faktúry
+// (väčšina prehliadačov — najmä Chrome/Edge — použije aktuálny document.title ako predvyplnený názov v dialógu "Uložiť ako PDF")
+function printWithFilename(suggestedName) {
+  const originalTitle = document.title;
+  const safeName = (suggestedName || 'dokument').replace(/[\\/:*?"<>|]/g, '-');
+  document.title = safeName;
+  const restoreTitle = () => { document.title = originalTitle; window.removeEventListener('afterprint', restoreTitle); };
+  window.addEventListener('afterprint', restoreTitle);
+  window.print();
+  setTimeout(restoreTitle, 3000); // záložné obnovenie, keby prehliadač nevyvolal afterprint
+}
+
 const mapMismatchFromDb = (r) => ({ id: r.id, employeeId: r.employee_id, employeeName: r.employee_name, stationId: r.station_id, date: r.assignment_date, createdAt: r.created_at });
 
 const mapBankTxFromDb = (r) => ({ id: r.id, date: r.tx_date, sender: r.sender || '', amount: r.amount || 0, variableSymbol: r.variable_symbol || '', matched: !!r.matched, invoiceId: r.invoice_id || null, importedAt: r.imported_at });
@@ -370,6 +434,83 @@ const mapTaxDeadlineFromDb = (r) => ({ id: r.id, title: r.title, dueDate: r.due_
 const mapCashDocFromDb = (r) => ({ id: r.id, docNumber: r.doc_number, docType: r.doc_type, date: r.doc_date, description: r.description || '', amount: r.amount || 0, category: r.category || '', createdBy: r.created_by || '', createdAt: r.created_at });
 
 // Zákazka je "kompletne hotová" ak je hotová každá aktívna stanica na každej položke
+// Dátum výroby pre konkrétnu stanicu — každá stanica môže mať iný deň (napr. strihanie v pondelok, potlač v utorok)
+function getItemStationDate(item, stationId) {
+  return item.stationDates?.[stationId] || item.productionDate || item.deliveryDate;
+}
+
+// Kedy položka "prišla" (prvé naskenovanie/rozbehnutie akejkoľvek stanice) a "odišla" (dokončenie poslednej aktívnej stanice)
+function getArrivalDeparture(item) {
+  const metaEntries = Object.entries(item.stationMeta || {}).filter(([sid]) => item.stationStatuses?.[sid] && item.stationStatuses[sid] !== 'neaktivne');
+  let arrival = null;
+  metaEntries.forEach(([, meta]) => {
+    if (meta.startedAt && (!arrival || meta.startedAt < arrival.at)) arrival = { at: meta.startedAt, by: meta.assignedEmployeeName };
+  });
+  const allDone = metaEntries.length > 0 && Object.entries(item.stationStatuses).filter(([sid]) => item.stationStatuses[sid] && item.stationStatuses[sid] !== 'neaktivne').every(([, v]) => v === 'hotove');
+  let departure = null;
+  if (allDone) {
+    metaEntries.forEach(([, meta]) => {
+      if (meta.completedAt && (!departure || meta.completedAt > departure.at)) departure = { at: meta.completedAt, by: meta.assignedEmployeeName };
+    });
+  }
+  return { arrival, departure };
+}
+
+const mapCapacityConfigFromDb = (r) => ({ stationId: r.station_id, mode: r.mode || 'per_product', rateValue: r.rate_value ?? null, dailyMinutes: r.daily_minutes ?? 480, machineCount: r.machine_count ?? 1 });
+const mapProductTimeFromDb = (r) => ({ id: r.id, stationId: r.station_id, label: r.label, minutesPerUnit: r.minutes_per_unit, unit: r.unit || 'ks' });
+
+// Stanice, ktoré majú jednoduchú sadzbu (m/hod alebo ks/min) namiesto tabuľky produktov
+const RATE_BASED_STATIONS = ['sublimacia', 'sietotlac'];
+
+// Odhad, koľko minút zaberie táto položka na danej stanici, podľa nastavenej kapacity
+function estimateItemStationMinutes(item, stationId, capacityByStation, productTimesByStation) {
+  const cfg = capacityByStation[stationId];
+  if (!cfg) return 0;
+  if (RATE_BASED_STATIONS.includes(stationId)) {
+    if (!cfg.rateValue || cfg.rateValue <= 0) return 0;
+    if (stationId === 'sublimacia') {
+      const meters = (item.materialsNeeded || []).reduce((s, m) => s + (m.qtyNeeded || 0), 0);
+      return (meters / cfg.rateValue) * 60; // m/hod -> minúty
+    }
+    if (stationId === 'sietotlac') {
+      return item.qty / cfg.rateValue; // ks/min
+    }
+    return 0;
+  }
+  const entries = productTimesByStation[stationId] || [];
+  if (entries.length === 0) return 0;
+  const nameLower = (item.productName || '').toLowerCase();
+  const match = entries.find(t => nameLower.includes(t.label.toLowerCase()) || t.label.toLowerCase().includes(nameLower));
+  const perUnit = match ? match.minutesPerUnit : (entries.reduce((s, t) => s + t.minutesPerUnit, 0) / entries.length);
+  return perUnit * item.qty;
+}
+
+// Vyťaženie stanice v daný deň (súčet minút / dostupná kapacita) v percentách
+function computeStationLoad(date, stationId, allItems, capacityByStation, productTimesByStation) {
+  const cfg = capacityByStation[stationId];
+  if (!cfg) return null;
+  const dayItems = allItems.filter(it => getItemStationDate(it, stationId) === date && it.stationStatuses?.[stationId] && it.stationStatuses[stationId] !== 'neaktivne' && it.stationStatuses[stationId] !== 'hotove');
+  const usedMinutes = dayItems.reduce((s, it) => s + estimateItemStationMinutes(it, stationId, capacityByStation, productTimesByStation), 0);
+  const capacityMinutes = (cfg.dailyMinutes || 480) * (cfg.machineCount || 1);
+  const percent = capacityMinutes > 0 ? (usedMinutes / capacityMinutes) * 100 : 0;
+  return { usedMinutes, capacityMinutes, percent };
+}
+
+function loadBarColor(percent) {
+  if (percent >= 100) return 'bg-rose-600';
+  if (percent >= 70) return 'bg-amber-500';
+  return 'bg-emerald-600';
+}
+
+function companyBrandBadgeClass(brand, variant = 'soft') {
+  const map = {
+    PBT: { soft: 'bg-purple-950/50 text-purple-300', solid: 'bg-purple-600 text-white' },
+    ADY: { soft: 'bg-amber-950/50 text-amber-300', solid: 'bg-amber-600 text-white' },
+    ATAK: { soft: 'bg-emerald-950/50 text-emerald-300', solid: 'bg-emerald-600 text-white' },
+  };
+  return (map[brand] || map.ATAK)[variant];
+}
+
 function isOrderFullyComplete(order) {
   if (!order.items || order.items.length === 0) return false;
   return order.items.every(item => {
@@ -543,6 +684,25 @@ export default function App() {
   const [rowSearch, setRowSearch] = useState('');
   const [rowDateFilter, setRowDateFilter] = useState('vsetko');
   const [draggedRowItem, setDraggedRowItem] = useState(null);
+  const [draggedMatrixCard, setDraggedMatrixCard] = useState(null);
+  const [showExpressDotlackovka, setShowExpressDotlackovka] = useState(false);
+  const [expressCustomerName, setExpressCustomerName] = useState('');
+  const [expressNeededDate, setExpressNeededDate] = useState('');
+  const [expressCreatedBy, setExpressCreatedBy] = useState('');
+  const [expressPaymentType, setExpressPaymentType] = useState('faktura');
+  const [expressListokFile, setExpressListokFile] = useState(null);
+  const [expressListokPreview, setExpressListokPreview] = useState('');
+  const [expressTovarFile, setExpressTovarFile] = useState(null);
+  const [expressTovarPreview, setExpressTovarPreview] = useState('');
+  const [isSubmittingExpress, setIsSubmittingExpress] = useState(false);
+  const [capacityConfigs, setCapacityConfigs] = useState([]);
+  const [stationProductTimes, setStationProductTimes] = useState([]);
+  const [showCapacitySettings, setShowCapacitySettings] = useState(false);
+  const [capacityDraft, setCapacityDraft] = useState(null);
+  const [productTimesDraft, setProductTimesDraft] = useState(null);
+  const [newProductTimeLabel, setNewProductTimeLabel] = useState({});
+  const [newProductTimeMinutes, setNewProductTimeMinutes] = useState({});
+  const [showCapacityBars, setShowCapacityBars] = useState(true);
 
   const [catalogSportFilter, setCatalogSportFilter] = useState('vsetko');
 
@@ -673,7 +833,7 @@ export default function App() {
     }
     async function loadAll() {
       try {
-        const [matRes, prodRes, tierRes, sportRes, empRes, aclRes, orderRes, whRes, rateRes, assignRes, mismatchRes, problemRes, companyRes, invoiceRes, bankRes, journalRes, deadlineRes, cashDocRes] = await Promise.all([
+        const [matRes, prodRes, tierRes, sportRes, empRes, aclRes, orderRes, whRes, rateRes, assignRes, mismatchRes, problemRes, companyRes, invoiceRes, bankRes, journalRes, deadlineRes, cashDocRes, capacityRes, productTimesRes] = await Promise.all([
           supabase.from('materials').select('*').order('name'),
           supabase.from('products').select('*'),
           supabase.from('quality_tiers').select('*'),
@@ -691,7 +851,9 @@ export default function App() {
           supabase.from('bank_transactions').select('*').order('imported_at', { ascending: false }),
           supabase.from('journal_entries').select('*').order('entry_date', { ascending: false }),
           supabase.from('tax_deadlines').select('*').order('due_date'),
-          supabase.from('cash_documents').select('*').order('doc_date', { ascending: false })
+          supabase.from('cash_documents').select('*').order('doc_date', { ascending: false }),
+          supabase.from('station_capacity_config').select('*'),
+          supabase.from('station_product_times').select('*')
         ]);
         const firstErr = [matRes, prodRes, tierRes, sportRes, empRes, orderRes, whRes].find(r => r.error);
         if (firstErr) throw firstErr.error;
@@ -720,6 +882,8 @@ export default function App() {
         setJournalEntries(journalRes.error ? [] : (journalRes.data || []).map(mapJournalFromDb));
         setTaxDeadlines(deadlineRes.error ? [] : (deadlineRes.data || []).map(mapTaxDeadlineFromDb));
         setCashDocuments(cashDocRes.error ? [] : (cashDocRes.data || []).map(mapCashDocFromDb));
+        setCapacityConfigs(capacityRes.error ? [] : (capacityRes.data || []).map(mapCapacityConfigFromDb));
+        setStationProductTimes(productTimesRes.error ? [] : (productTimesRes.data || []).map(mapProductTimeFromDb));
 
         if (loadedWarehouses.length > 0) {
           setActiveWarehouseId(loadedWarehouses[0].id);
@@ -771,6 +935,8 @@ export default function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'journal_entries' }, (payload) => applyRealtimeChange(setJournalEntries, payload, mapJournalFromDb))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tax_deadlines' }, (payload) => applyRealtimeChange(setTaxDeadlines, payload, mapTaxDeadlineFromDb))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'cash_documents' }, (payload) => applyRealtimeChange(setCashDocuments, payload, mapCashDocFromDb))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'station_capacity_config' }, (payload) => applyRealtimeChange(setCapacityConfigs, payload, mapCapacityConfigFromDb, 'stationId'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'station_product_times' }, (payload) => applyRealtimeChange(setStationProductTimes, payload, mapProductTimeFromDb))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings' }, (payload) => { if (payload.new) setCompanySettings(mapCompanySettingsFromDb(payload.new)); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, (payload) => applyRealtimeChange(setProducts, payload, mapProductFromDb))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'quality_tiers' }, (payload) => applyRealtimeChange(setQualityTiers, payload, mapTierFromDb))
@@ -2060,6 +2226,109 @@ export default function App() {
 
   const handleRemovePendingItem = (tempId) => setPendingItems(pendingItems.filter(i => i.tempId !== tempId));
 
+  // --- EXPRESNÉ PRIDANIE DOTLAČOVEJ ZÁKAZKY (firma ADY) ---
+  // --- KAPACITA VÝROBY ---
+  const handleOpenCapacitySettings = () => {
+    const draft = {};
+    STATION_ORDER.forEach(sid => {
+      const existing = capacityConfigs.find(c => c.stationId === sid);
+      draft[sid] = existing || { stationId: sid, mode: RATE_BASED_STATIONS.includes(sid) ? 'rate' : 'per_product', rateValue: null, dailyMinutes: 480, machineCount: 1 };
+    });
+    setCapacityDraft(draft);
+    const timesDraft = {};
+    STATION_ORDER.forEach(sid => { timesDraft[sid] = stationProductTimes.filter(t => t.stationId === sid); });
+    setProductTimesDraft(timesDraft);
+    setShowCapacitySettings(true);
+  };
+
+  const handleSaveCapacitySettings = async () => {
+    if (!hasPermission('manage_catalog')) { triggerNotification('error', 'Nemáte oprávnenie.'); return; }
+    for (const sid of STATION_ORDER) {
+      const cfg = capacityDraft[sid];
+      await supabase.from('station_capacity_config').upsert({
+        station_id: sid, mode: cfg.mode, rate_value: cfg.rateValue ? parseFloat(cfg.rateValue) : null,
+        daily_minutes: parseFloat(cfg.dailyMinutes) || 480, machine_count: parseInt(cfg.machineCount) || 1
+      });
+    }
+    setShowCapacitySettings(false);
+    triggerNotification('success', 'Kapacitné nastavenia boli uložené.');
+  };
+
+  const handleAddProductTime = async (stationId) => {
+    const label = (newProductTimeLabel[stationId] || '').trim();
+    const minutes = parseFloat(newProductTimeMinutes[stationId]);
+    if (!label || !minutes || minutes <= 0) { alert('Zadaj názov položky a kladný čas v minútach.'); return; }
+    const newRow = { id: `spt-${Date.now()}`, stationId, label, minutesPerUnit: minutes, unit: 'ks' };
+    setProductTimesDraft(prev => ({ ...prev, [stationId]: [...(prev[stationId] || []), newRow] }));
+    setNewProductTimeLabel(prev => ({ ...prev, [stationId]: '' }));
+    setNewProductTimeMinutes(prev => ({ ...prev, [stationId]: '' }));
+    await supabase.from('station_product_times').insert({ id: newRow.id, station_id: stationId, label, minutes_per_unit: minutes, unit: 'ks' });
+  };
+
+  const handleRemoveProductTime = async (stationId, rowId) => {
+    setProductTimesDraft(prev => ({ ...prev, [stationId]: (prev[stationId] || []).filter(r => r.id !== rowId) }));
+    await supabase.from('station_product_times').delete().eq('id', rowId);
+  };
+
+  const handleSubmitExpressDotlackovka = async () => {
+    if (!expressCustomerName.trim()) { alert('Zadaj meno zákazníka.'); return; }
+    if (!expressNeededDate) { alert('Zadaj dátum, kedy to zákazník potrebuje.'); return; }
+    setIsSubmittingExpress(true);
+    try {
+      let tovarUrl = '';
+      if (expressTovarFile) {
+        const path = `${Date.now()}-tovar-${expressTovarFile.name}`;
+        const { error: upErr } = await supabase.storage.from('item-images').upload(path, expressTovarFile);
+        if (upErr) throw new Error(`Fotka tovaru: ${upErr.message}`);
+        tovarUrl = supabase.storage.from('item-images').getPublicUrl(path).data.publicUrl;
+      }
+      let listokData = { rozpisUrl: '', rozpisFileName: '', rozpisMimeType: '' };
+      if (expressListokFile) {
+        listokData = await uploadRozpisFile(expressListokFile);
+      }
+
+      const now = getFormattedDateTime();
+      const orderId = `ZAK-${Date.now()}`;
+      const fullYear = new Date().getFullYear();
+      const shortYear = String(fullYear).slice(-2);
+      const { data: counterData } = await supabase.from('order_number_counters').select('*').eq('company', 'ADY').eq('year', fullYear).maybeSingle();
+      const nextNum = counterData?.next_number || 1;
+      const orderNumber = `ADY-${shortYear}-${String(nextNum).padStart(4, '0')}`;
+
+      const today = new Date().toISOString().slice(0, 10);
+      const activeStations = ['grafik', 'transfer', 'balenie'];
+      const initialStatuses = {}; const initialStationDates = {};
+      activeStations.forEach(sid => { initialStatuses[sid] = 'caka'; initialStationDates[sid] = today; });
+      const maxPriority = allItems.length > 0 ? Math.max(...allItems.map(i => i.priority || 0)) : 0;
+
+      const newItem = {
+        itemId: `${orderId}-1`, productId: null, productName: 'Dotlačovka', customCode: '', qualityTier: '', gender: 'neutral', qty: 1,
+        notes: '', imageUrl: tovarUrl, assignedDesignerId: '', ...listokData,
+        materialsNeeded: [], threadQtyM: 0, priority: maxPriority + 1, productionDate: today, stationDates: initialStationDates,
+        stationStatuses: initialStatuses, materialDeducted: false
+      };
+
+      const createdBy = expressCreatedBy.trim() || `${currentUser.firstName} ${currentUser.lastName}`;
+      const created = {
+        id: orderId, customer: expressCustomerName.trim(), createdAt: now, deliveryDate: expressNeededDate, driveLink: '', notes: '',
+        paymentType: expressPaymentType, items: [newItem], orderLog: [{ date: now, author: createdBy, text: 'Dotlačová zákazka zaevidovaná cez expresný formulár.' }],
+        legacyOrderNumber: '', companyBrand: 'ADY', orderNumber, accountingStatus: null
+      };
+
+      const { error } = await supabase.from('orders').insert(mapOrderToDb(created));
+      if (error) throw error;
+      await supabase.from('order_number_counters').upsert({ company: 'ADY', year: fullYear, next_number: nextNum + 1 }, { onConflict: 'company,year' });
+
+      setShowExpressDotlackovka(false);
+      setExpressCustomerName(''); setExpressNeededDate(''); setExpressCreatedBy(''); setExpressListokFile(null); setExpressListokPreview(''); setExpressTovarFile(null); setExpressTovarPreview('');
+      triggerNotification('success', `Dotlačová zákazka ${orderNumber} bola zaevidovaná a zaradená na dnešný deň (Grafika/Transfer/Balenie).`);
+    } catch (err) {
+      triggerNotification('error', `Chyba: ${err.message}`);
+    } finally {
+      setIsSubmittingExpress(false);
+    }
+  };
+
   const handleGenerateOrder = async () => {
     if (!hasPermission('create_order')) { triggerNotification('error', 'Chyba: Vaša úroveň nemá právo na zadávanie zákaziek.'); return; }
     if (!newOrderCustomer.trim()) { alert('Vyplňte odberateľa.'); return; }
@@ -2093,12 +2362,13 @@ export default function App() {
     const itemsWithMeta = pendingItems.map((item, idx) => {
       const itemId = `${orderId}-${idx + 1}`;
       const initialStatuses = {};
-      item.activeStations.forEach(sid => { initialStatuses[sid] = 'caka'; });
+      const initialStationDates = {};
+      item.activeStations.forEach(sid => { initialStatuses[sid] = 'caka'; initialStationDates[sid] = newOrderDeliveryDate; });
       return {
         itemId, productId: item.productId, productName: item.productName, customCode: item.customCode,
         qualityTier: item.qualityTier, gender: item.gender, qty: item.qty, notes: item.notes, imageUrl: item.imageUrl || '', assignedDesignerId: item.assignedDesignerId || '',
         rozpisUrl: item.rozpisUrl || '', rozpisFileName: item.rozpisFileName || '', rozpisMimeType: item.rozpisMimeType || '',
-        materialsNeeded: item.materialsNeeded, threadQtyM: item.threadQtyM, priority: sameDayCount + idx + 1, productionDate: newOrderDeliveryDate,
+        materialsNeeded: item.materialsNeeded, threadQtyM: item.threadQtyM, priority: sameDayCount + idx + 1, productionDate: newOrderDeliveryDate, stationDates: initialStationDates,
         stationStatuses: initialStatuses, materialDeducted: (item.materialsNeeded || []).length > 0
       };
     });
@@ -2107,7 +2377,7 @@ export default function App() {
     const shortYear = String(fullYear).slice(-2);
     const { data: counterData } = await supabase.from('order_number_counters').select('*').eq('company', newOrderCompany).eq('year', fullYear).maybeSingle();
     const nextNum = counterData?.next_number || 1;
-    const orderNumber = `${newOrderCompany}-${String(nextNum).padStart(4, '0')}-${shortYear}`;
+    const orderNumber = `${newOrderCompany}-${shortYear}-${String(nextNum).padStart(4, '0')}`;
 
     const created = { id: orderId, customer: newOrderCustomer, createdAt: now, deliveryDate: newOrderDeliveryDate, driveLink: orderDriveLink, notes: orderNotes, paymentType: newOrderPaymentType, items: itemsWithMeta, orderLog: [], legacyOrderNumber: newOrderLegacyNumber.trim(), companyBrand: newOrderCompany, orderNumber };
     const { error } = await supabase.from('orders').insert(mapOrderToDb(created));
@@ -2283,11 +2553,26 @@ export default function App() {
     triggerNotification('success', 'Poznámka bola pridaná do denníka zákazky.');
   };
 
-  const handleMoveProductionDate = async (orderId, itemId, newDate) => {
+  const handleMoveProductionDate = async (orderId, itemId, stationId, newDate) => {
     if (!hasPermission('edit_priority')) { triggerNotification('error', 'Nemáte oprávnenie meniť plán výroby.'); return; }
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
-    const updatedItems = order.items.map(item => item.itemId === itemId ? { ...item, productionDate: newDate } : item);
+    const updatedItems = order.items.map(item => {
+      if (item.itemId !== itemId) return item;
+      const currentDates = item.stationDates || {};
+      let newDates;
+      if (stationId) {
+        // Zmena len pre jednu konkrétnu stanicu
+        newDates = { ...currentDates, [stationId]: newDate };
+      } else {
+        // Hromadná zmena — nastaví rovnaký deň pre všetky aktívne stanice (z riadkového zoznamu)
+        newDates = { ...currentDates };
+        Object.keys(item.stationStatuses || {}).forEach(sid => {
+          if (item.stationStatuses[sid] && item.stationStatuses[sid] !== 'neaktivne') newDates[sid] = newDate;
+        });
+      }
+      return { ...item, stationDates: newDates, productionDate: newDate };
+    });
     const { error } = await supabase.from('orders').update({ items: updatedItems }).eq('id', orderId);
     if (error) { triggerNotification('error', error.message); return; }
     if (selectedOrderDetails?.id === orderId) setSelectedOrderDetails({ ...order, items: updatedItems });
@@ -2334,12 +2619,13 @@ export default function App() {
 
     const newItemId = `${orderEditDraft.id}-x${Date.now().toString().slice(-6)}`;
     const initialStatuses = {};
-    activeStations.forEach(sid => { initialStatuses[sid] = 'caka'; });
+    const initialStationDates = {};
+    activeStations.forEach(sid => { initialStatuses[sid] = 'caka'; initialStationDates[sid] = orderEditDraft.deliveryDate; });
 
     const newItem = {
       itemId: newItemId, productId: product.id, productName: product.name, customCode: product.customCode,
       qualityTier: tier?.name || '', gender: addItemGender, qty: qtyNum, notes: addItemNotes, imageUrl, assignedDesignerId: addItemDesignerId, ...rozpisData,
-      materialsNeeded: neededList, threadQtyM: product.threadM * qtyNum, priority: allItems.length + 1, productionDate: orderEditDraft.deliveryDate,
+      materialsNeeded: neededList, threadQtyM: product.threadM * qtyNum, priority: allItems.length + 1, productionDate: orderEditDraft.deliveryDate, stationDates: initialStationDates,
       stationStatuses: initialStatuses, materialDeducted: false
     };
 
@@ -2576,39 +2862,8 @@ export default function App() {
     }
   };
 
-  const handleStartEditEmployee = (emp) => { setEditingEmployee({ ...emp }); setEditEmpPassword(''); setEditEmpPin(''); setShowTotpSetup(false); setTotpSetupSecret(''); setTotpSetupCode(''); setTotpSetupError(''); };
+  const handleStartEditEmployee = (emp) => { setEditingEmployee({ ...emp }); setEditEmpPassword(''); setEditEmpPin(''); };
 
-  const handleBeginTotpSetup = () => {
-    setTotpSetupSecret(generateBase32Secret());
-    setTotpSetupCode('');
-    setTotpSetupError('');
-    setShowTotpSetup(true);
-  };
-
-  const handleConfirmTotpSetup = async () => {
-    if (!editingEmployee) return;
-    const ok = await verifyTotpCode(totpSetupCode, totpSetupSecret);
-    if (!ok) { setTotpSetupError('Kód nesedí. Skontroluj čas na telefóne a skús znova.'); return; }
-    const { error } = await supabase.from('employees').update({ totp_secret: totpSetupSecret, totp_enabled: true }).eq('id', editingEmployee.id);
-    if (error) { triggerNotification('error', error.message); return; }
-    const updated = { ...editingEmployee, totpSecret: totpSetupSecret, totpEnabled: true };
-    setEditingEmployee(updated);
-    if (currentUser.id === updated.id) setCurrentUser(updated);
-    setShowTotpSetup(false);
-    setTotpSetupCode('');
-    triggerNotification('success', '2FA bolo zapnuté.');
-  };
-
-  const handleDisableTotp = async () => {
-    if (!editingEmployee) return;
-    if (!window.confirm(`Naozaj vypnúť dvojfaktorové overenie pre ${editingEmployee.firstName}?`)) return;
-    const { error } = await supabase.from('employees').update({ totp_secret: null, totp_enabled: false }).eq('id', editingEmployee.id);
-    if (error) { triggerNotification('error', error.message); return; }
-    const updated = { ...editingEmployee, totpSecret: '', totpEnabled: false };
-    setEditingEmployee(updated);
-    if (currentUser.id === updated.id) setCurrentUser(updated);
-    triggerNotification('success', '2FA bolo vypnuté.');
-  };
   const handleCancelEditEmployee = () => { setEditingEmployee(null); setEditEmpPassword(''); setEditEmpPin(''); };
 
   const handleDeleteEmployee = async (id) => {
@@ -2670,10 +2925,17 @@ export default function App() {
       const d = new Date(today); d.setDate(today.getDate() + i);
       set.add(d.toISOString().slice(0, 10));
     }
-    allItems.forEach(it => { if (it.productionDate) set.add(it.productionDate); });
+    allItems.forEach(it => {
+      if (it.stationDates) Object.values(it.stationDates).forEach(d => { if (d) set.add(d); });
+      else if (it.productionDate) set.add(it.productionDate);
+    });
     return Array.from(set).sort();
   };
   const plannerDates = getPlannerDates();
+  const capacityByStation = {};
+  capacityConfigs.forEach(c => { capacityByStation[c.stationId] = c; });
+  const productTimesByStation = {};
+  stationProductTimes.forEach(t => { (productTimesByStation[t.stationId] = productTimesByStation[t.stationId] || []).push(t); });
 
   const sortedRows = allItems.filter(item => {
     const matchesSearch = item.customer.toLowerCase().includes(rowSearch.toLowerCase()) ||
@@ -2964,7 +3226,15 @@ export default function App() {
                       <span className="font-bold text-white w-8 text-center">{zoomLevel}%</span>
                       <button onClick={() => setZoomLevel(prev => Math.min(110, prev + 5))} className="p-1 bg-slate-800 hover:bg-slate-700 rounded"><ZoomIn className="h-3.5 w-3.5" /></button>
                     </div>
-                    <span className="text-[10px] italic">Farba rámčeka = položky patriace k rovnakej zákazke</span>
+                    <div className="flex items-center gap-3">
+                      <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                        <input type="checkbox" checked={showCapacityBars} onChange={(e) => setShowCapacityBars(e.target.checked)} className="accent-indigo-600" /> Zobraziť vyťaženie
+                      </label>
+                      {hasPermission('manage_catalog') && (
+                        <button onClick={handleOpenCapacitySettings} className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5"><Sliders className="h-3.5 w-3.5" /> Kapacita výroby</button>
+                      )}
+                      <span className="text-[10px] italic hidden lg:inline">Farba rámčeka = zákazka</span>
+                    </div>
                   </div>
                   <div className="overflow-x-auto border border-slate-800 rounded-xl bg-slate-900/20">
                     <table className="w-full text-left border-collapse" style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top left', width: `${100 / (zoomLevel / 100)}%` }}>
@@ -2989,9 +3259,29 @@ export default function App() {
                             </td>
                             {STATION_ORDER.map(stationId => {
                               const config = STATION_CONFIGS[stationId];
-                              const dayItems = allItems.filter(it => it.productionDate === date && it.stationStatuses[stationId] && it.stationStatuses[stationId] !== 'neaktivne').sort((a, b) => a.priority - b.priority);
+                              const dayItems = allItems.filter(it => getItemStationDate(it, stationId) === date && it.stationStatuses[stationId] && it.stationStatuses[stationId] !== 'neaktivne').sort((a, b) => a.priority - b.priority);
+                              const load = showCapacityBars ? computeStationLoad(date, stationId, allItems, capacityByStation, productTimesByStation) : null;
                               return (
-                                <td key={stationId} className="p-1 border-r border-slate-850 align-top min-h-[110px] bg-slate-950/15">
+                                <td
+                                  key={stationId}
+                                  onDragOver={(e) => { if (hasPermission('edit_priority') && draggedMatrixCard) e.preventDefault(); }}
+                                  onDrop={(e) => {
+                                    e.preventDefault();
+                                    if (!hasPermission('edit_priority') || !draggedMatrixCard) return;
+                                    if (draggedMatrixCard.stationId !== stationId) return; // presun len v rámci rovnakého stĺpca (stanice)
+                                    handleMoveProductionDate(draggedMatrixCard.orderId, draggedMatrixCard.itemId, stationId, date);
+                                    setDraggedMatrixCard(null);
+                                  }}
+                                  className={`p-1 border-r border-slate-850 align-top min-h-[110px] bg-slate-950/15 transition-colors ${draggedMatrixCard?.stationId === stationId ? 'outline outline-1 outline-dashed outline-indigo-700/40' : ''}`}
+                                >
+                                  {load && load.capacityMinutes > 0 && (
+                                    <div className="mb-1 px-0.5" title={`Vyťaženie: ${Math.round(load.percent)}% (${Math.round(load.usedMinutes)} / ${Math.round(load.capacityMinutes)} min)`}>
+                                      <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                                        <div className={`h-full ${loadBarColor(load.percent)} transition-all`} style={{ width: `${Math.min(100, load.percent)}%` }} />
+                                      </div>
+                                      <span className="text-[8px] text-slate-500 font-bold">{Math.round(load.percent)}%</span>
+                                    </div>
+                                  )}
                                   <div className="grid grid-cols-1 gap-1">
                                     {dayItems.map(item => {
                                       const statusId = item.stationStatuses[stationId];
@@ -3000,8 +3290,11 @@ export default function App() {
                                       return (
                                         <div 
                                           key={item.itemId} 
+                                          draggable={hasPermission('edit_priority')}
+                                          onDragStart={() => setDraggedMatrixCard({ orderId: item.orderId, itemId: item.itemId, stationId })}
+                                          onDragEnd={() => setDraggedMatrixCard(null)}
                                           onClick={() => openOrderDetails(orders.find(o => o.id === item.orderId))} 
-                                          className={`bg-slate-900 hover:bg-slate-800 border-l-4 ${orderColor.border} border-t border-r border-b border-slate-750 p-2 rounded cursor-pointer transition-all flex flex-col justify-between text-[10px] space-y-1 shadow hover:scale-[1.02] transform`}
+                                          className={`bg-slate-900 hover:bg-slate-800 border-l-4 ${orderColor.border} border-t border-r border-b border-slate-750 p-2 rounded cursor-pointer transition-all flex flex-col justify-between text-[10px] space-y-1 shadow hover:scale-[1.02] transform ${hasPermission('edit_priority') ? 'active:cursor-grabbing' : ''}`}
                                         >
                                           <div className="flex items-center justify-between">
                                             <span className="font-mono font-bold text-indigo-400">#{item.priority} • {item.itemId}</span>
@@ -3021,11 +3314,11 @@ export default function App() {
                                           {hasPermission('edit_priority') && (
                                             <input
                                               type="date"
-                                              value={item.productionDate || ''}
+                                              value={getItemStationDate(item, stationId) || ''}
                                               onClick={(e) => e.stopPropagation()}
-                                              onChange={(e) => handleMoveProductionDate(item.orderId, item.itemId, e.target.value)}
+                                              onChange={(e) => handleMoveProductionDate(item.orderId, item.itemId, stationId, e.target.value)}
                                               className="text-[8px] bg-slate-950 border border-slate-800 rounded px-1 py-0.5 text-slate-400 w-full"
-                                              title="Presunúť na iný deň výroby"
+                                              title="Presunúť túto stanicu na iný deň (alebo pretiahni kartu do iného riadku)"
                                             />
                                           )}
                                           <select
@@ -3084,7 +3377,7 @@ export default function App() {
                           <th className="px-4 py-3">Produkt (Vyhotovenie)</th>
                           <th className="px-4 py-3 text-center">Ks</th>
                           <th className="px-4 py-3 text-center">Termín (deadline)</th>
-                          <th className="px-4 py-3 text-center">Deň výroby</th>
+                          <th className="px-4 py-3 text-center">Deň výroby (všetky st.)</th>
                           <th className="px-4 py-3 text-center">Aktuálne štádium</th>
                           <th className="px-4 py-3 text-center">Akcie</th>
                         </tr>
@@ -3122,14 +3415,14 @@ export default function App() {
                                 </div>
                               </td>
                               <td className="px-4 py-3 font-mono font-bold text-indigo-400">{item.itemId}</td>
-                              <td className="px-4 py-3 font-mono text-slate-400">{item.orderNumber || item.orderId} <span className={`ml-1 text-[9px] font-extrabold px-1 py-0.5 rounded ${item.companyBrand === 'PBT' ? 'bg-purple-950/50 text-purple-300' : 'bg-emerald-950/50 text-emerald-300'}`}>{item.companyBrand || 'ATAK'}</span></td>
+                              <td className="px-4 py-3 font-mono text-slate-400">{item.orderNumber || item.orderId} <span className={`ml-1 text-[9px] font-extrabold px-1 py-0.5 rounded ${companyBrandBadgeClass(item.companyBrand)}`}>{item.companyBrand || 'ATAK'}</span></td>
                               <td className="px-4 py-3 font-bold text-white flex items-center gap-1.5"><CashBadge paymentType={item.paymentType} size="small" /> {item.customer}</td>
                               <td className="px-4 py-3 text-slate-300">{item.productName} (<span className="text-indigo-400">{item.qualityTier}</span>)</td>
                               <td className="px-4 py-3 text-center font-bold text-white">{item.qty}</td>
                               <td className="px-4 py-3 text-center"><span className={`px-2 py-0.5 rounded font-bold ${isUrgentDate(item.deliveryDate) ? 'bg-rose-600 text-white animate-pulse' : 'bg-slate-800'}`}>{formatDeliveryDate(item.deliveryDate)}</span></td>
                               <td className="px-4 py-3 text-center">
                                 {hasPermission('edit_priority') ? (
-                                  <input type="date" value={item.productionDate || ''} onChange={(e) => handleMoveProductionDate(item.orderId, item.itemId, e.target.value)} className={`bg-slate-950 border rounded px-1.5 py-1 text-[11px] ${isUrgentDate(item.productionDate) ? 'border-indigo-500 text-indigo-300 font-bold' : 'border-slate-800 text-slate-400'}`} />
+                                  <input type="date" value={item.productionDate || ''} onChange={(e) => handleMoveProductionDate(item.orderId, item.itemId, null, e.target.value)} title="Nastaví rovnaký deň pre všetky stanice tejto položky. Pre jednotlivé stanice zvlášť použi Plánovaciu Maticu." className={`bg-slate-950 border rounded px-1.5 py-1 text-[11px] ${isUrgentDate(item.productionDate) ? 'border-indigo-500 text-indigo-300 font-bold' : 'border-slate-800 text-slate-400'}`} />
                                 ) : (
                                   <span className="text-slate-400">{formatDeliveryDate(item.productionDate)}</span>
                                 )}
@@ -3258,6 +3551,9 @@ export default function App() {
               </div>
             ) : (
               <>
+                <div className="flex justify-end">
+                  <button onClick={() => { setShowExpressDotlackovka(true); setExpressCreatedBy(`${currentUser.firstName} ${currentUser.lastName}`); setExpressNeededDate(new Date().toISOString().slice(0, 10)); }} className="bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs px-4 py-2.5 rounded-lg flex items-center gap-1.5 shadow-lg"><Zap className="h-4 w-4" /> Expresné pridanie dotlačovej zákazky</button>
+                </div>
                 <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 shadow-xl">
                   <h2 className="text-xl font-bold text-white flex items-center gap-2 mb-4"><User className="text-indigo-400 h-5 w-5" /> 1. Zákazník & Harmonogram</h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -3986,6 +4282,159 @@ export default function App() {
           </div>
         )}
 
+        {showCapacitySettings && capacityDraft && productTimesDraft && (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl w-full max-w-3xl max-h-[92vh] overflow-y-auto shadow-2xl space-y-4">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2"><Sliders className="h-5 w-5 text-indigo-400" /> Kapacita výroby</h3>
+                  <p className="text-xs text-slate-500">Orientačné nastavenie výkonu strojov/staníc — appka podľa toho vypočíta % vyťaženia v pláne.</p>
+                </div>
+                <button onClick={() => setShowCapacitySettings(false)} className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white"><X className="h-5 w-5" /></button>
+              </div>
+
+              <div className="space-y-4">
+                {STATION_ORDER.map(sid => {
+                  const cfg = capacityDraft[sid];
+                  const config = STATION_CONFIGS[sid];
+                  const isRateBased = RATE_BASED_STATIONS.includes(sid);
+                  const rows = productTimesDraft[sid] || [];
+                  const avg = rows.length > 0 ? (rows.reduce((s, r) => s + r.minutesPerUnit, 0) / rows.length) : 0;
+                  return (
+                    <div key={sid} className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
+                      <h4 className="font-bold text-sm text-white flex items-center gap-2"><config.icon className="h-4 w-4 text-indigo-400" /> {config.name}</h4>
+
+                      {isRateBased ? (
+                        <div className="grid grid-cols-2 gap-3 text-xs">
+                          <div>
+                            <label className="text-slate-400 block mb-0.5">{sid === 'sublimacia' ? 'Rýchlosť (metrov / hodinu)' : 'Rýchlosť (ks / minútu, predpoklad 2 vrstvy)'}</label>
+                            <input type="number" step="0.1" value={cfg.rateValue ?? ''} onChange={(e) => setCapacityDraft(prev => ({ ...prev, [sid]: { ...prev[sid], rateValue: e.target.value } }))} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" />
+                          </div>
+                          <div>
+                            <label className="text-slate-400 block mb-0.5">Dostupné minúty / deň</label>
+                            <input type="number" value={cfg.dailyMinutes ?? ''} onChange={(e) => setCapacityDraft(prev => ({ ...prev, [sid]: { ...prev[sid], dailyMinutes: e.target.value } }))} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" />
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="grid grid-cols-2 gap-3 text-xs">
+                            <div>
+                              <label className="text-slate-400 block mb-0.5">Dostupné minúty / deň</label>
+                              <input type="number" value={cfg.dailyMinutes ?? ''} onChange={(e) => setCapacityDraft(prev => ({ ...prev, [sid]: { ...prev[sid], dailyMinutes: e.target.value } }))} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" />
+                            </div>
+                            {sid === 'transfer' && (
+                              <div>
+                                <label className="text-slate-400 block mb-0.5">Počet strojov (znásobí kapacitu)</label>
+                                <div className="grid grid-cols-3 gap-1">
+                                  {[1, 2, 3].map(n => (
+                                    <button key={n} type="button" onClick={() => setCapacityDraft(prev => ({ ...prev, [sid]: { ...prev[sid], machineCount: n } }))} className={`py-2 rounded font-bold ${cfg.machineCount === n ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-slate-400'}`}>{n}×</button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <span className="text-[10px] text-slate-500 uppercase font-bold">Orientačný čas na kus podľa typu produktu {rows.length > 0 && `(priemer: ${avg.toFixed(1)} min/ks)`}</span>
+                            {rows.map(r => (
+                              <div key={r.id} className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5">
+                                <span className="flex-1 text-xs text-white font-bold">{r.label}</span>
+                                <span className="text-xs text-indigo-400 font-mono">{r.minutesPerUnit} min/{r.unit}</span>
+                                <button onClick={() => handleRemoveProductTime(sid, r.id)} className="text-rose-400 hover:text-rose-300"><X className="h-3.5 w-3.5" /></button>
+                              </div>
+                            ))}
+                            <div className="flex gap-2">
+                              <input type="text" placeholder="napr. Cyklodres" value={newProductTimeLabel[sid] || ''} onChange={(e) => setNewProductTimeLabel(prev => ({ ...prev, [sid]: e.target.value }))} className="flex-1 bg-slate-900 border border-slate-800 rounded p-2 text-xs text-white" />
+                              <input type="number" step="0.1" placeholder="min/ks" value={newProductTimeMinutes[sid] || ''} onChange={(e) => setNewProductTimeMinutes(prev => ({ ...prev, [sid]: e.target.value }))} className="w-24 bg-slate-900 border border-slate-800 rounded p-2 text-xs text-white" />
+                              <button onClick={() => handleAddProductTime(sid)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 rounded text-xs shrink-0">Pridať</button>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <button onClick={handleSaveCapacitySettings} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg uppercase text-xs">Uložiť kapacitné nastavenia</button>
+            </div>
+          </div>
+        )}
+
+        {showExpressDotlackovka && (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-slate-900 border border-amber-700/50 p-6 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl space-y-4">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2"><Zap className="h-5 w-5 text-amber-400" /> Expresné pridanie dotlačovej zákazky</h3>
+                  <p className="text-xs text-slate-500">Firma ADY • zaradí sa rovno na dnešný deň do Grafika / Transfer / Balenie</p>
+                </div>
+                <button onClick={() => setShowExpressDotlackovka(false)} className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white"><X className="h-5 w-5" /></button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <label className="text-slate-400 block mb-0.5">Zadáva</label>
+                  <input type="text" value={expressCreatedBy} onChange={(e) => setExpressCreatedBy(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" />
+                  <p className="text-[9px] text-slate-600 mt-0.5">Uprav, ak to zadávaš v mene niekoho iného.</p>
+                </div>
+                <div>
+                  <label className="text-slate-400 block mb-0.5">Zadané do systému</label>
+                  <input type="text" disabled value={getFormattedDateTime()} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-slate-500" />
+                </div>
+              </div>
+
+              <div><label className="text-xs text-slate-400 block mb-0.5">Meno zákazníka</label><input type="text" value={expressCustomerName} onChange={(e) => setExpressCustomerName(e.target.value)} placeholder="Kto to nesie/objednáva" className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-sm text-white" autoFocus /></div>
+              <div><label className="text-xs text-slate-400 block mb-0.5">Zákazník to potrebuje do</label><input type="date" value={expressNeededDate} onChange={(e) => setExpressNeededDate(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-sm text-white" /></div>
+
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Spôsob platby</label>
+                <div className="grid grid-cols-2 gap-1">
+                  <button type="button" onClick={() => setExpressPaymentType('faktura')} className={`py-2 text-xs font-bold rounded ${expressPaymentType === 'faktura' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Faktúra</button>
+                  <button type="button" onClick={() => setExpressPaymentType('hotovost')} className={`py-2 text-xs font-bold rounded flex items-center justify-center gap-1 ${expressPaymentType === 'hotovost' ? 'bg-rose-600 text-white' : 'bg-slate-800 text-slate-400'}`}><Banknote className="h-3.5 w-3.5" /> Hotovosť</button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-slate-400 block mb-1">📄 Dotlačový listok</label>
+                  {expressListokPreview ? (
+                    <div className="relative">
+                      <img src={expressListokPreview} className="w-full h-24 object-cover rounded-lg border border-slate-800" alt="" />
+                      <button onClick={() => { setExpressListokFile(null); setExpressListokPreview(''); }} className="absolute top-1 right-1 bg-slate-950/80 text-rose-400 rounded p-1"><X className="h-3 w-3" /></button>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center justify-center gap-1 border-2 border-dashed border-slate-800 rounded-lg py-4 cursor-pointer hover:border-amber-600">
+                      <Camera className="h-5 w-5 text-slate-500" />
+                      <span className="text-[9px] text-slate-500">Odfotiť listok</span>
+                      <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files[0]; if (f) { setExpressListokFile(f); setExpressListokPreview(URL.createObjectURL(f)); } }} />
+                    </label>
+                  )}
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 block mb-1">👕 Fotka tovaru</label>
+                  {expressTovarPreview ? (
+                    <div className="relative">
+                      <img src={expressTovarPreview} className="w-full h-24 object-cover rounded-lg border border-slate-800" alt="" />
+                      <button onClick={() => { setExpressTovarFile(null); setExpressTovarPreview(''); }} className="absolute top-1 right-1 bg-slate-950/80 text-rose-400 rounded p-1"><X className="h-3 w-3" /></button>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center justify-center gap-1 border-2 border-dashed border-slate-800 rounded-lg py-4 cursor-pointer hover:border-amber-600">
+                      <Camera className="h-5 w-5 text-slate-500" />
+                      <span className="text-[9px] text-slate-500">Odfotiť tovar</span>
+                      <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files[0]; if (f) { setExpressTovarFile(f); setExpressTovarPreview(URL.createObjectURL(f)); } }} />
+                    </label>
+                  )}
+                </div>
+              </div>
+
+              <button onClick={handleSubmitExpressDotlackovka} disabled={isSubmittingExpress} className="w-full bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-extrabold py-3 rounded-lg uppercase text-xs flex items-center justify-center gap-2">
+                {isSubmittingExpress ? <><Loader2 className="h-4 w-4 animate-spin" /> Ukladám...</> : <><Zap className="h-4 w-4" /> Odoslať a zaradiť do plánu</>}
+              </button>
+            </div>
+          </div>
+        )}
+
         {showDeliveryNoteScanner && (
           <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
             <div className="bg-slate-900 border border-purple-800/40 p-6 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl space-y-4">
@@ -4294,7 +4743,7 @@ export default function App() {
                         <p className="text-[10px] text-slate-500">Telefón: <strong className="text-slate-400">{emp.phone || '—'}</strong> • Email: <strong className="text-slate-400">{emp.email || '—'}</strong></p>
                         <p className="text-[10px] text-slate-500">Heslo: <strong className={emp.passwordHash ? 'text-emerald-400' : 'text-rose-400'}>{emp.passwordHash ? 'Nastavené' : 'Nenastavené — nemôže sa prihlásiť'}</strong> • PIN: <strong className={emp.pinHash ? 'text-emerald-400' : 'text-slate-500'}>{emp.pinHash ? 'Nastavený' : 'Nenastavený'}</strong></p>
                         <div className="flex flex-wrap gap-2 pt-1">
-                          <span className="bg-indigo-950/40 text-indigo-300 text-[10px] px-2 py-0.5 rounded border border-indigo-900/20 flex items-center gap-1 font-bold"><CalendarDays className="h-3.5 w-3.5" /> Narodeniny: {emp.birthday || '—'}</span>
+                          <span className="bg-indigo-950/40 text-indigo-300 text-[10px] px-2 py-0.5 rounded border border-indigo-900/20 flex items-center gap-1 font-bold"><CalendarDays className="h-3.5 w-3.5" /> Narodeniny: {emp.birthday ? formatDeliveryDate(emp.birthday) : '—'}</span>
                           <span className="bg-purple-950/40 text-purple-300 text-[10px] px-2 py-0.5 rounded border border-purple-900/20 flex items-center gap-1 font-bold"><Gift className="h-3.5 w-3.5" /> Meniny: {emp.nameday || '—'}</span>
                         </div>
                       </div>
@@ -4309,7 +4758,11 @@ export default function App() {
                   <span className="text-xs font-bold text-slate-300 block uppercase">{editingEmployee ? `Upraviť zamestnanca: ${editingEmployee.firstName} ${editingEmployee.lastName}` : 'Zaevidovať zamestnanca:'}</span>
                   <form onSubmit={handleSubmitEmployee} className="space-y-2 text-xs">
                     <div className="grid grid-cols-2 gap-2">
-                      <div><label className="text-slate-400 block mb-0.5">Meno</label><input type="text" placeholder="Meno" required value={editingEmployee ? editingEmployee.firstName : newEmpFirstName} onChange={(e) => editingEmployee ? setEditingEmployee({ ...editingEmployee, firstName: e.target.value }) : setNewEmpFirstName(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" /></div>
+                      <div><label className="text-slate-400 block mb-0.5">Meno</label><input type="text" placeholder="Meno" required value={editingEmployee ? editingEmployee.firstName : newEmpFirstName} onChange={(e) => {
+                          const val = e.target.value;
+                          if (editingEmployee) setEditingEmployee({ ...editingEmployee, firstName: val });
+                          else { setNewEmpFirstName(val); if (!newEmpNameday) { const suggestion = suggestNameday(val); if (suggestion) setNewEmpNameday(suggestion); } }
+                        }} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" /></div>
                       <div><label className="text-slate-400 block mb-0.5">Priezvisko</label><input type="text" placeholder="Priezvisko" required value={editingEmployee ? editingEmployee.lastName : newEmpLastName} onChange={(e) => editingEmployee ? setEditingEmployee({ ...editingEmployee, lastName: e.target.value }) : setNewEmpLastName(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" /></div>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
@@ -4326,8 +4779,38 @@ export default function App() {
                     </div>
                     <div><label className="text-slate-400 block mb-0.5">Dátum nástupu</label><input type="date" value={editingEmployee ? editingEmployee.entryDate : newEmpEntryDate} onChange={(e) => editingEmployee ? setEditingEmployee({ ...editingEmployee, entryDate: e.target.value }) : setNewEmpEntryDate(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" /></div>
                     <div className="grid grid-cols-2 gap-2">
-                      <div><label className="text-slate-400 block mb-0.5">Dátum narodenia (deň a mesiac)</label><input type="text" placeholder="napr. 15. Máj" value={editingEmployee ? editingEmployee.birthday : newEmpBirthday} onChange={(e) => editingEmployee ? setEditingEmployee({ ...editingEmployee, birthday: e.target.value }) : setNewEmpBirthday(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" /></div>
-                      <div><label className="text-slate-400 block mb-0.5">Meniny (deň a mesiac)</label><input type="text" placeholder="napr. 24. Jún" value={editingEmployee ? editingEmployee.nameday : newEmpNameday} onChange={(e) => editingEmployee ? setEditingEmployee({ ...editingEmployee, nameday: e.target.value }) : setNewEmpNameday(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" /></div>
+                      <div>
+                        <label className="text-slate-400 block mb-0.5">Dátum narodenia</label>
+                        <input type="date" value={editingEmployee ? (editingEmployee.birthday || '') : newEmpBirthday} onChange={(e) => editingEmployee ? setEditingEmployee({ ...editingEmployee, birthday: e.target.value }) : setNewEmpBirthday(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" />
+                      </div>
+                      <div>
+                        <label className="text-slate-400 block mb-0.5">Meniny (deň a mesiac){!editingEmployee && suggestNameday(newEmpFirstName) && <span className="text-emerald-400 normal-case"> — navrhnuté podľa mena</span>}</label>
+                        <div className="grid grid-cols-2 gap-1">
+                          {(() => {
+                            const current = editingEmployee ? editingEmployee.nameday : newEmpNameday;
+                            const parts = (current || '').match(/^(\d{1,2})\.\s*(\S+)/);
+                            const curDay = parts ? parts[1] : '';
+                            const curMonth = parts ? parts[2] : '';
+                            const setNameday = (day, month) => {
+                              const val = day && month ? `${day}. ${month}` : '';
+                              if (editingEmployee) setEditingEmployee({ ...editingEmployee, nameday: val });
+                              else setNewEmpNameday(val);
+                            };
+                            return (
+                              <>
+                                <select value={curDay} onChange={(e) => setNameday(e.target.value, curMonth || SK_MONTHS[0])} className="bg-slate-900 border border-slate-800 rounded p-2 text-white">
+                                  <option value="">Deň</option>
+                                  {Array.from({ length: 31 }, (_, i) => i + 1).map(d => <option key={d} value={d}>{d}</option>)}
+                                </select>
+                                <select value={curMonth} onChange={(e) => setNameday(curDay || '1', e.target.value)} className="bg-slate-900 border border-slate-800 rounded p-2 text-white">
+                                  <option value="">Mesiac</option>
+                                  {SK_MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
+                                </select>
+                              </>
+                            );
+                          })()}
+                        </div>
+                      </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div><label className="text-slate-400 block mb-0.5">Telefón</label><input type="tel" placeholder="napr. 0900 123 456" value={editingEmployee ? (editingEmployee.phone || '') : newEmpPhone} onChange={(e) => editingEmployee ? setEditingEmployee({ ...editingEmployee, phone: e.target.value }) : setNewEmpPhone(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" /></div>
@@ -4939,7 +5422,7 @@ export default function App() {
                           <div>
                             <div className="flex items-center gap-2">
                               <span className="font-mono font-bold text-indigo-400">{o.orderNumber || o.id}</span>
-                              <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded ${o.companyBrand === 'PBT' ? 'bg-purple-950/50 text-purple-300' : 'bg-emerald-950/50 text-emerald-300'}`}>{o.companyBrand}</span>
+                              <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded ${companyBrandBadgeClass(o.companyBrand)}`}>{o.companyBrand}</span>
                             </div>
                             <p className="font-bold text-white text-sm">{o.customer}</p>
                             <p className="text-[11px] text-slate-500">{(o.items || []).map(it => it.productName).join(', ')}</p>
@@ -5142,7 +5625,7 @@ export default function App() {
                     {results.map(o => (
                       <tr key={o.id} className="hover:bg-slate-800/40">
                         <td className="px-3 py-3 font-mono font-bold text-indigo-400">{o.orderNumber || o.id}</td>
-                        <td className="px-3 py-3"><span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded ${o.companyBrand === 'PBT' ? 'bg-purple-950/50 text-purple-300' : 'bg-emerald-950/50 text-emerald-300'}`}>{o.companyBrand || 'ATAK'}</span></td>
+                        <td className="px-3 py-3"><span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded ${companyBrandBadgeClass(o.companyBrand)}`}>{o.companyBrand || 'ATAK'}</span></td>
                         <td className="px-3 py-3 font-bold text-white">{o.customer}</td>
                         <td className="px-3 py-3 text-slate-400">{o.legacyOrderNumber || '—'}</td>
                         <td className="px-3 py-3 text-slate-400">{o.createdAt}</td>
@@ -5314,7 +5797,7 @@ export default function App() {
                     <button onClick={() => handleMarkInvoicePaid(selectedInvoiceForDetail)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Check className="h-4 w-4" /> Označiť ako uhradenú</button>
                   )}
                   <button onClick={() => handleStartCorrectInvoice(selectedInvoiceForDetail)} className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Edit2 className="h-4 w-4" /> Opraviť</button>
-                  <button onClick={() => window.print()} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Printer className="h-4 w-4" /> Tlačiť / PDF</button>
+                  <button onClick={() => printWithFilename(selectedInvoiceForDetail.invoiceNumber)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Printer className="h-4 w-4" /> Tlačiť / PDF</button>
                 </div>
                 <button onClick={() => setSelectedInvoiceForDetail(null)} className="p-1 rounded bg-slate-200 text-slate-600 hover:text-slate-900"><X className="h-5 w-5" /></button>
               </div>
@@ -5411,7 +5894,7 @@ export default function App() {
                 {hasPermission('create_order') && (
                   <button onClick={() => { setActiveTab('invoices'); handleStartNewInvoice(selectedOrderDetails); }} className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Banknote className="h-4 w-4" /> Vystaviť faktúru</button>
                 )}
-                <button onClick={() => window.print()} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Printer className="h-4 w-4" /> Tlačiť (A4)</button>
+                <button onClick={() => printWithFilename(selectedOrderDetails.orderNumber || selectedOrderDetails.id)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Printer className="h-4 w-4" /> Tlačiť (A4)</button>
                 <button onClick={() => openOrderDetails(null)} className="bg-slate-800 hover:bg-slate-750 text-slate-400 px-3 py-2 rounded-lg text-xs">Zatvoriť</button>
               </div>
             </div>
@@ -5690,7 +6173,7 @@ export default function App() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs font-bold uppercase tracking-widest bg-indigo-600 text-white px-2.5 py-1 rounded print:bg-black print:text-white font-mono">SPRIEVODNÝ LIST VÝROBY</span>
                     {selectedOrderDetails.companyBrand && (
-                      <span className={`text-xs font-extrabold uppercase tracking-widest px-2.5 py-1 rounded print:text-black print:border print:border-black ${selectedOrderDetails.companyBrand === 'PBT' ? 'bg-purple-600 text-white' : 'bg-emerald-600 text-white'}`}>{selectedOrderDetails.companyBrand}</span>
+                      <span className={`text-xs font-extrabold uppercase tracking-widest px-2.5 py-1 rounded print:text-black print:border print:border-black ${companyBrandBadgeClass(selectedOrderDetails.companyBrand, 'solid')}`}>{selectedOrderDetails.companyBrand}</span>
                     )}
                     <CashBadge paymentType={selectedOrderDetails.paymentType} />
                   </div>
@@ -5743,6 +6226,16 @@ export default function App() {
                       <h2 className="text-lg font-extrabold text-white print:text-black">{item.productName} [{item.customCode}]</h2>
                       <p className="text-sm text-slate-400 print:text-black">Vyhotovenie: <strong className="text-indigo-400 print:text-black uppercase">{item.qualityTier}</strong>{qualityTiers.find(t => t.name === item.qualityTier)?.desc && <span className="text-xs text-slate-500 italic print:text-black"> ({qualityTiers.find(t => t.name === item.qualityTier).desc})</span>} • {genderLabel(item.gender)} • <strong className="text-white print:text-black">{item.qty} ks</strong></p>
                       {item.notes && <p className="text-xs text-slate-400 italic print:text-black mt-1">Poznámka: {item.notes}</p>}
+                      {(() => {
+                        const { arrival, departure } = getArrivalDeparture(item);
+                        if (!arrival && !departure) return null;
+                        return (
+                          <div className="flex flex-wrap gap-2 mt-2 print:hidden">
+                            {arrival && <span className="text-[10px] bg-sky-950/40 text-sky-300 border border-sky-800/40 px-2 py-1 rounded-full font-bold">📥 Prijaté: {arrival.at} {arrival.by ? `(${arrival.by})` : ''}</span>}
+                            {departure && <span className="text-[10px] bg-emerald-950/40 text-emerald-300 border border-emerald-800/40 px-2 py-1 rounded-full font-bold">📦 Odoslané: {departure.at} {departure.by ? `(${departure.by})` : ''}</span>}
+                          </div>
+                        );
+                      })()}
                     </div>
                     <div className="bg-white p-3 rounded-xl flex flex-col items-center border border-slate-300 shadow-sm shrink-0">
                       <QRCodeSVG value={`${window.location.origin}${window.location.pathname}?scan=${item.itemId}`} size={88} level="M" />
