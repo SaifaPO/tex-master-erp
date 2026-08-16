@@ -163,8 +163,8 @@ const mapProductToDb = (p) => ({ id: p.id, custom_code: p.customCode, name: p.na
 const mapTierFromDb = (r) => ({ id: r.id, name: r.name, fit: r.fit, ventilation: r.ventilation, desc: r.description });
 const mapTierToDb = (t) => ({ id: t.id, name: t.name, fit: t.fit, ventilation: t.ventilation, description: t.desc });
 
-const mapEmployeeFromDb = (r) => ({ id: r.id, firstName: r.first_name, lastName: r.last_name, birthday: r.birthday, nameday: r.nameday, entryDate: r.entry_date, role: r.role, position: r.position, passwordHash: r.password_hash || '', phone: r.phone || '', email: r.email || '', avatar: r.avatar || '', pinHash: r.pin_hash || '', authUserId: r.auth_user_id || '' });
-const mapEmployeeToDb = (e) => ({ id: e.id, first_name: e.firstName, last_name: e.lastName, birthday: e.birthday, nameday: e.nameday, entry_date: e.entryDate, role: e.role, position: e.position, password_hash: e.passwordHash || null, phone: e.phone || null, email: e.email || null, avatar: e.avatar || null, pin_hash: e.pinHash || null, auth_user_id: e.authUserId || null });
+const mapEmployeeFromDb = (r) => ({ id: r.id, firstName: r.first_name, lastName: r.last_name, birthday: r.birthday, nameday: r.nameday, entryDate: r.entry_date, role: r.role, position: r.position, passwordHash: r.password_hash || '', phone: r.phone || '', email: r.email || '', avatar: r.avatar || '', pinHash: r.pin_hash || '', authUserId: r.auth_user_id || '', signupToken: r.signup_token || '', signupTokenExpires: r.signup_token_expires || null });
+const mapEmployeeToDb = (e) => ({ id: e.id, first_name: e.firstName, last_name: e.lastName, birthday: e.birthday, nameday: e.nameday, entry_date: e.entryDate, role: e.role, position: e.position, password_hash: e.passwordHash || null, phone: e.phone || null, email: e.email || null, avatar: e.avatar || null, pin_hash: e.pinHash || null, auth_user_id: e.authUserId || null, signup_token: e.signupToken || null, signup_token_expires: e.signupTokenExpires || null });
 
 const mapOrderFromDb = (r) => ({ id: r.id, customer: r.customer, createdAt: r.created_at, deliveryDate: r.scheduled_day, driveLink: r.drive_link, notes: r.notes, paymentType: r.payment_type || 'faktura', items: r.items || [], orderLog: r.order_log || [], legacyOrderNumber: r.legacy_order_number || '', companyBrand: r.company_brand || 'ATAK', orderNumber: r.order_number || '', accountingStatus: r.accounting_status || null });
 const mapOrderToDb = (o) => ({ id: o.id, customer: o.customer, created_at: o.createdAt, scheduled_day: o.deliveryDate, drive_link: o.driveLink, notes: o.notes, payment_type: o.paymentType, items: o.items, order_log: o.orderLog || [], legacy_order_number: o.legacyOrderNumber || null, company_brand: o.companyBrand || 'ATAK', order_number: o.orderNumber || null, accounting_status: o.accountingStatus || null });
@@ -677,6 +677,8 @@ export default function App() {
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authSignupPassword2, setAuthSignupPassword2] = useState('');
+  const [authSignupCode, setAuthSignupCode] = useState('');
+  const [justGeneratedSignupCode, setJustGeneratedSignupCode] = useState('');
   const [authError, setAuthError] = useState('');
   const [isAuthBusy, setIsAuthBusy] = useState(false);
   const [authSession, setAuthSession] = useState(null);
@@ -1115,15 +1117,24 @@ export default function App() {
     const matchingEmployee = employees.find(x => x.email && x.email.toLowerCase() === authEmail.trim().toLowerCase() && ['master', 'supervisor', 'sales'].includes(x.role));
     if (!matchingEmployee) { setAuthError('Tento email nepatrí žiadnemu profilu s prístupom (Master/Supervisor/Obchodník). Over si ho v Zamestnanci & Práva, alebo požiadaj Mastra, nech ho tam doplní.'); return; }
     if (matchingEmployee.authUserId) { setAuthError('Tento profil už má vytvorený účet — použi prihlásenie, nie registráciu.'); return; }
+    if (!authSignupCode.trim()) { setAuthError('Zadaj registračný kód, ktorý ti dal Master. Bez kódu sa účet nedá vytvoriť (ochrana proti cudziemu vytvoreniu účtu).'); return; }
+    // Samotné overenie kódu prebieha bezpečne na serveri (Edge Function) až po vytvorení Auth účtu nižšie —
+    // v prehliadači sa uchováva len hash kódu, takže sa tu nedá overiť naslepo.
+    if (matchingEmployee.signupTokenExpires && new Date(matchingEmployee.signupTokenExpires) < new Date()) { setAuthError('Registračný kód expiroval. Vyžiadaj si nový od Mastra.'); return; }
     if (authPassword.length < 8) { setAuthError('Heslo musí mať aspoň 8 znakov.'); return; }
     if (authPassword !== authSignupPassword2) { setAuthError('Heslá sa nezhodujú.'); return; }
     setIsAuthBusy(true);
     const { data, error } = await supabase.auth.signUp({ email: authEmail.trim(), password: authPassword });
     if (error) { setIsAuthBusy(false); setAuthError(error.message); return; }
     if (!data.user) { setIsAuthBusy(false); setAuthError('Účet bol vytvorený, ale je potrebné potvrdenie emailom. Over si schránku, alebo požiadaj Mastra o vypnutie potvrdzovania v Supabase.'); return; }
-    await supabase.from('employees').update({ auth_user_id: data.user.id }).eq('id', matchingEmployee.id);
+    // Prepojenie účtu prebieha cez bezpečnú serverovú funkciu (klient sám nemá právo meniť cudzie záznamy zamestnancov)
+    const { data: linkData, error: linkError } = await supabase.functions.invoke('link-employee-account', { body: { signupCode: authSignupCode.trim() } });
     setIsAuthBusy(false);
-    setAuthPassword(''); setAuthSignupPassword2('');
+    if (linkError || linkData?.error) {
+      setAuthError(linkData?.error || linkError.message || 'Prepojenie účtu zlyhalo.');
+      return;
+    }
+    setAuthPassword(''); setAuthSignupPassword2(''); setAuthSignupCode('');
     triggerNotification('success', 'Účet bol vytvorený a prepojený s profilom. Prihlasujem...');
   };
 
@@ -3029,9 +3040,29 @@ export default function App() {
     }
   };
 
-  const handleStartEditEmployee = (emp) => { setEditingEmployee({ ...emp }); setEditEmpPassword(''); setEditEmpPin(''); };
+  const handleStartEditEmployee = (emp) => { setEditingEmployee({ ...emp }); setEditEmpPassword(''); setEditEmpPin(''); setJustGeneratedSignupCode(''); };
 
-  const handleCancelEditEmployee = () => { setEditingEmployee(null); setEditEmpPassword(''); setEditEmpPin(''); };
+  const handleGenerateSignupCode = async (employeeId) => {
+    if (!hasPermission('manage_profiles')) { triggerNotification('error', 'Nemáte oprávnenie.'); return; }
+    const code = Array.from({ length: 8 }, () => '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'[Math.floor(Math.random() * 32)]).join('');
+    const codeHash = await hashPassword(code);
+    const expires = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(); // 48 hodín
+    const { error } = await supabase.from('employees').update({ signup_token: codeHash, signup_token_expires: expires }).eq('id', employeeId);
+    if (error) { triggerNotification('error', error.message); return; }
+    setEditingEmployee(prev => prev ? { ...prev, signupToken: codeHash, signupTokenExpires: expires } : prev);
+    setJustGeneratedSignupCode(code);
+    triggerNotification('success', 'Registračný kód bol vygenerovaný. Platí 48 hodín — daj ho tejto osobe osobne (telefón/chat), nie verejne. Po zatvorení sa už nedá znova zobraziť (len vygenerovať nový).');
+  };
+
+  const handleCancelSignupCode = async (employeeId) => {
+    if (!hasPermission('manage_profiles')) { triggerNotification('error', 'Nemáte oprávnenie.'); return; }
+    const { error } = await supabase.from('employees').update({ signup_token: null, signup_token_expires: null }).eq('id', employeeId);
+    if (error) { triggerNotification('error', error.message); return; }
+    setEditingEmployee(prev => prev ? { ...prev, signupToken: '', signupTokenExpires: null } : prev);
+    setJustGeneratedSignupCode('');
+  };
+
+  const handleCancelEditEmployee = () => { setEditingEmployee(null); setEditEmpPassword(''); setEditEmpPin(''); setJustGeneratedSignupCode(''); };
 
   const handleDeleteEmployee = async (id) => {
     if (!hasPermission('manage_profiles')) { triggerNotification('error', 'Nemáte prístup do správy profilov.'); return; }
@@ -3263,6 +3294,12 @@ export default function App() {
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">Zopakuj heslo</label>
                 <input type="password" value={authSignupPassword2} onChange={(e) => { setAuthSignupPassword2(e.target.value); setAuthError(''); }} className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-white" />
+              </div>
+            )}
+            {authScreenMode === 'signup' && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Registračný kód (dostaneš od Mastra)</label>
+                <input type="text" value={authSignupCode} onChange={(e) => { setAuthSignupCode(e.target.value.toUpperCase()); setAuthError(''); }} placeholder="napr. X7K2M9QP" className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-white font-mono tracking-wider" />
               </div>
             )}
             {authError && <p className="text-xs text-rose-400 bg-rose-950/30 border border-rose-900/40 rounded-lg px-3 py-2">{authError}</p>}
@@ -5162,7 +5199,30 @@ export default function App() {
                       <label className="text-slate-400 block mb-0.5">Staré heslo (nepoužíva sa — Master/Superv./Obchodník sa prihlasujú emailom, nechaj prázdne)</label>
                       <input type="password" placeholder="nepoužívané" value={editingEmployee ? editEmpPassword : newEmpPassword} onChange={(e) => editingEmployee ? setEditEmpPassword(e.target.value) : setNewEmpPassword(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white opacity-60" />
                       {editingEmployee && ['master', 'supervisor', 'sales'].includes(editingEmployee.role) && (
-                        <p className="text-[10px] text-slate-500 mt-1">{editingEmployee.authUserId ? '✅ Prihlasovací účet (email) je vytvorený a prepojený.' : '⚠️ Prihlasovací účet ešte nie je vytvorený — zamestnanec si ho vytvorí sám na prihlasovacej obrazovke tlačidlom "Vytvor si ho" (podľa emailu vyššie).'}</p>
+                        <div className="mt-1.5">
+                          {editingEmployee.authUserId ? (
+                            <p className="text-[10px] text-slate-500">✅ Prihlasovací účet (email) je vytvorený a prepojený.</p>
+                          ) : justGeneratedSignupCode && editingEmployee.signupToken ? (
+                            <div className="bg-amber-950/20 border border-amber-800/40 rounded-lg p-2 space-y-1">
+                              <p className="text-[10px] text-amber-300">🔑 Registračný kód (platí do {new Date(editingEmployee.signupTokenExpires).toLocaleString('sk-SK')}) — daj ho tejto osobe osobne, nie verejne. <strong>Po zatvorení sa už znova nezobrazí!</strong></p>
+                              <p className="font-mono text-sm font-extrabold text-white tracking-widest text-center bg-slate-950 py-1.5 rounded">{justGeneratedSignupCode}</p>
+                              <button type="button" onClick={() => handleCancelSignupCode(editingEmployee.id)} className="text-[10px] text-rose-400 hover:text-rose-300 underline">Zrušiť kód</button>
+                            </div>
+                          ) : editingEmployee.signupToken && editingEmployee.signupTokenExpires && new Date(editingEmployee.signupTokenExpires) > new Date() ? (
+                            <div className="bg-slate-900 border border-slate-800 rounded-lg p-2 space-y-1">
+                              <p className="text-[10px] text-slate-400">🔒 Registračný kód je nastavený (platí do {new Date(editingEmployee.signupTokenExpires).toLocaleString('sk-SK')}), z bezpečnostných dôvodov sa už nedá znova zobraziť.</p>
+                              <div className="flex gap-2">
+                                <button type="button" onClick={() => handleGenerateSignupCode(editingEmployee.id)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] px-3 py-1.5 rounded-lg">Vygenerovať nový</button>
+                                <button type="button" onClick={() => handleCancelSignupCode(editingEmployee.id)} className="text-[10px] text-rose-400 hover:text-rose-300 underline">Zrušiť</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="space-y-1">
+                              <p className="text-[10px] text-slate-500">⚠️ Prihlasovací účet ešte nie je vytvorený.</p>
+                              <button type="button" onClick={() => handleGenerateSignupCode(editingEmployee.id)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] px-3 py-1.5 rounded-lg">Vygenerovať registračný kód</button>
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
                     <div>
