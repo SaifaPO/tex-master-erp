@@ -308,7 +308,7 @@ const mapStationDefaultFromDb = (r) => ({ stationId: r.station_id, employeeId: r
 const mapStationExclusionFromDb = (r) => ({ id: r.id, stationId: r.station_id, date: r.exclusion_date, reason: r.reason || '' });
 const mapCheckinFromDb = (r) => ({ id: r.id, employeeId: r.employee_id, date: r.checkin_date, checkedInAt: r.checked_in_at, stationId: r.station_id });
 const mapAttendanceFromDb = (r) => ({ id: r.id, employeeId: r.employee_id, employeeNameRaw: r.employee_name_raw, date: r.record_date, timeIn: r.time_in, timeOut: r.time_out, status: r.status || '', syncedAt: r.synced_at });
-const mapProblemFromDb = (r) => ({ id: r.id, orderId: r.order_id, itemId: r.item_id, stationId: r.station_id, employeeId: r.employee_id, employeeName: r.employee_name, category: r.category, description: r.description, status: r.status, createdAt: r.created_at, resolvedAt: r.resolved_at, resolvedBy: r.resolved_by, resolutionNote: r.resolution_note });
+const mapProblemFromDb = (r) => ({ id: r.id, orderId: r.order_id, itemId: r.item_id, stationId: r.station_id, employeeId: r.employee_id, employeeName: r.employee_name, category: r.category, description: r.description, status: r.status, createdAt: r.created_at, resolvedAt: r.resolved_at, resolvedBy: r.resolved_by, resolutionNote: r.resolution_note, imageUrl: r.image_url || '' });
 
 const mapCompanySettingsFromDb = (r) => ({ companyName: r.company_name || '', address: r.address || '', ico: r.ico || '', dic: r.dic || '', icDph: r.ic_dph || '', iban: r.iban || '', bankName: r.bank_name || '', defaultVatRate: r.default_vat_rate ?? 20, nextInvoiceNumber: r.next_invoice_number ?? 1, invoiceNumberPrefix: r.invoice_number_prefix || '', nextPpdNumber: r.next_ppd_number ?? 1, nextVpdNumber: r.next_vpd_number ?? 1 });
 const mapInvoiceFromDb = (r) => ({ id: r.id, invoiceNumber: r.invoice_number, orderId: r.order_id, customerName: r.customer_name || '', customerAddress: r.customer_address || '', customerIco: r.customer_ico || '', customerDic: r.customer_dic || '', customerIcDph: r.customer_ic_dph || '', issueDate: r.issue_date, deliveryDate: r.delivery_date, dueDate: r.due_date, variableSymbol: r.variable_symbol || '', items: r.items || [], subtotal: r.subtotal || 0, vatTotal: r.vat_total || 0, total: r.total || 0, status: r.status, paidAt: r.paid_at, notes: r.notes || '', createdBy: r.created_by || '', createdAt: r.created_at, corrections: r.corrections || [], customerType: r.customer_type || 'sk_platca' });
@@ -566,6 +566,9 @@ export default function App() {
   const [reportingProblemForItem, setReportingProblemForItem] = useState(null); // item object | null
   const [problemCategory, setProblemCategory] = useState(PROBLEM_CATEGORIES[0]);
   const [problemDescription, setProblemDescription] = useState('');
+  const [problemImageFile, setProblemImageFile] = useState(null);
+  const [problemImagePreview, setProblemImagePreview] = useState('');
+  const [isUploadingProblemImage, setIsUploadingProblemImage] = useState(false);
   const [showResolvedProblems, setShowResolvedProblems] = useState(false);
   const [resolvingProblem, setResolvingProblem] = useState(null);
   const [resolutionNoteInput, setResolutionNoteInput] = useState('');
@@ -1324,15 +1327,26 @@ export default function App() {
     if (!reportingProblemForItem) return;
     if (!problemDescription.trim()) { alert('Napíš krátky popis problému.'); return; }
     const item = reportingProblemForItem;
+    let imageUrl = '';
+    if (problemImageFile) {
+      setIsUploadingProblemImage(true);
+      const path = `${Date.now()}-problem-${problemImageFile.name}`;
+      const { error: upErr } = await supabase.storage.from('item-images').upload(path, problemImageFile);
+      setIsUploadingProblemImage(false);
+      if (upErr) { triggerNotification('error', `Chyba pri nahrávaní fotky: ${upErr.message}`); return; }
+      imageUrl = supabase.storage.from('item-images').getPublicUrl(path).data.publicUrl;
+    }
     const { error } = await supabase.from('problem_reports').insert({
       id: `pr-${Date.now()}`, order_id: item.orderId, item_id: item.itemId, station_id: activeStationFilter || activeStationContext || '',
       employee_id: currentUser.id, employee_name: `${currentUser.firstName} ${currentUser.lastName}`,
-      category: problemCategory, description: problemDescription.trim(), status: 'open'
+      category: problemCategory, description: problemDescription.trim(), status: 'open', image_url: imageUrl
     });
     if (error) { triggerNotification('error', error.message); return; }
     setReportingProblemForItem(null);
     setProblemDescription('');
     setProblemCategory(PROBLEM_CATEGORIES[0]);
+    setProblemImageFile(null);
+    setProblemImagePreview('');
     triggerNotification('success', 'Problém bol nahlásený. Master/Supervisor to uvidí.');
   };
 
@@ -4898,9 +4912,26 @@ export default function App() {
                 <label className="block text-xs font-semibold text-slate-400 mb-1">Popis problému</label>
                 <textarea rows={4} value={problemDescription} onChange={(e) => setProblemDescription(e.target.value)} placeholder="Čo presne sa deje?" className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" autoFocus />
               </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Fotka (voliteľné)</label>
+                {problemImagePreview ? (
+                  <div className="relative">
+                    <img src={problemImagePreview} alt="" className="w-full h-32 object-cover rounded-lg border border-slate-800" />
+                    <button type="button" onClick={() => { setProblemImageFile(null); setProblemImagePreview(''); }} className="absolute top-1.5 right-1.5 bg-slate-950/80 text-rose-400 rounded-lg p-1.5"><X className="h-4 w-4" /></button>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center gap-1 border-2 border-dashed border-slate-800 rounded-lg py-4 cursor-pointer hover:border-rose-600 transition-colors">
+                    <Camera className="h-5 w-5 text-slate-500" />
+                    <span className="text-[10px] text-slate-500">Odfotiť / nahrať obrázok</span>
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files[0]; if (f) { setProblemImageFile(f); setProblemImagePreview(URL.createObjectURL(f)); } }} />
+                  </label>
+                )}
+              </div>
               <div className="flex gap-2">
-                <button onClick={handleSubmitProblem} className="flex-1 bg-rose-700 hover:bg-rose-800 text-white font-bold py-2.5 rounded-lg uppercase text-xs">Nahlásiť</button>
-                <button onClick={() => setReportingProblemForItem(null)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-6 rounded-lg text-xs font-bold">Zrušiť</button>
+                <button onClick={handleSubmitProblem} disabled={isUploadingProblemImage} className="flex-1 bg-rose-700 hover:bg-rose-800 disabled:opacity-50 text-white font-bold py-2.5 rounded-lg uppercase text-xs flex items-center justify-center gap-2">
+                  {isUploadingProblemImage ? <><Loader2 className="h-4 w-4 animate-spin" /> Nahrávam...</> : 'Nahlásiť'}
+                </button>
+                <button onClick={() => { setReportingProblemForItem(null); setProblemImageFile(null); setProblemImagePreview(''); }} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-6 rounded-lg text-xs font-bold">Zrušiť</button>
               </div>
             </div>
           </div>
@@ -5581,6 +5612,9 @@ export default function App() {
                               <span className="font-mono text-[10px] text-slate-500">{p.itemId} • {STATION_CONFIGS[p.stationId]?.name || p.stationId}</span>
                             </div>
                             <p className="text-sm text-white">{p.description}</p>
+                            {p.imageUrl && (
+                              <img src={p.imageUrl} alt="Fotka problému" className="w-full max-w-xs h-40 object-cover rounded-lg border border-slate-800 cursor-pointer" onClick={() => window.open(p.imageUrl, '_blank')} />
+                            )}
                             {found && <p className="text-[11px] text-slate-500">Zákazka: <strong className="text-slate-300">{found.order.customer}</strong> — {found.item.productName}</p>}
                             <p className="text-[10px] text-slate-500">Nahlásil: <strong className="text-slate-400">{p.employeeName}</strong> • {new Date(p.createdAt).toLocaleString('sk-SK')}</p>
                             {p.status === 'resolved' && (
