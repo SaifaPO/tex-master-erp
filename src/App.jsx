@@ -307,7 +307,7 @@ const mapAssignmentFromDb = (r) => ({ id: r.id, employeeId: r.employee_id, stati
 const mapStationDefaultFromDb = (r) => ({ stationId: r.station_id, employeeId: r.employee_id });
 const mapStationExclusionFromDb = (r) => ({ id: r.id, stationId: r.station_id, date: r.exclusion_date, reason: r.reason || '' });
 const mapCheckinFromDb = (r) => ({ id: r.id, employeeId: r.employee_id, date: r.checkin_date, checkedInAt: r.checked_in_at, stationId: r.station_id });
-const mapAttendanceFromDb = (r) => ({ id: r.id, employeeId: r.employee_id, employeeNameRaw: r.employee_name_raw, date: r.record_date, timeIn: r.time_in, timeOut: r.time_out, syncedAt: r.synced_at });
+const mapAttendanceFromDb = (r) => ({ id: r.id, employeeId: r.employee_id, employeeNameRaw: r.employee_name_raw, date: r.record_date, timeIn: r.time_in, timeOut: r.time_out, status: r.status || '', syncedAt: r.synced_at });
 const mapProblemFromDb = (r) => ({ id: r.id, orderId: r.order_id, itemId: r.item_id, stationId: r.station_id, employeeId: r.employee_id, employeeName: r.employee_name, category: r.category, description: r.description, status: r.status, createdAt: r.created_at, resolvedAt: r.resolved_at, resolvedBy: r.resolved_by, resolutionNote: r.resolution_note });
 
 const mapCompanySettingsFromDb = (r) => ({ companyName: r.company_name || '', address: r.address || '', ico: r.ico || '', dic: r.dic || '', icDph: r.ic_dph || '', iban: r.iban || '', bankName: r.bank_name || '', defaultVatRate: r.default_vat_rate ?? 20, nextInvoiceNumber: r.next_invoice_number ?? 1, invoiceNumberPrefix: r.invoice_number_prefix || '', nextPpdNumber: r.next_ppd_number ?? 1, nextVpdNumber: r.next_vpd_number ?? 1 });
@@ -3679,9 +3679,10 @@ export default function App() {
                                 const defaultAssignment = stationDefaults.find(d => d.stationId === sid && d.employeeId);
                                 const exclusion = stationExclusions.find(ex => ex.date === date && ex.stationId === sid);
                                 const defaultEmp = defaultAssignment ? employees.find(e => e.id === defaultAssignment.employeeId) : null;
-                                const isUnstaffedToday = date === todayStr && cellAssignments.length === 0 && (!defaultEmp || exclusion);
-                                const isPickerOpen = staffingPickerCell && staffingPickerCell.date === date && staffingPickerCell.stationId === sid;
                                 const attendanceToday = date === todayStr && defaultEmp ? attendanceRecords.find(a => a.employeeId === defaultEmp.id) : null;
+                                const isAbsentByAttendance = attendanceToday && ['dovolenka', 'pn', 'ocr'].includes(attendanceToday.status);
+                                const isUnstaffedToday = date === todayStr && cellAssignments.length === 0 && (!defaultEmp || exclusion || isAbsentByAttendance);
+                                const isPickerOpen = staffingPickerCell && staffingPickerCell.date === date && staffingPickerCell.stationId === sid;
                                 const checkin = date === todayStr && defaultEmp ? employeeCheckins.find(c => c.employeeId === defaultEmp.id) : null;
                                 const someoneAssignedHere = (defaultEmp && !exclusion) || cellAssignments.length > 0;
                                 const hasScheduledWork = allItems.some(it => getItemStationDate(it, sid) === date && it.stationStatuses?.[sid] && it.stationStatuses[sid] !== 'neaktivne' && it.stationStatuses[sid] !== 'hotove');
@@ -3702,7 +3703,19 @@ export default function App() {
                                       )}
                                       {date === todayStr && defaultEmp && !exclusion && (
                                         attendanceToday ? (
-                                          <span className="text-[9px] text-emerald-400 px-2">📋 Dochádzka: {attendanceToday.timeIn || '—'}{attendanceToday.timeOut ? ` – ${attendanceToday.timeOut}` : ''}</span>
+                                          attendanceToday.status === 'dovolenka' ? (
+                                            <span className="text-[9px] text-sky-400 px-2">🏖️ Dovolenka</span>
+                                          ) : attendanceToday.status === 'pn' ? (
+                                            <span className="text-[9px] text-rose-400 px-2">🤒 PN</span>
+                                          ) : attendanceToday.status === 'ocr' ? (
+                                            <span className="text-[9px] text-rose-400 px-2">👶 OČR</span>
+                                          ) : attendanceToday.status === 'lekar' ? (
+                                            <span className="text-[9px] text-amber-400 px-2">🩺 U lekára</span>
+                                          ) : attendanceToday.status === 'odchod' ? (
+                                            <span className="text-[9px] text-slate-400 px-2">📋 {attendanceToday.timeIn || '—'} – {attendanceToday.timeOut} (odišiel)</span>
+                                          ) : (
+                                            <span className="text-[9px] text-emerald-400 px-2">📋 Prítomný od {attendanceToday.timeIn || '—'}</span>
+                                          )
                                         ) : checkin ? (
                                           <span className="text-[9px] text-emerald-400 px-2">✅ Prihlásený o {new Date(checkin.checkedInAt).toLocaleTimeString('sk-SK', { hour: '2-digit', minute: '2-digit' })}</span>
                                         ) : (
@@ -3731,7 +3744,7 @@ export default function App() {
                                           {employees.filter(e => !cellAssignments.some(a => a.employeeId === e.id)).map(e => <option key={e.id} value={e.id}>{e.avatar} {e.firstName} {e.lastName}</option>)}
                                         </select>
                                       ) : (
-                                        <button onClick={() => setStaffingPickerCell({ date, stationId: sid })} className="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold flex items-center gap-1 px-1"><Plus className="h-3 w-3" /> {exclusion ? 'Pridať náhradu' : 'Pridať navyše'}</button>
+                                        <button onClick={() => setStaffingPickerCell({ date, stationId: sid })} className="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold flex items-center gap-1 px-1"><Plus className="h-3 w-3" /> {(exclusion || isAbsentByAttendance) ? 'Pridať náhradu' : 'Pridať navyše'}</button>
                                       )}
                                     </div>
                                   </td>
