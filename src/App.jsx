@@ -36,12 +36,14 @@ const STATION_CONFIGS = {
   transfer: { name: 'Transfer tlač', icon: Layers, statuses: [
     { id: 'neaktivne', label: 'Neaktívne', color: 'bg-slate-700 text-slate-300' },
     { id: 'caka', label: 'Čaká sa', color: 'bg-slate-600 text-slate-200' },
+    { id: 'caka_na_vyriesenie', label: 'Čaká na vyriešenie', color: 'bg-orange-700 text-white' },
     { id: 'tlac', label: 'Tlačí sa', color: 'bg-sky-600 text-white' },
     { id: 'hotove', label: 'Hotové', color: 'bg-emerald-600 text-white' }
   ]},
   sietotlac: { name: 'Sieťotlač', icon: Palette, statuses: [
     { id: 'neaktivne', label: 'Neaktívne', color: 'bg-slate-700 text-slate-300' },
     { id: 'caka', label: 'Čaká sa', color: 'bg-slate-600 text-slate-200' },
+    { id: 'caka_na_vyriesenie', label: 'Čaká na vyriešenie', color: 'bg-orange-700 text-white' },
     { id: 'tlac', label: 'Tlačí sa', color: 'bg-sky-600 text-white' },
     { id: 'hotove', label: 'Hotové', color: 'bg-emerald-600 text-white' }
   ]},
@@ -79,6 +81,18 @@ const UNIT_OPTIONS = [
   { value: 'kg', label: 'kg (kilogramy)' }
 ];
 const STATION_ORDER = ['grafik', 'strihanie', 'laser', 'sublimacia', 'transfer', 'sietotlac', 'sitie', 'balenie'];
+
+// Ako dlho po úprave zákazky sa má na sprievodke zobrazovať upozornenie na nedávnu zmenu (Funkcia 4)
+const RECENT_ORDER_CHANGE_HOURS = 72;
+
+// Stanice, kde musí zamestnanec pred spustením tlače potvrdiť, že prijatý textil sedí s objednávkou (Funkcia 2)
+const MATERIAL_CHECK_STATIONS = ['transfer', 'sietotlac'];
+// Zistí, či na danej stanici/položke ešte treba prejsť potvrdením materiálu pred spustením práce
+function isMaterialCheckPending(item, stationId) {
+  if (!MATERIAL_CHECK_STATIONS.includes(stationId)) return false;
+  if ((item.stationStatuses?.[stationId] || 'neaktivne') !== 'caka') return false;
+  return !item.materialChecks?.[stationId]?.confirmed;
+}
 
 // "Potlač" preset — ide len cez tieto stanice (bez laseru, strihania/kompletáže, sublimácie, šitia)
 const PRINT_ONLY_STATIONS = ['grafik', 'transfer', 'sietotlac', 'balenie'];
@@ -166,8 +180,27 @@ const mapTierToDb = (t) => ({ id: t.id, name: t.name, fit: t.fit, ventilation: t
 const mapEmployeeFromDb = (r) => ({ id: r.id, firstName: r.first_name, lastName: r.last_name, birthday: r.birthday, nameday: r.nameday, entryDate: r.entry_date, role: r.role, position: r.position, passwordHash: r.password_hash || '', phone: r.phone || '', email: r.email || '', avatar: r.avatar || '', pinHash: r.pin_hash || '', authUserId: r.auth_user_id || '', signupToken: r.signup_token || '', signupTokenExpires: r.signup_token_expires || null });
 const mapEmployeeToDb = (e) => ({ id: e.id, first_name: e.firstName, last_name: e.lastName, birthday: e.birthday, nameday: e.nameday, entry_date: e.entryDate, role: e.role, position: e.position, password_hash: e.passwordHash || null, phone: e.phone || null, email: e.email || null, avatar: e.avatar || null, pin_hash: e.pinHash || null, auth_user_id: e.authUserId || null, signup_token: e.signupToken || null, signup_token_expires: e.signupTokenExpires || null });
 
-const mapOrderFromDb = (r) => ({ id: r.id, customer: r.customer, createdAt: r.created_at, deliveryDate: r.scheduled_day, driveLink: r.drive_link, notes: r.notes, paymentType: r.payment_type || 'faktura', items: r.items || [], orderLog: r.order_log || [], legacyOrderNumber: r.legacy_order_number || '', companyBrand: r.company_brand || 'ATAK', orderNumber: r.order_number || '', accountingStatus: r.accounting_status || null });
-const mapOrderToDb = (o) => ({ id: o.id, customer: o.customer, created_at: o.createdAt, scheduled_day: o.deliveryDate, drive_link: o.driveLink, notes: o.notes, payment_type: o.paymentType, items: o.items, order_log: o.orderLog || [], legacy_order_number: o.legacyOrderNumber || null, company_brand: o.companyBrand || 'ATAK', order_number: o.orderNumber || null, accounting_status: o.accountingStatus || null });
+const mapOrderFromDb = (r) => ({ id: r.id, customer: r.customer, createdAt: r.created_at, deliveryDate: r.scheduled_day, driveLink: r.drive_link, notes: r.notes, paymentType: r.payment_type || 'faktura', items: r.items || [], orderLog: r.order_log || [], legacyOrderNumber: r.legacy_order_number || '', companyBrand: r.company_brand || 'ATAK', orderNumber: r.order_number || '', accountingStatus: r.accounting_status || null, lastModifiedAt: r.last_modified_at || null, lastModifiedNote: r.last_modified_note || '' });
+const mapOrderToDb = (o) => ({ id: o.id, customer: o.customer, created_at: o.createdAt, scheduled_day: o.deliveryDate, drive_link: o.driveLink, notes: o.notes, payment_type: o.paymentType, items: o.items, order_log: o.orderLog || [], legacy_order_number: o.legacyOrderNumber || null, company_brand: o.companyBrand || 'ATAK', order_number: o.orderNumber || null, accounting_status: o.accountingStatus || null, last_modified_at: o.lastModifiedAt || null, last_modified_note: o.lastModifiedNote || null });
+
+// Krátky ľudsky čitateľný popis toho, čo sa v zákazke pri úprave zmenilo (Funkcia 4)
+function describeOrderChanges(original, draft) {
+  const changes = [];
+  if (original.customer !== draft.customer) changes.push(`odberateľ: "${original.customer}" → "${draft.customer}"`);
+  if (original.deliveryDate !== draft.deliveryDate) changes.push(`termín dodania: ${original.deliveryDate} → ${draft.deliveryDate}`);
+  if ((original.notes || '') !== (draft.notes || '')) changes.push('zmenená poznámka k zákazke');
+  if (original.paymentType !== draft.paymentType) changes.push(`spôsob platby: ${draft.paymentType}`);
+  if ((original.driveLink || '') !== (draft.driveLink || '')) changes.push('zmenený odkaz na podklady');
+  if (original.items.length !== draft.items.length) {
+    changes.push(draft.items.length > original.items.length ? 'pridaná položka' : 'odstránená položka');
+  } else {
+    draft.items.forEach(di => {
+      const oi = original.items.find(x => x.itemId === di.itemId);
+      if (oi && parseInt(oi.qty) !== parseInt(di.qty)) changes.push(`zmenené množstvo (${di.itemId}: ${oi.qty} → ${di.qty} ks)`);
+    });
+  }
+  return changes.length ? changes.join(', ') : 'drobná úprava';
+}
 
 function applyRealtimeChange(setter, payload, mapFn, keyField = 'id') {
   setter(prev => {
@@ -246,7 +279,7 @@ function flattenOrderItems(ordersList) {
   const flat = [];
   ordersList.forEach(order => {
     (order.items || []).forEach(item => {
-      flat.push({ ...item, orderId: order.id, orderNumber: order.orderNumber, companyBrand: order.companyBrand, customer: order.customer, deliveryDate: order.deliveryDate, productionDate: item.productionDate || order.deliveryDate, createdAt: order.createdAt, driveLink: order.driveLink, orderNotes: order.notes, paymentType: order.paymentType });
+      flat.push({ ...item, orderId: order.id, orderNumber: order.orderNumber, companyBrand: order.companyBrand, customer: order.customer, deliveryDate: order.deliveryDate, productionDate: item.productionDate || order.deliveryDate, createdAt: order.createdAt, driveLink: order.driveLink, orderNotes: order.notes, paymentType: order.paymentType, lastModifiedAt: order.lastModifiedAt, lastModifiedNote: order.lastModifiedNote });
     });
   });
   return flat;
@@ -308,7 +341,7 @@ const mapStationDefaultFromDb = (r) => ({ stationId: r.station_id, employeeId: r
 const mapStationExclusionFromDb = (r) => ({ id: r.id, stationId: r.station_id, date: r.exclusion_date, reason: r.reason || '' });
 const mapCheckinFromDb = (r) => ({ id: r.id, employeeId: r.employee_id, date: r.checkin_date, checkedInAt: r.checked_in_at, stationId: r.station_id });
 const mapAttendanceFromDb = (r) => ({ id: r.id, employeeId: r.employee_id, employeeNameRaw: r.employee_name_raw, date: r.record_date, timeIn: r.time_in, timeOut: r.time_out, status: r.status || '', syncedAt: r.synced_at });
-const mapProblemFromDb = (r) => ({ id: r.id, orderId: r.order_id, itemId: r.item_id, stationId: r.station_id, employeeId: r.employee_id, employeeName: r.employee_name, category: r.category, description: r.description, status: r.status, createdAt: r.created_at, resolvedAt: r.resolved_at, resolvedBy: r.resolved_by, resolutionNote: r.resolution_note, imageUrl: r.image_url || '' });
+const mapProblemFromDb = (r) => ({ id: r.id, orderId: r.order_id, itemId: r.item_id, stationId: r.station_id, employeeId: r.employee_id, employeeName: r.employee_name, category: r.category, description: r.description, status: r.status, createdAt: r.created_at, resolvedAt: r.resolved_at, resolvedBy: r.resolved_by, resolutionNote: r.resolution_note, imageUrl: r.image_url || '', faultEmployeeId: r.fault_employee_id || '', faultEmployeeName: r.fault_employee_name || '', costAmount: r.cost_amount ?? null });
 
 const mapCompanySettingsFromDb = (r) => ({ companyName: r.company_name || '', address: r.address || '', ico: r.ico || '', dic: r.dic || '', icDph: r.ic_dph || '', iban: r.iban || '', bankName: r.bank_name || '', defaultVatRate: r.default_vat_rate ?? 20, nextInvoiceNumber: r.next_invoice_number ?? 1, invoiceNumberPrefix: r.invoice_number_prefix || '', nextPpdNumber: r.next_ppd_number ?? 1, nextVpdNumber: r.next_vpd_number ?? 1 });
 const mapInvoiceFromDb = (r) => ({ id: r.id, invoiceNumber: r.invoice_number, orderId: r.order_id, customerName: r.customer_name || '', customerAddress: r.customer_address || '', customerIco: r.customer_ico || '', customerDic: r.customer_dic || '', customerIcDph: r.customer_ic_dph || '', issueDate: r.issue_date, deliveryDate: r.delivery_date, dueDate: r.due_date, variableSymbol: r.variable_symbol || '', items: r.items || [], subtotal: r.subtotal || 0, vatTotal: r.vat_total || 0, total: r.total || 0, status: r.status, paidAt: r.paid_at, notes: r.notes || '', createdBy: r.created_by || '', createdAt: r.created_at, corrections: r.corrections || [], customerType: r.customer_type || 'sk_platca' });
@@ -684,6 +717,14 @@ export default function App() {
   const [showResolvedProblems, setShowResolvedProblems] = useState(false);
   const [resolvingProblem, setResolvingProblem] = useState(null);
   const [resolutionNoteInput, setResolutionNoteInput] = useState('');
+  const [resolutionFaultEmployeeId, setResolutionFaultEmployeeId] = useState('');
+  const [resolutionCostAmount, setResolutionCostAmount] = useState('');
+  const [showErrorLeaderboard, setShowErrorLeaderboard] = useState(false);
+  const [errorLeaderboardPeriod, setErrorLeaderboardPeriod] = useState('month'); // 'month' | '3months' | '6months' | 'year'
+  // Nezrovnalosť materiálu pred Transfer/Sieťotlač (Funkcia 2)
+  const [reportingMismatchFor, setReportingMismatchFor] = useState(null); // { item, stationId } | null
+  const [mismatchNoteInput, setMismatchNoteInput] = useState('');
+  const [mismatchQtyInput, setMismatchQtyInput] = useState('');
   const [companySettings, setCompanySettings] = useState({ companyName: '', address: '', ico: '', dic: '', icDph: '', iban: '', bankName: '', defaultVatRate: 20, nextInvoiceNumber: 1, invoiceNumberPrefix: '' });
   const [companySettingsDraft, setCompanySettingsDraft] = useState(null);
   const [invoices, setInvoices] = useState([]);
@@ -1094,7 +1135,27 @@ export default function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, (payload) => applyRealtimeChange(setProducts, payload, mapProductFromDb))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'quality_tiers' }, (payload) => applyRealtimeChange(setQualityTiers, payload, mapTierFromDb))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, (payload) => applyRealtimeChange(setEmployees, payload, mapEmployeeFromDb))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => applyRealtimeChange(setOrders, payload, mapOrderFromDb))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
+        if (payload.eventType === 'UPDATE') {
+          const oldOrder = ordersRef.current.find(o => o.id === payload.new.id);
+          (payload.new.items || []).forEach(newItem => {
+            const oldItem = oldOrder?.items?.find(it => it.itemId === newItem.itemId);
+            MATERIAL_CHECK_STATIONS.forEach(stationId => {
+              const newMismatch = newItem.materialChecks?.[stationId]?.mismatch;
+              const oldMismatch = oldItem?.materialChecks?.[stationId]?.mismatch;
+              if (newMismatch?.status === 'pending' && (!oldMismatch || oldMismatch.status !== 'pending' || oldMismatch.reportedAt !== newMismatch.reportedAt)) {
+                playAlertBeep(2, 880);
+                showDesktopNotification('⚠️ Nezrovnalosť materiálu', `${STATION_CONFIGS[stationId].name} • ${newItem.itemId}: ${newMismatch.note}`);
+              }
+            });
+            if (newItem.ultraPriorityStatus === 'pending' && (oldItem?.ultraPriorityStatus !== 'pending' || oldItem?.ultraPriorityRequestedAt !== newItem.ultraPriorityRequestedAt)) {
+              playAlertBeep(2, 880);
+              showDesktopNotification('🔴 Žiadosť o ultra prioritu', `${newItem.itemId} — navrhol ${newItem.ultraPriorityRequestedBy}`);
+            }
+          });
+        }
+        applyRealtimeChange(setOrders, payload, mapOrderFromDb);
+      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sports' }, (payload) => {
         if (payload.eventType === 'DELETE') setSports(prev => prev.filter(s => s !== payload.old.name));
         else setSports(prev => prev.includes(payload.new.name) ? prev : [...prev, payload.new.name]);
@@ -1107,6 +1168,8 @@ export default function App() {
   }, []);
 
   const employeesRef = useRef(employees);
+  const ordersRef = useRef(orders);
+  useEffect(() => { ordersRef.current = orders; }, [orders]);
 
   useEffect(() => {
     if (plannerViewMode === 'staffing' && isAuthenticated && hasPermission('manage_profiles')) {
@@ -1464,12 +1527,17 @@ export default function App() {
 
   const handleResolveProblem = async () => {
     if (!resolvingProblem) return;
+    const faultEmployee = employees.find(e => e.id === resolutionFaultEmployeeId);
     const { error } = await supabase.from('problem_reports').update({
-      status: 'resolved', resolved_at: new Date().toISOString(), resolved_by: `${currentUser.firstName} ${currentUser.lastName}`, resolution_note: resolutionNoteInput.trim()
+      status: 'resolved', resolved_at: new Date().toISOString(), resolved_by: `${currentUser.firstName} ${currentUser.lastName}`, resolution_note: resolutionNoteInput.trim(),
+      fault_employee_id: faultEmployee?.id || null, fault_employee_name: faultEmployee ? `${faultEmployee.firstName} ${faultEmployee.lastName}` : null,
+      cost_amount: resolutionCostAmount.trim() ? parseFloat(resolutionCostAmount) : null
     }).eq('id', resolvingProblem.id);
     if (error) { triggerNotification('error', error.message); return; }
     setResolvingProblem(null);
     setResolutionNoteInput('');
+    setResolutionFaultEmployeeId('');
+    setResolutionCostAmount('');
     triggerNotification('success', 'Problém označený ako vyriešený.');
   };
 
@@ -2969,7 +3037,8 @@ export default function App() {
       return { ...it, qty: cleanQty };
     });
 
-    const finalDraft = { ...orderEditDraft, items: cleanedItems };
+    const changeDescription = describeOrderChanges(selectedOrderDetails, { ...orderEditDraft, items: cleanedItems });
+    const finalDraft = { ...orderEditDraft, items: cleanedItems, lastModifiedAt: now, lastModifiedNote: `${changeDescription} (${currentUser.firstName} ${currentUser.lastName})` };
     const { error } = await supabase.from('orders').update(mapOrderToDb(finalDraft)).eq('id', finalDraft.id);
     if (error) { triggerNotification('error', `Chyba: ${error.message}`); return; }
 
@@ -3012,6 +3081,18 @@ export default function App() {
     }
 
     const currentStatus = item.stationStatuses[selectedTerminalStation] || 'neaktivne';
+
+    if (currentStatus === 'caka_na_vyriesenie') {
+      triggerNotification('error', `Položka ${item.itemId} čaká na vyriešenie nezrovnalosti materiálu — kontaktuj nadriadeného.`);
+      setManualQrInput('');
+      return;
+    }
+    if (isMaterialCheckPending(item, selectedTerminalStation)) {
+      triggerNotification('error', `Najprv over materiál pri položke ${item.itemId} v Samostatných dielňach (Potvrdiť — spočítané, sedí).`);
+      setManualQrInput('');
+      return;
+    }
+
     if (currentStatus === 'neaktivne' || currentStatus === 'caka' || currentStatus === 'priprava') {
       let targetStatus = 'hotove';
       if (selectedTerminalStation === 'grafik') targetStatus = 'export';
@@ -3020,7 +3101,9 @@ export default function App() {
       else if (selectedTerminalStation === 'sitie') targetStatus = 'sije';
       else if (selectedTerminalStation === 'balenie') targetStatus = 'prebieha';
       else if (['transfer', 'sietotlac', 'sublimacia'].includes(selectedTerminalStation)) targetStatus = 'tlac';
-      updateStationStatus(order.id, item.itemId, selectedTerminalStation, targetStatus);
+      // Finálna kontrola kompletnosti — balenie pri prevzatí položky potvrdí sken QR kódu (Funkcia 2)
+      const extraFields = selectedTerminalStation === 'balenie' ? { finalCheckConfirmedBy: `${currentUser.firstName} ${currentUser.lastName}`, finalCheckConfirmedAt: getFormattedDateTime() } : null;
+      updateStationStatus(order.id, item.itemId, selectedTerminalStation, targetStatus, extraFields);
       triggerNotification('success', `VSTUP naskenovaný: Položka ${item.itemId} (${item.productName}) je v práci.`);
     } else {
       updateStationStatus(order.id, item.itemId, selectedTerminalStation, 'hotove');
@@ -3060,7 +3143,7 @@ export default function App() {
     setIsCameraScanning(false);
   };
 
-  const updateStationStatus = async (orderId, itemId, stationId, statusId) => {
+  const updateStationStatus = async (orderId, itemId, stationId, statusId, extraItemFields = null) => {
     if (!hasPermission('update_status')) { triggerNotification('error', 'Nemáte oprávnenie meniť stavy staníc.'); return; }
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
@@ -3097,7 +3180,7 @@ export default function App() {
         newMeta = { ...newMeta, completedAt: now, durationMinutes };
       }
 
-      return { ...item, stationStatuses: { ...item.stationStatuses, [stationId]: statusId }, stationMeta: { ...item.stationMeta, [stationId]: newMeta }, materialDeducted: isDeductedNow };
+      return { ...item, stationStatuses: { ...item.stationStatuses, [stationId]: statusId }, stationMeta: { ...item.stationMeta, [stationId]: newMeta }, materialDeducted: isDeductedNow, ...(extraItemFields || {}) };
     });
 
     const updatePayload = { items: updatedItems };
@@ -3126,6 +3209,126 @@ export default function App() {
     if (error) { triggerNotification('error', error.message); return; }
     if (selectedOrderDetails?.id === orderId) setSelectedOrderDetails({ ...order, items: updatedItems });
     triggerNotification('success', `Stanica "${STATION_CONFIGS[stationId].name}" bola doplnená k položke ${itemId}.`);
+  };
+
+  // --- SCHVAĽOVACÍ KROK PRED TRANSFER / SIEŤOTLAČ (Funkcia 2) ---
+  const handleConfirmMaterialCheck = async (orderId, itemId, stationId) => {
+    if (!hasPermission('update_status')) { triggerNotification('error', 'Nemáte oprávnenie meniť stavy staníc.'); return; }
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+    const now = getFormattedDateTime();
+    const updatedItems = order.items.map(item => item.itemId !== itemId ? item : {
+      ...item,
+      materialChecks: { ...item.materialChecks, [stationId]: { ...(item.materialChecks?.[stationId] || {}), confirmed: true, confirmedBy: `${currentUser.firstName} ${currentUser.lastName}`, confirmedAt: now } }
+    });
+    const { error } = await supabase.from('orders').update({ items: updatedItems }).eq('id', orderId);
+    if (error) { triggerNotification('error', error.message); return; }
+    if (selectedOrderDetails?.id === orderId) setSelectedOrderDetails({ ...order, items: updatedItems });
+    triggerNotification('success', 'Potvrdené — textil sedí s objednávkou. Môžeš spustiť tlač.');
+  };
+
+  const handleSubmitMismatchReport = async () => {
+    if (!reportingMismatchFor) return;
+    if (!mismatchNoteInput.trim()) { triggerNotification('error', 'Napíš, čo presne chýba/nesedí.'); return; }
+    if (!hasPermission('update_status')) { triggerNotification('error', 'Nemáte oprávnenie meniť stavy staníc.'); return; }
+    const { item, stationId } = reportingMismatchFor;
+    const order = orders.find(o => o.id === item.orderId);
+    if (!order) return;
+    const now = getFormattedDateTime();
+    const updatedItems = order.items.map(it => it.itemId !== item.itemId ? it : {
+      ...it,
+      stationStatuses: { ...it.stationStatuses, [stationId]: 'caka_na_vyriesenie' },
+      materialChecks: {
+        ...it.materialChecks,
+        [stationId]: {
+          confirmed: false,
+          mismatch: { status: 'pending', note: mismatchNoteInput.trim(), qty: mismatchQtyInput.trim(), reportedBy: `${currentUser.firstName} ${currentUser.lastName}`, reportedAt: now, resolvedBy: null, resolvedAt: null }
+        }
+      }
+    });
+    const { error } = await supabase.from('orders').update({ items: updatedItems }).eq('id', order.id);
+    if (error) { triggerNotification('error', error.message); return; }
+    if (selectedOrderDetails?.id === order.id) setSelectedOrderDetails({ ...order, items: updatedItems });
+    setReportingMismatchFor(null);
+    setMismatchNoteInput('');
+    setMismatchQtyInput('');
+    triggerNotification('success', 'Nezrovnalosť bola nahlásená. Master/Supervisor to uvidí.');
+  };
+
+  const handleResolveMismatch = async (item, stationId, resolution) => {
+    if (!hasPermission('view_reports')) { triggerNotification('error', 'Prístup zamietnutý.'); return; }
+    const order = orders.find(o => o.id === item.orderId);
+    if (!order) return;
+    const now = getFormattedDateTime();
+    const resolverName = `${currentUser.firstName} ${currentUser.lastName}`;
+    const updatedItems = order.items.map(it => {
+      if (it.itemId !== item.itemId) return it;
+      const existingCheck = it.materialChecks?.[stationId] || {};
+      const proceed = resolution === 'proceed';
+      return {
+        ...it,
+        stationStatuses: proceed ? { ...it.stationStatuses, [stationId]: 'caka' } : it.stationStatuses,
+        materialChecks: {
+          ...it.materialChecks,
+          [stationId]: {
+            ...existingCheck,
+            confirmed: proceed,
+            confirmedBy: proceed ? resolverName : existingCheck.confirmedBy,
+            confirmedAt: proceed ? now : existingCheck.confirmedAt,
+            mismatch: { ...existingCheck.mismatch, status: proceed ? 'overridden' : 'set_aside', resolvedBy: resolverName, resolvedAt: now }
+          }
+        }
+      };
+    });
+    const { error } = await supabase.from('orders').update({ items: updatedItems }).eq('id', order.id);
+    if (error) { triggerNotification('error', error.message); return; }
+    if (selectedOrderDetails?.id === order.id) setSelectedOrderDetails({ ...order, items: updatedItems });
+    triggerNotification('success', resolution === 'proceed' ? 'Zamestnanec môže pokračovať v tlači.' : 'Položka bola daná bokom, čaká na vyriešenie.');
+  };
+
+  // --- ULTRA PRIORITA ZÁKAZKY (Funkcia 1) ---
+  const handleSetUltraPriority = async (orderId, itemId, active) => {
+    if (currentUser.role !== 'master' && currentUser.role !== 'supervisor') { triggerNotification('error', 'Ultra prioritu môže nastaviť len Master alebo Supervisor.'); return; }
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+    const now = getFormattedDateTime();
+    const updatedItems = order.items.map(item => item.itemId !== itemId ? item : {
+      ...item,
+      ultraPriority: active,
+      ultraPriorityStatus: active ? 'approved' : 'none',
+      ...(active ? { ultraPriorityRequestedBy: `${currentUser.firstName} ${currentUser.lastName}`, ultraPriorityRequestedAt: now } : {})
+    });
+    const { error } = await supabase.from('orders').update({ items: updatedItems }).eq('id', orderId);
+    if (error) { triggerNotification('error', error.message); return; }
+    if (selectedOrderDetails?.id === orderId) setSelectedOrderDetails({ ...order, items: updatedItems });
+    triggerNotification('success', active ? 'Ultra priorita aktivovaná.' : 'Ultra priorita vypnutá.');
+  };
+
+  const handleRequestUltraPriority = async (orderId, itemId) => {
+    if (currentUser.role !== 'sales') { triggerNotification('error', 'Prístup zamietnutý.'); return; }
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+    const now = getFormattedDateTime();
+    const updatedItems = order.items.map(item => item.itemId !== itemId ? item : {
+      ...item, ultraPriorityStatus: 'pending', ultraPriorityRequestedBy: `${currentUser.firstName} ${currentUser.lastName}`, ultraPriorityRequestedAt: now
+    });
+    const { error } = await supabase.from('orders').update({ items: updatedItems }).eq('id', orderId);
+    if (error) { triggerNotification('error', error.message); return; }
+    if (selectedOrderDetails?.id === orderId) setSelectedOrderDetails({ ...order, items: updatedItems });
+    triggerNotification('success', 'Žiadosť o ultra prioritu bola odoslaná Master/Supervisorovi.');
+  };
+
+  const handleResolveUltraPriorityRequest = async (orderId, itemId, approve) => {
+    if (currentUser.role !== 'master' && currentUser.role !== 'supervisor') { triggerNotification('error', 'Prístup zamietnutý.'); return; }
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+    const updatedItems = order.items.map(item => item.itemId !== itemId ? item : {
+      ...item, ultraPriority: approve, ultraPriorityStatus: approve ? 'approved' : 'none'
+    });
+    const { error } = await supabase.from('orders').update({ items: updatedItems }).eq('id', orderId);
+    if (error) { triggerNotification('error', error.message); return; }
+    if (selectedOrderDetails?.id === orderId) setSelectedOrderDetails({ ...order, items: updatedItems });
+    triggerNotification('success', approve ? 'Ultra priorita schválená.' : 'Žiadosť bola zamietnutá.');
   };
 
   const handleSubmitEmployee = async (e) => {
@@ -3456,6 +3659,22 @@ export default function App() {
               <AlertTriangle className="h-3.5 w-3.5" /> {problemReports.filter(p => p.status === 'open').length} nevyriešených problémov
             </button>
           )}
+          {hasPermission('view_reports') && (() => {
+            const pendingMismatchCount = allItems.reduce((sum, item) => sum + MATERIAL_CHECK_STATIONS.filter(sid => item.materialChecks?.[sid]?.mismatch?.status === 'pending').length, 0);
+            return pendingMismatchCount > 0 && (
+              <button onClick={() => setActiveTab('problems')} className="px-3 py-1 rounded-md font-bold border bg-orange-600 text-white border-orange-500 animate-pulse flex items-center gap-1.5">
+                <AlertTriangle className="h-3.5 w-3.5" /> {pendingMismatchCount} nezrovnalostí materiálu
+              </button>
+            );
+          })()}
+          {hasPermission('view_reports') && (() => {
+            const pendingUltraCount = allItems.filter(item => item.ultraPriorityStatus === 'pending').length;
+            return pendingUltraCount > 0 && (
+              <button onClick={() => setActiveTab('problems')} className="px-3 py-1 rounded-md font-bold border bg-rose-600 text-white border-rose-500 animate-pulse flex items-center gap-1.5">
+                🔴 {pendingUltraCount} žiadostí o ultra prioritu
+              </button>
+            );
+          })()}
           {currentUser.role === 'master' && (
             <button onClick={() => setShowMasterSwitcher(s => !s)} className="px-3 py-1 rounded-md font-bold border bg-slate-900 text-indigo-400 border-slate-800 hover:text-white">
               {showMasterSwitcher ? 'Skryť testovací prepínač' : 'Testovať ako iný profil'}
@@ -3663,10 +3882,24 @@ export default function App() {
                                               setDragOverMatrixCell(prev => (prev && prev.targetItemId === item.itemId && prev.position === pos ? prev : { date, stationId, targetItemId: item.itemId, position: pos }));
                                             }}
                                             onClick={() => openOrderDetails(orders.find(o => o.id === item.orderId))}
-                                            className={`bg-slate-900 hover:bg-slate-800 border-l-4 ${orderColor.border} border-t border-r border-b border-slate-750 p-2 rounded cursor-pointer transition-all flex flex-col justify-between text-[10px] space-y-1 shadow hover:scale-[1.02] transform ${hasPermission('edit_priority') ? 'active:cursor-grabbing' : ''}`}
+                                            className={`relative bg-slate-900 hover:bg-slate-800 border-l-4 ${orderColor.border} border-t border-r border-b border-slate-750 p-2 rounded cursor-pointer transition-all flex flex-col justify-between text-[10px] space-y-1 shadow hover:scale-[1.02] transform ${hasPermission('edit_priority') ? 'active:cursor-grabbing' : ''} ${item.ultraPriority ? 'ultra-priority-card' : ''}`}
                                           >
+                                            {(() => {
+                                              if (!item.lastModifiedAt) return null;
+                                              const modifiedAt = parseFormattedDateTime(item.lastModifiedAt);
+                                              const hoursAgo = modifiedAt ? (Date.now() - modifiedAt.getTime()) / 3600000 : Infinity;
+                                              if (hoursAgo > RECENT_ORDER_CHANGE_HOURS) return null;
+                                              return (
+                                                <span
+                                                  title={`Zákazka bola nedávno upravená: ${item.lastModifiedAt} — ${item.lastModifiedNote}`}
+                                                  className="absolute -top-1.5 -right-1.5 bg-rose-600 text-white rounded-full p-0.5 shadow-lg animate-pulse cursor-help z-10"
+                                                >
+                                                  <AlertTriangle className="h-3 w-3" />
+                                                </span>
+                                              );
+                                            })()}
                                             <div className="flex items-center justify-between">
-                                              <span className="font-mono font-bold text-indigo-400">#{item.priority} • {item.itemId}</span>
+                                              <span className="font-mono font-bold text-indigo-400">{item.ultraPriority && '🔴 '}#{item.priority} • {item.itemId}</span>
                                               <div className="flex items-center gap-1">
                                                 {item.stationMeta?.[stationId]?.assignedEmployeeAvatar && (
                                                   <span title={item.stationMeta[stationId].assignedEmployeeName} className="text-sm leading-none cursor-help">{item.stationMeta[stationId].assignedEmployeeAvatar}</span>
@@ -4517,6 +4750,9 @@ export default function App() {
                     const currentStatusId = item.stationStatuses[activeStationFilter] || 'caka';
                     const orderColor = colorForOrder(item.orderId);
                     const itemOpenProblems = problemReports.filter(p => p.itemId === item.itemId && p.status === 'open');
+                    const needsMaterialGate = isMaterialCheckPending(item, activeStationFilter);
+                    const pendingMismatch = item.materialChecks?.[activeStationFilter]?.mismatch;
+                    const isWaitingForResolution = currentStatusId === 'caka_na_vyriesenie';
                     return (
                       <div key={item.itemId} className={`bg-slate-900/80 border-l-4 ${orderColor.border} border-t border-r border-b border-slate-800 p-5 rounded-xl flex flex-col md:flex-row justify-between gap-4`}>
                         <div className="space-y-2 flex-1">
@@ -4539,15 +4775,28 @@ export default function App() {
                           <p className="text-xs text-indigo-400 font-bold">{item.productName} - <span className="text-slate-100 uppercase">{item.qualityTier}</span></p>
                         </div>
                         <div className="flex flex-col sm:flex-row md:flex-col justify-between items-end gap-3 min-w-[220px]">
-                          <div className="w-full text-right space-y-1.5">
-                            <span className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Stav procesu:</span>
-                            <div className="grid grid-cols-2 gap-1">
-                              {config.statuses.map(st => {
-                                const isSelected = currentStatusId === st.id;
-                                return (<button key={st.id} onClick={() => updateStationStatus(item.orderId, item.itemId, activeStationFilter, st.id)} className={`px-2 py-1.5 rounded text-[10px] font-bold transition-all text-center truncate ${isSelected ? `${st.color} ring-2 ring-indigo-500` : 'bg-slate-800 text-slate-400 hover:text-slate-200'}`}>{st.label}</button>);
-                              })}
+                          {needsMaterialGate ? (
+                            <div className="w-full space-y-1.5">
+                              <span className="text-[10px] text-amber-400 uppercase font-bold block mb-1">Pred tlačou over prijatý textil:</span>
+                              <button onClick={() => handleConfirmMaterialCheck(item.orderId, item.itemId, activeStationFilter)} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] px-3 py-2 rounded-lg flex items-center justify-center gap-1.5"><Check className="h-3.5 w-3.5" /> Potvrdiť — spočítané, sedí</button>
+                              <button onClick={() => { setReportingMismatchFor({ item, stationId: activeStationFilter }); setMismatchNoteInput(''); setMismatchQtyInput(''); }} className="w-full bg-rose-950/50 hover:bg-rose-900/50 border border-rose-700/50 text-rose-300 font-bold text-[11px] px-3 py-2 rounded-lg flex items-center justify-center gap-1.5"><AlertTriangle className="h-3.5 w-3.5" /> Nahlásiť nezrovnalosť</button>
                             </div>
-                          </div>
+                          ) : isWaitingForResolution ? (
+                            <div className="w-full bg-orange-950/30 border border-orange-700/40 rounded-lg p-3 space-y-1 text-right">
+                              <span className="text-[10px] text-orange-300 uppercase font-bold block">Čaká na vyriešenie nadriadeným</span>
+                              {pendingMismatch?.note && <p className="text-[11px] text-orange-200">{pendingMismatch.note}{pendingMismatch.qty ? ` (${pendingMismatch.qty})` : ''}</p>}
+                            </div>
+                          ) : (
+                            <div className="w-full text-right space-y-1.5">
+                              <span className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Stav procesu:</span>
+                              <div className="grid grid-cols-2 gap-1">
+                                {config.statuses.filter(st => st.id !== 'caka_na_vyriesenie').map(st => {
+                                  const isSelected = currentStatusId === st.id;
+                                  return (<button key={st.id} onClick={() => updateStationStatus(item.orderId, item.itemId, activeStationFilter, st.id)} className={`px-2 py-1.5 rounded text-[10px] font-bold transition-all text-center truncate ${isSelected ? `${st.color} ring-2 ring-indigo-500` : 'bg-slate-800 text-slate-400 hover:text-slate-200'}`}>{st.label}</button>);
+                                })}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
@@ -5045,6 +5294,32 @@ export default function App() {
                   {isUploadingProblemImage ? <><Loader2 className="h-4 w-4 animate-spin" /> Nahrávam...</> : 'Nahlásiť'}
                 </button>
                 <button onClick={() => { setReportingProblemForItem(null); setProblemImageFile(null); setProblemImagePreview(''); }} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-6 rounded-lg text-xs font-bold">Zrušiť</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {reportingMismatchFor && (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-slate-900 border border-rose-800/40 p-6 rounded-2xl w-full max-w-md shadow-2xl space-y-4">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-amber-400" /> Nahlásiť nezrovnalosť materiálu</h3>
+                  <p className="text-xs text-slate-500 font-mono">{reportingMismatchFor.item.itemId} • {reportingMismatchFor.item.customer} • {STATION_CONFIGS[reportingMismatchFor.stationId]?.name}</p>
+                </div>
+                <button onClick={() => setReportingMismatchFor(null)} className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white"><X className="h-5 w-5" /></button>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Čo chýba / nesedí?</label>
+                <textarea rows={4} value={mismatchNoteInput} onChange={(e) => setMismatchNoteInput(e.target.value)} placeholder="napr. chýbajú 2 ks trička veľkosť M, prišla iná farba..." className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" autoFocus />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Počet kusov (voliteľné)</label>
+                <input type="text" value={mismatchQtyInput} onChange={(e) => setMismatchQtyInput(e.target.value)} placeholder="napr. 2 ks" className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" />
+              </div>
+              <div className="flex gap-2">
+                <button onClick={handleSubmitMismatchReport} className="flex-1 bg-rose-700 hover:bg-rose-800 text-white font-bold py-2.5 rounded-lg uppercase text-xs">Nahlásiť</button>
+                <button onClick={() => setReportingMismatchFor(null)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-6 rounded-lg text-xs font-bold">Zrušiť</button>
               </div>
             </div>
           </div>
@@ -5689,16 +5964,120 @@ export default function App() {
           const openProblems = problemReports.filter(p => p.status === 'open').sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
           const resolvedProblems = problemReports.filter(p => p.status === 'resolved').sort((a, b) => new Date(b.resolvedAt) - new Date(a.resolvedAt));
           const listToShow = showResolvedProblems ? resolvedProblems : openProblems;
+          const pendingMismatches = [];
+          allItems.forEach(item => {
+            MATERIAL_CHECK_STATIONS.forEach(stationId => {
+              const mismatch = item.materialChecks?.[stationId]?.mismatch;
+              if (mismatch?.status === 'pending') pendingMismatches.push({ item, stationId, mismatch });
+            });
+          });
+          pendingMismatches.sort((a, b) => (parseFormattedDateTime(a.mismatch.reportedAt) || 0) - (parseFormattedDateTime(b.mismatch.reportedAt) || 0));
+          const pendingUltraPriority = allItems.filter(item => item.ultraPriorityStatus === 'pending')
+            .sort((a, b) => (parseFormattedDateTime(a.ultraPriorityRequestedAt) || 0) - (parseFormattedDateTime(b.ultraPriorityRequestedAt) || 0));
           return (
             <div className="space-y-4 print:hidden animate-in fade-in duration-150">
+              {pendingUltraPriority.length > 0 && (
+                <div className="space-y-3">
+                  <h2 className="text-xl font-bold text-white flex items-center gap-2">🔴 Žiadosti o ultra prioritu — čakajú na rozhodnutie ({pendingUltraPriority.length})</h2>
+                  {pendingUltraPriority.map(item => (
+                    <div key={item.itemId} className="bg-slate-950 border border-rose-700/50 rounded-xl p-4">
+                      <div className="flex flex-col sm:flex-row justify-between items-start gap-3">
+                        <div className="space-y-1.5 flex-1">
+                          <span className="font-mono text-[10px] text-slate-500">{item.itemId} • {item.customer}</span>
+                          <p className="text-sm text-white font-bold">{item.productName}</p>
+                          <p className="text-[10px] text-slate-500">Navrhol: <strong className="text-slate-400">{item.ultraPriorityRequestedBy}</strong> • {item.ultraPriorityRequestedAt}</p>
+                        </div>
+                        <div className="flex gap-2 shrink-0 flex-wrap justify-end">
+                          <button onClick={() => openOrderDetails(orders.find(o => o.id === item.orderId))} className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold px-3 py-1.5 rounded-lg">Otvoriť zákazku</button>
+                          <button onClick={() => handleResolveUltraPriorityRequest(item.orderId, item.itemId, false)} className="bg-slate-700 hover:bg-slate-600 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg">Zamietnuť</button>
+                          <button onClick={() => handleResolveUltraPriorityRequest(item.orderId, item.itemId, true)} className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg">Schváliť</button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {pendingMismatches.length > 0 && (
+                <div className="space-y-3">
+                  <h2 className="text-xl font-bold text-white flex items-center gap-2"><AlertTriangle className="text-orange-400 h-5 w-5" /> Nezrovnalosti materiálu — čakajú na rozhodnutie ({pendingMismatches.length})</h2>
+                  {pendingMismatches.map(({ item, stationId, mismatch }) => (
+                    <div key={`${item.itemId}-${stationId}`} className="bg-slate-950 border border-orange-700/50 rounded-xl p-4">
+                      <div className="flex flex-col sm:flex-row justify-between items-start gap-3">
+                        <div className="space-y-1.5 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="bg-orange-900/50 text-orange-300 text-[10px] font-bold px-2 py-0.5 rounded">{STATION_CONFIGS[stationId].name}</span>
+                            <span className="font-mono text-[10px] text-slate-500">{item.itemId} • {item.customer}</span>
+                          </div>
+                          <p className="text-sm text-white">{mismatch.note}{mismatch.qty ? ` (${mismatch.qty})` : ''}</p>
+                          <p className="text-xs text-indigo-400 font-bold">{item.productName}</p>
+                          <p className="text-[10px] text-slate-500">Nahlásil: <strong className="text-slate-400">{mismatch.reportedBy}</strong> • {mismatch.reportedAt}</p>
+                        </div>
+                        <div className="flex gap-2 shrink-0 flex-wrap justify-end">
+                          <button onClick={() => openOrderDetails(orders.find(o => o.id === item.orderId))} className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold px-3 py-1.5 rounded-lg">Otvoriť zákazku</button>
+                          <button onClick={() => handleResolveMismatch(item, stationId, 'set_aside')} className="bg-slate-700 hover:bg-slate-600 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg">Dať bokom</button>
+                          <button onClick={() => handleResolveMismatch(item, stationId, 'proceed')} className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg">Pokračuj napriek tomu</button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                 <h2 className="text-xl font-bold text-white flex items-center gap-2"><AlertTriangle className="text-rose-400 h-5 w-5" /> Nahlásené problémy</h2>
                 <div className="flex items-center gap-2 bg-slate-900 p-1.5 rounded-xl border border-slate-800">
-                  <button onClick={() => setShowResolvedProblems(false)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${!showResolvedProblems ? 'bg-rose-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>Otvorené ({openProblems.length})</button>
-                  <button onClick={() => setShowResolvedProblems(true)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${showResolvedProblems ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>Vyriešené ({resolvedProblems.length})</button>
+                  <button onClick={() => { setShowResolvedProblems(false); setShowErrorLeaderboard(false); }} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${!showResolvedProblems && !showErrorLeaderboard ? 'bg-rose-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>Otvorené ({openProblems.length})</button>
+                  <button onClick={() => { setShowResolvedProblems(true); setShowErrorLeaderboard(false); }} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${showResolvedProblems && !showErrorLeaderboard ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>Vyriešené ({resolvedProblems.length})</button>
+                  {currentUser.role === 'master' && (
+                    <button onClick={() => setShowErrorLeaderboard(true)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${showErrorLeaderboard ? 'bg-orange-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>Rebríček chybovosti</button>
+                  )}
                 </div>
               </div>
 
+              {showErrorLeaderboard ? (() => {
+                const periodMonths = { month: 1, '3months': 3, '6months': 6, year: 12 }[errorLeaderboardPeriod];
+                const cutoff = new Date();
+                cutoff.setMonth(cutoff.getMonth() - periodMonths);
+                const relevant = problemReports.filter(p => p.faultEmployeeId && new Date(p.createdAt) >= cutoff);
+                const grouped = {};
+                relevant.forEach(p => {
+                  if (!grouped[p.faultEmployeeId]) grouped[p.faultEmployeeId] = { employeeName: p.faultEmployeeName, count: 0, totalCost: 0 };
+                  grouped[p.faultEmployeeId].count += 1;
+                  grouped[p.faultEmployeeId].totalCost += p.costAmount || 0;
+                });
+                const rows = Object.values(grouped).sort((a, b) => b.count - a.count || b.totalCost - a.totalCost);
+                return (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 bg-slate-900 p-1.5 rounded-xl border border-slate-800 w-fit">
+                      {[['month', 'Mesiac'], ['3months', '3 mesiace'], ['6months', '6 mesiacov'], ['year', 'Rok']].map(([key, label]) => (
+                        <button key={key} onClick={() => setErrorLeaderboardPeriod(key)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${errorLeaderboardPeriod === key ? 'bg-orange-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>{label}</button>
+                      ))}
+                    </div>
+                    {rows.length === 0 ? (
+                      <div className="bg-slate-950 border border-slate-800 rounded-2xl p-10 text-center text-slate-500 italic">Za zvolené obdobie nie sú zaznamenané žiadne problémy so zavineným zamestnancom.</div>
+                    ) : (
+                      <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
+                        <table className="w-full text-left text-xs text-slate-300">
+                          <thead className="bg-slate-900 text-slate-400 uppercase tracking-wider">
+                            <tr><th className="px-4 py-3">Zamestnanec</th><th className="px-3 py-3 text-center">Počet problémov</th><th className="px-3 py-3 text-center">Súčet nákladov</th></tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-800">
+                            {rows.map((r, i) => (
+                              <tr key={i} className="hover:bg-slate-800/40">
+                                <td className="px-4 py-3 font-bold text-white">{r.employeeName}</td>
+                                <td className="px-3 py-3 text-center font-bold text-rose-400">{r.count}</td>
+                                <td className="px-3 py-3 text-center font-bold text-orange-300">{r.totalCost.toFixed(2)} €</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              })() : (
+                <>
               {typeof Notification !== 'undefined' && Notification.permission !== 'granted' && (
                 <div className="bg-amber-950/20 border border-amber-800/40 rounded-xl px-4 py-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                   <span className="text-xs text-amber-300">🔔 Desktop upozornenia a zvuk sú {Notification.permission === 'denied' ? 'zablokované v prehliadači — povoľ ich v nastaveniach stránky' : 'zatiaľ vypnuté'}. Bez toho ťa appka na nový problém neupozorní, kým nemáš otvorenú túto záložku.</span>
@@ -5731,13 +6110,18 @@ export default function App() {
                             {found && <p className="text-[11px] text-slate-500">Zákazka: <strong className="text-slate-300">{found.order.customer}</strong> — {found.item.productName}</p>}
                             <p className="text-[10px] text-slate-500">Nahlásil: <strong className="text-slate-400">{p.employeeName}</strong> • {new Date(p.createdAt).toLocaleString('sk-SK')}</p>
                             {p.status === 'resolved' && (
-                              <p className="text-[10px] text-emerald-400 mt-1">✅ Vyriešil {p.resolvedBy} • {new Date(p.resolvedAt).toLocaleString('sk-SK')}{p.resolutionNote ? ` — ${p.resolutionNote}` : ''}</p>
+                              <>
+                                <p className="text-[10px] text-emerald-400 mt-1">✅ Vyriešil {p.resolvedBy} • {new Date(p.resolvedAt).toLocaleString('sk-SK')}{p.resolutionNote ? ` — ${p.resolutionNote}` : ''}</p>
+                                {(p.faultEmployeeName || p.costAmount != null) && (
+                                  <p className="text-[10px] text-orange-300">{p.faultEmployeeName ? `Zavinil: ${p.faultEmployeeName}` : ''}{p.faultEmployeeName && p.costAmount != null ? ' • ' : ''}{p.costAmount != null ? `Náklad: ${p.costAmount.toFixed(2)} €` : ''}</p>
+                                )}
+                              </>
                             )}
                           </div>
                           <div className="flex gap-2 shrink-0">
                             {found && <button onClick={() => openOrderDetails(found.order)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold px-3 py-1.5 rounded-lg">Otvoriť zákazku</button>}
                             {p.status === 'open' && (
-                              <button onClick={() => { setResolvingProblem(p); setResolutionNoteInput(''); }} className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg">Vyriešiť</button>
+                              <button onClick={() => { setResolvingProblem(p); setResolutionNoteInput(''); setResolutionFaultEmployeeId(''); setResolutionCostAmount(''); }} className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg">Vyriešiť</button>
                             )}
                           </div>
                         </div>
@@ -5745,6 +6129,8 @@ export default function App() {
                     );
                   })}
                 </div>
+              )}
+                </>
               )}
             </div>
           );
@@ -5758,6 +6144,19 @@ export default function App() {
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">Poznámka k riešeniu (voliteľné)</label>
                 <textarea rows={3} value={resolutionNoteInput} onChange={(e) => setResolutionNoteInput(e.target.value)} placeholder="Ako sa to vyriešilo?" className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" autoFocus />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Kto to zavinil (voliteľné)</label>
+                  <select value={resolutionFaultEmployeeId} onChange={(e) => setResolutionFaultEmployeeId(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white">
+                    <option value="">-- Nikto / neuvedené --</option>
+                    {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.firstName} {emp.lastName}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Koľko to stálo € (voliteľné)</label>
+                  <input type="number" step="0.01" min="0" value={resolutionCostAmount} onChange={(e) => setResolutionCostAmount(e.target.value)} placeholder="0.00" className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" />
+                </div>
               </div>
               <div className="flex gap-2">
                 <button onClick={handleResolveProblem} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg uppercase text-xs">Potvrdiť vyriešené</button>
@@ -6430,8 +6829,8 @@ export default function App() {
         )}
 
         {selectedOrderDetails && (
-          <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 shadow-xl space-y-6 print:bg-white print:text-black print:border-none print:p-0 mt-6 animate-in fade-in duration-200">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-4 print:hidden">
+          <div className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-7xl max-h-[85vh] overflow-y-auto bg-slate-950 p-6 rounded-t-2xl border border-slate-800 border-b-0 shadow-2xl space-y-6 print:static print:inset-auto print:z-auto print:mx-0 print:w-auto print:max-w-none print:max-h-none print:overflow-visible print:bg-white print:text-black print:border-none print:shadow-none print:rounded-none print:p-0 animate-in slide-in-from-bottom-8 fade-in duration-200">
+            <div className="sticky -top-6 -mx-6 px-6 pt-6 -mt-6 bg-slate-950 flex justify-between items-center border-b border-slate-800 pb-4 print:hidden print:static print:m-0 print:p-0 print:border-0 z-10">
               <div className="flex items-center gap-2"><FileText className="text-indigo-400 h-5 w-5" /><h3 className="text-lg font-bold">Sprievodka pre: <span className="font-mono text-indigo-400">{selectedOrderDetails.id}</span></h3></div>
               <div className="flex gap-2">
                 {!isEditingOrder && hasPermission('create_order') && (
@@ -6447,6 +6846,18 @@ export default function App() {
                 <button onClick={() => openOrderDetails(null)} className="bg-slate-800 hover:bg-slate-750 text-slate-400 px-3 py-2 rounded-lg text-xs">Zatvoriť</button>
               </div>
             </div>
+
+            {(() => {
+              if (!selectedOrderDetails.lastModifiedAt) return null;
+              const modifiedAt = parseFormattedDateTime(selectedOrderDetails.lastModifiedAt);
+              const hoursAgo = modifiedAt ? (Date.now() - modifiedAt.getTime()) / 3600000 : Infinity;
+              if (hoursAgo > RECENT_ORDER_CHANGE_HOURS) return null;
+              return (
+                <div className="bg-rose-700 border-2 border-rose-500 text-white rounded-xl px-4 py-3 flex items-center gap-2 font-bold text-sm print:bg-white print:text-black print:border-black">
+                  <AlertTriangle className="h-5 w-5 shrink-0 print:hidden" /> Táto zákazka bola nedávno upravená: {selectedOrderDetails.lastModifiedAt} — {selectedOrderDetails.lastModifiedNote}
+                </div>
+              );
+            })()}
 
             {isEditingOrder && orderEditDraft && (
               <div className="bg-amber-950/20 border border-amber-800/40 p-6 rounded-xl space-y-4 print:hidden">
@@ -6777,14 +7188,39 @@ export default function App() {
                       {item.notes && <p className="text-xs text-slate-400 italic print:text-black mt-1">Poznámka: {item.notes}</p>}
                       {(() => {
                         const { arrival, departure } = getArrivalDeparture(item);
-                        if (!arrival && !departure) return null;
+                        if (!arrival && !departure && !item.finalCheckConfirmedAt) return null;
                         return (
                           <div className="flex flex-wrap gap-2 mt-2 print:hidden">
                             {arrival && <span className="text-[10px] bg-sky-950/40 text-sky-300 border border-sky-800/40 px-2 py-1 rounded-full font-bold">📥 Prijaté: {arrival.at} {arrival.by ? `(${arrival.by})` : ''}</span>}
                             {departure && <span className="text-[10px] bg-emerald-950/40 text-emerald-300 border border-emerald-800/40 px-2 py-1 rounded-full font-bold">📦 Odoslané: {departure.at} {departure.by ? `(${departure.by})` : ''}</span>}
+                            {item.finalCheckConfirmedAt && <span className="text-[10px] bg-emerald-950/40 text-emerald-300 border border-emerald-800/40 px-2 py-1 rounded-full font-bold">✅ Finálna kontrola pri balení: {item.finalCheckConfirmedAt} ({item.finalCheckConfirmedBy})</span>}
                           </div>
                         );
                       })()}
+                      <div className="print:hidden mt-2">
+                        {item.ultraPriority ? (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-[10px] bg-rose-600 text-white px-2.5 py-1 rounded-full font-extrabold animate-pulse">🔴 ULTRA PRIORITA AKTÍVNA</span>
+                            {(currentUser.role === 'master' || currentUser.role === 'supervisor') && (
+                              <button onClick={() => handleSetUltraPriority(selectedOrderDetails.id, item.itemId, false)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-bold px-2.5 py-1 rounded-full">Vypnúť</button>
+                            )}
+                          </div>
+                        ) : item.ultraPriorityStatus === 'pending' ? (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-[10px] bg-amber-700 text-white px-2.5 py-1 rounded-full font-bold">⏳ Čaká na schválenie ultra priority (navrhol {item.ultraPriorityRequestedBy})</span>
+                            {(currentUser.role === 'master' || currentUser.role === 'supervisor') && (
+                              <>
+                                <button onClick={() => handleResolveUltraPriorityRequest(selectedOrderDetails.id, item.itemId, true)} className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold px-2.5 py-1 rounded-full">Schváliť</button>
+                                <button onClick={() => handleResolveUltraPriorityRequest(selectedOrderDetails.id, item.itemId, false)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-bold px-2.5 py-1 rounded-full">Zamietnuť</button>
+                              </>
+                            )}
+                          </div>
+                        ) : (currentUser.role === 'master' || currentUser.role === 'supervisor') ? (
+                          <button onClick={() => handleSetUltraPriority(selectedOrderDetails.id, item.itemId, true)} className="bg-rose-950/50 hover:bg-rose-900/50 border border-rose-700/50 text-rose-300 text-[10px] font-bold px-2.5 py-1 rounded-full">🔴 Aktivovať ultra prioritu</button>
+                        ) : currentUser.role === 'sales' ? (
+                          <button onClick={() => handleRequestUltraPriority(selectedOrderDetails.id, item.itemId)} className="bg-rose-950/50 hover:bg-rose-900/50 border border-rose-700/50 text-rose-300 text-[10px] font-bold px-2.5 py-1 rounded-full">Navrhnúť ultra prioritu</button>
+                        ) : null}
+                      </div>
                     </div>
                     <div className="bg-white p-3 rounded-xl flex flex-col items-center border border-slate-300 shadow-sm shrink-0">
                       <QRCodeSVG value={`${window.location.origin}${window.location.pathname}?scan=${item.itemId}`} size={88} level="M" />

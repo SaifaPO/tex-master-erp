@@ -1,1 +1,11 @@
 @import "tailwindcss";
+
+/* Ultra priorita zákazky (Funkcia 2 z briefu) — extrémne nápadný pulzujúci červený efekt, nápadnejší než bežné farebné rozlíšenie zákaziek */
+@keyframes ultra-priority-glow {
+  0%, 100% { box-shadow: 0 0 6px 2px rgba(225, 29, 72, 0.55), inset 0 0 0 2px rgba(244, 63, 94, 0.9); }
+  50% { box-shadow: 0 0 22px 7px rgba(225, 29, 72, 0.95), inset 0 0 0 2px rgba(244, 63, 94, 1); }
+}
+.ultra-priority-card {
+  animation: ultra-priority-glow 1.1s ease-in-out infinite;
+  border-color: rgb(244, 63, 94) !important;
+}
