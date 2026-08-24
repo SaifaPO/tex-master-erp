@@ -177,8 +177,12 @@ const mapProductToDb = (p) => ({ id: p.id, custom_code: p.customCode, name: p.na
 const mapTierFromDb = (r) => ({ id: r.id, name: r.name, fit: r.fit, ventilation: r.ventilation, desc: r.description });
 const mapTierToDb = (t) => ({ id: t.id, name: t.name, fit: t.fit, ventilation: t.ventilation, description: t.desc });
 
-const mapEmployeeFromDb = (r) => ({ id: r.id, firstName: r.first_name, lastName: r.last_name, birthday: r.birthday, nameday: r.nameday, entryDate: r.entry_date, role: r.role, position: r.position, passwordHash: r.password_hash || '', phone: r.phone || '', email: r.email || '', avatar: r.avatar || '', pinHash: r.pin_hash || '', authUserId: r.auth_user_id || '', signupToken: r.signup_token || '', signupTokenExpires: r.signup_token_expires || null });
-const mapEmployeeToDb = (e) => ({ id: e.id, first_name: e.firstName, last_name: e.lastName, birthday: e.birthday, nameday: e.nameday, entry_date: e.entryDate, role: e.role, position: e.position, password_hash: e.passwordHash || null, phone: e.phone || null, email: e.email || null, avatar: e.avatar || null, pin_hash: e.pinHash || null, auth_user_id: e.authUserId || null, signup_token: e.signupToken || null, signup_token_expires: e.signupTokenExpires || null });
+// Poznámka k bezpečnosti: password_hash/pin_hash/signup_token sa už z klienta nikdy nečítajú (ani cez
+// bežný select, ani cez Realtime — pozri migration_bezpecnost_pin_a_hesla.sql). Namiesto surovej hodnoty
+// appka pracuje len s booleovskými príznakmi has_password/has_pin/has_signup_token z pohľadu employees_public.
+// PIN sa odteraz overuje a nastavuje výlučne cez Edge Functions (verify-station-pin, employee-pin).
+const mapEmployeeFromDb = (r) => ({ id: r.id, firstName: r.first_name, lastName: r.last_name, birthday: r.birthday, nameday: r.nameday, entryDate: r.entry_date, role: r.role, position: r.position, hasPassword: !!r.has_password, phone: r.phone || '', email: r.email || '', avatar: r.avatar || '', hasPin: !!r.has_pin, authUserId: r.auth_user_id || '', hasSignupToken: !!r.has_signup_token, signupTokenExpires: r.signup_token_expires || null });
+const mapEmployeeToDb = (e) => ({ id: e.id, first_name: e.firstName, last_name: e.lastName, birthday: e.birthday, nameday: e.nameday, entry_date: e.entryDate, role: e.role, position: e.position, phone: e.phone || null, email: e.email || null, avatar: e.avatar || null, auth_user_id: e.authUserId || null });
 
 const mapOrderFromDb = (r) => ({ id: r.id, customer: r.customer, createdAt: r.created_at, deliveryDate: r.scheduled_day, driveLink: r.drive_link, notes: r.notes, paymentType: r.payment_type || 'faktura', items: r.items || [], orderLog: r.order_log || [], legacyOrderNumber: r.legacy_order_number || '', companyBrand: r.company_brand || 'ATAK', orderNumber: r.order_number || '', accountingStatus: r.accounting_status || null, lastModifiedAt: r.last_modified_at || null, lastModifiedNote: r.last_modified_note || '' });
 const mapOrderToDb = (o) => ({ id: o.id, customer: o.customer, created_at: o.createdAt, scheduled_day: o.deliveryDate, drive_link: o.driveLink, notes: o.notes, payment_type: o.paymentType, items: o.items, order_log: o.orderLog || [], legacy_order_number: o.legacyOrderNumber || null, company_brand: o.companyBrand || 'ATAK', order_number: o.orderNumber || null, accounting_status: o.accountingStatus || null, last_modified_at: o.lastModifiedAt || null, last_modified_note: o.lastModifiedNote || null });
@@ -1013,7 +1017,7 @@ export default function App() {
           supabase.from('products').select('*'),
           supabase.from('quality_tiers').select('*'),
           supabase.from('sports').select('*').order('name'),
-          supabase.from('employees').select('*'),
+          supabase.from('employees_public').select('*'),
           supabase.from('acl_settings').select('*').eq('id', 1).maybeSingle(),
           supabase.from('orders').select('*').order('created_at', { ascending: false }),
           supabase.from('warehouses').select('*').order('name'),
@@ -1457,9 +1461,15 @@ export default function App() {
 
   const handlePinLogin = async (pin) => {
     if (pinLockedUntil) return;
-    const enteredHash = await hashPassword(pin);
-    const emp = employees.find(x => x.pinHash && x.pinHash === enteredHash);
-    if (!emp) {
+    // PIN sa overuje na serveri (Edge Function verify-station-pin) — hash PIN-u sa nikdy neposiela
+    // ani neuchováva v prehliadači, appka nemá k dispozícii pinHash žiadneho zamestnanca.
+    const { data, error: invokeError } = await supabase.functions.invoke('verify-station-pin', { body: { pin } });
+    if (invokeError) {
+      setPinDigits('');
+      setPinError('Overenie PIN zlyhalo, skús to znova.');
+      return;
+    }
+    if (!data?.success) {
       const attempts = pinAttempts + 1;
       setPinAttempts(attempts);
       setPinDigits('');
@@ -1467,10 +1477,11 @@ export default function App() {
         setPinLockedUntil(Date.now() + 60000);
         setPinError('Príliš veľa nesprávnych pokusov. Skús to znova o minútu.');
       } else {
-        setPinError(`Nesprávny PIN (pokus ${attempts}/5).`);
+        setPinError(data?.error && data.error.includes('pokusov') ? data.error : `Nesprávny PIN (pokus ${attempts}/5).`);
       }
       return;
     }
+    const emp = employees.find(x => x.id === data.employee.id) || data.employee;
     setCurrentUser(emp);
     setIsAuthenticated(true);
     setPinDigits('');
@@ -3335,18 +3346,18 @@ export default function App() {
     e.preventDefault();
     if (!hasPermission('manage_profiles')) { triggerNotification('error', 'Nemáte prístup do správy profilov.'); return; }
     if (editingEmployee) {
-      let passwordHash = editingEmployee.passwordHash;
-      if (editEmpPassword.trim()) passwordHash = await hashPassword(editEmpPassword.trim());
-      let pinHash = editingEmployee.pinHash;
-      if (editEmpPin.trim()) {
-        if (!/^\d{4}$/.test(editEmpPin.trim())) { alert('PIN musí mať presne 4 číslice.'); return; }
-        pinHash = await hashPassword(editEmpPin.trim());
-        if (employees.some(x => x.id !== editingEmployee.id && x.pinHash === pinHash)) { alert('Tento PIN už používa iný zamestnanec. Zvoľte iný.'); return; }
-      }
-      const updated = { ...editingEmployee, passwordHash, pinHash };
-      const { error } = await supabase.from('employees').update(mapEmployeeToDb(updated)).eq('id', updated.id);
+      if (editEmpPin.trim() && !/^\d{4}$/.test(editEmpPin.trim())) { alert('PIN musí mať presne 4 číslice.'); return; }
+      const updatePayload = mapEmployeeToDb(editingEmployee);
+      if (editEmpPassword.trim()) updatePayload.password_hash = await hashPassword(editEmpPassword.trim());
+      const { error } = await supabase.from('employees').update(updatePayload).eq('id', editingEmployee.id);
       if (error) { triggerNotification('error', error.message); return; }
-      if (currentUser.id === updated.id) setCurrentUser(updated);
+      if (editEmpPin.trim()) {
+        // PIN sa nastavuje cez server (Edge Function) — kontrola duplicity aj zápis hashu prebieha tam,
+        // klient už nemá k dispozícii pinHash žiadneho iného zamestnanca na porovnanie.
+        const { data: pinData, error: pinError } = await supabase.functions.invoke('employee-pin', { body: { employeeId: editingEmployee.id, pin: editEmpPin.trim() } });
+        if (pinError || pinData?.error) { triggerNotification('error', pinData?.error || pinError.message); return; }
+      }
+      if (currentUser.id === editingEmployee.id) setCurrentUser(editingEmployee);
       setEditingEmployee(null);
       setEditEmpPassword('');
       setEditEmpPin('');
@@ -3354,16 +3365,16 @@ export default function App() {
     } else {
       if (!newEmpFirstName.trim() || !newEmpLastName.trim()) { alert('Zadajte meno a priezvisko.'); return; }
       if (['master', 'supervisor', 'sales'].includes(newEmpRole) && !newEmpEmail.trim()) { alert('Pre túto rolu zadajte email — zamestnanec si podľa neho vytvorí prihlasovací účet.'); return; }
-      let pinHash = '';
-      if (newEmpPin.trim()) {
-        if (!/^\d{4}$/.test(newEmpPin.trim())) { alert('PIN musí mať presne 4 číslice.'); return; }
-        pinHash = await hashPassword(newEmpPin.trim());
-        if (employees.some(x => x.pinHash === pinHash)) { alert('Tento PIN už používa iný zamestnanec. Zvoľte iný.'); return; }
-      }
-      const passwordHash = newEmpPassword.trim() ? await hashPassword(newEmpPassword.trim()) : '';
-      const created = { id: `emp-${Date.now()}`, firstName: newEmpFirstName, lastName: newEmpLastName, birthday: newEmpBirthday, nameday: newEmpNameday, entryDate: newEmpEntryDate, role: newEmpRole, position: newEmpPosition, phone: newEmpPhone, email: newEmpEmail, avatar: newEmpAvatar, passwordHash, pinHash };
-      const { error } = await supabase.from('employees').insert(mapEmployeeToDb(created));
+      if (newEmpPin.trim() && !/^\d{4}$/.test(newEmpPin.trim())) { alert('PIN musí mať presne 4 číslice.'); return; }
+      const passwordHash = newEmpPassword.trim() ? await hashPassword(newEmpPassword.trim()) : null;
+      const newId = `emp-${Date.now()}`;
+      const created = { id: newId, firstName: newEmpFirstName, lastName: newEmpLastName, birthday: newEmpBirthday, nameday: newEmpNameday, entryDate: newEmpEntryDate, role: newEmpRole, position: newEmpPosition, phone: newEmpPhone, email: newEmpEmail, avatar: newEmpAvatar };
+      const { error } = await supabase.from('employees').insert({ ...mapEmployeeToDb(created), password_hash: passwordHash });
       if (error) { triggerNotification('error', error.message); return; }
+      if (newEmpPin.trim()) {
+        const { data: pinData, error: pinError } = await supabase.functions.invoke('employee-pin', { body: { employeeId: newId, pin: newEmpPin.trim() } });
+        if (pinError || pinData?.error) { triggerNotification('error', `Zamestnanec bol vytvorený, ale PIN sa nepodarilo nastaviť: ${pinData?.error || pinError.message}`); }
+      }
       setNewEmpFirstName(''); setNewEmpLastName(''); setNewEmpBirthday(''); setNewEmpNameday(''); setNewEmpPosition(''); setNewEmpPhone(''); setNewEmpEmail(''); setNewEmpPassword(''); setNewEmpAvatar(''); setNewEmpPin('');
       triggerNotification('success', `Zamestnanec "${created.firstName}" bol pridaný.`);
     }
@@ -3378,7 +3389,7 @@ export default function App() {
     const expires = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(); // 48 hodín
     const { error } = await supabase.from('employees').update({ signup_token: codeHash, signup_token_expires: expires }).eq('id', employeeId);
     if (error) { triggerNotification('error', error.message); return; }
-    setEditingEmployee(prev => prev ? { ...prev, signupToken: codeHash, signupTokenExpires: expires } : prev);
+    setEditingEmployee(prev => prev ? { ...prev, hasSignupToken: true, signupTokenExpires: expires } : prev);
     setJustGeneratedSignupCode(code);
     triggerNotification('success', 'Registračný kód bol vygenerovaný. Platí 48 hodín — daj ho tejto osobe osobne (telefón/chat), nie verejne. Po zatvorení sa už nedá znova zobraziť (len vygenerovať nový).');
   };
@@ -3387,7 +3398,7 @@ export default function App() {
     if (!hasPermission('manage_profiles')) { triggerNotification('error', 'Nemáte oprávnenie.'); return; }
     const { error } = await supabase.from('employees').update({ signup_token: null, signup_token_expires: null }).eq('id', employeeId);
     if (error) { triggerNotification('error', error.message); return; }
-    setEditingEmployee(prev => prev ? { ...prev, signupToken: '', signupTokenExpires: null } : prev);
+    setEditingEmployee(prev => prev ? { ...prev, hasSignupToken: false, signupTokenExpires: null } : prev);
     setJustGeneratedSignupCode('');
   };
 
@@ -5520,7 +5531,7 @@ export default function App() {
                         <p className="text-xs text-slate-400">Pozícia: <strong className="text-slate-300">{emp.position || '—'}</strong></p>
                         <p className="text-[10px] text-slate-500">Dátum nástupu: <strong className="text-slate-400">{emp.entryDate || '—'}</strong></p>
                         <p className="text-[10px] text-slate-500">Telefón: <strong className="text-slate-400">{emp.phone || '—'}</strong> • Email: <strong className="text-slate-400">{emp.email || '—'}</strong></p>
-                        <p className="text-[10px] text-slate-500">Heslo: <strong className={emp.passwordHash ? 'text-emerald-400' : 'text-rose-400'}>{emp.passwordHash ? 'Nastavené' : 'Nenastavené — nemôže sa prihlásiť'}</strong> • PIN: <strong className={emp.pinHash ? 'text-emerald-400' : 'text-slate-500'}>{emp.pinHash ? 'Nastavený' : 'Nenastavený'}</strong></p>
+                        <p className="text-[10px] text-slate-500">Heslo: <strong className={emp.hasPassword ? 'text-emerald-400' : 'text-rose-400'}>{emp.hasPassword ? 'Nastavené' : 'Nenastavené — nemôže sa prihlásiť'}</strong> • PIN: <strong className={emp.hasPin ? 'text-emerald-400' : 'text-slate-500'}>{emp.hasPin ? 'Nastavený' : 'Nenastavený'}</strong></p>
                         <div className="flex flex-wrap gap-2 pt-1">
                           <span className="bg-indigo-950/40 text-indigo-300 text-[10px] px-2 py-0.5 rounded border border-indigo-900/20 flex items-center gap-1 font-bold"><CalendarDays className="h-3.5 w-3.5" /> Narodeniny: {emp.birthday ? formatDeliveryDate(emp.birthday) : '—'}</span>
                           <span className="bg-purple-950/40 text-purple-300 text-[10px] px-2 py-0.5 rounded border border-purple-900/20 flex items-center gap-1 font-bold"><Gift className="h-3.5 w-3.5" /> Meniny: {emp.nameday || '—'}</span>
@@ -5621,13 +5632,13 @@ export default function App() {
                         <div className="mt-1.5">
                           {editingEmployee.authUserId ? (
                             <p className="text-[10px] text-slate-500">✅ Prihlasovací účet (email) je vytvorený a prepojený.</p>
-                          ) : justGeneratedSignupCode && editingEmployee.signupToken ? (
+                          ) : justGeneratedSignupCode && editingEmployee.hasSignupToken ? (
                             <div className="bg-amber-950/20 border border-amber-800/40 rounded-lg p-2 space-y-1">
                               <p className="text-[10px] text-amber-300">🔑 Registračný kód (platí do {new Date(editingEmployee.signupTokenExpires).toLocaleString('sk-SK')}) — daj ho tejto osobe osobne, nie verejne. <strong>Po zatvorení sa už znova nezobrazí!</strong></p>
                               <p className="font-mono text-sm font-extrabold text-white tracking-widest text-center bg-slate-950 py-1.5 rounded">{justGeneratedSignupCode}</p>
                               <button type="button" onClick={() => handleCancelSignupCode(editingEmployee.id)} className="text-[10px] text-rose-400 hover:text-rose-300 underline">Zrušiť kód</button>
                             </div>
-                          ) : editingEmployee.signupToken && editingEmployee.signupTokenExpires && new Date(editingEmployee.signupTokenExpires) > new Date() ? (
+                          ) : editingEmployee.hasSignupToken && editingEmployee.signupTokenExpires && new Date(editingEmployee.signupTokenExpires) > new Date() ? (
                             <div className="bg-slate-900 border border-slate-800 rounded-lg p-2 space-y-1">
                               <p className="text-[10px] text-slate-400">🔒 Registračný kód je nastavený (platí do {new Date(editingEmployee.signupTokenExpires).toLocaleString('sk-SK')}), z bezpečnostných dôvodov sa už nedá znova zobraziť.</p>
                               <div className="flex gap-2">
@@ -5646,9 +5657,9 @@ export default function App() {
                     </div>
                     <div>
                       <label className="text-slate-400 block mb-0.5">PIN pre rýchle prihlásenie na stanici (4 číslice, voliteľné)</label>
-                      <input type="text" inputMode="numeric" pattern="\d{4}" maxLength={4} placeholder={editingEmployee ? (editingEmployee.pinHash ? '••••' : 'napr. 1234') : 'napr. 1234'} value={editingEmployee ? editEmpPin : newEmpPin} onChange={(e) => { const v = e.target.value.replace(/\D/g, '').slice(0, 4); editingEmployee ? setEditEmpPin(v) : setNewEmpPin(v); }} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" />
+                      <input type="text" inputMode="numeric" pattern="\d{4}" maxLength={4} placeholder={editingEmployee ? (editingEmployee.hasPin ? '••••' : 'napr. 1234') : 'napr. 1234'} value={editingEmployee ? editEmpPin : newEmpPin} onChange={(e) => { const v = e.target.value.replace(/\D/g, '').slice(0, 4); editingEmployee ? setEditEmpPin(v) : setNewEmpPin(v); }} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" />
                       {editingEmployee && (
-                        <p className="text-[10px] text-slate-500 mt-0.5">{editingEmployee.pinHash ? 'PIN je nastavený — nechaj prázdne, ak ho nemeníš.' : 'PIN zatiaľ nie je nastavený.'}</p>
+                        <p className="text-[10px] text-slate-500 mt-0.5">{editingEmployee.hasPin ? 'PIN je nastavený — nechaj prázdne, ak ho nemeníš.' : 'PIN zatiaľ nie je nastavený.'}</p>
                       )}
                     </div>
                     {editingEmployee && editingEmployee.id === currentUser.id && authSession && (
