@@ -4032,6 +4032,46 @@ export default function App() {
     triggerNotification('success', 'Zákazka bola vymazaná.');
   };
 
+  // Sledovanie tlače po jednotlivých materiáloch (napr. 3 materiály = 3 QR kódy, každý sa skenuje 2x — začiatok/koniec).
+  // Stanica sa označí ako "Hotové" automaticky až keď sú hotové všetky materiály danej položky.
+  const handleMaterialScan = async (order, item, stationId, materialId) => {
+    const matProgress = item.stationMeta?.[stationId]?.materialProgress || {};
+    const matStatus = matProgress[materialId] || 'caka';
+    const matName = materials.find(m => m.id === materialId)?.name || materialId;
+    if (matStatus === 'hotove') {
+      triggerNotification('error', `Materiál "${matName}" na položke ${item.itemId} je už označený ako hotový.`);
+      return;
+    }
+    const nextMatStatus = matStatus === 'caka' ? 'tlac' : 'hotove';
+    const newProgress = { ...matProgress, [materialId]: nextMatStatus };
+    const allMaterialIds = (item.materialsNeeded || []).map(m => m.materialId);
+    const allDone = allMaterialIds.length > 0 && allMaterialIds.every(mid => (newProgress[mid] || 'caka') === 'hotove');
+    const now = getFormattedDateTime();
+    const existingMeta = item.stationMeta?.[stationId] || {};
+    const newMeta = { ...existingMeta, materialProgress: newProgress };
+    if (!newMeta.startedAt) newMeta.startedAt = now;
+    if (allDone && !existingMeta.completedAt) {
+      const started = parseFormattedDateTime(newMeta.startedAt);
+      newMeta.completedAt = now;
+      newMeta.durationMinutes = started ? Math.max(0, Math.round((parseFormattedDateTime(now) - started) / 60000)) : null;
+    }
+    const currentStationStatus = item.stationStatuses[stationId];
+    const newStationStatus = allDone ? 'hotove' : (currentStationStatus === 'caka' ? 'tlac' : currentStationStatus);
+    const updatedItems = order.items.map(it => it.itemId !== item.itemId ? it : {
+      ...it,
+      stationStatuses: { ...it.stationStatuses, [stationId]: newStationStatus },
+      stationMeta: { ...it.stationMeta, [stationId]: newMeta }
+    });
+    const { error } = await supabase.from('orders').update({ items: updatedItems }).eq('id', order.id);
+    if (error) { triggerNotification('error', error.message); return; }
+    if (selectedOrderDetails?.id === order.id) setSelectedOrderDetails({ ...order, items: updatedItems });
+    if (allDone) {
+      triggerNotification('success', `Materiál "${matName}" hotový — VŠETKY materiály hotové, položka ${item.itemId} je HOTOVÁ na stanici ${STATION_CONFIGS[stationId].name}! 🎉`);
+    } else {
+      triggerNotification('success', `Materiál "${matName}": ${nextMatStatus === 'tlac' ? 'ZAČATÝ' : 'HOTOVÝ'} (položka ${item.itemId}).`);
+    }
+  };
+
   const handleQrScan = (scannedCode) => {
     if (!hasPermission('scan_qr')) { triggerNotification('error', 'Prístup zamietnutý na skenovanie.'); return; }
     if (!scannedCode.trim()) return;
@@ -4039,12 +4079,19 @@ export default function App() {
     // Ak sa naskenoval celý odkaz (URL v QR kóde), vytiahnuť z neho len kód položky
     const scanParamMatch = code.match(/[?&]scan=([^&]+)/);
     if (scanParamMatch) code = decodeURIComponent(scanParamMatch[1]);
-    const found = findItemByItemId(code);
-    if (!found) { triggerNotification('error', `Položka ${code} nebola nájdená.`); setManualQrInput(''); return; }
+    const [rawCode, scannedMaterialId] = code.split('::');
+    const found = findItemByItemId(rawCode);
+    if (!found) { triggerNotification('error', `Položka ${rawCode} nebola nájdená.`); setManualQrInput(''); return; }
     const { order, item } = found;
 
     if (!(selectedTerminalStation in (item.stationStatuses || {}))) {
       triggerNotification('error', `Položka ${item.itemId} nie je zaradená na stanicu "${STATION_CONFIGS[selectedTerminalStation].name}".`);
+      setManualQrInput('');
+      return;
+    }
+
+    if (scannedMaterialId && scannedMaterialId !== 'main' && (item.materialsNeeded || []).some(m => m.materialId === scannedMaterialId)) {
+      handleMaterialScan(order, item, selectedTerminalStation, scannedMaterialId);
       setManualQrInput('');
       return;
     }
@@ -6042,6 +6089,17 @@ export default function App() {
                           </div>
                           <h3 className="font-extrabold text-base text-slate-100">{item.customer} ({item.qty} ks)</h3>
                           <p className="text-xs text-indigo-400 font-bold">{item.productName} - <span className="text-slate-100 uppercase">{item.qualityTier}</span></p>
+                          {(item.materialsNeeded || []).length > 1 && (
+                            <div className="flex flex-wrap gap-1 pt-0.5">
+                              {item.materialsNeeded.map(mat => {
+                                const matStatus = item.stationMeta?.[activeStationFilter]?.materialProgress?.[mat.materialId] || 'caka';
+                                const matName = materials.find(m => m.id === mat.materialId)?.name || mat.layerName;
+                                const style = matStatus === 'hotove' ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800/40' : matStatus === 'tlac' ? 'bg-sky-950/40 text-sky-300 border-sky-800/40' : 'bg-slate-800 text-slate-400 border-slate-700';
+                                const icon = matStatus === 'hotove' ? '✅' : matStatus === 'tlac' ? '🔵' : '⬜';
+                                return <span key={mat.materialId} className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${style}`}>{icon} {matName}</span>;
+                              })}
+                            </div>
+                          )}
                         </div>
                         <div className="flex flex-col sm:flex-row md:flex-col justify-between items-end gap-3 min-w-[220px]">
                           {activeStationFilter === 'grafik' ? (() => {
