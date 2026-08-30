@@ -157,13 +157,14 @@ function colorForOrder(orderId) {
 }
 
 // Role, ktoré sa prihlasujú menom/heslom cez Supabase Auth (nie PIN-om na stanici).
-const EMAIL_LOGIN_ROLES = ['master', 'supervisor', 'sales', 'uctovnik', 'sofer'];
-const ALL_ROLES = ['master', 'supervisor', 'sales', 'employee', 'uctovnik', 'sofer'];
-const ROLE_LABELS = { master: 'Master', supervisor: 'Supervisor', sales: 'Obchodník', employee: 'Zamestnanec', uctovnik: 'Účtovník', sofer: 'Šofér' };
+const EMAIL_LOGIN_ROLES = ['master', 'supervisor', 'sales', 'uctovnik', 'sofer', 'predajna'];
+const ALL_ROLES = ['master', 'supervisor', 'sales', 'employee', 'uctovnik', 'sofer', 'predajna'];
+const ROLE_LABELS = { master: 'Master', supervisor: 'Supervisor', sales: 'Obchodník', employee: 'Zamestnanec', uctovnik: 'Účtovník', sofer: 'Šofér', predajna: 'Predajňa' };
 // Úzke role vidia len vymenované karty v hornom menu; role bez záznamu tu (master/supervisor/sales/employee) vidia všetko ako doteraz.
 const ROLE_TAB_ALLOWLIST = {
   uctovnik: ['invoices', 'materials', 'reports', 'manual'],
-  sofer: ['cestaky', 'kniha-jazd', 'manual']
+  sofer: ['cestaky', 'kniha-jazd', 'manual'],
+  predajna: ['orders', 'planner', 'manual']
 };
 function canSeeTab(role, tabId) {
   const allowlist = ROLE_TAB_ALLOWLIST[role];
@@ -174,18 +175,18 @@ function canSeeTab(role, tabId) {
 // vlastne pravidla pre existujuci kluc (napr. create_order), ulozeny objekt NEOBSAHUJE tieto nove role —
 // hasPermission() nizsie sa preto pre chybajucu rolu vrati k FALLBACK_ACL, nie k undefined/false naslepo.
 const FALLBACK_ACL = {
-  create_order: { master: true, supervisor: true, sales: true, employee: false, uctovnik: false, sofer: false },
-  delete_order: { master: true, supervisor: false, sales: false, employee: false, uctovnik: false, sofer: false },
-  edit_priority: { master: true, supervisor: true, sales: false, employee: false, uctovnik: false, sofer: false },
-  scan_qr: { master: true, supervisor: true, sales: false, employee: true, uctovnik: false, sofer: false },
-  update_status: { master: true, supervisor: true, sales: false, employee: true, uctovnik: false, sofer: false },
-  manage_profiles: { master: true, supervisor: false, sales: false, employee: false, uctovnik: false, sofer: false },
-  edit_stock: { master: true, supervisor: true, sales: false, employee: false, uctovnik: false, sofer: false },
-  manage_catalog: { master: true, supervisor: true, sales: false, employee: false, uctovnik: false, sofer: false },
-  view_reports: { master: true, supervisor: true, sales: false, employee: false, uctovnik: true, sofer: false },
+  create_order: { master: true, supervisor: true, sales: true, employee: false, uctovnik: false, sofer: false, predajna: true },
+  delete_order: { master: true, supervisor: false, sales: false, employee: false, uctovnik: false, sofer: false, predajna: false },
+  edit_priority: { master: true, supervisor: true, sales: false, employee: false, uctovnik: false, sofer: false, predajna: false },
+  scan_qr: { master: true, supervisor: true, sales: false, employee: true, uctovnik: false, sofer: false, predajna: false },
+  update_status: { master: true, supervisor: true, sales: false, employee: true, uctovnik: false, sofer: false, predajna: false },
+  manage_profiles: { master: true, supervisor: false, sales: false, employee: false, uctovnik: false, sofer: false, predajna: false },
+  edit_stock: { master: true, supervisor: true, sales: false, employee: false, uctovnik: false, sofer: false, predajna: false },
+  manage_catalog: { master: true, supervisor: true, sales: false, employee: false, uctovnik: false, sofer: false, predajna: false },
+  view_reports: { master: true, supervisor: true, sales: false, employee: false, uctovnik: true, sofer: false, predajna: false },
   // Financie (predtym zdielalo pravo s create_order) — teraz samostatne, aby uctovnik mohol vidiet
   // Financie bez toho, aby mohol vytvarat vyrobne zakazky.
-  view_finance: { master: true, supervisor: true, sales: true, employee: false, uctovnik: true, sofer: false }
+  view_finance: { master: true, supervisor: true, sales: true, employee: false, uctovnik: true, sofer: false, predajna: false }
 };
 
 const mapMaterialFromDb = (r) => ({ id: r.id, name: r.name, color: r.color, colorHex: r.color_hex || '', width: r.width, weight: r.weight, pricePerM: r.price_per_m, qty: r.qty, unit: r.unit, minQty: r.min_qty, warehouseId: r.warehouse_id || 'sklad-1', manufacturer: r.manufacturer || '', productType: r.product_type || '', deliveryNoteNumber: r.delivery_note_number || '', deliveryNoteDate: r.delivery_note_date || '', history: r.history || [] });
@@ -511,6 +512,7 @@ const mapCustomerFromDb = (r) => ({ name: r.name, phone: r.phone || '', email: r
 const mapCustomerToDb = (c) => ({ name: c.name, phone: c.phone || null, email: c.email || null, contact_person: c.contactPerson || null, address: c.address || null, notes: c.notes || null, interaction_log: c.interactionLog || [] });
 
 const mapDotlackovkaPriceFromDb = (r) => ({ id: r.id, label: r.label, price: r.price || 0, sortOrder: r.sort_order || 0 });
+const mapAddonTypeFromDb = (r) => ({ id: r.id, label: r.label, sortOrder: r.sort_order || 0 });
 
 // Body na papierovom dotlačovom listku, ktoré vie predajňa rýchlo označiť (predné + zadné schéma trička/tepláky).
 const DOTLACOVKA_PLACEMENT_POINTS = [
@@ -980,6 +982,9 @@ export default function App() {
   const speechRecognitionRef = useRef(null);
   const [customers, setCustomers] = useState([]);
   const [dotlacovkaPriceList, setDotlacovkaPriceList] = useState([]);
+  const [addonTypes, setAddonTypes] = useState([]);
+  const [showAddonEditor, setShowAddonEditor] = useState(false);
+  const [newAddonLabel, setNewAddonLabel] = useState('');
   const [selectedCustomerForDetail, setSelectedCustomerForDetail] = useState(null);
   const [customerDraft, setCustomerDraft] = useState(null);
   const [newCustomerLogEntry, setNewCustomerLogEntry] = useState('');
@@ -1098,6 +1103,7 @@ export default function App() {
   const [expressDescription, setExpressDescription] = useState('');
   const [expressLink, setExpressLink] = useState('');
   const [expressPlacements, setExpressPlacements] = useState({}); // { [pointId]: { priceId, note } }
+  const [expressAddons, setExpressAddons] = useState([]);
   const [expressActivePoint, setExpressActivePoint] = useState(null);
   const [showDotlackovkaPriceEditor, setShowDotlackovkaPriceEditor] = useState(false);
   const [isSubmittingExpress, setIsSubmittingExpress] = useState(false);
@@ -1141,6 +1147,7 @@ export default function App() {
   const [selectedStations, setSelectedStations] = useState(buildAllStationsPreset());
   const [selectedDesignerId, setSelectedDesignerId] = useState('');
   const [itemNotes, setItemNotes] = useState('');
+  const [selectedAddons, setSelectedAddons] = useState([]);
   const [itemImageFile, setItemImageFile] = useState(null);
   const [itemImagePreview, setItemImagePreview] = useState('');
   const [isUploadingItemImage, setIsUploadingItemImage] = useState(false);
@@ -1246,7 +1253,7 @@ export default function App() {
     }
     async function loadAll() {
       try {
-        const [matRes, prodRes, tierRes, sportRes, empRes, aclRes, orderRes, whRes, rateRes, assignRes, stationDefaultRes, stationExclusionRes, checkinRes, attendanceRes, mismatchRes, problemRes, companyRes, invoiceRes, bankRes, journalRes, deadlineRes, cashDocRes, capacityRes, productTimesRes, assetRes, metricRes, tierRuleRes, travelRes, vehicleRes, vehicleLogRes, customerRes, dotlackovkaPriceRes] = await Promise.all([
+        const [matRes, prodRes, tierRes, sportRes, empRes, aclRes, orderRes, whRes, rateRes, assignRes, stationDefaultRes, stationExclusionRes, checkinRes, attendanceRes, mismatchRes, problemRes, companyRes, invoiceRes, bankRes, journalRes, deadlineRes, cashDocRes, capacityRes, productTimesRes, assetRes, metricRes, tierRuleRes, travelRes, vehicleRes, vehicleLogRes, customerRes, dotlackovkaPriceRes, addonTypeRes] = await Promise.all([
           supabase.from('materials').select('*').order('name'),
           supabase.from('products').select('*'),
           supabase.from('quality_tiers').select('*'),
@@ -1278,7 +1285,8 @@ export default function App() {
           supabase.from('vehicles').select('*').order('name'),
           supabase.from('vehicle_log_entries').select('*').order('entry_date', { ascending: false }),
           supabase.from('customers').select('*'),
-          supabase.from('dotlacovka_price_list').select('*').order('sort_order')
+          supabase.from('dotlacovka_price_list').select('*').order('sort_order'),
+          supabase.from('addon_types').select('*').order('sort_order')
         ]);
         const firstErr = [matRes, prodRes, tierRes, sportRes, empRes, orderRes, whRes].find(r => r.error);
         if (firstErr) throw firstErr.error;
@@ -1321,6 +1329,7 @@ export default function App() {
         setVehicleLogEntries(vehicleLogRes.error ? [] : (vehicleLogRes.data || []).map(mapVehicleLogFromDb));
         setCustomers(customerRes.error ? [] : (customerRes.data || []).map(mapCustomerFromDb));
         setDotlacovkaPriceList(dotlackovkaPriceRes.error ? [] : (dotlackovkaPriceRes.data || []).map(mapDotlackovkaPriceFromDb));
+        setAddonTypes(addonTypeRes.error ? [] : (addonTypeRes.data || []).map(mapAddonTypeFromDb));
 
         if (loadedWarehouses.length > 0) {
           setActiveWarehouseId(loadedWarehouses[0].id);
@@ -1391,6 +1400,7 @@ export default function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'vehicle_log_entries' }, (payload) => applyRealtimeChange(setVehicleLogEntries, payload, mapVehicleLogFromDb))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'customers' }, (payload) => applyRealtimeChange(setCustomers, payload, mapCustomerFromDb, 'name'))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'dotlacovka_price_list' }, (payload) => applyRealtimeChange(setDotlacovkaPriceList, payload, mapDotlackovkaPriceFromDb))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'addon_types' }, (payload) => applyRealtimeChange(setAddonTypes, payload, mapAddonTypeFromDb))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'station_capacity_config' }, (payload) => applyRealtimeChange(setCapacityConfigs, payload, mapCapacityConfigFromDb, 'stationId'))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'station_product_times' }, (payload) => applyRealtimeChange(setStationProductTimes, payload, mapProductTimeFromDb))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings' }, (payload) => { if (payload.new) setCompanySettings(mapCompanySettingsFromDb(payload.new)); })
@@ -1444,6 +1454,7 @@ export default function App() {
 
   const problemReportsRef = useRef(problemReports);
   useEffect(() => { problemReportsRef.current = problemReports; }, [problemReports]);
+  const dotlackovkaNotifiedDateRef = useRef('');
 
   // Požiadať o povolenie desktop notifikácií, keď sa prihlási niekto, kto rieši problémy
   useEffect(() => {
@@ -3171,7 +3182,7 @@ export default function App() {
       tempId: `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       productId: selectedProduct.id, productName: selectedProduct.name, customCode: selectedProduct.customCode,
       qualityTier: selectedQualityTier.name, gender: selectedGender, qty: qtyNum, activeStations,
-      notes: itemNotes, materialsNeeded: neededList, threadQtyM: selectedProduct.threadM * qtyNum, imageUrl, assignedDesignerId: selectedDesignerId, ...rozpisData
+      notes: itemNotes, materialsNeeded: neededList, threadQtyM: selectedProduct.threadM * qtyNum, imageUrl, assignedDesignerId: selectedDesignerId, addons: selectedAddons, ...rozpisData
     };
     setPendingItems([...pendingItems, newItem]);
     setItemQty(10);
@@ -3181,6 +3192,7 @@ export default function App() {
     setItemRozpisFile(null);
     setSelectedStations(buildAllStationsPreset());
     setSelectedDesignerId('');
+    setSelectedAddons([]);
     triggerNotification('success', `Položka "${selectedProduct.name}" pridaná do zoznamu zákazky.`);
   };
 
@@ -3363,6 +3375,28 @@ export default function App() {
     await supabase.from('dotlacovka_price_list').update(payload).eq('id', id);
   };
 
+  const handleAddAddonType = async () => {
+    const label = newAddonLabel.trim();
+    if (!label) return;
+    const id = `addon_${Date.now()}`;
+    const sortOrder = addonTypes.length > 0 ? Math.max(...addonTypes.map(a => a.sortOrder)) + 1 : 1;
+    setAddonTypes(prev => [...prev, { id, label, sortOrder }]);
+    setNewAddonLabel('');
+    await supabase.from('addon_types').insert({ id, label, sort_order: sortOrder });
+  };
+
+  const handleRenameAddonType = async (id, label) => {
+    setAddonTypes(prev => prev.map(a => a.id === id ? { ...a, label } : a));
+    await supabase.from('addon_types').update({ label }).eq('id', id);
+  };
+
+  const handleDeleteAddonType = async (id) => {
+    setAddonTypes(prev => prev.filter(a => a.id !== id));
+    setSelectedAddons(prev => prev.filter(a => a !== id));
+    setExpressAddons(prev => prev.filter(a => a !== id));
+    await supabase.from('addon_types').delete().eq('id', id);
+  };
+
   const handleSubmitExpressDotlackovka = async () => {
     if (!expressCustomerName.trim()) { alert('Zadaj meno zákazníka.'); return; }
     if (!expressNeededDate) { alert('Zadaj dátum, kedy to zákazník potrebuje.'); return; }
@@ -3403,7 +3437,7 @@ export default function App() {
 
       const newItem = {
         itemId: `${orderId}-1`, productId: null, productName: 'Dotlačovka', customCode: '', qualityTier: '', gender: 'neutral', qty: 1,
-        notes: combinedNotes, imageUrl: tovarUrl, assignedDesignerId: '', ...listokData,
+        notes: combinedNotes, imageUrl: tovarUrl, assignedDesignerId: '', addons: expressAddons, ...listokData,
         dotlackovkaPlacements: placementSummary, dotlackovkaLink: expressLink.trim(),
         materialsNeeded: [], threadQtyM: 0, priority: maxPriority + 1, productionDate: today, stationDates: initialStationDates,
         stationStatuses: initialStatuses, materialDeducted: false
@@ -3434,7 +3468,7 @@ export default function App() {
       setShowExpressDotlackovka(false);
       setExpressCustomerName(''); setExpressPhone(''); setExpressEmail(''); setExpressNeededDate(''); setExpressCreatedBy('');
       setExpressListokFile(null); setExpressListokPreview(''); setExpressTovarFile(null); setExpressTovarPreview('');
-      setExpressDescription(''); setExpressLink(''); setExpressPlacements({}); setExpressCompany('ADY');
+      setExpressDescription(''); setExpressLink(''); setExpressPlacements({}); setExpressAddons([]); setExpressCompany('ADY');
       triggerNotification('success', `Dotlačová zákazka ${orderNumber} bola zaevidovaná a zaradená na dnešný deň (Grafika/Transfer/Balenie).`);
     } catch (err) {
       triggerNotification('error', `Chyba: ${err.message}`);
@@ -3480,7 +3514,7 @@ export default function App() {
       item.activeStations.forEach(sid => { initialStatuses[sid] = 'caka'; initialStationDates[sid] = newOrderDeliveryDate; });
       return {
         itemId, productId: item.productId, productName: item.productName, customCode: item.customCode,
-        qualityTier: item.qualityTier, gender: item.gender, qty: item.qty, notes: item.notes, imageUrl: item.imageUrl || '', assignedDesignerId: item.assignedDesignerId || '',
+        qualityTier: item.qualityTier, gender: item.gender, qty: item.qty, notes: item.notes, imageUrl: item.imageUrl || '', assignedDesignerId: item.assignedDesignerId || '', addons: item.addons || [],
         rozpisUrl: item.rozpisUrl || '', rozpisFileName: item.rozpisFileName || '', rozpisMimeType: item.rozpisMimeType || '',
         materialsNeeded: item.materialsNeeded, threadQtyM: item.threadQtyM, priority: sameDayCount + idx + 1, productionDate: newOrderDeliveryDate, stationDates: initialStationDates,
         stationStatuses: initialStatuses, materialDeducted: (item.materialsNeeded || []).length > 0
@@ -4193,6 +4227,19 @@ export default function App() {
 
   const allItems = flattenOrderItems(orders);
 
+  const todaysDueDotlackovky = allItems.filter(it => it.productName === 'Dotlačovka' && it.deliveryDate === new Date().toISOString().slice(0, 10) && !currentStageLabel(it).done);
+
+  useEffect(() => {
+    if (!currentUser || currentUser.role !== 'predajna') return;
+    const today = new Date().toISOString().slice(0, 10);
+    if (dotlackovkaNotifiedDateRef.current === today) return;
+    if (todaysDueDotlackovky.length === 0) return;
+    dotlackovkaNotifiedDateRef.current = today;
+    playAlertBeep(2, 780);
+    showDesktopNotification('⏰ Pozor — dnes má byť hotová dotlačovka', todaysDueDotlackovky.map(it => `${it.orderNumber || it.orderId} — ${it.customer}`).join(', '));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser, todaysDueDotlackovky.length]);
+
   const getSportStats = () => {
     const now = new Date();
     const currentYear = now.getFullYear();
@@ -4663,7 +4710,7 @@ export default function App() {
                           {STATION_ORDER.map(stationId => {
                             const config = STATION_CONFIGS[stationId];
                             return (
-                              <th key={stationId} className="p-3 text-xs font-bold text-slate-300 uppercase tracking-wider text-center border-r border-slate-850">
+                              <th key={stationId} className="p-3 text-xs font-bold text-slate-300 uppercase tracking-wider text-center border-r border-slate-850 min-w-[260px]">
                                 <div className="flex items-center justify-center gap-1.5"><config.icon className="h-4 w-4 text-indigo-400 shrink-0" /><span>{config.name}</span></div>
                               </th>
                             );
@@ -4704,7 +4751,7 @@ export default function App() {
                                     handleMoveAndReorder(draggedMatrixCard, stationId, date, target?.targetItemId || null, target?.position || 'after');
                                     setDraggedMatrixCard(null);
                                   }}
-                                  className={`p-1 border-r border-slate-850 align-top min-h-[110px] transition-all duration-150 ${
+                                  className={`p-1 border-r border-slate-850 align-top min-h-[110px] min-w-[260px] transition-all duration-150 ${
                                     isHoveringThisCell
                                       ? 'bg-indigo-950/50 ring-2 ring-inset ring-indigo-500'
                                       : draggedMatrixCard?.stationId === stationId ? 'bg-slate-950/40 outline outline-1 outline-dashed outline-indigo-700/40' : 'bg-slate-950/15'
@@ -4751,7 +4798,7 @@ export default function App() {
                                               setDragOverMatrixCell(prev => (prev && prev.targetItemId === item.itemId && prev.position === pos ? prev : { date, stationId, targetItemId: item.itemId, position: pos }));
                                             }}
                                             onClick={() => openOrderDetails(orders.find(o => o.id === item.orderId))}
-                                            className={`relative bg-slate-900 hover:bg-slate-800 border-l-4 ${orderColor.border} border-t border-r border-b border-slate-750 p-2 rounded cursor-pointer transition-all flex flex-col justify-between text-[10px] space-y-1 shadow hover:scale-[1.02] transform ${hasPermission('edit_priority') ? 'active:cursor-grabbing' : ''} ${(item.ultraPriority || isDotlackovkaUrgent(item)) ? 'ultra-priority-card' : ''}`}
+                                            className={`relative bg-slate-900 hover:bg-slate-800 border-l-4 ${orderColor.border} border-t border-r border-b border-slate-750 p-2 rounded cursor-pointer transition-all flex flex-col justify-between text-[10px] space-y-1 shadow hover:scale-[1.02] transform ${hasPermission('edit_priority') ? 'active:cursor-grabbing' : ''} ${(item.ultraPriority || isDotlackovkaUrgent(item)) ? (statusId === 'hotove' ? 'ultra-priority-static' : 'ultra-priority-card') : ''}`}
                                           >
                                             {(() => {
                                               if (!item.lastModifiedAt) return null;
@@ -4767,19 +4814,19 @@ export default function App() {
                                                 </span>
                                               );
                                             })()}
-                                            <div className="flex items-center justify-between">
-                                              <span className="font-mono font-bold text-indigo-400">{(item.ultraPriority || isDotlackovkaUrgent(item)) && '🔴 '}#{item.priority} • {item.itemId}</span>
-                                              <div className="flex items-center gap-1">
+                                            <div className="flex items-center justify-between gap-1">
+                                              <span className="font-mono font-bold text-indigo-400 text-xs">{(item.ultraPriority || isDotlackovkaUrgent(item)) && '🔴 '}#{item.priority} • {item.itemId}</span>
+                                              <div className="flex items-center gap-1 shrink-0">
                                                 {item.stationMeta?.[stationId]?.assignedEmployeeAvatar && (
-                                                  <span title={item.stationMeta[stationId].assignedEmployeeName} className="text-sm leading-none cursor-help">{item.stationMeta[stationId].assignedEmployeeAvatar}</span>
+                                                  <span title={item.stationMeta[stationId].assignedEmployeeName} className="text-base leading-none cursor-help">{item.stationMeta[stationId].assignedEmployeeAvatar}</span>
                                                 )}
                                                 <CashBadge paymentType={item.paymentType} size="small" />
-                                                <span className="text-slate-400 font-bold">{item.qty}ks</span>
                                               </div>
                                             </div>
-                                            <p className="font-extrabold text-slate-100 truncate">{item.customer}</p>
-                                            <p className="text-[9px] text-slate-300 truncate">{item.productName} ({item.qualityTier})</p>
-                                            <div className={`text-[8px] px-1 py-0.5 rounded ${isUrgentDate(item.deliveryDate) ? 'bg-rose-950/60 text-rose-300 font-bold' : 'bg-slate-950/60 text-slate-500'}`}>
+                                            <p className="font-extrabold text-slate-100 text-[11px] truncate">{item.customer}</p>
+                                            <p className="text-[10px] text-slate-300 truncate">{item.productName} ({item.qualityTier})</p>
+                                            <p className="text-[10px] text-slate-400 font-bold">{item.qty} ks</p>
+                                            <div className={`text-[9px] px-1.5 py-1 rounded ${isUrgentDate(item.deliveryDate) ? 'bg-rose-950/60 text-rose-300 font-bold' : 'bg-slate-950/60 text-slate-500'}`}>
                                               Termín: {formatDeliveryDate(item.deliveryDate)}
                                             </div>
                                             {hasPermission('edit_priority') && (
@@ -4788,7 +4835,7 @@ export default function App() {
                                                 value={getItemStationDate(item, stationId) || ''}
                                                 onClick={(e) => e.stopPropagation()}
                                                 onChange={(e) => handleMoveProductionDate(item.orderId, item.itemId, stationId, e.target.value)}
-                                                className="text-[8px] bg-slate-950 border border-slate-800 rounded px-1 py-0.5 text-slate-400 w-full"
+                                                className="text-[9px] bg-slate-950 border border-slate-800 rounded px-1 py-0.5 text-slate-400 w-full"
                                                 title="Presunúť túto stanicu na iný deň (alebo pretiahni kartu — pusti hore/dole nad inou kartou pre presné poradie)"
                                               />
                                             )}
@@ -4797,7 +4844,7 @@ export default function App() {
                                               onClick={(e) => e.stopPropagation()}
                                               onChange={(e) => updateStationStatus(item.orderId, item.itemId, stationId, e.target.value)}
                                               disabled={!hasPermission('update_status')}
-                                              className={`text-[9px] px-1 py-0.5 rounded text-center font-bold ${statusCfg.color} truncate w-full focus:outline-none`}
+                                              className={`text-[10px] px-1 py-1 rounded text-center font-bold ${statusCfg.color} truncate w-full focus:outline-none`}
                                             >
                                               {config.statuses.filter(s => s.id !== 'neaktivne').map(st => (
                                                 <option key={st.id} value={st.id} className="bg-slate-900 text-slate-300">{st.label}</option>
@@ -5099,6 +5146,18 @@ export default function App() {
               </div>
             ) : (
               <>
+                {currentUser.role === 'predajna' && todaysDueDotlackovky.length > 0 && (
+                  <div className="bg-rose-950/50 border-2 border-rose-600 rounded-2xl p-4 flex items-start gap-3 animate-pulse">
+                    <AlertTriangle className="h-6 w-6 text-rose-400 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-extrabold text-rose-300">Pozor — dnes má byť hotová dotlačová zákazka!</p>
+                      <ul className="text-xs text-rose-200 mt-1 space-y-0.5">
+                        {todaysDueDotlackovky.map(it => <li key={it.itemId}>• {it.orderNumber || it.orderId} — {it.customer}{it.qty > 1 ? ` (${it.qty} ks)` : ''}</li>)}
+                      </ul>
+                      <p className="text-[10px] text-rose-400 italic mt-1">Zákazník to dnes príde vyzdvihnúť — ak treba, zavolaj na potlač, či je všetko OK.</p>
+                    </div>
+                  </div>
+                )}
                 <div className="flex justify-end gap-2">
                   <button onClick={() => { setShowAiOrderAssistant(true); setAiOrderResult(null); setAiOrderError(''); setAiOrderText(''); setAiOrderImageFile(null); setAiOrderImagePreview(''); setAiOrderInputMode('voice'); }} className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs px-4 py-2.5 rounded-lg flex items-center gap-1.5 shadow-lg"><Bot className="h-4 w-4" /> AI zadanie zákazky</button>
                   <button onClick={() => { setShowExpressDotlackovka(true); setExpressCreatedBy(`${currentUser.firstName} ${currentUser.lastName}`); setExpressNeededDate(new Date().toISOString().slice(0, 10)); }} className="bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs px-4 py-2.5 rounded-lg flex items-center gap-1.5 shadow-lg"><Zap className="h-4 w-4" /> Expresné pridanie dotlačovej zákazky</button>
@@ -5211,6 +5270,36 @@ export default function App() {
                           </select>
                         </div>
                       )}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-xs font-semibold text-slate-400">Rýchle doplnky</label>
+                          <button type="button" onClick={() => setShowAddonEditor(v => !v)} className="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold flex items-center gap-1"><Sliders className="h-3 w-3" /> Upraviť zoznam</button>
+                        </div>
+                        {showAddonEditor && (
+                          <div className="bg-slate-950 border border-slate-800 rounded-lg p-2 space-y-1.5 mb-2">
+                            {addonTypes.map(a => (
+                              <div key={a.id} className="flex items-center gap-2 text-xs">
+                                <input type="text" value={a.label} onChange={(e) => handleRenameAddonType(a.id, e.target.value)} className="flex-1 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-white" />
+                                <button type="button" onClick={() => handleDeleteAddonType(a.id)} className="text-rose-400 hover:text-rose-300"><X className="h-3.5 w-3.5" /></button>
+                              </div>
+                            ))}
+                            <div className="flex gap-2">
+                              <input type="text" value={newAddonLabel} onChange={(e) => setNewAddonLabel(e.target.value)} placeholder="Nový doplnok..." className="flex-1 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-white" />
+                              <button type="button" onClick={handleAddAddonType} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 rounded text-xs shrink-0">Pridať</button>
+                            </div>
+                          </div>
+                        )}
+                        <div className="flex flex-wrap gap-1.5">
+                          {addonTypes.map(a => {
+                            const checked = selectedAddons.includes(a.id);
+                            return (
+                              <button key={a.id} type="button" onClick={() => setSelectedAddons(prev => checked ? prev.filter(x => x !== a.id) : [...prev, a.id])} className={`text-[10px] font-bold px-2.5 py-1.5 rounded-full border ${checked ? 'bg-teal-950/50 border-teal-600 text-teal-300' : 'bg-slate-950 border-slate-800 text-slate-500 hover:border-slate-600'}`}>
+                                {checked ? '✓ ' : ''}{a.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
                       <div>
                         <label className="block text-xs font-semibold text-slate-400 mb-1">Poznámka k tejto položke</label>
                         <textarea rows={5} value={itemNotes} onChange={(e) => setItemNotes(e.target.value)} placeholder="Napr. Pantone 286C, mesh podpazušie, číslovanie 1-10..." className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white" />
@@ -6112,6 +6201,37 @@ export default function App() {
                 </div>
               </div>
 
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs text-slate-400">Rýchle doplnky</label>
+                  <button type="button" onClick={() => setShowAddonEditor(v => !v)} className="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold flex items-center gap-1"><Sliders className="h-3 w-3" /> Upraviť zoznam</button>
+                </div>
+                {showAddonEditor && (
+                  <div className="bg-slate-950 border border-slate-800 rounded-lg p-2 space-y-1.5 mb-2">
+                    {addonTypes.map(a => (
+                      <div key={a.id} className="flex items-center gap-2 text-xs">
+                        <input type="text" value={a.label} onChange={(e) => handleRenameAddonType(a.id, e.target.value)} className="flex-1 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-white" />
+                        <button type="button" onClick={() => handleDeleteAddonType(a.id)} className="text-rose-400 hover:text-rose-300"><X className="h-3.5 w-3.5" /></button>
+                      </div>
+                    ))}
+                    <div className="flex gap-2">
+                      <input type="text" value={newAddonLabel} onChange={(e) => setNewAddonLabel(e.target.value)} placeholder="Nový doplnok..." className="flex-1 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-white" />
+                      <button type="button" onClick={handleAddAddonType} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 rounded text-xs shrink-0">Pridať</button>
+                    </div>
+                  </div>
+                )}
+                <div className="flex flex-wrap gap-1.5">
+                  {addonTypes.map(a => {
+                    const checked = expressAddons.includes(a.id);
+                    return (
+                      <button key={a.id} type="button" onClick={() => setExpressAddons(prev => checked ? prev.filter(x => x !== a.id) : [...prev, a.id])} className={`text-[10px] font-bold px-2.5 py-1.5 rounded-full border ${checked ? 'bg-teal-950/50 border-teal-600 text-teal-300' : 'bg-slate-950 border-slate-800 text-slate-500 hover:border-slate-600'}`}>
+                        {checked ? '✓ ' : ''}{a.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div><label className="text-xs text-slate-400 block mb-0.5">Popis / poznámka</label><textarea value={expressDescription} onChange={(e) => setExpressDescription(e.target.value)} rows={2} placeholder="Voľný text, ak treba niečo doplniť k potlači" className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-sm text-white resize-none" /></div>
               <div><label className="text-xs text-slate-400 block mb-0.5">Link na logo / obrázok (voliteľné)</label><input type="text" value={expressLink} onChange={(e) => setExpressLink(e.target.value)} placeholder="https://..." className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-sm text-white" /></div>
 
@@ -6539,6 +6659,7 @@ export default function App() {
                           <option value="employee">Zamestnanec</option>
                           <option value="uctovnik">Účtovník</option>
                           <option value="sofer">Šofér</option>
+                          <option value="predajna">Predajňa</option>
                         </select>
                       </div>
                     </div>
@@ -9000,6 +9121,14 @@ export default function App() {
                       <h2 className="text-lg font-extrabold text-white print:text-black">{item.productName} [{item.customCode}]</h2>
                       <p className="text-sm text-slate-400 print:text-black">Vyhotovenie: <strong className="text-indigo-400 print:text-black uppercase">{item.qualityTier}</strong>{qualityTiers.find(t => t.name === item.qualityTier)?.desc && <span className="text-xs text-slate-500 italic print:text-black"> ({qualityTiers.find(t => t.name === item.qualityTier).desc})</span>} • {genderLabel(item.gender)} • <strong className="text-white print:text-black">{item.qty} ks</strong></p>
                       {item.notes && <p className="text-xs text-slate-400 italic print:text-black mt-1">Poznámka: {item.notes}</p>}
+                      {(item.addons || []).length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1.5 print:mt-1">
+                          {(item.addons || []).map(aid => {
+                            const addon = addonTypes.find(a => a.id === aid);
+                            return <span key={aid} className="text-[10px] bg-teal-950/40 text-teal-300 border border-teal-800/40 px-2 py-0.5 rounded-full font-bold print:bg-transparent print:text-black print:border-black">✓ {addon?.label || aid}</span>;
+                          })}
+                        </div>
+                      )}
                       {(() => {
                         const { arrival, departure } = getArrivalDeparture(item);
                         if (!arrival && !departure && !item.finalCheckConfirmedAt) return null;
