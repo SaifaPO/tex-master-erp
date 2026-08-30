@@ -330,6 +330,13 @@ function currentStageLabel(item) {
   return { label: 'Hotové', done: true };
 }
 
+function isDotlackovkaUrgent(item) {
+  if (item.productName !== 'Dotlačovka') return false;
+  if (currentStageLabel(item).done) return false;
+  const today = new Date().toISOString().slice(0, 10);
+  return !!item.deliveryDate && item.deliveryDate <= today;
+}
+
 // Parsuje formát "YYYY-MM-DD HH:MM" (getFormattedDateTime) späť na Date objekt
 function parseFormattedDateTime(str) {
   if (!str) return null;
@@ -502,6 +509,21 @@ const mapCashDocFromDb = (r) => ({ id: r.id, docNumber: r.doc_number, docType: r
 
 const mapCustomerFromDb = (r) => ({ name: r.name, phone: r.phone || '', email: r.email || '', contactPerson: r.contact_person || '', address: r.address || '', notes: r.notes || '', interactionLog: r.interaction_log || [] });
 const mapCustomerToDb = (c) => ({ name: c.name, phone: c.phone || null, email: c.email || null, contact_person: c.contactPerson || null, address: c.address || null, notes: c.notes || null, interaction_log: c.interactionLog || [] });
+
+const mapDotlackovkaPriceFromDb = (r) => ({ id: r.id, label: r.label, price: r.price || 0, sortOrder: r.sort_order || 0 });
+
+// Body na papierovom dotlačovom listku, ktoré vie predajňa rýchlo označiť (predné + zadné schéma trička/tepláky).
+const DOTLACOVKA_PLACEMENT_POINTS = [
+  { id: 'srdce', label: 'Srdce', view: 'front', x: 42, y: 30 },
+  { id: 'hrud', label: 'Hruď', view: 'front', x: 50, y: 26 },
+  { id: 'bod_oproti_srdcu', label: 'Bod oproti srdcu', view: 'front', x: 58, y: 30 },
+  { id: 'lavy_rukav', label: 'Ľavý rukáv', view: 'front', x: 16, y: 34 },
+  { id: 'pravy_rukav', label: 'Pravý rukáv', view: 'front', x: 84, y: 34 },
+  { id: 'chrbat_hore_stred', label: 'Chrbát hore stred', view: 'back', x: 50, y: 24 },
+  { id: 'chrbat_dole_stred', label: 'Chrbát dole stred', view: 'back', x: 50, y: 42 },
+  { id: 'tepláky_lava_noha', label: 'Tepláky ľavá noha', view: 'front', x: 42, y: 80 },
+  { id: 'tepláky_prava_noha', label: 'Tepláky pravá noha', view: 'front', x: 58, y: 80 },
+];
 
 const mapVehicleFromDb = (r) => ({ id: r.id, name: r.name, licensePlate: r.license_plate || '' });
 const mapVehicleToDb = (v) => ({ id: v.id, name: v.name, license_plate: v.licensePlate || null });
@@ -957,6 +979,7 @@ export default function App() {
   const [aiOrderResult, setAiOrderResult] = useState(null); // { customerName, deliveryDate, notes, items: [...] }
   const speechRecognitionRef = useRef(null);
   const [customers, setCustomers] = useState([]);
+  const [dotlacovkaPriceList, setDotlacovkaPriceList] = useState([]);
   const [selectedCustomerForDetail, setSelectedCustomerForDetail] = useState(null);
   const [customerDraft, setCustomerDraft] = useState(null);
   const [newCustomerLogEntry, setNewCustomerLogEntry] = useState('');
@@ -1061,7 +1084,10 @@ export default function App() {
   const [draggedMatrixCard, setDraggedMatrixCard] = useState(null);
   const [dragOverMatrixCell, setDragOverMatrixCell] = useState(null); // { date, stationId } | null
   const [showExpressDotlackovka, setShowExpressDotlackovka] = useState(false);
+  const [expressCompany, setExpressCompany] = useState('ADY');
   const [expressCustomerName, setExpressCustomerName] = useState('');
+  const [expressPhone, setExpressPhone] = useState('');
+  const [expressEmail, setExpressEmail] = useState('');
   const [expressNeededDate, setExpressNeededDate] = useState('');
   const [expressCreatedBy, setExpressCreatedBy] = useState('');
   const [expressPaymentType, setExpressPaymentType] = useState('faktura');
@@ -1069,6 +1095,11 @@ export default function App() {
   const [expressListokPreview, setExpressListokPreview] = useState('');
   const [expressTovarFile, setExpressTovarFile] = useState(null);
   const [expressTovarPreview, setExpressTovarPreview] = useState('');
+  const [expressDescription, setExpressDescription] = useState('');
+  const [expressLink, setExpressLink] = useState('');
+  const [expressPlacements, setExpressPlacements] = useState({}); // { [pointId]: { priceId, note } }
+  const [expressActivePoint, setExpressActivePoint] = useState(null);
+  const [showDotlackovkaPriceEditor, setShowDotlackovkaPriceEditor] = useState(false);
   const [isSubmittingExpress, setIsSubmittingExpress] = useState(false);
   const [capacityConfigs, setCapacityConfigs] = useState([]);
   const [stationProductTimes, setStationProductTimes] = useState([]);
@@ -1215,7 +1246,7 @@ export default function App() {
     }
     async function loadAll() {
       try {
-        const [matRes, prodRes, tierRes, sportRes, empRes, aclRes, orderRes, whRes, rateRes, assignRes, stationDefaultRes, stationExclusionRes, checkinRes, attendanceRes, mismatchRes, problemRes, companyRes, invoiceRes, bankRes, journalRes, deadlineRes, cashDocRes, capacityRes, productTimesRes, assetRes, metricRes, tierRuleRes, travelRes, vehicleRes, vehicleLogRes, customerRes] = await Promise.all([
+        const [matRes, prodRes, tierRes, sportRes, empRes, aclRes, orderRes, whRes, rateRes, assignRes, stationDefaultRes, stationExclusionRes, checkinRes, attendanceRes, mismatchRes, problemRes, companyRes, invoiceRes, bankRes, journalRes, deadlineRes, cashDocRes, capacityRes, productTimesRes, assetRes, metricRes, tierRuleRes, travelRes, vehicleRes, vehicleLogRes, customerRes, dotlackovkaPriceRes] = await Promise.all([
           supabase.from('materials').select('*').order('name'),
           supabase.from('products').select('*'),
           supabase.from('quality_tiers').select('*'),
@@ -1246,7 +1277,8 @@ export default function App() {
           supabase.from('travel_orders').select('*').order('trip_date', { ascending: false }),
           supabase.from('vehicles').select('*').order('name'),
           supabase.from('vehicle_log_entries').select('*').order('entry_date', { ascending: false }),
-          supabase.from('customers').select('*')
+          supabase.from('customers').select('*'),
+          supabase.from('dotlacovka_price_list').select('*').order('sort_order')
         ]);
         const firstErr = [matRes, prodRes, tierRes, sportRes, empRes, orderRes, whRes].find(r => r.error);
         if (firstErr) throw firstErr.error;
@@ -1288,6 +1320,7 @@ export default function App() {
         setVehicles(vehicleRes.error ? [] : (vehicleRes.data || []).map(mapVehicleFromDb));
         setVehicleLogEntries(vehicleLogRes.error ? [] : (vehicleLogRes.data || []).map(mapVehicleLogFromDb));
         setCustomers(customerRes.error ? [] : (customerRes.data || []).map(mapCustomerFromDb));
+        setDotlacovkaPriceList(dotlackovkaPriceRes.error ? [] : (dotlackovkaPriceRes.data || []).map(mapDotlackovkaPriceFromDb));
 
         if (loadedWarehouses.length > 0) {
           setActiveWarehouseId(loadedWarehouses[0].id);
@@ -1357,6 +1390,7 @@ export default function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'vehicles' }, (payload) => applyRealtimeChange(setVehicles, payload, mapVehicleFromDb))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'vehicle_log_entries' }, (payload) => applyRealtimeChange(setVehicleLogEntries, payload, mapVehicleLogFromDb))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'customers' }, (payload) => applyRealtimeChange(setCustomers, payload, mapCustomerFromDb, 'name'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'dotlacovka_price_list' }, (payload) => applyRealtimeChange(setDotlacovkaPriceList, payload, mapDotlackovkaPriceFromDb))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'station_capacity_config' }, (payload) => applyRealtimeChange(setCapacityConfigs, payload, mapCapacityConfigFromDb, 'stationId'))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'station_product_times' }, (payload) => applyRealtimeChange(setStationProductTimes, payload, mapProductTimeFromDb))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings' }, (payload) => { if (payload.new) setCompanySettings(mapCompanySettingsFromDb(payload.new)); })
@@ -3302,6 +3336,33 @@ export default function App() {
     await supabase.from('station_product_times').delete().eq('id', rowId);
   };
 
+  const getExpressPlacementSummary = () => {
+    return Object.entries(expressPlacements).map(([pointId, sel]) => {
+      const point = DOTLACOVKA_PLACEMENT_POINTS.find(p => p.id === pointId);
+      const priceItem = dotlacovkaPriceList.find(p => p.id === sel.priceId);
+      return { pointId, pointLabel: point?.label || pointId, priceId: sel.priceId, priceLabel: priceItem?.label || '', price: priceItem?.price || 0, note: sel.note || '' };
+    });
+  };
+
+  const getExpressTotalPrice = () => getExpressPlacementSummary().reduce((sum, p) => sum + (p.price || 0), 0);
+
+  const handleSetExpressPlacement = (pointId, priceId, note) => {
+    setExpressPlacements(prev => {
+      if (!priceId && !note) {
+        const next = { ...prev };
+        delete next[pointId];
+        return next;
+      }
+      return { ...prev, [pointId]: { priceId: priceId || '', note: note || '' } };
+    });
+  };
+
+  const handleUpdateDotlackovkaPrice = async (id, field, value) => {
+    setDotlacovkaPriceList(prev => prev.map(p => p.id === id ? { ...p, [field]: field === 'price' ? Number(value) || 0 : value } : p));
+    const payload = field === 'price' ? { price: Number(value) || 0 } : { [field]: value };
+    await supabase.from('dotlacovka_price_list').update(payload).eq('id', id);
+  };
+
   const handleSubmitExpressDotlackovka = async () => {
     if (!expressCustomerName.trim()) { alert('Zadaj meno zákazníka.'); return; }
     if (!expressNeededDate) { alert('Zadaj dátum, kedy to zákazník potrebuje.'); return; }
@@ -3323,9 +3384,9 @@ export default function App() {
       const orderId = `ZAK-${Date.now()}`;
       const fullYear = new Date().getFullYear();
       const shortYear = String(fullYear).slice(-2);
-      const { data: counterData } = await supabase.from('order_number_counters').select('*').eq('company', 'ADY').eq('year', fullYear).maybeSingle();
+      const { data: counterData } = await supabase.from('order_number_counters').select('*').eq('company', expressCompany).eq('year', fullYear).maybeSingle();
       const nextNum = counterData?.next_number || 1;
-      const orderNumber = `ADY-${shortYear}-${String(nextNum).padStart(4, '0')}`;
+      const orderNumber = `${expressCompany}-${shortYear}-${String(nextNum).padStart(4, '0')}`;
 
       const today = new Date().toISOString().slice(0, 10);
       const activeStations = ['grafik', 'transfer', 'balenie'];
@@ -3333,26 +3394,47 @@ export default function App() {
       activeStations.forEach(sid => { initialStatuses[sid] = 'caka'; initialStationDates[sid] = today; });
       const maxPriority = allItems.length > 0 ? Math.max(...allItems.map(i => i.priority || 0)) : 0;
 
+      const placementSummary = getExpressPlacementSummary();
+      const totalPrice = getExpressTotalPrice();
+      const placementNotesText = placementSummary.length > 0
+        ? placementSummary.map(p => `${p.pointLabel}: ${p.priceLabel}${p.note ? ` (${p.note})` : ''}`).join('; ')
+        : '';
+      const combinedNotes = [placementNotesText, expressDescription.trim()].filter(Boolean).join(' | ');
+
       const newItem = {
         itemId: `${orderId}-1`, productId: null, productName: 'Dotlačovka', customCode: '', qualityTier: '', gender: 'neutral', qty: 1,
-        notes: '', imageUrl: tovarUrl, assignedDesignerId: '', ...listokData,
+        notes: combinedNotes, imageUrl: tovarUrl, assignedDesignerId: '', ...listokData,
+        dotlackovkaPlacements: placementSummary, dotlackovkaLink: expressLink.trim(),
         materialsNeeded: [], threadQtyM: 0, priority: maxPriority + 1, productionDate: today, stationDates: initialStationDates,
         stationStatuses: initialStatuses, materialDeducted: false
       };
 
       const createdBy = expressCreatedBy.trim() || `${currentUser.firstName} ${currentUser.lastName}`;
       const created = {
-        id: orderId, customer: expressCustomerName.trim(), createdAt: now, deliveryDate: expressNeededDate, driveLink: '', notes: '',
+        id: orderId, customer: expressCustomerName.trim(), createdAt: now, deliveryDate: expressNeededDate, driveLink: expressLink.trim(), notes: '',
         paymentType: expressPaymentType, items: [newItem], orderLog: [{ date: now, author: createdBy, text: 'Dotlačová zákazka zaevidovaná cez expresný formulár.' }],
-        legacyOrderNumber: '', companyBrand: 'ADY', orderNumber, accountingStatus: null, variableSymbol: generateVariableSymbol(orderId)
+        legacyOrderNumber: '', companyBrand: expressCompany, orderNumber, accountingStatus: null,
+        variableSymbol: generateVariableSymbol(orderId), expectedAmount: totalPrice || null
       };
 
       const { error } = await supabase.from('orders').insert(mapOrderToDb(created));
       if (error) throw error;
-      await supabase.from('order_number_counters').upsert({ company: 'ADY', year: fullYear, next_number: nextNum + 1 }, { onConflict: 'company,year' });
+      await supabase.from('order_number_counters').upsert({ company: expressCompany, year: fullYear, next_number: nextNum + 1 }, { onConflict: 'company,year' });
+
+      if (expressPhone.trim() || expressEmail.trim()) {
+        const existing = customers.find(c => c.name === expressCustomerName.trim());
+        await supabase.from('customers').upsert(mapCustomerToDb({
+          name: expressCustomerName.trim(),
+          phone: expressPhone.trim() || existing?.phone || '',
+          email: expressEmail.trim() || existing?.email || '',
+          contactPerson: existing?.contactPerson || '', address: existing?.address || '', notes: existing?.notes || '', interactionLog: existing?.interactionLog || []
+        }));
+      }
 
       setShowExpressDotlackovka(false);
-      setExpressCustomerName(''); setExpressNeededDate(''); setExpressCreatedBy(''); setExpressListokFile(null); setExpressListokPreview(''); setExpressTovarFile(null); setExpressTovarPreview('');
+      setExpressCustomerName(''); setExpressPhone(''); setExpressEmail(''); setExpressNeededDate(''); setExpressCreatedBy('');
+      setExpressListokFile(null); setExpressListokPreview(''); setExpressTovarFile(null); setExpressTovarPreview('');
+      setExpressDescription(''); setExpressLink(''); setExpressPlacements({}); setExpressCompany('ADY');
       triggerNotification('success', `Dotlačová zákazka ${orderNumber} bola zaevidovaná a zaradená na dnešný deň (Grafika/Transfer/Balenie).`);
     } catch (err) {
       triggerNotification('error', `Chyba: ${err.message}`);
@@ -4669,7 +4751,7 @@ export default function App() {
                                               setDragOverMatrixCell(prev => (prev && prev.targetItemId === item.itemId && prev.position === pos ? prev : { date, stationId, targetItemId: item.itemId, position: pos }));
                                             }}
                                             onClick={() => openOrderDetails(orders.find(o => o.id === item.orderId))}
-                                            className={`relative bg-slate-900 hover:bg-slate-800 border-l-4 ${orderColor.border} border-t border-r border-b border-slate-750 p-2 rounded cursor-pointer transition-all flex flex-col justify-between text-[10px] space-y-1 shadow hover:scale-[1.02] transform ${hasPermission('edit_priority') ? 'active:cursor-grabbing' : ''} ${item.ultraPriority ? 'ultra-priority-card' : ''}`}
+                                            className={`relative bg-slate-900 hover:bg-slate-800 border-l-4 ${orderColor.border} border-t border-r border-b border-slate-750 p-2 rounded cursor-pointer transition-all flex flex-col justify-between text-[10px] space-y-1 shadow hover:scale-[1.02] transform ${hasPermission('edit_priority') ? 'active:cursor-grabbing' : ''} ${(item.ultraPriority || isDotlackovkaUrgent(item)) ? 'ultra-priority-card' : ''}`}
                                           >
                                             {(() => {
                                               if (!item.lastModifiedAt) return null;
@@ -4686,7 +4768,7 @@ export default function App() {
                                               );
                                             })()}
                                             <div className="flex items-center justify-between">
-                                              <span className="font-mono font-bold text-indigo-400">{item.ultraPriority && '🔴 '}#{item.priority} • {item.itemId}</span>
+                                              <span className="font-mono font-bold text-indigo-400">{(item.ultraPriority || isDotlackovkaUrgent(item)) && '🔴 '}#{item.priority} • {item.itemId}</span>
                                               <div className="flex items-center gap-1">
                                                 {item.stationMeta?.[stationId]?.assignedEmployeeAvatar && (
                                                   <span title={item.stationMeta[stationId].assignedEmployeeName} className="text-sm leading-none cursor-help">{item.stationMeta[stationId].assignedEmployeeAvatar}</span>
@@ -5901,9 +5983,18 @@ export default function App() {
               <div className="flex justify-between items-start">
                 <div>
                   <h3 className="text-lg font-bold text-white flex items-center gap-2"><Zap className="h-5 w-5 text-amber-400" /> Expresné pridanie dotlačovej zákazky</h3>
-                  <p className="text-xs text-slate-500">Firma ADY • zaradí sa rovno na dnešný deň do Grafika / Transfer / Balenie</p>
+                  <p className="text-xs text-slate-500">Zaradí sa rovno na dnešný deň do Grafika / Transfer / Balenie • v deň odovzdania automaticky pulzuje na červeno</p>
                 </div>
                 <button onClick={() => setShowExpressDotlackovka(false)} className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white"><X className="h-5 w-5" /></button>
+              </div>
+
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Firma</label>
+                <div className="grid grid-cols-3 gap-1">
+                  {['ATAK', 'ADY', 'PBT'].map(c => (
+                    <button key={c} type="button" onClick={() => setExpressCompany(c)} className={`py-2 text-center text-xs font-bold rounded transition-colors ${expressCompany === c ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>{c}</button>
+                  ))}
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3 text-xs">
@@ -5919,6 +6010,10 @@ export default function App() {
               </div>
 
               <div><label className="text-xs text-slate-400 block mb-0.5">Meno zákazníka</label><input type="text" value={expressCustomerName} onChange={(e) => setExpressCustomerName(e.target.value)} placeholder="Kto to nesie/objednáva" className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-sm text-white" autoFocus /></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="text-xs text-slate-400 block mb-0.5">Telefón</label><input type="tel" value={expressPhone} onChange={(e) => setExpressPhone(e.target.value)} placeholder="09XX XXX XXX" className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-sm text-white" /></div>
+                <div><label className="text-xs text-slate-400 block mb-0.5">E-mail</label><input type="email" value={expressEmail} onChange={(e) => setExpressEmail(e.target.value)} placeholder="voliteľné" className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-sm text-white" /></div>
+              </div>
               <div><label className="text-xs text-slate-400 block mb-0.5">Zákazník to potrebuje do</label><input type="date" value={expressNeededDate} onChange={(e) => setExpressNeededDate(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-sm text-white" /></div>
 
               <div>
@@ -5929,9 +6024,100 @@ export default function App() {
                 </div>
               </div>
 
+              <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-slate-400 font-bold uppercase">Mapa tela — kam čo ísť potlačiť</span>
+                  <button type="button" onClick={() => setShowDotlackovkaPriceEditor(v => !v)} className="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold flex items-center gap-1"><Sliders className="h-3 w-3" /> Cenník</button>
+                </div>
+
+                {showDotlackovkaPriceEditor && (
+                  <div className="bg-slate-900 border border-slate-800 rounded-lg p-2 space-y-1.5">
+                    {dotlacovkaPriceList.map(p => (
+                      <div key={p.id} className="flex items-center gap-2 text-xs">
+                        <span className="flex-1 text-slate-300">{p.label}</span>
+                        <input type="number" step="0.5" min="0" value={p.price} onChange={(e) => handleUpdateDotlackovkaPrice(p.id, 'price', e.target.value)} className="w-20 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-white text-right" />
+                        <span className="text-slate-600">€</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-2">
+                  {['front', 'back'].map(view => (
+                    <div key={view} className="relative bg-slate-900 rounded-lg border border-slate-800" style={{ aspectRatio: '1 / 1.15' }}>
+                      <span className="absolute top-1 left-1.5 text-[9px] text-slate-600 uppercase font-bold z-10">{view === 'front' ? 'Predok' : 'Chrbát'}</span>
+                      <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full">
+                        <circle cx="50" cy="8" r="6" className="fill-slate-800" />
+                        <rect x="32" y="14" width="36" height="40" rx="6" className="fill-slate-800" />
+                        {view === 'front' && (
+                          <>
+                            <rect x="14" y="16" width="14" height="30" rx="5" className="fill-slate-800" />
+                            <rect x="72" y="16" width="14" height="30" rx="5" className="fill-slate-800" />
+                            <rect x="34" y="56" width="14" height="40" rx="4" className="fill-slate-800" />
+                            <rect x="52" y="56" width="14" height="40" rx="4" className="fill-slate-800" />
+                          </>
+                        )}
+                      </svg>
+                      {DOTLACOVKA_PLACEMENT_POINTS.filter(pt => pt.view === view).map(pt => {
+                        const assigned = expressPlacements[pt.id];
+                        return (
+                          <button
+                            key={pt.id}
+                            type="button"
+                            title={pt.label}
+                            onClick={() => setExpressActivePoint(expressActivePoint === pt.id ? null : pt.id)}
+                            style={{ left: `${pt.x}%`, top: `${pt.y}%` }}
+                            className={`absolute -translate-x-1/2 -translate-y-1/2 h-4 w-4 rounded-full border-2 flex items-center justify-center text-[7px] font-black transition-colors ${assigned ? 'bg-amber-500 border-amber-300 text-slate-950' : 'bg-slate-700 border-slate-500 text-slate-300 hover:border-amber-400'} ${expressActivePoint === pt.id ? 'ring-2 ring-indigo-400' : ''}`}
+                          >
+                            {assigned ? '✓' : ''}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+
+                {expressActivePoint && (() => {
+                  const point = DOTLACOVKA_PLACEMENT_POINTS.find(p => p.id === expressActivePoint);
+                  const current = expressPlacements[expressActivePoint] || { priceId: '', note: '' };
+                  return (
+                    <div className="bg-slate-900 border border-indigo-700/50 rounded-lg p-2.5 space-y-1.5">
+                      <p className="text-xs font-bold text-white">{point.label}</p>
+                      <select value={current.priceId} onChange={(e) => handleSetExpressPlacement(expressActivePoint, e.target.value, current.note)} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white">
+                        <option value="">— nič nepotlačiť —</option>
+                        {dotlacovkaPriceList.map(p => <option key={p.id} value={p.id}>{p.label} ({p.price.toFixed(2)} €)</option>)}
+                      </select>
+                      <input type="text" value={current.note} onChange={(e) => handleSetExpressPlacement(expressActivePoint, current.priceId, e.target.value)} placeholder="Poznámka (napr. meno, číslo)" className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" />
+                      <div className="flex gap-2">
+                        <button type="button" onClick={() => setExpressActivePoint(null)} className="flex-1 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold py-1.5 rounded">Hotovo</button>
+                        {current.priceId && <button type="button" onClick={() => { handleSetExpressPlacement(expressActivePoint, '', ''); setExpressActivePoint(null); }} className="px-3 bg-rose-900/50 hover:bg-rose-900 text-rose-300 text-xs font-bold py-1.5 rounded">Zmazať</button>}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {getExpressPlacementSummary().length > 0 && (
+                  <div className="space-y-1">
+                    {getExpressPlacementSummary().map(p => (
+                      <div key={p.pointId} className="flex items-center justify-between text-[10px] text-slate-400">
+                        <span>{p.pointLabel}: <span className="text-slate-300">{p.priceLabel}</span>{p.note && ` — ${p.note}`}</span>
+                        <span className="font-mono text-amber-400">{p.price.toFixed(2)} €</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex items-center justify-between pt-1.5 border-t border-slate-800">
+                  <span className="text-xs font-bold text-slate-300 uppercase">Cena spolu</span>
+                  <span className="text-lg font-mono font-extrabold text-amber-400">{getExpressTotalPrice().toFixed(2)} €</span>
+                </div>
+              </div>
+
+              <div><label className="text-xs text-slate-400 block mb-0.5">Popis / poznámka</label><textarea value={expressDescription} onChange={(e) => setExpressDescription(e.target.value)} rows={2} placeholder="Voľný text, ak treba niečo doplniť k potlači" className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-sm text-white resize-none" /></div>
+              <div><label className="text-xs text-slate-400 block mb-0.5">Link na logo / obrázok (voliteľné)</label><input type="text" value={expressLink} onChange={(e) => setExpressLink(e.target.value)} placeholder="https://..." className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-sm text-white" /></div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-slate-400 block mb-1">📄 Dotlačový listok</label>
+                  <label className="text-xs text-slate-400 block mb-1">📄 Dotlačový listok / logo</label>
                   {expressListokPreview ? (
                     <div className="relative">
                       <img src={expressListokPreview} className="w-full h-24 object-cover rounded-lg border border-slate-800" alt="" />
@@ -5940,8 +6126,8 @@ export default function App() {
                   ) : (
                     <label className="flex flex-col items-center justify-center gap-1 border-2 border-dashed border-slate-800 rounded-lg py-4 cursor-pointer hover:border-amber-600">
                       <Camera className="h-5 w-5 text-slate-500" />
-                      <span className="text-[9px] text-slate-500">Odfotiť listok</span>
-                      <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files[0]; if (f) { setExpressListokFile(f); setExpressListokPreview(URL.createObjectURL(f)); } }} />
+                      <span className="text-[9px] text-slate-500">Odfotiť/nahrať súbor</span>
+                      <input type="file" className="hidden" onChange={(e) => { const f = e.target.files[0]; if (f) { setExpressListokFile(f); setExpressListokPreview(f.type.startsWith('image/') ? URL.createObjectURL(f) : ''); } }} />
                     </label>
                   )}
                 </div>
