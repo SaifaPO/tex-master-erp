@@ -81,6 +81,10 @@ const UNIT_OPTIONS = [
   { value: 'kg', label: 'kg (kilogramy)' }
 ];
 const STATION_ORDER = ['grafik', 'strihanie', 'laser', 'sublimacia', 'transfer', 'sietotlac', 'sitie', 'balenie'];
+// Prirodzena (nezmensena) sirka Planovacej Matice v px — datumovy stlpec (w-32=128px) + min. sirka kazdej stanice (260px)
+const MATRIX_DATE_COL_WIDTH = 128;
+const MATRIX_STATION_COL_WIDTH = 260;
+const MATRIX_NATURAL_WIDTH = MATRIX_DATE_COL_WIDTH + STATION_ORDER.length * MATRIX_STATION_COL_WIDTH;
 
 // Ako dlho po úprave zákazky sa má na sprievodke zobrazovať upozornenie na nedávnu zmenu (Funkcia 4)
 const RECENT_ORDER_CHANGE_HOURS = 72;
@@ -1065,6 +1069,10 @@ export default function App() {
   const [activeStationFilter, setActiveStationFilter] = useState('grafik'); 
   const [addMissingItemId, setAddMissingItemId] = useState('');
   const [zoomLevel, setZoomLevel] = useState(85);
+  const [matrixAutoFit, setMatrixAutoFit] = useState(true);
+  const [isMatrixFullscreen, setIsMatrixFullscreen] = useState(false);
+  const matrixSectionRef = useRef(null);
+  const matrixTableWrapRef = useRef(null);
   const [plannerViewMode, setPlannerViewMode] = useState('matrix');
 
   const [currentUser, setCurrentUser] = useState(null); 
@@ -1512,6 +1520,38 @@ export default function App() {
     const interval = setInterval(() => setStationNowTick(Date.now()), 1000);
     return () => clearInterval(interval);
   }, [activeTab]);
+
+  // Plánovacia Matica — automatické prispôsobenie mierky šírke obrazovky, aby boli vidno všetky stanice bez skrolovania
+  useEffect(() => {
+    if (activeTab !== 'planner' || plannerViewMode !== 'matrix' || !matrixAutoFit) return;
+    const el = matrixTableWrapRef.current;
+    if (!el) return;
+    const applyFit = () => {
+      const availableWidth = el.clientWidth;
+      if (!availableWidth) return;
+      const fitZoom = Math.min(110, Math.max(40, Math.floor((availableWidth / MATRIX_NATURAL_WIDTH) * 100)));
+      setZoomLevel(fitZoom);
+    };
+    applyFit();
+    const observer = new ResizeObserver(applyFit);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [activeTab, plannerViewMode, matrixAutoFit, isMatrixFullscreen]);
+
+  // Fullscreen API pre Plánovaciu Maticu — sleduje, či si používateľ zavrel fullscreen aj mimo nášho tlačidla (napr. klávesou Esc)
+  useEffect(() => {
+    const handleFsChange = () => setIsMatrixFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', handleFsChange);
+    return () => document.removeEventListener('fullscreenchange', handleFsChange);
+  }, []);
+
+  const handleToggleMatrixFullscreen = () => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else if (matrixSectionRef.current?.requestFullscreen) {
+      matrixSectionRef.current.requestFullscreen();
+    }
+  };
 
   const problemReportsRef = useRef(problemReports);
   useEffect(() => { problemReportsRef.current = problemReports; }, [problemReports]);
@@ -4994,7 +5034,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className={`flex-1 w-full mx-auto py-6 ${activeTab === 'planner' && plannerViewMode === 'matrix' ? 'max-w-none px-2 sm:px-3' : 'max-w-7xl px-4 sm:px-6 lg:px-8'}`}>
 
         {scanNotification && (
           <div className={`mb-6 p-4 rounded-xl border-l-4 shadow-xl flex items-start gap-3 transition-all duration-300 print:hidden ${scanNotification.type === 'success' ? 'bg-emerald-950/80 border-emerald-500 text-emerald-200' : 'bg-rose-950/80 border-rose-500 text-rose-200'}`}>
@@ -5010,7 +5050,7 @@ export default function App() {
 
         {activeTab === 'planner' && (
           <div className="space-y-4 print:hidden animate-in fade-in duration-150">
-            <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 shadow-2xl">
+            <div ref={matrixSectionRef} className={`bg-slate-950 rounded-2xl border border-slate-800 shadow-2xl ${isMatrixFullscreen ? 'p-4 h-screen overflow-y-auto' : 'p-6'}`}>
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                 <div>
                   <h2 className="text-xl font-bold text-white flex items-center gap-2"><Calendar className="text-indigo-400 h-5 w-5" /> Plánovací Panel podľa termínu dodania</h2>
@@ -5027,12 +5067,16 @@ export default function App() {
 
               {plannerViewMode === 'matrix' && (
                 <div className="space-y-4">
-                  <div className="flex justify-between items-center bg-slate-900 p-3 rounded-xl border border-slate-800 text-xs text-slate-400">
+                  <div className="flex flex-wrap justify-between items-center gap-2 bg-slate-900 p-3 rounded-xl border border-slate-800 text-xs text-slate-400">
                     <div className="flex items-center gap-2">
                       <span>Mierka:</span>
-                      <button onClick={() => setZoomLevel(prev => Math.max(50, prev - 5))} className="p-1 bg-slate-800 hover:bg-slate-700 rounded"><ZoomOut className="h-3.5 w-3.5" /></button>
+                      <button onClick={() => { setMatrixAutoFit(false); setZoomLevel(prev => Math.max(40, prev - 5)); }} className="p-1 bg-slate-800 hover:bg-slate-700 rounded"><ZoomOut className="h-3.5 w-3.5" /></button>
                       <span className="font-bold text-white w-8 text-center">{zoomLevel}%</span>
-                      <button onClick={() => setZoomLevel(prev => Math.min(110, prev + 5))} className="p-1 bg-slate-800 hover:bg-slate-700 rounded"><ZoomIn className="h-3.5 w-3.5" /></button>
+                      <button onClick={() => { setMatrixAutoFit(false); setZoomLevel(prev => Math.min(110, prev + 5)); }} className="p-1 bg-slate-800 hover:bg-slate-700 rounded"><ZoomIn className="h-3.5 w-3.5" /></button>
+                      <button onClick={() => setMatrixAutoFit(true)} title="Automaticky prispôsobiť mierku tak, aby boli vidno všetky stanice bez skrolovania" className={`px-2 py-1 rounded font-bold ${matrixAutoFit ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300 hover:text-white'}`}>Prispôsobiť šírke</button>
+                      <button onClick={handleToggleMatrixFullscreen} title="Celá obrazovka" className="px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded font-bold text-slate-200">
+                        {isMatrixFullscreen ? '✕ Zavrieť celú obrazovku' : '⛶ Celá obrazovka'}
+                      </button>
                     </div>
                     <div className="flex items-center gap-3">
                       <label className="flex items-center gap-1.5 cursor-pointer select-none">
@@ -5044,7 +5088,7 @@ export default function App() {
                       <span className="text-[10px] italic hidden lg:inline">Farba rámčeka = zákazka</span>
                     </div>
                   </div>
-                  <div className="overflow-x-auto border border-slate-800 rounded-xl bg-slate-900/20">
+                  <div ref={matrixTableWrapRef} className="overflow-x-auto border border-slate-800 rounded-xl bg-slate-900/20">
                     <table className="w-full text-left border-collapse" style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top left', width: `${100 / (zoomLevel / 100)}%` }}>
                       <thead>
                         <tr className="bg-slate-900 border-b border-slate-800">
