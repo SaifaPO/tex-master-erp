@@ -85,8 +85,8 @@ const STATION_ORDER = ['grafik', 'strihanie', 'laser', 'sublimacia', 'transfer',
 // Ako dlho po úprave zákazky sa má na sprievodke zobrazovať upozornenie na nedávnu zmenu (Funkcia 4)
 const RECENT_ORDER_CHANGE_HOURS = 72;
 
-// Stanice, kde musí zamestnanec pred spustením tlače potvrdiť, že prijatý textil sedí s objednávkou (Funkcia 2)
-const MATERIAL_CHECK_STATIONS = ['transfer', 'sietotlac'];
+// Stanice, kde musí zamestnanec pred spustením tlače/balenia potvrdiť kontrolu (rozpis/textil/kvalita) (Funkcia 2)
+const MATERIAL_CHECK_STATIONS = ['transfer', 'sietotlac', 'balenie'];
 // Zistí, či na danej stanici/položke ešte treba prejsť potvrdením materiálu pred spustením práce
 function isMaterialCheckPending(item, stationId) {
   if (!MATERIAL_CHECK_STATIONS.includes(stationId)) return false;
@@ -908,6 +908,9 @@ export default function App() {
   const [resolutionNoteInput, setResolutionNoteInput] = useState('');
   const [resolutionFaultEmployeeId, setResolutionFaultEmployeeId] = useState('');
   const [resolutionCostAmount, setResolutionCostAmount] = useState('');
+  const [resolutionFaultType, setResolutionFaultType] = useState(''); // 'tlaciar' | 'dodavatel_textilu' | 'skladac' | 'grafik' | ''
+  const [resolutionDefectStationId, setResolutionDefectStationId] = useState('');
+  const [resolutionDefectiveQty, setResolutionDefectiveQty] = useState('1');
   const [showErrorLeaderboard, setShowErrorLeaderboard] = useState(false);
   const [errorLeaderboardPeriod, setErrorLeaderboardPeriod] = useState('month'); // 'month' | '3months' | '6months' | 'year'
   // Žiadosti o pomoc medzi stanicami (dedikované rozhranie pre Grafika a i.)
@@ -1884,8 +1887,40 @@ export default function App() {
     triggerNotification('success', 'Problém bol nahlásený. Master/Supervisor to uvidí.');
   };
 
+  // Automaticky dopočíta škodu podľa toho, kde bola chyba zachytená — materiál pomernou časťou + náklady staníc,
+  // ktorými položka až po zachytenú stanicu prešla (napr. sublimácia = materiál+potlač, laser = navyše rezanie, šitie = navyše šitie).
+  const calculateDefectCost = (item, uptoStationId, defectiveQty) => {
+    if (!item || !uptoStationId || !defectiveQty) return 0;
+    const totalQty = item.qty || 1;
+    let materialCostPerUnit = 0;
+    (item.materialsNeeded || []).forEach(needed => {
+      const mat = materials.find(m => m.id === needed.materialId);
+      if (mat) materialCostPerUnit += ((needed.qtyNeeded || 0) / totalQty) * (mat.pricePerM || 0);
+    });
+    const uptoIndex = STATION_ORDER.indexOf(uptoStationId);
+    let stationCostPerUnit = 0;
+    STATION_ORDER.forEach((sid, idx) => {
+      if (uptoIndex >= 0 && idx > uptoIndex) return;
+      const status = item.stationStatuses?.[sid];
+      if (!status || status === 'neaktivne') return;
+      const rate = costRates.find(r => r.stationId === sid);
+      if (rate) stationCostPerUnit += (rate.rate || 0);
+    });
+    return parseFloat(((materialCostPerUnit + stationCostPerUnit) * defectiveQty).toFixed(2));
+  };
+
   const handleResolveProblem = async () => {
     if (!resolvingProblem) return;
+    if (resolutionFaultType === 'dodavatel_textilu') {
+      const found = findItemByItemId(resolvingProblem.itemId || '');
+      await supabase.from('help_requests').insert(mapHelpRequestToDb({
+        id: `hr-${Date.now()}`, orderId: resolvingProblem.orderId, itemId: resolvingProblem.itemId, stationId: resolvingProblem.stationId || 'balenie',
+        raisedById: currentUser.id, raisedByName: `${currentUser.firstName} ${currentUser.lastName}`,
+        targetRole: 'sales', targetEmployeeId: '', targetEmployeeName: '',
+        message: `Chyba dodávateľa textilu na položke ${resolvingProblem.itemId}${found ? ` (${found.item.productName}, ${found.order.customer})` : ''} — treba objednať nový kus/kusy. ${resolutionNoteInput.trim()}`,
+        imageUrl: '', status: 'open', replies: []
+      }));
+    }
     const faultEmployee = employees.find(e => e.id === resolutionFaultEmployeeId);
     const { error } = await supabase.from('problem_reports').update({
       status: 'resolved', resolved_at: new Date().toISOString(), resolved_by: `${currentUser.firstName} ${currentUser.lastName}`, resolution_note: resolutionNoteInput.trim(),
@@ -1897,6 +1932,9 @@ export default function App() {
     setResolutionNoteInput('');
     setResolutionFaultEmployeeId('');
     setResolutionCostAmount('');
+    setResolutionFaultType('');
+    setResolutionDefectStationId('');
+    setResolutionDefectiveQty('1');
     triggerNotification('success', 'Problém označený ako vyriešený.');
   };
 
@@ -6016,6 +6054,26 @@ export default function App() {
                                 )}
                               </div>
                             );
+                          })() : activeStationFilter === 'balenie' ? (() => {
+                            const isPending = isMaterialCheckPending(item, 'balenie');
+                            return isPending ? (
+                              <div className="w-full space-y-1.5">
+                                <span className="text-[10px] text-amber-400 uppercase font-bold block mb-1">Pred balením skontroluj rozpis a kvalitu potlače:</span>
+                                <button onClick={() => handleConfirmMaterialCheck(item.orderId, item.itemId, 'balenie')} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] px-3 py-2 rounded-lg flex items-center justify-center gap-1.5"><Check className="h-3.5 w-3.5" /> Skontrolované — OK, balím</button>
+                                <button onClick={() => { setReportingProblemForItem(item); setProblemCategory('Chyba vo výrobe/tlači'); setProblemDescription(''); }} className="w-full bg-rose-950/50 hover:bg-rose-900/50 border border-rose-700/50 text-rose-300 font-bold text-[11px] px-3 py-2 rounded-lg flex items-center justify-center gap-1.5"><AlertTriangle className="h-3.5 w-3.5" /> Našiel som chybu</button>
+                              </div>
+                            ) : (
+                              <div className="w-full text-right space-y-1.5">
+                                <span className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Stav procesu:</span>
+                                <div className="grid grid-cols-2 gap-1">
+                                  {config.statuses.filter(st => st.id !== 'caka_na_vyriesenie').map(st => {
+                                    const isSelected = currentStatusId === st.id;
+                                    return (<button key={st.id} onClick={() => updateStationStatus(item.orderId, item.itemId, 'balenie', st.id)} className={`px-2 py-1.5 rounded text-[10px] font-bold transition-all text-center truncate ${isSelected ? `${st.color} ring-2 ring-indigo-500` : 'bg-slate-800 text-slate-400 hover:text-slate-200'}`}>{st.label}</button>);
+                                  })}
+                                </div>
+                                <button onClick={() => { setReportingProblemForItem(item); setProblemCategory('Chyba vo výrobe/tlači'); setProblemDescription(''); }} className="w-full bg-slate-800 hover:bg-slate-700 text-amber-400 text-[10px] font-bold py-1.5 rounded-lg flex items-center justify-center gap-1"><AlertTriangle className="h-3 w-3" /> Nahlásiť chybu</button>
+                              </div>
+                            );
                           })() : needsMaterialGate ? (() => {
                             const assignedGrafik = item.stationMeta?.grafik;
                             return (
@@ -7726,35 +7784,73 @@ export default function App() {
           );
         })()}
 
-        {resolvingProblem && (
+        {resolvingProblem && (() => {
+          const found = findItemByItemId(resolvingProblem.itemId || '');
+          const itemStations = found ? STATION_ORDER.filter(sid => found.item.stationStatuses?.[sid] && found.item.stationStatuses[sid] !== 'neaktivne') : [];
+          const suggestedEmployeeId = resolutionFaultType === 'grafik' ? found?.item.stationMeta?.grafik?.assignedEmployeeId
+            : resolutionFaultType === 'skladac' ? found?.item.stationMeta?.balenie?.assignedEmployeeId
+            : resolutionFaultType === 'tlaciar' ? (found?.item.stationMeta?.transfer?.assignedEmployeeId || found?.item.stationMeta?.sietotlac?.assignedEmployeeId || found?.item.stationMeta?.sublimacia?.assignedEmployeeId)
+            : '';
+          return (
           <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-            <div className="bg-slate-900 border border-emerald-800/40 p-6 rounded-2xl w-full max-w-md shadow-2xl space-y-4">
+            <div className="bg-slate-900 border border-emerald-800/40 p-6 rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl space-y-4">
               <h3 className="text-lg font-bold text-white flex items-center gap-2"><Check className="h-5 w-5 text-emerald-400" /> Označiť ako vyriešené</h3>
               <p className="text-xs text-slate-400">{resolvingProblem.category}: {resolvingProblem.description}</p>
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">Poznámka k riešeniu (voliteľné)</label>
                 <textarea rows={3} value={resolutionNoteInput} onChange={(e) => setResolutionNoteInput(e.target.value)} placeholder="Ako sa to vyriešilo?" className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" autoFocus />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">Kto to zavinil (voliteľné)</label>
-                  <select value={resolutionFaultEmployeeId} onChange={(e) => setResolutionFaultEmployeeId(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white">
-                    <option value="">-- Nikto / neuvedené --</option>
-                    {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.firstName} {emp.lastName}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">Koľko to stálo € (voliteľné)</label>
-                  <input type="number" step="0.01" min="0" value={resolutionCostAmount} onChange={(e) => setResolutionCostAmount(e.target.value)} placeholder="0.00" className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" />
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Kto/čo zavinilo problém (voliteľné)</label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button type="button" onClick={() => setResolutionFaultType(resolutionFaultType === 'tlaciar' ? '' : 'tlaciar')} className={`py-2 rounded-lg text-[11px] font-bold ${resolutionFaultType === 'tlaciar' ? 'bg-orange-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Zavinil tlačiar</button>
+                  <button type="button" onClick={() => setResolutionFaultType(resolutionFaultType === 'skladac' ? '' : 'skladac')} className={`py-2 rounded-lg text-[11px] font-bold ${resolutionFaultType === 'skladac' ? 'bg-orange-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Zavinil skladač</button>
+                  <button type="button" onClick={() => setResolutionFaultType(resolutionFaultType === 'grafik' ? '' : 'grafik')} className={`py-2 rounded-lg text-[11px] font-bold ${resolutionFaultType === 'grafik' ? 'bg-orange-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Zavinil grafik</button>
+                  <button type="button" onClick={() => setResolutionFaultType(resolutionFaultType === 'dodavatel_textilu' ? '' : 'dodavatel_textilu')} className={`py-2 rounded-lg text-[11px] font-bold ${resolutionFaultType === 'dodavatel_textilu' ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Chyba dodávateľa textilu</button>
                 </div>
               </div>
+
+              {resolutionFaultType === 'dodavatel_textilu' ? (
+                <p className="text-[11px] text-sky-300 bg-sky-950/30 border border-sky-800/40 rounded-lg px-3 py-2">Obchodník dostane notifikáciu, že treba objednať nový kus/kusy textilu.</p>
+              ) : resolutionFaultType && (
+                <div className="space-y-2 bg-slate-950 border border-slate-800 rounded-lg p-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-400 mb-1">Kto presne (voliteľné, predvyplnené podľa priradenia)</label>
+                    <select value={resolutionFaultEmployeeId || suggestedEmployeeId || ''} onChange={(e) => setResolutionFaultEmployeeId(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white">
+                      <option value="">-- Nikto / neuvedené --</option>
+                      {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.firstName} {emp.lastName}</option>)}
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-400 mb-1">Kde zachytené</label>
+                      <select value={resolutionDefectStationId} onChange={(e) => setResolutionDefectStationId(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white">
+                        <option value="">-- vyber stanicu --</option>
+                        {itemStations.map(sid => <option key={sid} value={sid}>{STATION_CONFIGS[sid].name}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-400 mb-1">Počet kusov</label>
+                      <input type="number" min="1" value={resolutionDefectiveQty} onChange={(e) => setResolutionDefectiveQty(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" />
+                    </div>
+                  </div>
+                  <button type="button" disabled={!found || !resolutionDefectStationId} onClick={() => setResolutionCostAmount(String(calculateDefectCost(found.item, resolutionDefectStationId, parseInt(resolutionDefectiveQty) || 1)))} className="w-full bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 text-[11px] font-bold py-1.5 rounded-lg">Auto-vypočítať cenu škody</button>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Koľko to stálo € (voliteľné, dá sa upraviť)</label>
+                <input type="number" step="0.01" min="0" value={resolutionCostAmount} onChange={(e) => setResolutionCostAmount(e.target.value)} placeholder="0.00" className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" />
+              </div>
+
               <div className="flex gap-2">
                 <button onClick={handleResolveProblem} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg uppercase text-xs">Potvrdiť vyriešené</button>
-                <button onClick={() => setResolvingProblem(null)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-6 rounded-lg text-xs font-bold">Zrušiť</button>
+                <button onClick={() => { setResolvingProblem(null); setResolutionFaultType(''); setResolutionDefectStationId(''); setResolutionDefectiveQty('1'); }} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-6 rounded-lg text-xs font-bold">Zrušiť</button>
               </div>
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {activeTab === 'invoices' && hasPermission('view_finance') && (() => {
           const filteredInvoices = invoices.filter(inv => invoiceStatusFilter === 'all' || inv.status === invoiceStatusFilter);
