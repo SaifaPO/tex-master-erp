@@ -533,20 +533,22 @@ const mapCashDocFromDb = (r) => ({ id: r.id, docNumber: r.doc_number, docType: r
 const mapCustomerFromDb = (r) => ({ name: r.name, phone: r.phone || '', email: r.email || '', contactPerson: r.contact_person || '', address: r.address || '', notes: r.notes || '', interactionLog: r.interaction_log || [] });
 const mapCustomerToDb = (c) => ({ name: c.name, phone: c.phone || null, email: c.email || null, contact_person: c.contactPerson || null, address: c.address || null, notes: c.notes || null, interaction_log: c.interactionLog || [] });
 
-const mapDotlackovkaPriceFromDb = (r) => ({ id: r.id, label: r.label, price: r.price || 0, sortOrder: r.sort_order || 0 });
+const mapDotlackovkaPriceFromDb = (r) => ({ id: r.id, label: r.label, price: r.price || 0, costPrice: r.cost_price || 0, sortOrder: r.sort_order || 0 });
 const mapAddonTypeFromDb = (r) => ({ id: r.id, label: r.label, sortOrder: r.sort_order || 0 });
 
-// Body na papierovom dotlačovom listku, ktoré vie predajňa rýchlo označiť (predné + zadné schéma trička/tepláky).
+// Body na papierovom dotlačovom listku, ktoré vie predajňa rýchlo označiť (predné + zadné schéma trička/nohavíc).
+// Pohľad je na osobu spredu/zozadu (ako keby sme sa na ňu pozerali) — jej ľavá strana je preto na PRAVEJ strane obrázka.
 const DOTLACOVKA_PLACEMENT_POINTS = [
-  { id: 'srdce', label: 'Srdce', view: 'front', x: 42, y: 30 },
+  { id: 'srdce', label: 'Srdce', view: 'front', x: 58, y: 30 },
   { id: 'hrud', label: 'Hruď', view: 'front', x: 50, y: 26 },
-  { id: 'bod_oproti_srdcu', label: 'Bod oproti srdcu', view: 'front', x: 58, y: 30 },
-  { id: 'lavy_rukav', label: 'Ľavý rukáv', view: 'front', x: 16, y: 34 },
-  { id: 'pravy_rukav', label: 'Pravý rukáv', view: 'front', x: 84, y: 34 },
-  { id: 'chrbat_hore_stred', label: 'Chrbát hore stred', view: 'back', x: 50, y: 24 },
-  { id: 'chrbat_dole_stred', label: 'Chrbát dole stred', view: 'back', x: 50, y: 42 },
-  { id: 'tepláky_lava_noha', label: 'Tepláky ľavá noha', view: 'front', x: 42, y: 80 },
-  { id: 'tepláky_prava_noha', label: 'Tepláky pravá noha', view: 'front', x: 58, y: 80 },
+  { id: 'bod_oproti_srdcu', label: 'Bod oproti srdcu', view: 'front', x: 42, y: 30 },
+  { id: 'lavy_rukav', label: 'Ľavý rukáv', view: 'front', x: 84, y: 34 },
+  { id: 'pravy_rukav', label: 'Pravý rukáv', view: 'front', x: 16, y: 34 },
+  { id: 'chrbat_hore', label: 'Chrbát — vrch', view: 'back', x: 50, y: 20 },
+  { id: 'chrbat_stred', label: 'Chrbát — stred', view: 'back', x: 50, y: 31 },
+  { id: 'chrbat_dole', label: 'Chrbát — spod', view: 'back', x: 50, y: 42 },
+  { id: 'lava_noha', label: 'Ľavá noha', view: 'front', x: 58, y: 80 },
+  { id: 'prava_noha', label: 'Pravá noha', view: 'front', x: 42, y: 80 },
 ];
 
 const mapVehicleFromDb = (r) => ({ id: r.id, name: r.name, licensePlate: r.license_plate || '' });
@@ -1137,9 +1139,12 @@ export default function App() {
   const [expressTovarPreview, setExpressTovarPreview] = useState('');
   const [expressDescription, setExpressDescription] = useState('');
   const [expressLink, setExpressLink] = useState('');
-  const [expressPlacements, setExpressPlacements] = useState({}); // { [pointId]: { priceId, note } }
+  const [expressPlacements, setExpressPlacements] = useState({}); // { [pointId]: { priceId, note } } — aktuálne rozpracovaný produkt
   const [expressAddons, setExpressAddons] = useState([]);
   const [expressActivePoint, setExpressActivePoint] = useState(null);
+  const [expressProductLabel, setExpressProductLabel] = useState('');
+  const [expressQty, setExpressQty] = useState(1);
+  const [expressGarments, setExpressGarments] = useState([]); // už pridané produkty do tejto dotlačovky
   const [showDotlackovkaPriceEditor, setShowDotlackovkaPriceEditor] = useState(false);
   const [isSubmittingExpress, setIsSubmittingExpress] = useState(false);
   const [capacityConfigs, setCapacityConfigs] = useState([]);
@@ -3461,15 +3466,40 @@ export default function App() {
     await supabase.from('station_product_times').delete().eq('id', rowId);
   };
 
-  const getExpressPlacementSummary = () => {
-    return Object.entries(expressPlacements).map(([pointId, sel]) => {
+  const getPlacementSummaryFor = (placements) => {
+    return Object.entries(placements || {}).map(([pointId, sel]) => {
       const point = DOTLACOVKA_PLACEMENT_POINTS.find(p => p.id === pointId);
       const priceItem = dotlacovkaPriceList.find(p => p.id === sel.priceId);
       return { pointId, pointLabel: point?.label || pointId, priceId: sel.priceId, priceLabel: priceItem?.label || '', price: priceItem?.price || 0, note: sel.note || '' };
     });
   };
+  const getTotalPriceFor = (placements) => getPlacementSummaryFor(placements).reduce((sum, p) => sum + (p.price || 0), 0);
 
-  const getExpressTotalPrice = () => getExpressPlacementSummary().reduce((sum, p) => sum + (p.price || 0), 0);
+  const getExpressPlacementSummary = () => getPlacementSummaryFor(expressPlacements);
+  const getExpressTotalPrice = () => getTotalPriceFor(expressPlacements);
+
+  const isExpressDraftBlank = () => !expressProductLabel.trim() && Object.keys(expressPlacements).length === 0 && expressAddons.length === 0 && !expressListokFile && !expressTovarFile && !expressDescription.trim() && !expressLink.trim();
+
+  const handleAddExpressGarment = () => {
+    if (isExpressDraftBlank()) return;
+    setExpressGarments(prev => [...prev, {
+      tempId: `grm-${Date.now()}`,
+      productLabel: expressProductLabel.trim() || 'Dotlačovka',
+      qty: parseInt(expressQty) || 1,
+      placements: expressPlacements,
+      addons: expressAddons,
+      description: expressDescription.trim(),
+      link: expressLink.trim(),
+      listokFile: expressListokFile,
+      tovarFile: expressTovarFile,
+      tovarPreview: expressTovarPreview
+    }]);
+    setExpressProductLabel(''); setExpressQty(1); setExpressPlacements({}); setExpressAddons([]);
+    setExpressDescription(''); setExpressLink(''); setExpressActivePoint(null);
+    setExpressListokFile(null); setExpressListokPreview(''); setExpressTovarFile(null); setExpressTovarPreview('');
+  };
+
+  const handleRemoveExpressGarment = (tempId) => setExpressGarments(prev => prev.filter(g => g.tempId !== tempId));
 
   const handleSetExpressPlacement = (pointId, priceId, note) => {
     setExpressPlacements(prev => {
@@ -3483,8 +3513,10 @@ export default function App() {
   };
 
   const handleUpdateDotlackovkaPrice = async (id, field, value) => {
-    setDotlacovkaPriceList(prev => prev.map(p => p.id === id ? { ...p, [field]: field === 'price' ? Number(value) || 0 : value } : p));
-    const payload = field === 'price' ? { price: Number(value) || 0 } : { [field]: value };
+    const isNumericField = field === 'price' || field === 'costPrice';
+    setDotlacovkaPriceList(prev => prev.map(p => p.id === id ? { ...p, [field]: isNumericField ? Number(value) || 0 : value } : p));
+    const dbField = field === 'costPrice' ? 'cost_price' : field;
+    const payload = isNumericField ? { [dbField]: Number(value) || 0 } : { [dbField]: value };
     await supabase.from('dotlacovka_price_list').update(payload).eq('id', id);
   };
 
@@ -3513,20 +3545,14 @@ export default function App() {
   const handleSubmitExpressDotlackovka = async () => {
     if (!expressCustomerName.trim()) { alert('Zadaj meno zákazníka.'); return; }
     if (!expressNeededDate) { alert('Zadaj dátum, kedy to zákazník potrebuje.'); return; }
+    const garments = isExpressDraftBlank() ? expressGarments : [...expressGarments, {
+      tempId: 'draft', productLabel: expressProductLabel.trim() || 'Dotlačovka', qty: parseInt(expressQty) || 1,
+      placements: expressPlacements, addons: expressAddons, description: expressDescription.trim(), link: expressLink.trim(),
+      listokFile: expressListokFile, tovarFile: expressTovarFile
+    }];
+    if (garments.length === 0) { alert('Pridaj aspoň jeden produkt (napr. dres, tričko...).'); return; }
     setIsSubmittingExpress(true);
     try {
-      let tovarUrl = '';
-      if (expressTovarFile) {
-        const path = `${Date.now()}-tovar-${expressTovarFile.name}`;
-        const { error: upErr } = await supabase.storage.from('item-images').upload(path, expressTovarFile);
-        if (upErr) throw new Error(`Fotka tovaru: ${upErr.message}`);
-        tovarUrl = supabase.storage.from('item-images').getPublicUrl(path).data.publicUrl;
-      }
-      let listokData = { rozpisUrl: '', rozpisFileName: '', rozpisMimeType: '' };
-      if (expressListokFile) {
-        listokData = await uploadRozpisFile(expressListokFile);
-      }
-
       const now = getFormattedDateTime();
       const orderId = `ZAK-${Date.now()}`;
       const fullYear = new Date().getFullYear();
@@ -3541,25 +3567,41 @@ export default function App() {
       activeStations.forEach(sid => { initialStatuses[sid] = 'caka'; initialStationDates[sid] = today; });
       const maxPriority = allItems.length > 0 ? Math.max(...allItems.map(i => i.priority || 0)) : 0;
 
-      const placementSummary = getExpressPlacementSummary();
-      const totalPrice = getExpressTotalPrice();
-      const placementNotesText = placementSummary.length > 0
-        ? placementSummary.map(p => `${p.pointLabel}: ${p.priceLabel}${p.note ? ` (${p.note})` : ''}`).join('; ')
-        : '';
-      const combinedNotes = [placementNotesText, expressDescription.trim()].filter(Boolean).join(' | ');
-
-      const newItem = {
-        itemId: `${orderId}-1`, productId: null, productName: 'Dotlačovka', customCode: '', qualityTier: '', gender: 'neutral', qty: 1,
-        notes: combinedNotes, imageUrl: tovarUrl, assignedDesignerId: '', addons: expressAddons, ...listokData,
-        dotlackovkaPlacements: placementSummary, dotlackovkaLink: expressLink.trim(),
-        materialsNeeded: [], threadQtyM: 0, priority: maxPriority + 1, productionDate: today, stationDates: initialStationDates,
-        stationStatuses: initialStatuses, materialDeducted: false
-      };
+      let totalPrice = 0;
+      const items = [];
+      for (let i = 0; i < garments.length; i++) {
+        const g = garments[i];
+        let tovarUrl = '';
+        if (g.tovarFile) {
+          const path = `${Date.now()}-tovar-${i}-${g.tovarFile.name}`;
+          const { error: upErr } = await supabase.storage.from('item-images').upload(path, g.tovarFile);
+          if (upErr) throw new Error(`Fotka tovaru (${g.productLabel}): ${upErr.message}`);
+          tovarUrl = supabase.storage.from('item-images').getPublicUrl(path).data.publicUrl;
+        }
+        let listokData = { rozpisUrl: '', rozpisFileName: '', rozpisMimeType: '' };
+        if (g.listokFile) {
+          listokData = await uploadRozpisFile(g.listokFile);
+        }
+        const placementSummary = getPlacementSummaryFor(g.placements);
+        const garmentTotal = getTotalPriceFor(g.placements);
+        totalPrice += garmentTotal;
+        const placementNotesText = placementSummary.length > 0
+          ? placementSummary.map(p => `${p.pointLabel}: ${p.priceLabel}${p.note ? ` (${p.note})` : ''}`).join('; ')
+          : '';
+        const combinedNotes = [placementNotesText, g.description].filter(Boolean).join(' | ');
+        items.push({
+          itemId: `${orderId}-${i + 1}`, productId: null, productName: g.productLabel, customCode: '', qualityTier: '', gender: 'neutral', qty: g.qty,
+          notes: combinedNotes, imageUrl: tovarUrl, assignedDesignerId: '', addons: g.addons, ...listokData,
+          dotlackovkaPlacements: placementSummary, dotlackovkaLink: g.link,
+          materialsNeeded: [], threadQtyM: 0, priority: maxPriority + i + 1, productionDate: today, stationDates: initialStationDates,
+          stationStatuses: initialStatuses, materialDeducted: false
+        });
+      }
 
       const createdBy = expressCreatedBy.trim() || `${currentUser.firstName} ${currentUser.lastName}`;
       const created = {
-        id: orderId, customer: expressCustomerName.trim(), createdAt: now, deliveryDate: expressNeededDate, driveLink: expressLink.trim(), notes: '',
-        paymentType: expressPaymentType, items: [newItem], orderLog: [{ date: now, author: createdBy, text: 'Dotlačová zákazka zaevidovaná cez expresný formulár.' }],
+        id: orderId, customer: expressCustomerName.trim(), createdAt: now, deliveryDate: expressNeededDate, driveLink: '', notes: '',
+        paymentType: expressPaymentType, items, orderLog: [{ date: now, author: createdBy, text: `Dotlačová zákazka zaevidovaná cez expresný formulár (${items.length} produkt${items.length > 1 ? 'y/ov' : ''}).` }],
         legacyOrderNumber: '', companyBrand: expressCompany, orderNumber, accountingStatus: null,
         variableSymbol: generateVariableSymbol(orderId), expectedAmount: totalPrice || null
       };
@@ -3582,7 +3624,8 @@ export default function App() {
       setExpressCustomerName(''); setExpressPhone(''); setExpressEmail(''); setExpressNeededDate(''); setExpressCreatedBy('');
       setExpressListokFile(null); setExpressListokPreview(''); setExpressTovarFile(null); setExpressTovarPreview('');
       setExpressDescription(''); setExpressLink(''); setExpressPlacements({}); setExpressAddons([]); setExpressCompany('ADY');
-      triggerNotification('success', `Dotlačová zákazka ${orderNumber} bola zaevidovaná a zaradená na dnešný deň (Grafika/Transfer/Balenie).`);
+      setExpressProductLabel(''); setExpressQty(1); setExpressGarments([]);
+      triggerNotification('success', `Dotlačová zákazka ${orderNumber} (${items.length} produkt${items.length > 1 ? 'y/ov' : ''}) bola zaevidovaná a zaradená na dnešný deň (Grafika/Transfer/Balenie).`);
     } catch (err) {
       triggerNotification('error', `Chyba: ${err.message}`);
     } finally {
@@ -6474,21 +6517,58 @@ export default function App() {
                 </div>
               </div>
 
+              {expressGarments.length > 0 && (
+                <div className="bg-slate-950 border border-emerald-800/40 rounded-lg p-3 space-y-1.5">
+                  <span className="text-xs text-emerald-400 font-bold uppercase block">Produkty v tejto dotlačovke ({expressGarments.length})</span>
+                  {expressGarments.map(g => (
+                    <div key={g.tempId} className="flex items-center justify-between gap-2 bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs">
+                      <span className="text-white font-bold">{g.productLabel} <span className="text-slate-500 font-normal">× {g.qty}</span></span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-amber-400">{getTotalPriceFor(g.placements).toFixed(2)} €</span>
+                        <button type="button" onClick={() => handleRemoveExpressGarment(g.tempId)} className="text-rose-400 hover:text-rose-300"><X className="h-3.5 w-3.5" /></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-slate-400 font-bold uppercase">Mapa tela — kam čo ísť potlačiť</span>
+                <span className="text-xs text-slate-400 font-bold uppercase block">{expressGarments.length > 0 ? `Ďalší produkt (${expressGarments.length + 1}.)` : 'Produkt'}</span>
+                <input type="text" list="dotlackovka-product-labels" value={expressProductLabel} onChange={(e) => setExpressProductLabel(e.target.value)} placeholder="napr. Dres, Šiltovka, Mikina..." className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-sm text-white" />
+                <datalist id="dotlackovka-product-labels">
+                  <option value="Dres" /><option value="Tričko" /><option value="Mikina" /><option value="Šiltovka" /><option value="Tepláky" />
+                </datalist>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-slate-400 shrink-0">Počet ks</label>
+                  <input type="number" min="1" value={expressQty} onChange={(e) => setExpressQty(e.target.value)} className="w-20 bg-slate-900 border border-slate-800 rounded p-2 text-sm text-white" />
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-xs text-slate-400 font-bold uppercase">Mapa tela — kam má ísť potlač</span>
                   <button type="button" onClick={() => setShowDotlackovkaPriceEditor(v => !v)} className="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold flex items-center gap-1"><Sliders className="h-3 w-3" /> Cenník</button>
                 </div>
 
                 {showDotlackovkaPriceEditor && (
                   <div className="bg-slate-900 border border-slate-800 rounded-lg p-2 space-y-1.5">
+                    <div className="grid grid-cols-[1fr_auto_auto] gap-2 text-[9px] text-slate-500 uppercase font-bold px-0.5">
+                      <span>Typ potlače</span><span className="text-center">Cena zákazník (s DPH)</span>{currentUser.role === 'master' && <span className="text-center">Cena PBT→ADY (bez DPH)</span>}
+                    </div>
                     {dotlacovkaPriceList.map(p => (
-                      <div key={p.id} className="flex items-center gap-2 text-xs">
-                        <span className="flex-1 text-slate-300">{p.label}</span>
-                        <input type="number" step="0.5" min="0" value={p.price} onChange={(e) => handleUpdateDotlackovkaPrice(p.id, 'price', e.target.value)} className="w-20 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-white text-right" />
-                        <span className="text-slate-600">€</span>
+                      <div key={p.id} className="grid grid-cols-[1fr_auto_auto] gap-2 items-center text-xs">
+                        <span className="text-slate-300">{p.label}</span>
+                        <div className="flex items-center gap-1">
+                          <input type="number" step="0.5" min="0" value={p.price} onChange={(e) => handleUpdateDotlackovkaPrice(p.id, 'price', e.target.value)} className="w-20 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-white text-right" />
+                          <span className="text-slate-600">€</span>
+                        </div>
+                        {currentUser.role === 'master' && (
+                          <div className="flex items-center gap-1">
+                            <input type="number" step="0.5" min="0" value={p.costPrice} onChange={(e) => handleUpdateDotlackovkaPrice(p.id, 'costPrice', e.target.value)} className="w-20 bg-slate-950 border border-amber-800/40 rounded px-2 py-1 text-amber-300 text-right" />
+                            <span className="text-slate-600">€</span>
+                          </div>
+                        )}
                       </div>
                     ))}
+                    {currentUser.role === 'master' && <p className="text-[9px] text-slate-600 italic pt-1">Nákupnú cenu (čo ADY platí PBT za potlač) vidí len master.</p>}
                   </div>
                 )}
 
@@ -6629,8 +6709,10 @@ export default function App() {
                 </div>
               </div>
 
+              <button type="button" onClick={handleAddExpressGarment} disabled={isExpressDraftBlank()} className="w-full bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-emerald-400 font-bold py-2.5 rounded-lg text-xs flex items-center justify-center gap-1.5"><Plus className="h-4 w-4" /> Pridať ďalší produkt do tejto dotlačovky (dres, tričko, šiltovka...)</button>
+
               <button onClick={handleSubmitExpressDotlackovka} disabled={isSubmittingExpress} className="w-full bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-extrabold py-3 rounded-lg uppercase text-xs flex items-center justify-center gap-2">
-                {isSubmittingExpress ? <><Loader2 className="h-4 w-4 animate-spin" /> Ukladám...</> : <><Zap className="h-4 w-4" /> Odoslať a zaradiť do plánu</>}
+                {isSubmittingExpress ? <><Loader2 className="h-4 w-4 animate-spin" /> Ukladám...</> : <><Zap className="h-4 w-4" /> {expressGarments.length > 0 ? `Odoslať všetkých ${expressGarments.length + (isExpressDraftBlank() ? 0 : 1)} produktov a zaradiť do plánu` : 'Odoslať a zaradiť do plánu'}</>}
               </button>
             </div>
           </div>

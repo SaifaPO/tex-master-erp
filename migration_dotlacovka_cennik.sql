@@ -19,6 +19,9 @@ values
   ('potlac_a3', 'Potlač A3', 25, 6)
 on conflict (id) do nothing;
 
+-- Nakupna cena (bez DPH), ktoru firma ADY plati firme PBT za vykonanie danej potlace — vidi len master.
+alter table dotlacovka_price_list add column if not exists cost_price numeric not null default 0;
+
 alter table dotlacovka_price_list enable row level security;
 drop policy if exists "dotlacovka_price_list_allow_all" on dotlacovka_price_list;
 create policy "dotlacovka_price_list_allow_all" on dotlacovka_price_list for all to anon, authenticated using (true) with check (true);
