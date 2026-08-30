@@ -10,10 +10,14 @@
 -- 1) Bezpecny pohlad na zamestnancov bez citlivych stlpcov, len booleovske priznaky "je nastavene".
 --    Pohlad (view) cita povodnu tabulku s pravami vlastnika (typicky superuser), takze potrebuje
 --    citat password_hash/pin_hash interne na vypocet true/false, ale toto navonok nikdy neuniká.
+--    Telefon/email sa navyse vidia len prihlasenym cez Supabase Auth (auth.role() = 'authenticated'),
+--    teda Master/Supervisor/Sales — PIN-prihlaseny zamestnanec na stanici (anon) ich nevidi vobec.
 create or replace view employees_public as
 select
   id, first_name, last_name, birthday, nameday, entry_date, role, position,
-  phone, email, avatar, auth_user_id, signup_token_expires,
+  case when auth.role() = 'authenticated' then phone else null end as phone,
+  case when auth.role() = 'authenticated' then email else null end as email,
+  avatar, auth_user_id, signup_token_expires,
   (password_hash is not null and password_hash <> '') as has_password,
   (pin_hash is not null and pin_hash <> '') as has_pin,
   (signup_token is not null and signup_token <> '') as has_signup_token

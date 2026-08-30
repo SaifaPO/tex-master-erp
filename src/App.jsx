@@ -156,16 +156,36 @@ function colorForOrder(orderId) {
   return ORDER_COLOR_PALETTE[hash % ORDER_COLOR_PALETTE.length];
 }
 
+// Role, ktoré sa prihlasujú menom/heslom cez Supabase Auth (nie PIN-om na stanici).
+const EMAIL_LOGIN_ROLES = ['master', 'supervisor', 'sales', 'uctovnik', 'sofer'];
+const ALL_ROLES = ['master', 'supervisor', 'sales', 'employee', 'uctovnik', 'sofer'];
+const ROLE_LABELS = { master: 'Master', supervisor: 'Supervisor', sales: 'Obchodník', employee: 'Zamestnanec', uctovnik: 'Účtovník', sofer: 'Šofér' };
+// Úzke role vidia len vymenované karty v hornom menu; role bez záznamu tu (master/supervisor/sales/employee) vidia všetko ako doteraz.
+const ROLE_TAB_ALLOWLIST = {
+  uctovnik: ['invoices', 'materials', 'reports', 'manual'],
+  sofer: ['cestaky', 'kniha-jazd', 'manual']
+};
+function canSeeTab(role, tabId) {
+  const allowlist = ROLE_TAB_ALLOWLIST[role];
+  return !allowlist || allowlist.includes(tabId);
+}
+
+// Poznámka k novým rolám (uctovnik, sofer): pridané 2026-08-29. Ak acl_settings v DB uz ma ulozene
+// vlastne pravidla pre existujuci kluc (napr. create_order), ulozeny objekt NEOBSAHUJE tieto nove role —
+// hasPermission() nizsie sa preto pre chybajucu rolu vrati k FALLBACK_ACL, nie k undefined/false naslepo.
 const FALLBACK_ACL = {
-  create_order: { master: true, supervisor: true, sales: true, employee: false },
-  delete_order: { master: true, supervisor: false, sales: false, employee: false },
-  edit_priority: { master: true, supervisor: true, sales: false, employee: false },
-  scan_qr: { master: true, supervisor: true, sales: false, employee: true },
-  update_status: { master: true, supervisor: true, sales: false, employee: true },
-  manage_profiles: { master: true, supervisor: false, sales: false, employee: false },
-  edit_stock: { master: true, supervisor: true, sales: false, employee: false },
-  manage_catalog: { master: true, supervisor: true, sales: false, employee: false },
-  view_reports: { master: true, supervisor: true, sales: false, employee: false }
+  create_order: { master: true, supervisor: true, sales: true, employee: false, uctovnik: false, sofer: false },
+  delete_order: { master: true, supervisor: false, sales: false, employee: false, uctovnik: false, sofer: false },
+  edit_priority: { master: true, supervisor: true, sales: false, employee: false, uctovnik: false, sofer: false },
+  scan_qr: { master: true, supervisor: true, sales: false, employee: true, uctovnik: false, sofer: false },
+  update_status: { master: true, supervisor: true, sales: false, employee: true, uctovnik: false, sofer: false },
+  manage_profiles: { master: true, supervisor: false, sales: false, employee: false, uctovnik: false, sofer: false },
+  edit_stock: { master: true, supervisor: true, sales: false, employee: false, uctovnik: false, sofer: false },
+  manage_catalog: { master: true, supervisor: true, sales: false, employee: false, uctovnik: false, sofer: false },
+  view_reports: { master: true, supervisor: true, sales: false, employee: false, uctovnik: true, sofer: false },
+  // Financie (predtym zdielalo pravo s create_order) — teraz samostatne, aby uctovnik mohol vidiet
+  // Financie bez toho, aby mohol vytvarat vyrobne zakazky.
+  view_finance: { master: true, supervisor: true, sales: true, employee: false, uctovnik: true, sofer: false }
 };
 
 const mapMaterialFromDb = (r) => ({ id: r.id, name: r.name, color: r.color, colorHex: r.color_hex || '', width: r.width, weight: r.weight, pricePerM: r.price_per_m, qty: r.qty, unit: r.unit, minQty: r.min_qty, warehouseId: r.warehouse_id || 'sklad-1', manufacturer: r.manufacturer || '', productType: r.product_type || '', deliveryNoteNumber: r.delivery_note_number || '', deliveryNoteDate: r.delivery_note_date || '', history: r.history || [] });
@@ -184,8 +204,14 @@ const mapTierToDb = (t) => ({ id: t.id, name: t.name, fit: t.fit, ventilation: t
 const mapEmployeeFromDb = (r) => ({ id: r.id, firstName: r.first_name, lastName: r.last_name, birthday: r.birthday, nameday: r.nameday, entryDate: r.entry_date, role: r.role, position: r.position, hasPassword: !!r.has_password, phone: r.phone || '', email: r.email || '', avatar: r.avatar || '', hasPin: !!r.has_pin, authUserId: r.auth_user_id || '', hasSignupToken: !!r.has_signup_token, signupTokenExpires: r.signup_token_expires || null });
 const mapEmployeeToDb = (e) => ({ id: e.id, first_name: e.firstName, last_name: e.lastName, birthday: e.birthday, nameday: e.nameday, entry_date: e.entryDate, role: e.role, position: e.position, phone: e.phone || null, email: e.email || null, avatar: e.avatar || null, auth_user_id: e.authUserId || null });
 
-const mapOrderFromDb = (r) => ({ id: r.id, customer: r.customer, createdAt: r.created_at, deliveryDate: r.scheduled_day, driveLink: r.drive_link, notes: r.notes, paymentType: r.payment_type || 'faktura', items: r.items || [], orderLog: r.order_log || [], legacyOrderNumber: r.legacy_order_number || '', companyBrand: r.company_brand || 'ATAK', orderNumber: r.order_number || '', accountingStatus: r.accounting_status || null, lastModifiedAt: r.last_modified_at || null, lastModifiedNote: r.last_modified_note || '' });
-const mapOrderToDb = (o) => ({ id: o.id, customer: o.customer, created_at: o.createdAt, scheduled_day: o.deliveryDate, drive_link: o.driveLink, notes: o.notes, payment_type: o.paymentType, items: o.items, order_log: o.orderLog || [], legacy_order_number: o.legacyOrderNumber || null, company_brand: o.companyBrand || 'ATAK', order_number: o.orderNumber || null, accounting_status: o.accountingStatus || null, last_modified_at: o.lastModifiedAt || null, last_modified_note: o.lastModifiedNote || null });
+const mapOrderFromDb = (r) => ({ id: r.id, customer: r.customer, createdAt: r.created_at, deliveryDate: r.scheduled_day, driveLink: r.drive_link, notes: r.notes, paymentType: r.payment_type || 'faktura', items: r.items || [], orderLog: r.order_log || [], legacyOrderNumber: r.legacy_order_number || '', companyBrand: r.company_brand || 'ATAK', orderNumber: r.order_number || '', accountingStatus: r.accounting_status || null, lastModifiedAt: r.last_modified_at || null, lastModifiedNote: r.last_modified_note || '', variableSymbol: r.variable_symbol || '', expectedAmount: r.expected_amount ?? null, variableSymbolConfirmed: !!r.variable_symbol_confirmed });
+const mapOrderToDb = (o) => ({ id: o.id, customer: o.customer, created_at: o.createdAt, scheduled_day: o.deliveryDate, drive_link: o.driveLink, notes: o.notes, payment_type: o.paymentType, items: o.items, order_log: o.orderLog || [], legacy_order_number: o.legacyOrderNumber || null, company_brand: o.companyBrand || 'ATAK', order_number: o.orderNumber || null, accounting_status: o.accountingStatus || null, last_modified_at: o.lastModifiedAt || null, last_modified_note: o.lastModifiedNote || null, variable_symbol: o.variableSymbol || null, expected_amount: o.expectedAmount ?? null, variable_symbol_confirmed: o.variableSymbolConfirmed ?? false });
+
+// VS sa odvodzuje rovnakym sposobom ako pri fakturach (len cislice, posledych 10) — zakazka ho dostane
+// uz pri vytvoreni, este pred vystavenim faktury, aby sa dala platba priradit aj bez existujucej faktury.
+function generateVariableSymbol(id) {
+  return id.replace(/\D/g, '').slice(-10);
+}
 
 // Krátky ľudsky čitateľný popis toho, čo sa v zákazke pri úprave zmenilo (Funkcia 4)
 function describeOrderChanges(original, draft) {
@@ -468,11 +494,126 @@ function printWithFilename(suggestedName) {
 
 const mapMismatchFromDb = (r) => ({ id: r.id, employeeId: r.employee_id, employeeName: r.employee_name, stationId: r.station_id, date: r.assignment_date, createdAt: r.created_at });
 
-const mapBankTxFromDb = (r) => ({ id: r.id, date: r.tx_date, sender: r.sender || '', amount: r.amount || 0, variableSymbol: r.variable_symbol || '', matched: !!r.matched, invoiceId: r.invoice_id || null, importedAt: r.imported_at });
+const mapBankTxFromDb = (r) => ({ id: r.id, date: r.tx_date, sender: r.sender || '', amount: r.amount || 0, variableSymbol: r.variable_symbol || '', matched: !!r.matched, invoiceId: r.invoice_id || null, orderId: r.order_id || null, importedAt: r.imported_at });
 const mapJournalFromDb = (r) => ({ id: r.id, date: r.entry_date, description: r.description, mdAccount: r.md_account, dalAccount: r.dal_account, amount: r.amount || 0, invoiceId: r.invoice_id || null, createdAt: r.created_at });
 
 const mapTaxDeadlineFromDb = (r) => ({ id: r.id, title: r.title, dueDate: r.due_date, note: r.note || '', createdBy: r.created_by || '' });
 const mapCashDocFromDb = (r) => ({ id: r.id, docNumber: r.doc_number, docType: r.doc_type, date: r.doc_date, description: r.description || '', amount: r.amount || 0, category: r.category || '', createdBy: r.created_by || '', createdAt: r.created_at });
+
+const mapCustomerFromDb = (r) => ({ name: r.name, phone: r.phone || '', email: r.email || '', contactPerson: r.contact_person || '', address: r.address || '', notes: r.notes || '', interactionLog: r.interaction_log || [] });
+const mapCustomerToDb = (c) => ({ name: c.name, phone: c.phone || null, email: c.email || null, contact_person: c.contactPerson || null, address: c.address || null, notes: c.notes || null, interaction_log: c.interactionLog || [] });
+
+const mapVehicleFromDb = (r) => ({ id: r.id, name: r.name, licensePlate: r.license_plate || '' });
+const mapVehicleToDb = (v) => ({ id: v.id, name: v.name, license_plate: v.licensePlate || null });
+const mapVehicleLogFromDb = (r) => ({ id: r.id, vehicleId: r.vehicle_id, employeeId: r.employee_id, employeeName: r.employee_name, entryDate: r.entry_date, odometerKm: r.odometer_km || 0, photoUrl: r.photo_url || '', fuelType: r.fuel_type || '', fuelLiters: r.fuel_liters ?? null, fuelCost: r.fuel_cost ?? null, notes: r.notes || '', createdAt: r.created_at });
+const mapVehicleLogToDb = (v) => ({ id: v.id, vehicle_id: v.vehicleId, employee_id: v.employeeId, employee_name: v.employeeName, entry_date: v.entryDate, odometer_km: v.odometerKm, photo_url: v.photoUrl || null, fuel_type: v.fuelType || null, fuel_liters: v.fuelLiters ?? null, fuel_cost: v.fuelCost ?? null, notes: v.notes || null });
+
+const mapTravelOrderFromDb = (r) => ({ id: r.id, employeeId: r.employee_id, employeeName: r.employee_name, tripDate: r.trip_date, departureTime: r.departure_time || '', returnTime: r.return_time || '', fromLocation: r.from_location || '', toLocation: r.to_location || '', purpose: r.purpose || '', relatedOrderId: r.related_order_id || null, distanceKm: r.distance_km || 0, fuelConsumptionL100km: r.fuel_consumption_l100km ?? 7, fuelPricePerLiter: r.fuel_price_per_liter ?? 1.7, status: r.status || 'navrhnute', approvedBy: r.approved_by || '', approvedAt: r.approved_at || null, rejectionReason: r.rejection_reason || '', createdAt: r.created_at });
+const mapTravelOrderToDb = (t) => ({ id: t.id, employee_id: t.employeeId, employee_name: t.employeeName, trip_date: t.tripDate, departure_time: t.departureTime || null, return_time: t.returnTime || null, from_location: t.fromLocation || null, to_location: t.toLocation || null, purpose: t.purpose || null, related_order_id: t.relatedOrderId || null, distance_km: t.distanceKm, fuel_consumption_l100km: t.fuelConsumptionL100km, fuel_price_per_liter: t.fuelPricePerLiter, status: t.status });
+
+// --- CESTOVNÉ PRÍKAZY — sadzby podľa platnej legislatívy SR (overené k 2026-08-29) ---
+// Základná náhrada za 1 km pri osobnom motorovom vozidle, platí od 1.1.2026 (§7 zákona č. 283/2002 Z.z.).
+const CESTOVNE_KM_RATE = 0.313;
+// Tuzemské stravné podľa dĺžky pracovnej cesty, platí od 1.12.2025 (opatrenie MPSVR SR).
+function calculateStravne(hours) {
+  if (hours < 5) return 0;
+  if (hours < 12) return 9.30;
+  if (hours < 18) return 13.80;
+  return 20.60;
+}
+// Dĺžka cesty v hodinách z časov odchodu/príchodu (predpokladá cestu v rámci jedného dňa alebo do nasledujúceho rána).
+function calculateTripHours(departureTime, returnTime) {
+  if (!departureTime || !returnTime) return 0;
+  const [dh, dm] = departureTime.split(':').map(Number);
+  const [rh, rm] = returnTime.split(':').map(Number);
+  if ([dh, dm, rh, rm].some(Number.isNaN)) return 0;
+  let minutes = (rh * 60 + rm) - (dh * 60 + dm);
+  if (minutes < 0) minutes += 24 * 60;
+  return minutes / 60;
+}
+function calculateTravelOrderCost(t) {
+  const kilometrovne = (t.distanceKm || 0) * CESTOVNE_KM_RATE;
+  const palivo = ((t.fuelConsumptionL100km || 0) * (t.distanceKm || 0) / 100) * (t.fuelPricePerLiter || 0);
+  const hours = calculateTripHours(t.departureTime, t.returnTime);
+  const stravne = calculateStravne(hours);
+  return {
+    kilometrovne: parseFloat(kilometrovne.toFixed(2)), palivo: parseFloat(palivo.toFixed(2)), stravne, hours: parseFloat(hours.toFixed(1)),
+    total: parseFloat((kilometrovne + palivo + stravne).toFixed(2))
+  };
+}
+
+const mapTierRuleFromDb = (r) => ({ tier: r.tier, sortOrder: r.sort_order, minOrders: r.min_orders || 0, minVolume: r.min_volume || 0, dueDays: r.due_days || 14 });
+const TIER_LABELS = { standard: 'Standard', bronze: 'Bronze', silver: 'Silver', gold: 'Gold' };
+const TIER_COLORS = { standard: 'bg-slate-700 text-slate-200', bronze: 'bg-amber-800 text-amber-100', silver: 'bg-slate-400 text-slate-900', gold: 'bg-yellow-500 text-yellow-950' };
+
+const mapCostMetricFromDb = (r) => ({ id: r.id, name: r.name, value: r.value || 0, unit: r.unit || '', description: r.description || '', category: r.category || 'vseobecne', powerKw: r.power_kw, hoursPerMonth: r.hours_per_month, costType: r.cost_type || 'fixny' });
+const mapCostMetricToDb = (m) => ({ id: m.id, name: m.name, value: m.value, unit: m.unit || null, description: m.description || null, category: m.category || 'vseobecne', power_kw: m.powerKw ?? null, hours_per_month: m.hoursPerMonth ?? null, cost_type: m.costType || 'fixny' });
+
+// Mesačný náklad zariadenia = výkon (kW) × hodiny prevádzky za mesiac × cena elektriny/plynu (podľa kategórie).
+function calculateDeviceMonthlyCost(metric, allMetrics) {
+  if (metric.powerKw == null || metric.hoursPerMonth == null) return null;
+  const rateMetric = allMetrics.find(m => m.name === (metric.category === 'kurenie' ? 'Cena plynu' : 'Cena elektriny'));
+  if (!rateMetric) return null;
+  return parseFloat((metric.powerKw * metric.hoursPerMonth * rateMetric.value).toFixed(2));
+}
+
+const mapAssetFromDb = (r) => ({ id: r.id, name: r.name, acquisitionDate: r.acquisition_date, acquisitionPrice: r.acquisition_price || 0, depreciationGroup: r.depreciation_group, depreciationMethod: r.depreciation_method || 'rovnomerne', status: r.status || 'aktivny', disposalDate: r.disposal_date, notes: r.notes || '', createdBy: r.created_by || '', createdAt: r.created_at });
+const mapAssetToDb = (a) => ({ id: a.id, name: a.name, acquisition_date: a.acquisitionDate, acquisition_price: a.acquisitionPrice, depreciation_group: a.depreciationGroup, depreciation_method: a.depreciationMethod, status: a.status, disposal_date: a.disposalDate || null, notes: a.notes || null, created_by: a.createdBy || null });
+
+// --- DAŇOVÉ ODPISY MAJETKU podľa zákona o dani z príjmov (§27 rovnomerné, §28 zrýchlené) ---
+// Doba odpisovania (roky) podľa odpisovej skupiny (0-6).
+const DEPRECIATION_GROUP_YEARS = { 0: 2, 1: 4, 2: 6, 3: 8, 4: 12, 5: 20, 6: 40 };
+// Zrýchlené odpisovanie je zo zákona povolené len pre skupiny 2 a 3, koeficienty k1 (prvý rok) a kn (ďalšie roky).
+const ACCELERATED_COEFFICIENTS = { 2: { k1: 6, kn: 7 }, 3: { k1: 8, kn: 9 } };
+
+// Počet mesiacov používania majetku v danom kalendárnom roku (vrátane mesiaca zaradenia do užívania).
+function monthsOfUseInYear(acquisitionDate, year) {
+  const acq = new Date(acquisitionDate);
+  if (year < acq.getFullYear()) return 0;
+  const startMonth = year === acq.getFullYear() ? acq.getMonth() : 0;
+  return 12 - startMonth;
+}
+
+// Vypočíta celý plánovaný ročný rozpis odpisov od roku obstarania až po úplné odpísanie (alebo rok vyradenia).
+// Vracia pole { year, odpis, zostatkovaCenaNaKoniec }. Nezohľadňuje technické zhodnotenie ani prerušenie odpisovania.
+function calculateDepreciationSchedule(asset) {
+  const startYear = new Date(asset.acquisitionDate).getFullYear();
+  const durationYears = DEPRECIATION_GROUP_YEARS[asset.depreciationGroup];
+  const isAccelerated = asset.depreciationMethod === 'zrychlene' && ACCELERATED_COEFFICIENTS[asset.depreciationGroup];
+  // Rovnomerné odpisovanie sa pri obstaraní v priebehu roka predĺži o zvyšný neodpísaný zostatok na konci —
+  // preto o rok viac ako nominálna doba. Zrýchlené sa nedá takto predĺžiť (vzorec by delil nulou), zostáva presne na dobe.
+  const endYear = asset.disposalDate ? new Date(asset.disposalDate).getFullYear() : startYear + durationYears + (isAccelerated ? 0 : 1);
+  const schedule = [];
+  let zostatkovaCena = asset.acquisitionPrice;
+  let yearsDepreciated = 0;
+  const maxIterations = isAccelerated ? durationYears : durationYears + 1;
+
+  for (let year = startYear; year <= endYear && zostatkovaCena > 0.01 && yearsDepreciated < maxIterations; year++) {
+    const monthsUsed = monthsOfUseInYear(asset.acquisitionDate, year);
+    if (monthsUsed <= 0) continue;
+    let odpis;
+    if (isAccelerated) {
+      const { k1, kn } = ACCELERATED_COEFFICIENTS[asset.depreciationGroup];
+      odpis = yearsDepreciated === 0 ? asset.acquisitionPrice / k1 : (2 * zostatkovaCena) / (kn - yearsDepreciated);
+    } else {
+      odpis = asset.acquisitionPrice / durationYears;
+    }
+    // Prvý rok (aj posledný, ak sa majetok obstaral/vyradil v priebehu roka) sa kráti podľa počtu mesiacov používania.
+    if (year === startYear && monthsUsed < 12) odpis = odpis * (monthsUsed / 12);
+    odpis = Math.min(odpis, zostatkovaCena);
+    zostatkovaCena = Math.round((zostatkovaCena - odpis) * 100) / 100;
+    schedule.push({ year, odpis: Math.round(odpis * 100) / 100, zostatkovaCenaNaKoniec: zostatkovaCena });
+    yearsDepreciated++;
+  }
+  return schedule;
+}
+
+function getCurrentBookValue(asset) {
+  const currentYear = new Date().getFullYear();
+  const soFar = calculateDepreciationSchedule(asset).filter(row => row.year <= currentYear);
+  if (soFar.length === 0) return asset.acquisitionPrice;
+  return soFar[soFar.length - 1].zostatkovaCenaNaKoniec;
+}
 
 // Zákazka je "kompletne hotová" ak je hotová každá aktívna stanica na každej položke
 // Dátum výroby pre konkrétnu stanicu — každá stanica môže mať iný deň (napr. strihanie v pondelok, potlač v utorok)
@@ -759,6 +900,66 @@ export default function App() {
   const [newDeadlineNote, setNewDeadlineNote] = useState('');
   const [editingDeadline, setEditingDeadline] = useState(null);
   const [cashDocuments, setCashDocuments] = useState([]);
+  const [assets, setAssets] = useState([]);
+  const [showAddAssetForm, setShowAddAssetForm] = useState(false);
+  const [newAssetName, setNewAssetName] = useState('');
+  const [newAssetDate, setNewAssetDate] = useState('');
+  const [newAssetPrice, setNewAssetPrice] = useState('');
+  const [newAssetGroup, setNewAssetGroup] = useState(1);
+  const [newAssetMethod, setNewAssetMethod] = useState('rovnomerne');
+  const [selectedAssetForDetail, setSelectedAssetForDetail] = useState(null);
+  const [costMetrics, setCostMetrics] = useState([]);
+  const [newMetricName, setNewMetricName] = useState('');
+  const [newMetricValue, setNewMetricValue] = useState('');
+  const [newMetricUnit, setNewMetricUnit] = useState('');
+  const [newMetricDescription, setNewMetricDescription] = useState('');
+  const [newMetricCategory, setNewMetricCategory] = useState('vseobecne');
+  const [newMetricCostType, setNewMetricCostType] = useState('fixny');
+  const [newMetricPowerKw, setNewMetricPowerKw] = useState('');
+  const [newMetricHoursPerMonth, setNewMetricHoursPerMonth] = useState('');
+  const [tierRules, setTierRules] = useState([]);
+  const [travelOrders, setTravelOrders] = useState([]);
+  const [showAddTravelOrderForm, setShowAddTravelOrderForm] = useState(false);
+  const [newTravelDate, setNewTravelDate] = useState('');
+  const [newTravelDeparture, setNewTravelDeparture] = useState('');
+  const [newTravelReturn, setNewTravelReturn] = useState('');
+  const [newTravelFrom, setNewTravelFrom] = useState('');
+  const [newTravelTo, setNewTravelTo] = useState('');
+  const [newTravelPurpose, setNewTravelPurpose] = useState('');
+  const [newTravelOrderId, setNewTravelOrderId] = useState('');
+  const [newTravelDistance, setNewTravelDistance] = useState('');
+  const [newTravelConsumption, setNewTravelConsumption] = useState('7');
+  const [newTravelFuelPrice, setNewTravelFuelPrice] = useState('1.70');
+  const [rejectingTravelOrder, setRejectingTravelOrder] = useState(null);
+  const [travelRejectionReason, setTravelRejectionReason] = useState('');
+  const [vehicles, setVehicles] = useState([]);
+  const [vehicleLogEntries, setVehicleLogEntries] = useState([]);
+  const [newVehicleName, setNewVehicleName] = useState('');
+  const [newVehiclePlate, setNewVehiclePlate] = useState('');
+  const [selectedVehicleId, setSelectedVehicleId] = useState('');
+  const [odometerPhotoFile, setOdometerPhotoFile] = useState(null);
+  const [odometerPhotoPreview, setOdometerPhotoPreview] = useState('');
+  const [isReadingOdometer, setIsReadingOdometer] = useState(false);
+  const [odometerReadError, setOdometerReadError] = useState('');
+  const [confirmedOdometerKm, setConfirmedOdometerKm] = useState('');
+  const [newLogFuelType, setNewLogFuelType] = useState('');
+  const [newLogFuelLiters, setNewLogFuelLiters] = useState('');
+  const [newLogFuelCost, setNewLogFuelCost] = useState('');
+  const [showAddVehicleForm, setShowAddVehicleForm] = useState(false);
+  const [showAiOrderAssistant, setShowAiOrderAssistant] = useState(false);
+  const [aiOrderInputMode, setAiOrderInputMode] = useState('voice'); // 'voice' | 'text' | 'photo'
+  const [aiOrderText, setAiOrderText] = useState('');
+  const [aiOrderImageFile, setAiOrderImageFile] = useState(null);
+  const [aiOrderImagePreview, setAiOrderImagePreview] = useState('');
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
+  const [isProcessingAiOrder, setIsProcessingAiOrder] = useState(false);
+  const [aiOrderError, setAiOrderError] = useState('');
+  const [aiOrderResult, setAiOrderResult] = useState(null); // { customerName, deliveryDate, notes, items: [...] }
+  const speechRecognitionRef = useRef(null);
+  const [customers, setCustomers] = useState([]);
+  const [selectedCustomerForDetail, setSelectedCustomerForDetail] = useState(null);
+  const [customerDraft, setCustomerDraft] = useState(null);
+  const [newCustomerLogEntry, setNewCustomerLogEntry] = useState('');
   const [showCashDocForm, setShowCashDocForm] = useState(false);
   const [newCashDocType, setNewCashDocType] = useState('prijem');
   const [newCashDocDate, setNewCashDocDate] = useState('');
@@ -784,6 +985,7 @@ export default function App() {
   const [staffingPickerCell, setStaffingPickerCell] = useState(null); // { date, stationId } | null
   const [recentlyMovedItemId, setRecentlyMovedItemId] = useState(null);
   const [reportPeriod, setReportPeriod] = useState('month');
+  const [vatSummaryYear, setVatSummaryYear] = useState(new Date().getFullYear());
   const [activeWarehouseId, setActiveWarehouseId] = useState('');
   const [editingWarehouseId, setEditingWarehouseId] = useState(null);
   const [editingWarehouseName, setEditingWarehouseName] = useState('');
@@ -1003,6 +1205,7 @@ export default function App() {
 
   const qrInputRef = useRef(null);
   const importFileInputRef = useRef(null);
+  const productImportFileInputRef = useRef(null);
 
   useEffect(() => {
     if (!supabase) {
@@ -1012,7 +1215,7 @@ export default function App() {
     }
     async function loadAll() {
       try {
-        const [matRes, prodRes, tierRes, sportRes, empRes, aclRes, orderRes, whRes, rateRes, assignRes, stationDefaultRes, stationExclusionRes, checkinRes, attendanceRes, mismatchRes, problemRes, companyRes, invoiceRes, bankRes, journalRes, deadlineRes, cashDocRes, capacityRes, productTimesRes] = await Promise.all([
+        const [matRes, prodRes, tierRes, sportRes, empRes, aclRes, orderRes, whRes, rateRes, assignRes, stationDefaultRes, stationExclusionRes, checkinRes, attendanceRes, mismatchRes, problemRes, companyRes, invoiceRes, bankRes, journalRes, deadlineRes, cashDocRes, capacityRes, productTimesRes, assetRes, metricRes, tierRuleRes, travelRes, vehicleRes, vehicleLogRes, customerRes] = await Promise.all([
           supabase.from('materials').select('*').order('name'),
           supabase.from('products').select('*'),
           supabase.from('quality_tiers').select('*'),
@@ -1036,7 +1239,14 @@ export default function App() {
           supabase.from('tax_deadlines').select('*').order('due_date'),
           supabase.from('cash_documents').select('*').order('doc_date', { ascending: false }),
           supabase.from('station_capacity_config').select('*'),
-          supabase.from('station_product_times').select('*')
+          supabase.from('station_product_times').select('*'),
+          supabase.from('assets').select('*').order('acquisition_date', { ascending: false }),
+          supabase.from('cost_metrics').select('*').order('name'),
+          supabase.from('customer_tier_rules').select('*').order('sort_order'),
+          supabase.from('travel_orders').select('*').order('trip_date', { ascending: false }),
+          supabase.from('vehicles').select('*').order('name'),
+          supabase.from('vehicle_log_entries').select('*').order('entry_date', { ascending: false }),
+          supabase.from('customers').select('*')
         ]);
         const firstErr = [matRes, prodRes, tierRes, sportRes, empRes, orderRes, whRes].find(r => r.error);
         if (firstErr) throw firstErr.error;
@@ -1071,6 +1281,13 @@ export default function App() {
         setCashDocuments(cashDocRes.error ? [] : (cashDocRes.data || []).map(mapCashDocFromDb));
         setCapacityConfigs(capacityRes.error ? [] : (capacityRes.data || []).map(mapCapacityConfigFromDb));
         setStationProductTimes(productTimesRes.error ? [] : (productTimesRes.data || []).map(mapProductTimeFromDb));
+        setAssets(assetRes.error ? [] : (assetRes.data || []).map(mapAssetFromDb));
+        setCostMetrics(metricRes.error ? [] : (metricRes.data || []).map(mapCostMetricFromDb));
+        setTierRules(tierRuleRes.error ? [] : (tierRuleRes.data || []).map(mapTierRuleFromDb));
+        setTravelOrders(travelRes.error ? [] : (travelRes.data || []).map(mapTravelOrderFromDb));
+        setVehicles(vehicleRes.error ? [] : (vehicleRes.data || []).map(mapVehicleFromDb));
+        setVehicleLogEntries(vehicleLogRes.error ? [] : (vehicleLogRes.data || []).map(mapVehicleLogFromDb));
+        setCustomers(customerRes.error ? [] : (customerRes.data || []).map(mapCustomerFromDb));
 
         if (loadedWarehouses.length > 0) {
           setActiveWarehouseId(loadedWarehouses[0].id);
@@ -1133,6 +1350,13 @@ export default function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'journal_entries' }, (payload) => applyRealtimeChange(setJournalEntries, payload, mapJournalFromDb))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tax_deadlines' }, (payload) => applyRealtimeChange(setTaxDeadlines, payload, mapTaxDeadlineFromDb))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'cash_documents' }, (payload) => applyRealtimeChange(setCashDocuments, payload, mapCashDocFromDb))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'assets' }, (payload) => applyRealtimeChange(setAssets, payload, mapAssetFromDb))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cost_metrics' }, (payload) => applyRealtimeChange(setCostMetrics, payload, mapCostMetricFromDb))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'customer_tier_rules' }, (payload) => applyRealtimeChange(setTierRules, payload, mapTierRuleFromDb, 'tier'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'travel_orders' }, (payload) => applyRealtimeChange(setTravelOrders, payload, mapTravelOrderFromDb))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'vehicles' }, (payload) => applyRealtimeChange(setVehicles, payload, mapVehicleFromDb))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'vehicle_log_entries' }, (payload) => applyRealtimeChange(setVehicleLogEntries, payload, mapVehicleLogFromDb))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'customers' }, (payload) => applyRealtimeChange(setCustomers, payload, mapCustomerFromDb, 'name'))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'station_capacity_config' }, (payload) => applyRealtimeChange(setCapacityConfigs, payload, mapCapacityConfigFromDb, 'stationId'))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'station_product_times' }, (payload) => applyRealtimeChange(setStationProductTimes, payload, mapProductTimeFromDb))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings' }, (payload) => { if (payload.new) setCompanySettings(mapCompanySettingsFromDb(payload.new)); })
@@ -1288,7 +1512,13 @@ export default function App() {
     return () => clearInterval(interval);
   }, [pinLockedUntil]);
 
-  const hasPermission = (action) => acl[action] ? acl[action][currentUser?.role] : false;
+  const hasPermission = (action) => {
+    const role = currentUser?.role;
+    if (!role) return false;
+    const stored = acl[action]?.[role];
+    if (stored !== undefined) return stored;
+    return FALLBACK_ACL[action]?.[role] || false;
+  };
 
   // --- PRIHLÁSENIE / ODHLÁSENIE ---
   // --- SUPABASE AUTH: registrácia, prihlásenie a MFA pre Master/Supervisor/Obchodníka ---
@@ -1296,7 +1526,7 @@ export default function App() {
     e.preventDefault();
     setAuthError('');
     if (!authEmail.trim()) { setAuthError('Zadaj email.'); return; }
-    const matchingEmployee = employees.find(x => x.email && x.email.toLowerCase() === authEmail.trim().toLowerCase() && ['master', 'supervisor', 'sales'].includes(x.role));
+    const matchingEmployee = employees.find(x => x.email && x.email.toLowerCase() === authEmail.trim().toLowerCase() && EMAIL_LOGIN_ROLES.includes(x.role));
     if (!matchingEmployee) { setAuthError('Tento email nepatrí žiadnemu profilu s prístupom (Master/Supervisor/Obchodník). Over si ho v Zamestnanci & Práva, alebo požiadaj Mastra, nech ho tam doplní.'); return; }
     if (matchingEmployee.authUserId) { setAuthError('Tento profil už má vytvorený účet — použi prihlásenie, nie registráciu.'); return; }
     if (!authSignupCode.trim()) { setAuthError('Zadaj registračný kód, ktorý ti dal Master. Bez kódu sa účet nedá vytvoriť (ochrana proti cudziemu vytvoreniu účtu).'); return; }
@@ -1896,7 +2126,8 @@ export default function App() {
       setNewInvoiceItems([{ tempId: `li-${Date.now()}`, description: '', qty: 1, unitPrice: 0, vatRate: companySettings.defaultVatRate }]);
     }
     setNewInvoiceCustomerAddress(''); setNewInvoiceCustomerIco(''); setNewInvoiceCustomerDic(''); setNewInvoiceCustomerIcDph(''); setNewInvoiceCustomerType('sk_platca');
-    const due = new Date(); due.setDate(due.getDate() + 14);
+    // Splatnosť sa predvyplní podľa úrovne zákazníka (Standard/Bronze/Silver/Gold) — pozri Financie -> Zákazníci.
+    const due = new Date(); due.setDate(due.getDate() + getTierDueDays(getCustomerTier(order ? order.customer : '')));
     setNewInvoiceDueDate(due.toISOString().slice(0, 10));
     setNewInvoiceNotes('');
   };
@@ -1926,12 +2157,15 @@ export default function App() {
     const invoiceNumber = `${companySettings.invoiceNumberPrefix || year}${String(seq).padStart(4, '0')}`;
     const totals = calcInvoiceTotals(validItems);
     const now = new Date();
+    // Ak zákazka už má pridelený VS (nastaví sa hneď pri vytvorení zákazky), faktúra ho prevezme —
+    // aby platba prijatá cez QR zo zákazky ešte pred fakturáciou zostala spárovateľná aj po vystavení faktúry.
+    const linkedOrderForVs = newInvoiceOrderId ? orders.find(o => o.id === newInvoiceOrderId) : null;
     const created = {
       id: `inv-${Date.now()}`, invoiceNumber, orderId: newInvoiceOrderId || null,
       customerName: newInvoiceCustomerName.trim(), customerAddress: newInvoiceCustomerAddress.trim(), customerIco: newInvoiceCustomerIco.trim(),
       customerDic: newInvoiceCustomerDic.trim(), customerIcDph: newInvoiceCustomerIcDph.trim(), customerType: newInvoiceCustomerType,
       issueDate: now.toISOString().slice(0, 10), deliveryDate: now.toISOString().slice(0, 10), dueDate: newInvoiceDueDate,
-      variableSymbol: invoiceNumber.replace(/\D/g, '').slice(-10),
+      variableSymbol: linkedOrderForVs?.variableSymbol || invoiceNumber.replace(/\D/g, '').slice(-10),
       items: validItems.map(it => ({ description: it.description, qty: parseFloat(it.qty), unitPrice: parseFloat(it.unitPrice) || 0, vatRate: parseFloat(it.vatRate) || 0 })),
       ...totals, status: 'issued', notes: newInvoiceNotes.trim(), createdBy: `${currentUser.firstName} ${currentUser.lastName}`, corrections: []
     };
@@ -1978,6 +2212,41 @@ export default function App() {
     } catch (e) {
       return null;
     }
+  };
+
+  // QR platba priamo zo zákazky, ešte pred vystavením faktúry — vyžaduje zadanú očakávanú sumu (Funkcia 4 z backlogu).
+  const generateOrderBySquareQr = (order) => {
+    if (!companySettings.iban || !order.expectedAmount || !order.variableSymbol || !order.variableSymbolConfirmed) return null;
+    try {
+      return encodeBySquare({
+        payments: [{
+          type: PaymentOptions.PaymentOrder,
+          amount: order.expectedAmount,
+          variableSymbol: order.variableSymbol,
+          currencyCode: CurrencyCode.EUR,
+          beneficiary: { name: companySettings.companyName || 'Odberateľ' },
+          bankAccounts: [{ iban: companySettings.iban }],
+        }],
+      });
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const handleUpdateOrderExpectedAmount = async (orderId, value) => {
+    if (!hasPermission('create_order')) { triggerNotification('error', 'Nemáte oprávnenie na túto úpravu.'); return; }
+    const amount = value.trim() === '' ? null : parseFloat(value) || 0;
+    const { error } = await supabase.from('orders').update({ expected_amount: amount }).eq('id', orderId);
+    if (error) triggerNotification('error', error.message);
+  };
+
+  // Potvrdenie VS/sumy — QR sa zákazníkovi reálne ponúkne a automatické párovanie ho berie do úvahy
+  // až po tomto kroku (napr. keď je zákazka dokončená alebo daná na úhradu), nie hneď pri vytvorení.
+  const handleSetVariableSymbolConfirmed = async (orderId, confirmed) => {
+    if (!hasPermission('create_order')) { triggerNotification('error', 'Nemáte oprávnenie na túto úpravu.'); return; }
+    const { error } = await supabase.from('orders').update({ variable_symbol_confirmed: confirmed }).eq('id', orderId);
+    if (error) { triggerNotification('error', error.message); return; }
+    triggerNotification('success', confirmed ? 'VS a suma potvrdené — QR kód je aktívny.' : 'Potvrdenie zrušené, QR kód je skrytý.');
   };
 
   // --- FRONTA PRE ÚČTOVNÍKA ---
@@ -2038,6 +2307,7 @@ export default function App() {
   const handleAutoMatchPayments = async () => {
     setIsAutoMatching(true);
     let matchedCount = 0;
+    let matchedToOrderCount = 0;
     for (const tx of bankTransactions.filter(t => !t.matched)) {
       const found = invoices.find(inv => inv.status !== 'paid' && inv.variableSymbol === tx.variableSymbol && Math.abs(inv.total - tx.amount) < 0.01);
       if (found) {
@@ -2048,10 +2318,208 @@ export default function App() {
           md_account: '221 - Bankové účty', dal_account: '311 - Odberatelia', amount: found.total, invoice_id: found.id
         });
         matchedCount++;
+        continue;
+      }
+      // Platba mohla prísť ešte pred vystavením faktúry (VS priradený rovno zákazke) — spáruj priamo na zákazku,
+      // účtovník dostane avízo vo Fronte a faktúru dovystaví dodatočne s tým istým VS.
+      const matchedOrder = orders.find(o => o.variableSymbol && o.variableSymbolConfirmed && o.variableSymbol === tx.variableSymbol && !invoices.some(inv => inv.orderId === o.id) && (!o.expectedAmount || Math.abs(o.expectedAmount - tx.amount) < 0.01));
+      if (matchedOrder) {
+        await supabase.from('bank_transactions').update({ matched: true, order_id: matchedOrder.id }).eq('id', tx.id);
+        matchedToOrderCount++;
       }
     }
     setIsAutoMatching(false);
-    triggerNotification(matchedCount > 0 ? 'success' : 'error', matchedCount > 0 ? `Spárovaných ${matchedCount} platieb s faktúrami.` : 'Nenašli sa žiadne nové zhody (skontroluj variabilné symboly a sumy).');
+    const parts = [];
+    if (matchedCount > 0) parts.push(`${matchedCount} platieb s faktúrami`);
+    if (matchedToOrderCount > 0) parts.push(`${matchedToOrderCount} platieb k zákazkám bez faktúry (treba dovystaviť)`);
+    triggerNotification(parts.length > 0 ? 'success' : 'error', parts.length > 0 ? `Spárovaných: ${parts.join(', ')}.` : 'Nenašli sa žiadne nové zhody (skontroluj variabilné symboly a sumy).');
+  };
+
+  // --- EVIDENCIA MAJETKU A ODPISY ---
+  const handleAddAsset = async (e) => {
+    e.preventDefault();
+    if (!hasPermission('create_order')) { triggerNotification('error', 'Nemáte prístup do správy majetku.'); return; }
+    if (!newAssetName.trim() || !newAssetDate || !newAssetPrice) { alert('Vyplňte názov, dátum obstarania a cenu.'); return; }
+    if (newAssetMethod === 'zrychlene' && !ACCELERATED_COEFFICIENTS[newAssetGroup]) { alert('Zrýchlené odpisovanie je zo zákona povolené len pre odpisové skupiny 2 a 3.'); return; }
+    const created = {
+      id: `asset-${Date.now()}`, name: newAssetName.trim(), acquisitionDate: newAssetDate, acquisitionPrice: parseFloat(newAssetPrice),
+      depreciationGroup: parseInt(newAssetGroup), depreciationMethod: newAssetMethod, status: 'aktivny', createdBy: `${currentUser.firstName} ${currentUser.lastName}`
+    };
+    const { error } = await supabase.from('assets').insert(mapAssetToDb(created));
+    if (error) { triggerNotification('error', error.message); return; }
+    setShowAddAssetForm(false);
+    setNewAssetName(''); setNewAssetDate(''); setNewAssetPrice(''); setNewAssetGroup(1); setNewAssetMethod('rovnomerne');
+    triggerNotification('success', `Majetok "${created.name}" bol zaevidovaný.`);
+  };
+
+  const handleDisposeAsset = async (asset) => {
+    if (!hasPermission('create_order')) { triggerNotification('error', 'Nemáte prístup do správy majetku.'); return; }
+    if (!confirm(`Vyradiť majetok "${asset.name}" ku dnešnému dňu?`)) return;
+    const { error } = await supabase.from('assets').update({ status: 'vyradeny', disposal_date: new Date().toISOString().slice(0, 10) }).eq('id', asset.id);
+    if (error) { triggerNotification('error', error.message); return; }
+    setSelectedAssetForDetail(null);
+    triggerNotification('success', 'Majetok bol vyradený z evidencie.');
+  };
+
+  // --- VŠEOBECNÁ TABUĽKA NÁKLADOV/METRÍK ---
+  const handleAddCostMetric = async (e) => {
+    e.preventDefault();
+    if (!hasPermission('create_order')) { triggerNotification('error', 'Nemáte prístup do správy nákladov.'); return; }
+    if (!newMetricName.trim()) { alert('Zadajte názov metriky.'); return; }
+    const created = {
+      id: `metric-${Date.now()}`, name: newMetricName.trim(), value: parseFloat(newMetricValue) || 0, unit: newMetricUnit.trim(), description: newMetricDescription.trim(),
+      category: newMetricCategory, costType: newMetricCostType,
+      powerKw: newMetricPowerKw.trim() ? parseFloat(newMetricPowerKw) : null, hoursPerMonth: newMetricHoursPerMonth.trim() ? parseFloat(newMetricHoursPerMonth) : null
+    };
+    const { error } = await supabase.from('cost_metrics').insert(mapCostMetricToDb(created));
+    if (error) { triggerNotification('error', error.message); return; }
+    setNewMetricName(''); setNewMetricValue(''); setNewMetricUnit(''); setNewMetricDescription(''); setNewMetricCategory('vseobecne'); setNewMetricCostType('fixny'); setNewMetricPowerKw(''); setNewMetricHoursPerMonth('');
+    triggerNotification('success', `Metrika "${created.name}" bola pridaná.`);
+  };
+
+  const handleUpdateCostMetric = async (id, field, value) => {
+    if (!hasPermission('create_order')) { triggerNotification('error', 'Nemáte prístup do správy nákladov.'); return; }
+    let parsedValue = value;
+    if (field === 'value') parsedValue = parseFloat(value) || 0;
+    else if (field === 'power_kw' || field === 'hours_per_month') parsedValue = value.trim() === '' ? null : (parseFloat(value) || 0);
+    const { error } = await supabase.from('cost_metrics').update({ [field]: parsedValue }).eq('id', id);
+    if (error) triggerNotification('error', error.message);
+  };
+
+  const handleDeleteCostMetric = async (metric) => {
+    if (!hasPermission('create_order')) { triggerNotification('error', 'Nemáte prístup do správy nákladov.'); return; }
+    if (!confirm(`Zmazať metriku "${metric.name}"?`)) return;
+    const { error } = await supabase.from('cost_metrics').delete().eq('id', metric.id);
+    if (error) triggerNotification('error', error.message);
+  };
+
+  // --- ZÁKAZNÍCKY REBRÍČEK (Standard/Bronze/Silver/Gold) ---
+  const handleUpdateTierRule = async (tier, field, value) => {
+    if (!hasPermission('create_order')) { triggerNotification('error', 'Nemáte prístup do správy zákazníckych úrovní.'); return; }
+    const { error } = await supabase.from('customer_tier_rules').update({ [field]: parseFloat(value) || 0 }).eq('tier', tier);
+    if (error) triggerNotification('error', error.message);
+  };
+
+  // --- CRM: KARTA ZÁKAZNÍKA ---
+  const getOrCreateCustomerRecord = (name) => customers.find(c => c.name === name) || { name, phone: '', email: '', contactPerson: '', address: '', notes: '', interactionLog: [] };
+
+  const handleOpenCustomerDetail = (name) => {
+    const record = getOrCreateCustomerRecord(name);
+    setSelectedCustomerForDetail(name);
+    setCustomerDraft(record);
+  };
+
+  const handleSaveCustomerContactInfo = async () => {
+    if (!hasPermission('create_order') || !customerDraft) { triggerNotification('error', 'Nemáte oprávnenie.'); return; }
+    const { error } = await supabase.from('customers').upsert(mapCustomerToDb(customerDraft));
+    if (error) { triggerNotification('error', error.message); return; }
+    triggerNotification('success', 'Kontaktné údaje zákazníka boli uložené.');
+  };
+
+  const handleAddCustomerLogEntry = async () => {
+    if (!hasPermission('create_order') || !customerDraft) { triggerNotification('error', 'Nemáte oprávnenie.'); return; }
+    if (!newCustomerLogEntry.trim()) return;
+    const entry = { text: newCustomerLogEntry.trim(), author: `${currentUser.firstName} ${currentUser.lastName}`, date: getFormattedDateTime() };
+    const updated = { ...customerDraft, interactionLog: [entry, ...(customerDraft.interactionLog || [])] };
+    const { error } = await supabase.from('customers').upsert(mapCustomerToDb(updated));
+    if (error) { triggerNotification('error', error.message); return; }
+    setCustomerDraft(updated);
+    setNewCustomerLogEntry('');
+    triggerNotification('success', 'Záznam bol pridaný.');
+  };
+
+  // --- CESTOVNÉ PRÍKAZY ---
+  const handleAddTravelOrder = async (e) => {
+    e.preventDefault();
+    if (!newTravelDate || !newTravelDistance.trim()) { alert('Vyplňte aspoň dátum a počet km.'); return; }
+    const created = {
+      id: `trip-${Date.now()}`, employeeId: currentUser.id, employeeName: `${currentUser.firstName} ${currentUser.lastName}`,
+      tripDate: newTravelDate, departureTime: newTravelDeparture, returnTime: newTravelReturn, fromLocation: newTravelFrom.trim(), toLocation: newTravelTo.trim(),
+      purpose: newTravelPurpose.trim(), relatedOrderId: newTravelOrderId || null, distanceKm: parseFloat(newTravelDistance) || 0,
+      fuelConsumptionL100km: parseFloat(newTravelConsumption) || 7, fuelPricePerLiter: parseFloat(newTravelFuelPrice) || 1.7, status: 'navrhnute'
+    };
+    const { error } = await supabase.from('travel_orders').insert(mapTravelOrderToDb(created));
+    if (error) { triggerNotification('error', error.message); return; }
+    setShowAddTravelOrderForm(false);
+    setNewTravelDate(''); setNewTravelDeparture(''); setNewTravelReturn(''); setNewTravelFrom(''); setNewTravelTo(''); setNewTravelPurpose(''); setNewTravelOrderId(''); setNewTravelDistance(''); setNewTravelConsumption('7'); setNewTravelFuelPrice('1.70');
+    triggerNotification('success', 'Cestovný príkaz bol odoslaný na schválenie.');
+  };
+
+  const handleApproveTravelOrder = async (travelOrder) => {
+    if (currentUser.role !== 'master' && currentUser.role !== 'supervisor') { triggerNotification('error', 'Nemáte oprávnenie schvaľovať cestovné príkazy.'); return; }
+    const { error } = await supabase.from('travel_orders').update({ status: 'schvalene', approved_by: `${currentUser.firstName} ${currentUser.lastName}`, approved_at: new Date().toISOString() }).eq('id', travelOrder.id);
+    if (error) { triggerNotification('error', error.message); return; }
+    triggerNotification('success', 'Cestovný príkaz schválený.');
+  };
+
+  const handleRejectTravelOrder = async () => {
+    if (!rejectingTravelOrder) return;
+    if (currentUser.role !== 'master' && currentUser.role !== 'supervisor') { triggerNotification('error', 'Nemáte oprávnenie zamietať cestovné príkazy.'); return; }
+    const { error } = await supabase.from('travel_orders').update({ status: 'zamietnute', approved_by: `${currentUser.firstName} ${currentUser.lastName}`, approved_at: new Date().toISOString(), rejection_reason: travelRejectionReason.trim() }).eq('id', rejectingTravelOrder.id);
+    if (error) { triggerNotification('error', error.message); return; }
+    setRejectingTravelOrder(null);
+    setTravelRejectionReason('');
+    triggerNotification('success', 'Cestovný príkaz zamietnutý.');
+  };
+
+  // --- KNIHA JÁZD (firemné vozidlá) ---
+  const handleAddVehicle = async (e) => {
+    e.preventDefault();
+    if (!hasPermission('create_order')) { triggerNotification('error', 'Nemáte oprávnenie.'); return; }
+    if (!newVehicleName.trim()) { alert('Zadajte názov vozidla.'); return; }
+    const created = { id: `veh-${Date.now()}`, name: newVehicleName.trim(), licensePlate: newVehiclePlate.trim() };
+    const { error } = await supabase.from('vehicles').insert(mapVehicleToDb(created));
+    if (error) { triggerNotification('error', error.message); return; }
+    setNewVehicleName(''); setNewVehiclePlate(''); setShowAddVehicleForm(false);
+    setSelectedVehicleId(created.id);
+    triggerNotification('success', `Vozidlo "${created.name}" bolo pridané.`);
+  };
+
+  const handleOdometerPhotoSelected = async (file) => {
+    if (!file) return;
+    setOdometerPhotoFile(file);
+    setOdometerPhotoPreview(URL.createObjectURL(file));
+    setConfirmedOdometerKm('');
+    setOdometerReadError('');
+    setIsReadingOdometer(true);
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const { data, error } = await supabase.functions.invoke('ocr-odometer', { body: { imageBase64: base64, mimeType: file.type || 'image/jpeg' } });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      if (data?.success) setConfirmedOdometerKm(String(data.km));
+      else setOdometerReadError(data?.error || 'Nepodarilo sa prečítať číslo z fotky.');
+    } catch (err) {
+      setOdometerReadError(`Chyba: ${err.message}`);
+    } finally {
+      setIsReadingOdometer(false);
+    }
+  };
+
+  const handleSaveVehicleLogEntry = async () => {
+    if (!selectedVehicleId) { alert('Vyberte vozidlo.'); return; }
+    if (!confirmedOdometerKm.trim()) { alert('Zadajte alebo potvrďte stav kilometrov.'); return; }
+    let photoUrl = '';
+    if (odometerPhotoFile) {
+      const path = `vehicle-logs/${Date.now()}-${odometerPhotoFile.name}`;
+      const { error: upErr } = await supabase.storage.from('item-images').upload(path, odometerPhotoFile);
+      if (!upErr) photoUrl = supabase.storage.from('item-images').getPublicUrl(path).data.publicUrl;
+    }
+    const created = {
+      id: `vlog-${Date.now()}`, vehicleId: selectedVehicleId, employeeId: currentUser.id, employeeName: `${currentUser.firstName} ${currentUser.lastName}`,
+      entryDate: new Date().toISOString().slice(0, 10), odometerKm: parseInt(confirmedOdometerKm, 10) || 0, photoUrl,
+      fuelType: newLogFuelType, fuelLiters: newLogFuelLiters.trim() ? parseFloat(newLogFuelLiters) : null, fuelCost: newLogFuelCost.trim() ? parseFloat(newLogFuelCost) : null
+    };
+    const { error } = await supabase.from('vehicle_log_entries').insert(mapVehicleLogToDb(created));
+    if (error) { triggerNotification('error', error.message); return; }
+    setOdometerPhotoFile(null); setOdometerPhotoPreview(''); setConfirmedOdometerKm(''); setOdometerReadError('');
+    setNewLogFuelType(''); setNewLogFuelLiters(''); setNewLogFuelCost('');
+    triggerNotification('success', 'Záznam do knihy jázd bol uložený.');
   };
 
   // --- AI ÚČTOVNÝ ASISTENT ---
@@ -2328,6 +2796,31 @@ export default function App() {
     exportMaterialsToExcel(materials, 'Vsetky_sklady', true);
   };
 
+  // Export faktúr do Excelu — na predanie účtovníkovi/naimportovanie do účtovného softvéru (napr. OMEGA)
+  const handleExportInvoices = (invoiceList) => {
+    const rows = invoiceList.map(inv => ({
+      'Číslo faktúry': inv.invoiceNumber,
+      Odberateľ: inv.customerName,
+      Adresa: inv.customerAddress,
+      IČO: inv.customerIco,
+      DIČ: inv.customerDic,
+      'IČ DPH': inv.customerIcDph,
+      'Dátum vystavenia': inv.issueDate,
+      'Dátum dodania': inv.deliveryDate,
+      Splatnosť: inv.dueDate,
+      'Variabilný symbol': inv.variableSymbol,
+      'Základ DPH (€)': inv.subtotal,
+      'DPH (€)': inv.vatTotal,
+      'Celkom s DPH (€)': inv.total,
+      Stav: inv.status === 'paid' ? 'Uhradená' : inv.status === 'issued' ? 'Neuhradená' : inv.status,
+      'Uhradené dňa': inv.paidAt || '',
+      Poznámka: inv.notes || '',
+    }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Faktúry');
+    XLSX.writeFile(wb, `faktury_export_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
   const handleDownloadImportTemplate = () => {
     const sample = [{
       Nazov: 'Polyester Interlock', Vyrobca: 'Sinterama', Farba: 'Biela', Farba_hex: '#FFFFFF', Sirka_cm: 160, Gramaz_gm2: 140,
@@ -2382,6 +2875,93 @@ export default function App() {
       if (error) { triggerNotification('error', `Chyba pri importe: ${error.message}`); e.target.value = ''; return; }
 
       triggerNotification('success', `Import dokončený: naskladnených ${toInsert.length} položiek${skipped > 0 ? `, preskočených ${skipped} neplatných riadkov` : ''}.`);
+    } catch (err) {
+      triggerNotification('error', `Chyba pri čítaní súboru: ${err.message}`);
+    } finally {
+      e.target.value = '';
+    }
+  };
+
+  // --- EXPORT / IMPORT KATALÓGU MODELOV (produktov) DO EXCELU ---
+  const buildProductRow = (p) => {
+    const layerRow = (layer) => ({
+      Nazov: materials.find(m => m.id === layer?.materialId)?.name || '',
+      Spotreba_1az4ks_m: layer?.consumption?.lt5 ?? '',
+      Spotreba_5plus_m: layer?.consumption?.ge5 ?? ''
+    });
+    const l1 = layerRow(p.layer1), l2 = layerRow(p.layer2), l3 = layerRow(p.layer3);
+    return {
+      Vlastny_Kod: p.customCode, Nazov_Modelu: p.name, Sporty: (p.sports || []).join(', '),
+      Latka1_Nazov: l1.Nazov, Latka1_Spotreba_1az4ks_m: l1.Spotreba_1az4ks_m, Latka1_Spotreba_5plus_m: l1.Spotreba_5plus_m,
+      Latka2_Nazov: l2.Nazov, Latka2_Spotreba_1az4ks_m: l2.Spotreba_1az4ks_m, Latka2_Spotreba_5plus_m: l2.Spotreba_5plus_m,
+      Latka3_Nazov: l3.Nazov, Latka3_Spotreba_1az4ks_m: l3.Spotreba_1az4ks_m, Latka3_Spotreba_5plus_m: l3.Spotreba_5plus_m,
+      Niti_m: p.threadM ?? '', Damsky_pomer_percent: p.womenRatioPercent ?? '', Detsky_pomer_percent: p.childrenRatioPercent ?? ''
+    };
+  };
+
+  const handleExportProducts = () => {
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(products.map(buildProductRow)), 'Katalog');
+    XLSX.writeFile(wb, `katalog_modelov_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+  const handleDownloadProductImportTemplate = () => {
+    const sample = [{
+      Vlastny_Kod: 'TRICKO-BAV-190', Nazov_Modelu: 'Tričko bavlna 190g', Sporty: sports[0] || 'Futbal',
+      Latka1_Nazov: materials[0]?.name || '', Latka1_Spotreba_1az4ks_m: 1.2, Latka1_Spotreba_5plus_m: 1.1,
+      Latka2_Nazov: '', Latka2_Spotreba_1az4ks_m: '', Latka2_Spotreba_5plus_m: '',
+      Latka3_Nazov: '', Latka3_Spotreba_1az4ks_m: '', Latka3_Spotreba_5plus_m: '',
+      Niti_m: 30, Damsky_pomer_percent: 90, Detsky_pomer_percent: 65
+    }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sample), 'Sablona');
+    XLSX.writeFile(wb, 'katalog_sablona.xlsx');
+  };
+
+  const handleImportProductsFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!hasPermission('manage_catalog')) { triggerNotification('error', 'Nemáte prístup do správy katalógu.'); e.target.value = ''; return; }
+    try {
+      const data = await file.arrayBuffer();
+      const wb = XLSX.read(data);
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+      if (rows.length === 0) { triggerNotification('error', 'Súbor neobsahuje žiadne riadky.'); e.target.value = ''; return; }
+
+      const findMaterialByName = (name) => name ? materials.find(m => m.name.toLowerCase() === String(name).toLowerCase()) : null;
+      const buildLayer = (nameCol, lt5Col, ge5Col, row) => {
+        const mat = findMaterialByName(row[nameCol]);
+        if (!mat) return null;
+        return { materialId: mat.id, alternativeIds: [], consumption: { lt5: parseFloat(row[lt5Col]) || 0, ge5: parseFloat(row[ge5Col]) || 0 } };
+      };
+
+      const toInsert = [];
+      let skipped = 0;
+      let unmatchedMaterials = 0;
+      rows.forEach((row, idx) => {
+        const name = row.Nazov_Modelu;
+        if (!name) { skipped++; return; }
+        ['Latka1_Nazov', 'Latka2_Nazov', 'Latka3_Nazov'].forEach(col => { if (row[col] && !findMaterialByName(row[col])) unmatchedMaterials++; });
+        const rowSports = String(row.Sporty || '').split(',').map(s => s.trim()).filter(s => sports.includes(s));
+        toInsert.push(mapProductToDb({
+          id: `prod-${Date.now()}-${idx}`, customCode: String(row.Vlastny_Kod || ''), name: String(name), sports: rowSports,
+          layer1: buildLayer('Latka1_Nazov', 'Latka1_Spotreba_1az4ks_m', 'Latka1_Spotreba_5plus_m', row),
+          layer2: buildLayer('Latka2_Nazov', 'Latka2_Spotreba_1az4ks_m', 'Latka2_Spotreba_5plus_m', row),
+          layer3: buildLayer('Latka3_Nazov', 'Latka3_Spotreba_1az4ks_m', 'Latka3_Spotreba_5plus_m', row),
+          threadM: parseFloat(row.Niti_m) || 0,
+          womenRatioPercent: row.Damsky_pomer_percent !== '' ? parseFloat(row.Damsky_pomer_percent) : 90,
+          childrenRatioPercent: row.Detsky_pomer_percent !== '' ? parseFloat(row.Detsky_pomer_percent) : 65
+        }));
+      });
+
+      if (toInsert.length === 0) { triggerNotification('error', 'V súbore sa nenašiel žiadny platný riadok (chýba stĺpec "Nazov_Modelu").'); e.target.value = ''; return; }
+
+      const { error } = await supabase.from('products').insert(toInsert);
+      if (error) { triggerNotification('error', `Chyba pri importe: ${error.message}`); e.target.value = ''; return; }
+
+      let msg = `Import dokončený: pridaných ${toInsert.length} modelov${skipped > 0 ? `, preskočených ${skipped} neplatných riadkov` : ''}.`;
+      if (unmatchedMaterials > 0) msg += ` Pozor: ${unmatchedMaterials}× sa nenašla látka podľa názvu (skontroluj presný názov v sklade) — tá vrstva sa preskočila.`;
+      triggerNotification(unmatchedMaterials > 0 ? 'error' : 'success', msg);
     } catch (err) {
       triggerNotification('error', `Chyba pri čítaní súboru: ${err.message}`);
     } finally {
@@ -2572,6 +3152,112 @@ export default function App() {
 
   const handleRemovePendingItem = (tempId) => setPendingItems(pendingItems.filter(i => i.tempId !== tempId));
 
+  // --- AI ASISTENT NA ZADÁVANIE ZÁKAZIEK (hlas / text-email / fotka) ---
+  const handleToggleVoiceRecording = () => {
+    if (isRecordingVoice) {
+      speechRecognitionRef.current?.stop();
+      return;
+    }
+    const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognitionCtor) { setAiOrderError('Tento prehliadač nepodporuje rozpoznávanie reči. Skús Chrome, alebo zadaj text ručne.'); return; }
+    const recognition = new SpeechRecognitionCtor();
+    recognition.lang = 'sk-SK';
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    let finalTranscript = aiOrderText ? aiOrderText + ' ' : '';
+    recognition.onresult = (event) => {
+      let interim = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript + ' ';
+        else interim += event.results[i][0].transcript;
+      }
+      setAiOrderText(finalTranscript + interim);
+    };
+    recognition.onerror = (event) => { setAiOrderError(`Chyba rozpoznávania reči: ${event.error}`); setIsRecordingVoice(false); };
+    recognition.onend = () => setIsRecordingVoice(false);
+    speechRecognitionRef.current = recognition;
+    setAiOrderError('');
+    setIsRecordingVoice(true);
+    recognition.start();
+  };
+
+  const handleProcessAiOrderInput = async () => {
+    setAiOrderError('');
+    setIsProcessingAiOrder(true);
+    try {
+      const body = {
+        knownProducts: products.map(p => ({ id: p.id, name: p.name, customCode: p.customCode })),
+        knownCustomers: Array.from(new Set(orders.map(o => o.customer).filter(Boolean)))
+      };
+      if (aiOrderImageFile) {
+        body.imageBase64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result.split(',')[1]);
+          reader.onerror = reject;
+          reader.readAsDataURL(aiOrderImageFile);
+        });
+        body.mimeType = aiOrderImageFile.type || 'image/jpeg';
+      } else {
+        if (!aiOrderText.trim()) { setAiOrderError('Nahovor, prilep text, alebo nahraj fotku objednávky.'); setIsProcessingAiOrder(false); return; }
+        body.text = aiOrderText.trim();
+      }
+      const { data, error } = await supabase.functions.invoke('parse-order-request', { body });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      const items = (data.items || []).map((it, idx) => ({
+        tempId: `ai-${idx}`, productId: it.productId || '', productNameGuess: it.productNameGuess || '',
+        qty: parseInt(it.qty) || 1, gender: ['men', 'women', 'children'].includes(it.gender) ? it.gender : 'men', notes: it.notes || ''
+      }));
+      setAiOrderResult({ customerName: data.customerName || '', deliveryDate: data.deliveryDate || '', notes: data.notes || '', items });
+    } catch (err) {
+      setAiOrderError(`Chyba: ${err.message}`);
+    } finally {
+      setIsProcessingAiOrder(false);
+    }
+  };
+
+  const handleUpdateAiResultItem = (tempId, field, value) => {
+    setAiOrderResult(prev => ({ ...prev, items: prev.items.map(it => it.tempId === tempId ? { ...it, [field]: value } : it) }));
+  };
+  const handleRemoveAiResultItem = (tempId) => setAiOrderResult(prev => ({ ...prev, items: prev.items.filter(it => it.tempId !== tempId) }));
+
+  const buildPendingItemFromAiGuess = (aiItem) => {
+    const product = products.find(p => p.id === aiItem.productId);
+    if (!product) return null;
+    const gender = aiItem.gender;
+    const qty = parseInt(aiItem.qty) || 1;
+    const qualityTier = qualityTiers[0]?.name || '';
+    const neededList = [];
+    if (product.layer1?.materialId) neededList.push({ layerName: 'Primárna látka', materialId: product.layer1.materialId, qtyNeeded: calculateLayerConsumption(product, gender, 'layer1', qty) });
+    if (product.layer2?.materialId) neededList.push({ layerName: 'Sekundárna látka', materialId: product.layer2.materialId, qtyNeeded: calculateLayerConsumption(product, gender, 'layer2', qty) });
+    if (product.layer3?.materialId) neededList.push({ layerName: 'Terciárna látka', materialId: product.layer3.materialId, qtyNeeded: calculateLayerConsumption(product, gender, 'layer3', qty) });
+    return {
+      tempId: `tmp-ai-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      productId: product.id, productName: product.name, customCode: product.customCode,
+      qualityTier, gender, qty, activeStations: [...STATION_ORDER],
+      notes: aiItem.notes || '', materialsNeeded: neededList, threadQtyM: (product.threadM || 0) * qty, imageUrl: '', assignedDesignerId: ''
+    };
+  };
+
+  const handleConfirmAiOrderResult = () => {
+    if (!aiOrderResult) return;
+    const matchedItems = aiOrderResult.items.filter(it => it.productId);
+    const unmatchedCount = aiOrderResult.items.length - matchedItems.length;
+    const newPendingItems = matchedItems.map(buildPendingItemFromAiGuess).filter(Boolean);
+    if (newPendingItems.length === 0) { triggerNotification('error', 'Žiadna položka sa nedala priradiť k produktu z katalógu — priraď produkty ručne pred potvrdením.'); return; }
+    if (aiOrderResult.customerName) setNewOrderCustomer(aiOrderResult.customerName);
+    if (aiOrderResult.deliveryDate) setNewOrderDeliveryDate(aiOrderResult.deliveryDate);
+    if (aiOrderResult.notes) setOrderNotes(prev => prev ? `${prev}\n${aiOrderResult.notes}` : aiOrderResult.notes);
+    setPendingItems(prev => [...prev, ...newPendingItems]);
+    setActiveTab('orders');
+    setShowAiOrderAssistant(false);
+    setAiOrderResult(null);
+    setAiOrderText('');
+    setAiOrderImageFile(null);
+    setAiOrderImagePreview('');
+    triggerNotification('success', `Pridaných ${newPendingItems.length} položiek do rozpracovanej zákazky.${unmatchedCount > 0 ? ` ${unmatchedCount} položiek sa nepodarilo priradiť k produktu, pridaj ich ručne.` : ''} Skontroluj pred vytvorením zákazky!`);
+  };
+
   // --- EXPRESNÉ PRIDANIE DOTLAČOVEJ ZÁKAZKY (firma ADY) ---
   // --- KAPACITA VÝROBY ---
   const handleOpenCapacitySettings = () => {
@@ -2658,7 +3344,7 @@ export default function App() {
       const created = {
         id: orderId, customer: expressCustomerName.trim(), createdAt: now, deliveryDate: expressNeededDate, driveLink: '', notes: '',
         paymentType: expressPaymentType, items: [newItem], orderLog: [{ date: now, author: createdBy, text: 'Dotlačová zákazka zaevidovaná cez expresný formulár.' }],
-        legacyOrderNumber: '', companyBrand: 'ADY', orderNumber, accountingStatus: null
+        legacyOrderNumber: '', companyBrand: 'ADY', orderNumber, accountingStatus: null, variableSymbol: generateVariableSymbol(orderId)
       };
 
       const { error } = await supabase.from('orders').insert(mapOrderToDb(created));
@@ -2725,7 +3411,7 @@ export default function App() {
     const nextNum = counterData?.next_number || 1;
     const orderNumber = `${newOrderCompany}-${shortYear}-${String(nextNum).padStart(4, '0')}`;
 
-    const created = { id: orderId, customer: newOrderCustomer, createdAt: now, deliveryDate: newOrderDeliveryDate, driveLink: orderDriveLink, notes: orderNotes, paymentType: newOrderPaymentType, items: itemsWithMeta, orderLog: [], legacyOrderNumber: newOrderLegacyNumber.trim(), companyBrand: newOrderCompany, orderNumber };
+    const created = { id: orderId, customer: newOrderCustomer, createdAt: now, deliveryDate: newOrderDeliveryDate, driveLink: orderDriveLink, notes: orderNotes, paymentType: newOrderPaymentType, items: itemsWithMeta, orderLog: [], legacyOrderNumber: newOrderLegacyNumber.trim(), companyBrand: newOrderCompany, orderNumber, variableSymbol: generateVariableSymbol(orderId) };
     const { error } = await supabase.from('orders').insert(mapOrderToDb(created));
     if (error) { triggerNotification('error', `Chyba: ${error.message}`); return; }
     await supabase.from('order_number_counters').upsert({ company: newOrderCompany, year: fullYear, next_number: nextNum + 1 }, { onConflict: 'company,year' });
@@ -3364,7 +4050,7 @@ export default function App() {
       triggerNotification('success', 'Zamestnanec bol upravený.');
     } else {
       if (!newEmpFirstName.trim() || !newEmpLastName.trim()) { alert('Zadajte meno a priezvisko.'); return; }
-      if (['master', 'supervisor', 'sales'].includes(newEmpRole) && !newEmpEmail.trim()) { alert('Pre túto rolu zadajte email — zamestnanec si podľa neho vytvorí prihlasovací účet.'); return; }
+      if (EMAIL_LOGIN_ROLES.includes(newEmpRole) && !newEmpEmail.trim()) { alert('Pre túto rolu zadajte email — zamestnanec si podľa neho vytvorí prihlasovací účet.'); return; }
       if (newEmpPin.trim() && !/^\d{4}$/.test(newEmpPin.trim())) { alert('PIN musí mať presne 4 číslice.'); return; }
       const passwordHash = newEmpPassword.trim() ? await hashPassword(newEmpPassword.trim()) : null;
       const newId = `emp-${Date.now()}`;
@@ -3453,6 +4139,70 @@ export default function App() {
     return Object.entries(stats).map(([sport, s]) => ({ sport, orders: s.orderIds.size, qty: s.qty, meters: parseFloat(s.meters.toFixed(2)), minutes: s.minutes })).sort((a, b) => b.qty - a.qty);
   };
   const sportStats = getSportStats();
+
+  // Zákaznícky rebríček (Standard/Bronze/Silver/Gold) — počíta sa priebežne z histórie objednávok
+  // (počet) a faktúr (objem v €), nie z osobitnej "karty zákazníka". Úroveň sa dosiahne splnením
+  // POČTU OBJEDNÁVOK ALEBO OBJEMU (stačí jedno z dvoch), podľa nastavenia v customer_tier_rules.
+  const getCustomerStats = () => {
+    const stats = {};
+    orders.forEach(o => {
+      const name = (o.customer || '').trim();
+      if (!name) return;
+      if (!stats[name]) stats[name] = { name, orderCount: 0, volume: 0 };
+      stats[name].orderCount += 1;
+    });
+    invoices.forEach(inv => {
+      const name = (inv.customerName || '').trim();
+      if (!name) return;
+      if (!stats[name]) stats[name] = { name, orderCount: 0, volume: 0 };
+      stats[name].volume += inv.total;
+    });
+    const rulesByRank = [...tierRules].sort((a, b) => b.sortOrder - a.sortOrder);
+    return Object.values(stats)
+      .map(c => ({ ...c, tier: rulesByRank.find(r => c.orderCount >= r.minOrders || c.volume >= r.minVolume)?.tier || 'standard' }))
+      .sort((a, b) => b.volume - a.volume);
+  };
+  const customerStats = getCustomerStats();
+  const getCustomerTier = (customerName) => customerStats.find(c => c.name === (customerName || '').trim())?.tier || 'standard';
+  const getTierDueDays = (tier) => tierRules.find(r => r.tier === tier)?.dueDays ?? 14;
+
+  // Ziskovosť podľa zákazky — náklad na materiál (aktuálna cena zo skladu) + náklad na prácu (sadzba za stanicu × počet kusov,
+  // pozri Prehľady -> "Sadzby za jednotku práce"), oproti fakturovanej sume. Orientačný prepočet, nie presné účtovanie.
+  const getOrderProfitability = () => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    const filtered = orders.filter(o => {
+      if (!o.deliveryDate) return false;
+      const d = new Date(o.deliveryDate + 'T00:00:00');
+      if (isNaN(d.getTime())) return false;
+      if (reportPeriod === 'year') return d.getFullYear() === currentYear;
+      return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+    });
+    return filtered.map(order => {
+      let materialCost = 0;
+      let stationCost = 0;
+      (order.items || []).forEach(item => {
+        (item.materialsNeeded || []).forEach(needed => {
+          const mat = materials.find(m => m.id === needed.materialId);
+          if (mat) materialCost += (needed.qtyNeeded || 0) * (mat.pricePerM || 0);
+        });
+        STATION_ORDER.forEach(sid => {
+          const status = item.stationStatuses?.[sid];
+          if (!status || status === 'neaktivne') return;
+          const rate = costRates.find(r => r.stationId === sid);
+          if (rate) stationCost += (rate.rate || 0) * item.qty;
+        });
+      });
+      const totalCost = parseFloat((materialCost + stationCost).toFixed(2));
+      const relatedInvoices = invoices.filter(inv => inv.orderId === order.id);
+      const revenue = relatedInvoices.length > 0 ? parseFloat(relatedInvoices.reduce((s, inv) => s + inv.total, 0).toFixed(2)) : null;
+      const profit = revenue !== null ? parseFloat((revenue - totalCost).toFixed(2)) : null;
+      const marginPercent = revenue ? parseFloat(((profit / revenue) * 100).toFixed(1)) : null;
+      return { orderId: order.id, orderNumber: order.orderNumber || order.id, customer: order.customer, materialCost: parseFloat(materialCost.toFixed(2)), stationCost: parseFloat(stationCost.toFixed(2)), totalCost, revenue, profit, marginPercent };
+    }).sort((a, b) => (a.profit ?? Infinity) - (b.profit ?? Infinity));
+  };
+  const orderProfitability = getOrderProfitability();
 
   const distinctDeliveryDates = Array.from(new Set(allItems.map(i => i.deliveryDate).filter(Boolean))).sort();
 
@@ -3723,25 +4473,51 @@ export default function App() {
               <span className="text-[10px] text-indigo-400 block -mt-1 font-semibold">Živé dáta • Supabase</span>
             </div>
             <nav className="flex flex-wrap items-center justify-center gap-1 bg-slate-900/60 p-1 rounded-xl border border-slate-800 w-full lg:w-auto">
-              <button onClick={() => setActiveTab('planner')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'planner' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Calendar className="h-3.5 w-3.5" /> Plánovacia Matica</button>
-              <button onClick={() => setActiveTab('orders')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'orders' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><PlusCircle className="h-3.5 w-3.5" /> Konfigurátor Zákaziek</button>
-              <button onClick={() => setActiveTab('catalog')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'catalog' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Tag className="h-3.5 w-3.5" /> Katalóg Modelov</button>
-              <button onClick={() => setActiveTab('isolated-station')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'isolated-station' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Sliders className="h-3.5 w-3.5" /> Samostatné Dielne</button>
-              <button onClick={() => setActiveTab('materials')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'materials' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Package className="h-3.5 w-3.5" /> Sklad</button>
-              <button onClick={() => setActiveTab('profiles')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'profiles' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Users className="h-3.5 w-3.5" /> Zamestnanci & Práva</button>
-              <button onClick={() => setActiveTab('qr-terminal')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'qr-terminal' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><QrCode className="h-3.5 w-3.5" /> Čítačka QR</button>
-              {hasPermission('view_reports') && (
+              {canSeeTab(currentUser.role, 'planner') && (
+                <button onClick={() => setActiveTab('planner')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'planner' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Calendar className="h-3.5 w-3.5" /> Plánovacia Matica</button>
+              )}
+              {canSeeTab(currentUser.role, 'orders') && (
+                <button onClick={() => setActiveTab('orders')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'orders' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><PlusCircle className="h-3.5 w-3.5" /> Konfigurátor Zákaziek</button>
+              )}
+              {canSeeTab(currentUser.role, 'catalog') && (
+                <button onClick={() => setActiveTab('catalog')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'catalog' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Tag className="h-3.5 w-3.5" /> Katalóg Modelov</button>
+              )}
+              {canSeeTab(currentUser.role, 'isolated-station') && (
+                <button onClick={() => setActiveTab('isolated-station')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'isolated-station' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Sliders className="h-3.5 w-3.5" /> Samostatné Dielne</button>
+              )}
+              {canSeeTab(currentUser.role, 'materials') && (
+                <button onClick={() => setActiveTab('materials')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'materials' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Package className="h-3.5 w-3.5" /> Sklad</button>
+              )}
+              {canSeeTab(currentUser.role, 'profiles') && (
+                <button onClick={() => setActiveTab('profiles')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'profiles' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Users className="h-3.5 w-3.5" /> Zamestnanci & Práva</button>
+              )}
+              {canSeeTab(currentUser.role, 'qr-terminal') && (
+                <button onClick={() => setActiveTab('qr-terminal')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'qr-terminal' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><QrCode className="h-3.5 w-3.5" /> Čítačka QR</button>
+              )}
+              {hasPermission('view_reports') && canSeeTab(currentUser.role, 'reports') && (
                 <button onClick={() => setActiveTab('reports')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'reports' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><BarChart3 className="h-3.5 w-3.5" /> Prehľady</button>
               )}
-              <button onClick={() => setActiveTab('designers')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'designers' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Palette className="h-3.5 w-3.5" /> Dashboard Grafikov</button>
-              {hasPermission('view_reports') && (
+              {canSeeTab(currentUser.role, 'designers') && (
+                <button onClick={() => setActiveTab('designers')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'designers' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Palette className="h-3.5 w-3.5" /> Dashboard Grafikov</button>
+              )}
+              {hasPermission('view_reports') && canSeeTab(currentUser.role, 'problems') && (
                 <button onClick={() => setActiveTab('problems')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'problems' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><AlertTriangle className="h-3.5 w-3.5" /> Problémy</button>
               )}
-              {hasPermission('create_order') && (
+              {hasPermission('view_finance') && canSeeTab(currentUser.role, 'invoices') && (
                 <button onClick={() => setActiveTab('invoices')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'invoices' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><FileEdit className="h-3.5 w-3.5" /> Financie{orders.filter(o => o.accountingStatus === 'pending_review').length > 0 && <span className="bg-amber-500 text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full ml-1">{orders.filter(o => o.accountingStatus === 'pending_review').length}</span>}</button>
               )}
-              <button onClick={() => setActiveTab('archive')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'archive' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Search className="h-3.5 w-3.5" /> História Zákaziek</button>
-              <button onClick={() => setActiveTab('manual')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'manual' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><BookOpen className="h-3.5 w-3.5" /> Manuál</button>
+              {canSeeTab(currentUser.role, 'archive') && (
+                <button onClick={() => setActiveTab('archive')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'archive' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Search className="h-3.5 w-3.5" /> História Zákaziek</button>
+              )}
+              {canSeeTab(currentUser.role, 'cestaky') && (
+                <button onClick={() => setActiveTab('cestaky')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'cestaky' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Banknote className="h-3.5 w-3.5" /> Cestovné príkazy{travelOrders.filter(t => t.status === 'navrhnute').length > 0 && (currentUser.role === 'master' || currentUser.role === 'supervisor') && <span className="bg-amber-500 text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full ml-1">{travelOrders.filter(t => t.status === 'navrhnute').length}</span>}</button>
+              )}
+              {canSeeTab(currentUser.role, 'kniha-jazd') && (
+                <button onClick={() => setActiveTab('kniha-jazd')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'kniha-jazd' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Camera className="h-3.5 w-3.5" /> Kniha jázd</button>
+              )}
+              {canSeeTab(currentUser.role, 'manual') && (
+                <button onClick={() => setActiveTab('manual')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'manual' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><BookOpen className="h-3.5 w-3.5" /> Manuál</button>
+              )}
             </nav>
           </div>
         </div>
@@ -4241,7 +5017,8 @@ export default function App() {
               </div>
             ) : (
               <>
-                <div className="flex justify-end">
+                <div className="flex justify-end gap-2">
+                  <button onClick={() => { setShowAiOrderAssistant(true); setAiOrderResult(null); setAiOrderError(''); setAiOrderText(''); setAiOrderImageFile(null); setAiOrderImagePreview(''); setAiOrderInputMode('voice'); }} className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs px-4 py-2.5 rounded-lg flex items-center gap-1.5 shadow-lg"><Bot className="h-4 w-4" /> AI zadanie zákazky</button>
                   <button onClick={() => { setShowExpressDotlackovka(true); setExpressCreatedBy(`${currentUser.firstName} ${currentUser.lastName}`); setExpressNeededDate(new Date().toISOString().slice(0, 10)); }} className="bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs px-4 py-2.5 rounded-lg flex items-center gap-1.5 shadow-lg"><Zap className="h-4 w-4" /> Expresné pridanie dotlačovej zákazky</button>
                 </div>
                 <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 shadow-xl">
@@ -4496,8 +5273,18 @@ export default function App() {
         {activeTab === 'catalog' && (
           <div className="space-y-6 print:hidden animate-in fade-in duration-150">
             <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 shadow-xl">
-              <h2 className="text-xl font-bold text-white flex items-center gap-2 mb-2"><Tag className="text-indigo-400 h-5 w-5" /> Správa Katalógu Modelov</h2>
-              <p className="text-xs text-slate-400 mb-6">Katalóg môže obsahovať akékoľvek modely - dresy, tréningovky, mikiny, tepláky, ale aj napr. tričká na dotlač bez priradenej látky.</p>
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-2">
+                <h2 className="text-xl font-bold text-white flex items-center gap-2"><Tag className="text-indigo-400 h-5 w-5" /> Správa Katalógu Modelov</h2>
+                {hasPermission('manage_catalog') && (
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={handleExportProducts} className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[11px] px-3 py-1.5 rounded-lg flex items-center gap-1.5"><Download className="h-3.5 w-3.5" /> Export do Excelu</button>
+                    <button onClick={() => productImportFileInputRef.current?.click()} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] px-3 py-1.5 rounded-lg flex items-center gap-1.5"><Upload className="h-3.5 w-3.5" /> Import z Excelu</button>
+                    <input ref={productImportFileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImportProductsFileChange} className="hidden" />
+                    <button onClick={handleDownloadProductImportTemplate} className="bg-slate-800 hover:bg-slate-700 text-slate-400 font-bold text-[11px] px-3 py-1.5 rounded-lg flex items-center gap-1.5"><FileText className="h-3.5 w-3.5" /> Stiahnuť šablónu</button>
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-slate-400 mb-6">Katalóg môže obsahovať akékoľvek modely - dresy, tréningovky, mikiny, tepláky, ale aj napr. tričká na dotlač bez priradenej látky. Import vždy pridá nové modely (nepreťaží existujúce) — látky sa priraďujú podľa presného názvu zo skladu.</p>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 bg-slate-900/60 p-4 rounded-xl border border-slate-800 space-y-4">
@@ -5564,6 +6351,8 @@ export default function App() {
                           <option value="supervisor">Supervisor</option>
                           <option value="sales">Obchodník</option>
                           <option value="employee">Zamestnanec</option>
+                          <option value="uctovnik">Účtovník</option>
+                          <option value="sofer">Šofér</option>
                         </select>
                       </div>
                     </div>
@@ -5628,7 +6417,7 @@ export default function App() {
                     <div>
                       <label className="text-slate-400 block mb-0.5">Staré heslo (nepoužíva sa — Master/Superv./Obchodník sa prihlasujú emailom, nechaj prázdne)</label>
                       <input type="password" placeholder="nepoužívané" value={editingEmployee ? editEmpPassword : newEmpPassword} onChange={(e) => editingEmployee ? setEditEmpPassword(e.target.value) : setNewEmpPassword(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white opacity-60" />
-                      {editingEmployee && ['master', 'supervisor', 'sales'].includes(editingEmployee.role) && (
+                      {editingEmployee && EMAIL_LOGIN_ROLES.includes(editingEmployee.role) && (
                         <div className="mt-1.5">
                           {editingEmployee.authUserId ? (
                             <p className="text-[10px] text-slate-500">✅ Prihlasovací účet (email) je vytvorený a prepojený.</p>
@@ -5688,7 +6477,7 @@ export default function App() {
                         )}
                       </div>
                     )}
-                    {editingEmployee && !(editingEmployee.id === currentUser.id && authSession) && ['master', 'supervisor', 'sales'].includes(editingEmployee.role) && (
+                    {editingEmployee && !(editingEmployee.id === currentUser.id && authSession) && EMAIL_LOGIN_ROLES.includes(editingEmployee.role) && (
                       <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
                         <span className="text-slate-300 font-bold block mb-1">Dvojfaktorové overenie (2FA)</span>
                         <p className="text-[10px] text-slate-500">{editingEmployee.authUserId ? 'Tento zamestnanec má vytvorený prihlasovací účet — 2FA si nastaví sám po prihlásení, vo svojom profile.' : 'Tento zamestnanec si ešte musí vytvoriť prihlasovací účet (email + heslo) na prihlasovacej obrazovke — potom si tam môže zapnúť aj 2FA.'}</p>
@@ -5707,7 +6496,7 @@ export default function App() {
                 <div className="overflow-x-auto rounded-xl border border-slate-850">
                   <table className="w-full text-left text-xs text-slate-300">
                     <thead className="bg-slate-900 text-slate-400 uppercase tracking-wider text-[10px]">
-                      <tr><th className="px-4 py-3">Akcia</th><th className="px-3 py-3 text-center">Master</th><th className="px-3 py-3 text-center">Superv.</th><th className="px-3 py-3 text-center">Obchod.</th><th className="px-3 py-3 text-center">Zames.</th></tr>
+                      <tr><th className="px-4 py-3">Akcia</th>{ALL_ROLES.map(role => <th key={role} className="px-3 py-3 text-center">{ROLE_LABELS[role]}</th>)}</tr>
                     </thead>
                     <tbody className="divide-y divide-slate-850">
                       {[
@@ -5718,12 +6507,14 @@ export default function App() {
                         { key: 'update_status', label: 'Meniť stavy staníc' },
                         { key: 'manage_profiles', label: 'Spravovať profily' },
                         { key: 'edit_stock', label: 'Korigovať sklad' },
-                        { key: 'manage_catalog', label: 'Spravovať katalóg' }
+                        { key: 'manage_catalog', label: 'Spravovať katalóg' },
+                        { key: 'view_reports', label: 'Vidieť Prehľady' },
+                        { key: 'view_finance', label: 'Vidieť Financie' }
                       ].map(action => (
                         <tr key={action.key} className="hover:bg-slate-900/40">
                           <td className="px-4 py-3 font-semibold text-slate-200">{action.label}</td>
-                          {['master', 'supervisor', 'sales', 'employee'].map(role => (
-                            <td key={role} className="px-3 py-3 text-center"><input type="checkbox" checked={acl[action.key][role]} onChange={() => handleToggleAcl(action.key, role)} disabled={currentUser.role !== 'master' || role === 'master'} className="rounded bg-slate-900 border-slate-800 text-indigo-600 focus:ring-0" /></td>
+                          {ALL_ROLES.map(role => (
+                            <td key={role} className="px-3 py-3 text-center"><input type="checkbox" checked={acl[action.key]?.[role] ?? FALLBACK_ACL[action.key]?.[role] ?? false} onChange={() => handleToggleAcl(action.key, role)} disabled={currentUser.role !== 'master' || role === 'master'} className="rounded bg-slate-900 border-slate-800 text-indigo-600 focus:ring-0" /></td>
                           ))}
                         </tr>
                       ))}
@@ -5836,6 +6627,42 @@ export default function App() {
             </div>
 
             <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 shadow-xl">
+              <h2 className="text-xl font-bold text-white flex items-center gap-2 mb-2"><BarChart3 className="text-indigo-400 h-5 w-5" /> Ziskovosť podľa zákazky</h2>
+              <p className="text-xs text-slate-400 mb-4">Náklad = materiál (aktuálna cena zo skladu) + práca (sadzba za stanicu × počet kusov, nastav nižšie v "Sadzby za jednotku práce"). Zisk sa počíta len pri zákazkách s vystavenou faktúrou — orientačný prepočet, nie presné účtovanie.</p>
+              <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
+                <table className="w-full text-left text-xs text-slate-300">
+                  <thead className="bg-slate-900 text-slate-400 uppercase tracking-wider">
+                    <tr>
+                      <th className="px-3 py-3">Zákazka</th>
+                      <th className="px-3 py-3 text-center">Materiál</th>
+                      <th className="px-3 py-3 text-center">Práca</th>
+                      <th className="px-3 py-3 text-center">Náklady spolu</th>
+                      <th className="px-3 py-3 text-center">Fakturované</th>
+                      <th className="px-3 py-3 text-center">Zisk</th>
+                      <th className="px-3 py-3 text-center">Marža</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {orderProfitability.length === 0 && (
+                      <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-500 italic">Za toto obdobie zatiaľ nie sú žiadne zákazky.</td></tr>
+                    )}
+                    {orderProfitability.map(p => (
+                      <tr key={p.orderId} className="hover:bg-slate-800/40">
+                        <td className="px-3 py-3"><span className="font-mono font-bold text-indigo-400">{p.orderNumber}</span><span className="text-slate-500 block">{p.customer}</span></td>
+                        <td className="px-3 py-3 text-center">{p.materialCost.toFixed(2)} €</td>
+                        <td className="px-3 py-3 text-center">{p.stationCost.toFixed(2)} €</td>
+                        <td className="px-3 py-3 text-center font-bold">{p.totalCost.toFixed(2)} €</td>
+                        <td className="px-3 py-3 text-center">{p.revenue !== null ? `${p.revenue.toFixed(2)} €` : <span className="text-slate-600 italic">bez faktúry</span>}</td>
+                        <td className={`px-3 py-3 text-center font-bold ${p.profit === null ? 'text-slate-600' : p.profit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{p.profit !== null ? `${p.profit.toFixed(2)} €` : '—'}</td>
+                        <td className={`px-3 py-3 text-center font-bold ${p.marginPercent === null ? 'text-slate-600' : p.marginPercent >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{p.marginPercent !== null ? `${p.marginPercent}%` : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 shadow-xl">
               <h2 className="text-xl font-bold text-white flex items-center gap-2 mb-2"><BarChart3 className="text-indigo-400 h-5 w-5" /> Prehľady — čas strávený na jednotlivých staniciach</h2>
               <p className="text-xs text-slate-400 mb-4">Sleduje sa od kliknutia na "Príprava" po "Hotové" na danej stanici. Viditeľné len pre Master/Supervisor.</p>
               <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
@@ -5885,7 +6712,7 @@ export default function App() {
 
             <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 shadow-xl">
               <h3 className="font-bold text-md text-white flex items-center gap-2 mb-2"><Banknote className="text-indigo-400 h-5 w-5" /> Sadzby za jednotku práce (náčrt)</h3>
-              <p className="text-xs text-slate-400 mb-4">Zatiaľ len na poznačenie orientačných cien — automatický prepočet nákladov na zákazku doplníme neskôr.</p>
+              <p className="text-xs text-slate-400 mb-4">Sadzba sa počíta ako € za kus, ktorý prejde danou stanicou — používa sa v prepočte "Ziskovosť podľa zákazky" vyššie.</p>
               <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
                 <table className="w-full text-left text-xs text-slate-300">
                   <thead className="bg-slate-900 text-slate-400 uppercase tracking-wider">
@@ -5906,6 +6733,82 @@ export default function App() {
                   </tbody>
                 </table>
               </div>
+            </div>
+
+            <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 shadow-xl">
+              <h3 className="font-bold text-md text-white flex items-center gap-2 mb-2"><Banknote className="text-indigo-400 h-5 w-5" /> Všeobecná tabuľka nákladov/metrík</h3>
+              <p className="text-xs text-slate-400 mb-1">Elektrina, mzdy, cena za meter sublimácie/fólie/DTF, hodina/kus tlače, spotreba zariadení a pod. — jedno miesto na všetky čísla, s poľom na popis/zdroj.</p>
+              <p className="text-[10px] text-amber-400/80 mb-4">⚠️ Predvyplnené zariadenia (žehličky, tlačiarne, počítače, svetlá, kúrenie) majú FIKTÍVNE hodnoty výkonu a hodín prevádzky — uprav ich na reálne čísla.</p>
+              <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40 mb-4">
+                <table className="w-full text-left text-xs text-slate-300">
+                  <thead className="bg-slate-900 text-slate-400 uppercase tracking-wider">
+                    <tr>
+                      <th className="px-3 py-3">Názov</th><th className="px-3 py-3 text-center">Kategória</th><th className="px-3 py-3 text-center">Typ</th>
+                      <th className="px-3 py-3 text-center">Hodnota</th><th className="px-3 py-3 text-center">Jednotka</th>
+                      <th className="px-3 py-3 text-center">Výkon (kW)</th><th className="px-3 py-3 text-center">Hod./mesiac</th>
+                      <th className="px-3 py-3 text-center">Mesačný náklad</th><th className="px-3 py-3">Popis / vzorec / zdroj</th><th className="px-3 py-3"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {costMetrics.length === 0 && (<tr><td colSpan={10} className="px-4 py-6 text-center text-slate-500 italic">Zatiaľ žiadne metriky.</td></tr>)}
+                    {costMetrics.map(m => {
+                      const monthlyCost = calculateDeviceMonthlyCost(m, costMetrics);
+                      return (
+                        <tr key={m.id} className="hover:bg-slate-800/40">
+                          <td className="px-3 py-3"><input type="text" defaultValue={m.name} onBlur={(e) => handleUpdateCostMetric(m.id, 'name', e.target.value)} className="w-32 bg-slate-950 border border-slate-800 rounded p-1 font-bold text-white" /></td>
+                          <td className="px-3 py-3 text-center">
+                            <select defaultValue={m.category} onChange={(e) => handleUpdateCostMetric(m.id, 'category', e.target.value)} className="bg-slate-950 border border-slate-800 rounded p-1 text-white">
+                              <option value="vseobecne">Všeobecné</option>
+                              <option value="zariadenie">Zariadenie</option>
+                              <option value="kurenie">Kúrenie (plyn)</option>
+                            </select>
+                          </td>
+                          <td className="px-3 py-3 text-center">
+                            <select defaultValue={m.costType} onChange={(e) => handleUpdateCostMetric(m.id, 'cost_type', e.target.value)} className={`rounded p-1 border ${m.costType === 'fixny' ? 'bg-sky-950/40 border-sky-800/40 text-sky-300' : 'bg-amber-950/40 border-amber-800/40 text-amber-300'}`}>
+                              <option value="fixny">Fixný</option>
+                              <option value="variabilny">Variabilný</option>
+                            </select>
+                          </td>
+                          <td className="px-3 py-3 text-center"><input type="number" step="0.01" defaultValue={m.value} onBlur={(e) => handleUpdateCostMetric(m.id, 'value', e.target.value)} className="w-20 bg-slate-950 border border-slate-800 rounded p-1 text-center text-white" /></td>
+                          <td className="px-3 py-3 text-center"><input type="text" defaultValue={m.unit} onBlur={(e) => handleUpdateCostMetric(m.id, 'unit', e.target.value)} placeholder="€/kWh..." className="w-20 bg-slate-950 border border-slate-800 rounded p-1 text-center text-white" /></td>
+                          <td className="px-3 py-3 text-center"><input type="number" step="0.01" defaultValue={m.powerKw ?? ''} onBlur={(e) => handleUpdateCostMetric(m.id, 'power_kw', e.target.value)} placeholder="—" className="w-16 bg-slate-950 border border-slate-800 rounded p-1 text-center text-white" /></td>
+                          <td className="px-3 py-3 text-center"><input type="number" step="1" defaultValue={m.hoursPerMonth ?? ''} onBlur={(e) => handleUpdateCostMetric(m.id, 'hours_per_month', e.target.value)} placeholder="—" className="w-16 bg-slate-950 border border-slate-800 rounded p-1 text-center text-white" /></td>
+                          <td className="px-3 py-3 text-center font-bold text-emerald-400">{monthlyCost !== null ? `${monthlyCost.toFixed(2)} €` : '—'}</td>
+                          <td className="px-3 py-3"><input type="text" defaultValue={m.description} onBlur={(e) => handleUpdateCostMetric(m.id, 'description', e.target.value)} placeholder="odkiaľ pochádza toto číslo" className="w-40 bg-slate-950 border border-slate-800 rounded p-1 text-white" /></td>
+                          <td className="px-3 py-3 text-center"><button onClick={() => handleDeleteCostMetric(m)} className="text-rose-400 hover:text-rose-300"><Trash2 className="h-3.5 w-3.5" /></button></td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  {costMetrics.some(m => calculateDeviceMonthlyCost(m, costMetrics) !== null) && (
+                    <tfoot>
+                      <tr className="border-t border-slate-700 bg-slate-900/60">
+                        <td colSpan={7} className="px-3 py-2 text-right font-bold text-slate-400 uppercase text-[10px]">Spolu energie / mesiac (orientačne)</td>
+                        <td className="px-3 py-2 text-center font-extrabold text-emerald-400">{costMetrics.reduce((s, m) => s + (calculateDeviceMonthlyCost(m, costMetrics) || 0), 0).toFixed(2)} €</td>
+                        <td colSpan={2}></td>
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
+              </div>
+              <form onSubmit={handleAddCostMetric} className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
+                <input type="text" required value={newMetricName} onChange={(e) => setNewMetricName(e.target.value)} placeholder="Názov" className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white col-span-2" />
+                <select value={newMetricCategory} onChange={(e) => setNewMetricCategory(e.target.value)} className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-2 text-xs text-white">
+                  <option value="vseobecne">Všeobecné</option>
+                  <option value="zariadenie">Zariadenie</option>
+                  <option value="kurenie">Kúrenie (plyn)</option>
+                </select>
+                <select value={newMetricCostType} onChange={(e) => setNewMetricCostType(e.target.value)} className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-2 text-xs text-white">
+                  <option value="fixny">Fixný</option>
+                  <option value="variabilny">Variabilný</option>
+                </select>
+                <input type="number" step="0.01" value={newMetricValue} onChange={(e) => setNewMetricValue(e.target.value)} placeholder="Hodnota" className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white" />
+                <input type="text" value={newMetricUnit} onChange={(e) => setNewMetricUnit(e.target.value)} placeholder="Jednotka" className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white" />
+                <input type="number" step="0.01" value={newMetricPowerKw} onChange={(e) => setNewMetricPowerKw(e.target.value)} placeholder="Výkon kW" className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white" />
+                <input type="number" step="1" value={newMetricHoursPerMonth} onChange={(e) => setNewMetricHoursPerMonth(e.target.value)} placeholder="Hod./mesiac" className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white" />
+                <input type="text" value={newMetricDescription} onChange={(e) => setNewMetricDescription(e.target.value)} placeholder="Popis / vzorec / zdroj" className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white col-span-2 sm:col-span-3 lg:col-span-5" />
+                <button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center justify-center gap-1.5 col-span-2 sm:col-span-1 lg:col-span-3"><Plus className="h-4 w-4" /> Pridať</button>
+              </form>
             </div>
           </div>
         )}
@@ -6177,7 +7080,7 @@ export default function App() {
           </div>
         )}
 
-        {activeTab === 'invoices' && hasPermission('create_order') && (() => {
+        {activeTab === 'invoices' && hasPermission('view_finance') && (() => {
           const filteredInvoices = invoices.filter(inv => invoiceStatusFilter === 'all' || inv.status === invoiceStatusFilter);
           const pendingReviewOrders = orders.filter(o => o.accountingStatus === 'pending_review');
           return (
@@ -6206,6 +7109,8 @@ export default function App() {
                 <button onClick={() => setFinanceSubTab('cash')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'cash' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Pokladňa</button>
                 <button onClick={() => setFinanceSubTab('bank')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'bank' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Banka</button>
                 <button onClick={() => setFinanceSubTab('journal')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'journal' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Účtovný denník</button>
+                <button onClick={() => setFinanceSubTab('assets')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'assets' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Majetok</button>
+                <button onClick={() => setFinanceSubTab('customers')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'customers' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Zákazníci</button>
                 <button onClick={() => setFinanceSubTab('ai')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap flex items-center gap-1 ${financeSubTab === 'ai' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}><Bot className="h-3.5 w-3.5" /> AI Asistent</button>
               </div>
 
@@ -6252,6 +7157,20 @@ export default function App() {
                 const customerTypeLabels = { sk_platca: 'SK — platca DPH', sk_neplatca: 'SK — neplatca DPH', eu_platca: 'EÚ — platca DPH', eu_neplatca: 'EÚ — neplatca DPH', tretia_krajina: 'Tretia krajina' };
 
                 const upcomingDeadlines = taxDeadlines.slice().sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+
+                // DPH sa priznáva mesačne alebo štvrťročne, nie ročne — tento rozpad je priamo použiteľný ako podklad na konkrétne priznanie/KV DPH.
+                const MONTH_NAMES = ['Január', 'Február', 'Marec', 'Apríl', 'Máj', 'Jún', 'Júl', 'August', 'September', 'Október', 'November', 'December'];
+                const byMonth = Array.from({ length: 12 }, () => ({ subtotal: 0, vat: 0, total: 0, count: 0 }));
+                invoices.forEach(inv => {
+                  if (!inv.issueDate) return;
+                  const d = new Date(inv.issueDate);
+                  if (isNaN(d.getTime()) || d.getFullYear() !== vatSummaryYear) return;
+                  const m = byMonth[d.getMonth()];
+                  m.subtotal += inv.subtotal; m.vat += inv.vatTotal; m.total += inv.total; m.count += 1;
+                });
+                const byQuarter = [1, 2, 3, 4].map(q => byMonth.slice((q - 1) * 3, q * 3).reduce((acc, m) => ({ subtotal: acc.subtotal + m.subtotal, vat: acc.vat + m.vat, total: acc.total + m.total, count: acc.count + m.count }), { subtotal: 0, vat: 0, total: 0, count: 0 }));
+                const availableVatYears = Array.from(new Set(invoices.map(inv => inv.issueDate ? new Date(inv.issueDate).getFullYear() : null).filter(Boolean))).sort((a, b) => b - a);
+                if (!availableVatYears.includes(vatSummaryYear)) availableVatYears.unshift(vatSummaryYear);
 
                 return (
                   <div className="space-y-6">
@@ -6308,6 +7227,48 @@ export default function App() {
                     </div>
 
                     <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-1">
+                        <h3 className="text-sm font-bold text-white">Podklad na DPH priznanie / KV DPH — podľa mesiaca a štvrťroka</h3>
+                        <select value={vatSummaryYear} onChange={(e) => setVatSummaryYear(parseInt(e.target.value))} className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white">
+                          {availableVatYears.map(y => <option key={y} value={y}>{y}</option>)}
+                        </select>
+                      </div>
+                      <p className="text-[10px] text-slate-500 mb-3">⚠️ Počíta len z vystavených faktúr (výstupy) — príjmové doklady, prijaté faktúry ani nákupy tu nie sú. Over pred podaním s účtovníčkou.</p>
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs text-slate-300">
+                            <thead className="text-slate-500 border-b border-slate-800"><tr><th className="text-left py-1.5">Mesiac</th><th className="text-right py-1.5">Základ</th><th className="text-right py-1.5">DPH</th><th className="text-right py-1.5">Faktúr</th></tr></thead>
+                            <tbody className="divide-y divide-slate-800/60">
+                              {byMonth.map((m, i) => (
+                                <tr key={i} className={m.count === 0 ? 'text-slate-600' : ''}>
+                                  <td className="py-1.5">{MONTH_NAMES[i]}</td>
+                                  <td className="py-1.5 text-right">{m.subtotal.toFixed(2)} €</td>
+                                  <td className="py-1.5 text-right text-amber-400">{m.vat.toFixed(2)} €</td>
+                                  <td className="py-1.5 text-right">{m.count}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs text-slate-300">
+                            <thead className="text-slate-500 border-b border-slate-800"><tr><th className="text-left py-1.5">Štvrťrok</th><th className="text-right py-1.5">Základ</th><th className="text-right py-1.5">DPH</th><th className="text-right py-1.5">Faktúr</th></tr></thead>
+                            <tbody className="divide-y divide-slate-800/60">
+                              {byQuarter.map((q, i) => (
+                                <tr key={i} className={q.count === 0 ? 'text-slate-600' : ''}>
+                                  <td className="py-1.5">Q{i + 1}</td>
+                                  <td className="py-1.5 text-right">{q.subtotal.toFixed(2)} €</td>
+                                  <td className="py-1.5 text-right text-amber-400">{q.vat.toFixed(2)} €</td>
+                                  <td className="py-1.5 text-right">{q.count}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
                       <div className="flex items-center justify-between mb-3">
                         <h3 className="text-sm font-bold text-white">Daňové termíny</h3>
                       </div>
@@ -6353,8 +7314,29 @@ export default function App() {
                 );
               })()}
 
-              {financeSubTab === 'queue' && (
+              {financeSubTab === 'queue' && (() => {
+                const paymentsAwaitingInvoice = bankTransactions.filter(tx => tx.matched && tx.orderId && !invoices.some(inv => inv.orderId === tx.orderId));
+                return (
                 <div className="space-y-3">
+                  {paymentsAwaitingInvoice.length > 0 && (
+                    <div className="space-y-2 mb-4">
+                      <h3 className="text-sm font-bold text-amber-300 flex items-center gap-1.5"><AlertTriangle className="h-4 w-4" /> Platby prijaté pred vystavením faktúry ({paymentsAwaitingInvoice.length})</h3>
+                      {paymentsAwaitingInvoice.map(tx => {
+                        const relatedOrder = orders.find(o => o.id === tx.orderId);
+                        return (
+                          <div key={tx.id} className="bg-slate-950 border border-amber-700/40 rounded-xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                            <div>
+                              <p className="text-sm font-bold text-white">{tx.amount.toFixed(2)} € — VS {tx.variableSymbol}</p>
+                              <p className="text-[11px] text-slate-500">{relatedOrder ? `${relatedOrder.orderNumber || relatedOrder.id} • ${relatedOrder.customer}` : 'Zákazka nenájdená'} • prijaté {tx.date}</p>
+                            </div>
+                            {relatedOrder && (
+                              <button onClick={() => handleStartNewInvoice(relatedOrder)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] px-3 py-2 rounded-lg flex items-center gap-1 shrink-0"><FileEdit className="h-3.5 w-3.5" /> Dovystaviť faktúru</button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                   <p className="text-xs text-slate-400">Zákazky, ktoré sú kompletne hotové na všetkých staniciach a majú byť fakturované. Skontroluj a buď vystav faktúru, alebo prehoď na hotovosť, ak si to zákazník rozmyslel.</p>
                   {pendingReviewOrders.length === 0 ? (
                     <div className="bg-slate-950 border border-slate-800 rounded-2xl p-10 text-center text-slate-500 italic">Fronta je prázdna — nič nečaká na spracovanie. 🎉</div>
@@ -6380,14 +7362,18 @@ export default function App() {
                     </div>
                   )}
                 </div>
-              )}
+                );
+              })()}
 
               {financeSubTab === 'invoices' && (
                 <>
-                  <div className="flex items-center gap-2 bg-slate-900 p-1.5 rounded-xl border border-slate-800 w-fit">
-                    <button onClick={() => setInvoiceStatusFilter('all')} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${invoiceStatusFilter === 'all' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Všetky ({invoices.length})</button>
-                    <button onClick={() => setInvoiceStatusFilter('issued')} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${invoiceStatusFilter === 'issued' ? 'bg-amber-600 text-white' : 'text-slate-400'}`}>Neuhradené ({invoices.filter(i => i.status === 'issued').length})</button>
-                    <button onClick={() => setInvoiceStatusFilter('paid')} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${invoiceStatusFilter === 'paid' ? 'bg-emerald-600 text-white' : 'text-slate-400'}`}>Uhradené ({invoices.filter(i => i.status === 'paid').length})</button>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 bg-slate-900 p-1.5 rounded-xl border border-slate-800 w-fit">
+                      <button onClick={() => setInvoiceStatusFilter('all')} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${invoiceStatusFilter === 'all' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Všetky ({invoices.length})</button>
+                      <button onClick={() => setInvoiceStatusFilter('issued')} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${invoiceStatusFilter === 'issued' ? 'bg-amber-600 text-white' : 'text-slate-400'}`}>Neuhradené ({invoices.filter(i => i.status === 'issued').length})</button>
+                      <button onClick={() => setInvoiceStatusFilter('paid')} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${invoiceStatusFilter === 'paid' ? 'bg-emerald-600 text-white' : 'text-slate-400'}`}>Uhradené ({invoices.filter(i => i.status === 'paid').length})</button>
+                    </div>
+                    <button onClick={() => handleExportInvoices(filteredInvoices)} disabled={filteredInvoices.length === 0} className="bg-emerald-700 hover:bg-emerald-800 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-[11px] px-3 py-1.5 rounded-lg flex items-center gap-1.5"><Download className="h-3.5 w-3.5" /> Export do Excelu ({filteredInvoices.length})</button>
                   </div>
 
                   <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
@@ -6513,6 +7499,86 @@ export default function App() {
                 </div>
               )}
 
+              {financeSubTab === 'assets' && (
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <p className="text-xs text-slate-400">Evidencia dlhodobého majetku a výpočet daňových odpisov. Orientačný výpočet — pri vyradení v priebehu roka alebo technickom zhodnotení nechaj skontrolovať účtovníčkou.</p>
+                    <button onClick={() => setShowAddAssetForm(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5 shrink-0"><Plus className="h-4 w-4" /> Nový majetok</button>
+                  </div>
+                  <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
+                    <table className="w-full text-left text-xs text-slate-300">
+                      <thead className="bg-slate-900 text-slate-400 uppercase tracking-wider">
+                        <tr><th className="px-3 py-3">Názov</th><th className="px-3 py-3 text-center">Obstarané</th><th className="px-3 py-3 text-center">Vstupná cena</th><th className="px-3 py-3 text-center">Skupina</th><th className="px-3 py-3 text-center">Metóda</th><th className="px-3 py-3 text-center">Zostatková cena</th><th className="px-3 py-3 text-center">Stav</th><th className="px-3 py-3 text-center">Karta</th></tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800">
+                        {assets.length === 0 && (<tr><td colSpan={8} className="px-4 py-8 text-center text-slate-500 italic">Zatiaľ žiadny evidovaný majetok.</td></tr>)}
+                        {assets.map(a => (
+                          <tr key={a.id} className="hover:bg-slate-800/40">
+                            <td className="px-3 py-3 font-bold text-white">{a.name}</td>
+                            <td className="px-3 py-3 text-center">{a.acquisitionDate}</td>
+                            <td className="px-3 py-3 text-center font-mono">{a.acquisitionPrice.toFixed(2)} €</td>
+                            <td className="px-3 py-3 text-center">{a.depreciationGroup}. skupina ({DEPRECIATION_GROUP_YEARS[a.depreciationGroup]} r.)</td>
+                            <td className="px-3 py-3 text-center">{a.depreciationMethod === 'zrychlene' ? 'Zrýchlené' : 'Rovnomerné'}</td>
+                            <td className="px-3 py-3 text-center font-bold text-emerald-400">{getCurrentBookValue(a).toFixed(2)} €</td>
+                            <td className="px-3 py-3 text-center"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${a.status === 'aktivny' ? 'bg-emerald-950/40 text-emerald-300' : 'bg-slate-800 text-slate-400'}`}>{a.status === 'aktivny' ? 'Aktívny' : 'Vyradený'}</span></td>
+                            <td className="px-3 py-3 text-center"><button onClick={() => setSelectedAssetForDetail(a)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] px-2.5 py-1 rounded">Detail</button></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {financeSubTab === 'customers' && (
+                <div className="space-y-6">
+                  <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
+                    <h3 className="text-sm font-bold text-white mb-1">Úrovne zákazníkov — prahy a splatnosť</h3>
+                    <p className="text-[10px] text-slate-500 mb-3">Zákazník dosiahne úroveň splnením POČTU OBJEDNÁVOK ALEBO OBJEMU (stačí jedno z dvoch). Splatnosť faktúry sa podľa toho predvyplní automaticky pri vystavení.</p>
+                    <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
+                      <table className="w-full text-left text-xs text-slate-300">
+                        <thead className="bg-slate-900 text-slate-400 uppercase tracking-wider">
+                          <tr><th className="px-3 py-3">Úroveň</th><th className="px-3 py-3 text-center">Min. počet objednávok</th><th className="px-3 py-3 text-center">Min. objem (€)</th><th className="px-3 py-3 text-center">Splatnosť (dní)</th></tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800">
+                          {[...tierRules].sort((a, b) => a.sortOrder - b.sortOrder).map(rule => (
+                            <tr key={rule.tier} className="hover:bg-slate-800/40">
+                              <td className="px-3 py-3"><span className={`text-[10px] font-extrabold px-2 py-1 rounded-full ${TIER_COLORS[rule.tier]}`}>{TIER_LABELS[rule.tier]}</span></td>
+                              <td className="px-3 py-3 text-center"><input type="number" step="1" defaultValue={rule.minOrders} onBlur={(e) => handleUpdateTierRule(rule.tier, 'min_orders', e.target.value)} className="w-20 bg-slate-950 border border-slate-800 rounded p-1 text-center text-white" /></td>
+                              <td className="px-3 py-3 text-center"><input type="number" step="1" defaultValue={rule.minVolume} onBlur={(e) => handleUpdateTierRule(rule.tier, 'min_volume', e.target.value)} className="w-24 bg-slate-950 border border-slate-800 rounded p-1 text-center text-white" /></td>
+                              <td className="px-3 py-3 text-center"><input type="number" step="1" defaultValue={rule.dueDays} onBlur={(e) => handleUpdateTierRule(rule.tier, 'due_days', e.target.value)} className="w-16 bg-slate-950 border border-slate-800 rounded p-1 text-center text-white" /></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
+                    <h3 className="text-sm font-bold text-white mb-3">Rebríček zákazníkov</h3>
+                    <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
+                      <table className="w-full text-left text-xs text-slate-300">
+                        <thead className="bg-slate-900 text-slate-400 uppercase tracking-wider">
+                          <tr><th className="px-3 py-3">Zákazník</th><th className="px-3 py-3 text-center">Úroveň</th><th className="px-3 py-3 text-center">Počet objednávok</th><th className="px-3 py-3 text-center">Celkový objem</th><th className="px-3 py-3"></th></tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800">
+                          {customerStats.length === 0 && (<tr><td colSpan={5} className="px-4 py-6 text-center text-slate-500 italic">Zatiaľ žiadni zákazníci.</td></tr>)}
+                          {customerStats.map(c => (
+                            <tr key={c.name} className="hover:bg-slate-800/40">
+                              <td className="px-3 py-3 font-bold text-white">{c.name}</td>
+                              <td className="px-3 py-3 text-center"><span className={`text-[10px] font-extrabold px-2 py-1 rounded-full ${TIER_COLORS[c.tier]}`}>{TIER_LABELS[c.tier]}</span></td>
+                              <td className="px-3 py-3 text-center">{c.orderCount}</td>
+                              <td className="px-3 py-3 text-center font-bold text-emerald-400">{c.volume.toFixed(2)} €</td>
+                              <td className="px-3 py-3 text-center"><button onClick={() => handleOpenCustomerDetail(c.name)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] px-2.5 py-1 rounded">Karta zákazníka</button></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {financeSubTab === 'ai' && (
                 <div className="bg-slate-950 border border-slate-800 rounded-xl h-[560px] flex flex-col overflow-hidden">
                   <div className="p-4 bg-slate-900 border-b border-slate-800 flex items-center gap-3">
@@ -6579,6 +7645,445 @@ export default function App() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          );
+        })()}
+
+        {activeTab === 'cestaky' && (() => {
+          const isApprover = currentUser.role === 'master' || currentUser.role === 'supervisor';
+          const pendingForApproval = isApprover ? travelOrders.filter(t => t.status === 'navrhnute') : [];
+          const myTravelOrders = travelOrders.filter(t => t.employeeId === currentUser.id);
+          const statusLabel = { navrhnute: 'Čaká na schválenie', schvalene: 'Schválené', zamietnute: 'Zamietnuté' };
+          const statusColor = { navrhnute: 'bg-amber-950/40 text-amber-300', schvalene: 'bg-emerald-950/40 text-emerald-300', zamietnute: 'bg-rose-950/40 text-rose-300' };
+          return (
+            <div className="space-y-6 print:hidden animate-in fade-in duration-150 max-w-4xl mx-auto">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <h2 className="text-xl font-bold text-white flex items-center gap-2"><Banknote className="text-indigo-400 h-5 w-5" /> Cestovné príkazy</h2>
+                <button onClick={() => setShowAddTravelOrderForm(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Plus className="h-4 w-4" /> Nový cestovný príkaz</button>
+              </div>
+              <p className="text-[10px] text-slate-500">Sadzby: kilometrovné {CESTOVNE_KM_RATE.toFixed(3)} €/km, stravné 9,30 € (5-12h) / 13,80 € (12-18h) / 20,60 € (nad 18h) — podľa platnej legislatívy SR k 2026. Palivo sa počíta zo zadanej spotreby vozidla a ceny paliva.</p>
+
+              {isApprover && pendingForApproval.length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="text-sm font-bold text-amber-300">Čakajú na schválenie ({pendingForApproval.length})</h3>
+                  {pendingForApproval.map(t => {
+                    const cost = calculateTravelOrderCost(t);
+                    return (
+                      <div key={t.id} className="bg-slate-950 border border-amber-700/40 rounded-xl p-4 space-y-2">
+                        <div className="flex flex-col sm:flex-row justify-between items-start gap-2">
+                          <div>
+                            <p className="text-sm font-bold text-white">{t.employeeName} — {t.tripDate}</p>
+                            <p className="text-[11px] text-slate-500">{t.fromLocation} → {t.toLocation} {t.purpose && `• ${t.purpose}`}</p>
+                            <p className="text-[11px] text-slate-500">{t.distanceKm} km • {t.departureTime || '—'}–{t.returnTime || '—'} ({cost.hours} h)</p>
+                          </div>
+                          <div className="flex gap-2 shrink-0">
+                            <button onClick={() => { setRejectingTravelOrder(t); setTravelRejectionReason(''); }} className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-[11px] px-3 py-1.5 rounded-lg">Zamietnuť</button>
+                            <button onClick={() => handleApproveTravelOrder(t)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] px-3 py-1.5 rounded-lg">Schváliť</button>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-3 text-[11px] text-slate-400 bg-slate-900/60 rounded-lg px-3 py-2">
+                          <span>Kilometrovné: <strong className="text-white">{cost.kilometrovne.toFixed(2)} €</strong></span>
+                          <span>Palivo: <strong className="text-white">{cost.palivo.toFixed(2)} €</strong></span>
+                          <span>Stravné: <strong className="text-white">{cost.stravne.toFixed(2)} €</strong></span>
+                          <span>Spolu: <strong className="text-emerald-400">{cost.total.toFixed(2)} €</strong></span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <h3 className="text-sm font-bold text-white">Moje cestovné príkazy</h3>
+                {myTravelOrders.length === 0 ? (
+                  <div className="bg-slate-950 border border-slate-800 rounded-2xl p-8 text-center text-slate-500 italic">Zatiaľ žiadne cestovné príkazy.</div>
+                ) : (
+                  myTravelOrders.map(t => {
+                    const cost = calculateTravelOrderCost(t);
+                    return (
+                      <div key={t.id} className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusColor[t.status]}`}>{statusLabel[t.status]}</span>
+                          <span className="text-sm font-bold text-white">{t.tripDate}</span>
+                          <span className="text-[11px] text-slate-500">{t.fromLocation} → {t.toLocation}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-3 text-[11px] text-slate-400">
+                          <span>{t.distanceKm} km</span>
+                          <span>Spolu: <strong className="text-emerald-400">{cost.total.toFixed(2)} €</strong></span>
+                        </div>
+                        {t.status === 'zamietnute' && t.rejectionReason && <p className="text-[11px] text-rose-400 italic">Dôvod zamietnutia: {t.rejectionReason}</p>}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          );
+        })()}
+
+        {showAddTravelOrderForm && (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <form onSubmit={handleAddTravelOrder} className="bg-slate-900 border border-slate-700 p-6 rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl space-y-3">
+              <div className="flex justify-between items-start">
+                <h3 className="text-lg font-bold text-white">Nový cestovný príkaz</h3>
+                <button type="button" onClick={() => setShowAddTravelOrderForm(false)} className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white"><X className="h-5 w-5" /></button>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Dátum cesty</label>
+                  <input type="date" required value={newTravelDate} onChange={(e) => setNewTravelDate(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Vzdialenosť (km)</label>
+                  <input type="number" step="0.1" required value={newTravelDistance} onChange={(e) => setNewTravelDistance(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Odchod (čas)</label>
+                  <input type="time" value={newTravelDeparture} onChange={(e) => setNewTravelDeparture(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Návrat (čas)</label>
+                  <input type="time" value={newTravelReturn} onChange={(e) => setNewTravelReturn(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Odkiaľ</label>
+                  <input type="text" value={newTravelFrom} onChange={(e) => setNewTravelFrom(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Kam</label>
+                  <input type="text" value={newTravelTo} onChange={(e) => setNewTravelTo(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Účel cesty / poznámka</label>
+                <input type="text" value={newTravelPurpose} onChange={(e) => setNewTravelPurpose(e.target.value)} placeholder="napr. odovzdanie tovaru zákazníkovi" className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Súvisiaca zákazka (voliteľné)</label>
+                <select value={newTravelOrderId} onChange={(e) => setNewTravelOrderId(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white">
+                  <option value="">-- žiadna --</option>
+                  {orders.map(o => <option key={o.id} value={o.id}>{o.orderNumber || o.id} — {o.customer}</option>)}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Spotreba (l/100km)</label>
+                  <input type="number" step="0.1" value={newTravelConsumption} onChange={(e) => setNewTravelConsumption(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Cena paliva (€/l)</label>
+                  <input type="number" step="0.01" value={newTravelFuelPrice} onChange={(e) => setNewTravelFuelPrice(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" />
+                </div>
+              </div>
+              {newTravelDistance && (
+                <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs text-slate-300 space-y-1">
+                  {(() => {
+                    const preview = calculateTravelOrderCost({ distanceKm: parseFloat(newTravelDistance) || 0, fuelConsumptionL100km: parseFloat(newTravelConsumption) || 0, fuelPricePerLiter: parseFloat(newTravelFuelPrice) || 0, departureTime: newTravelDeparture, returnTime: newTravelReturn });
+                    return (
+                      <>
+                        <p>Kilometrovné: {preview.kilometrovne.toFixed(2)} € • Palivo: {preview.palivo.toFixed(2)} € • Stravné: {preview.stravne.toFixed(2)} €</p>
+                        <p className="font-bold text-emerald-400">Spolu: {preview.total.toFixed(2)} €</p>
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
+              <div className="flex gap-2 pt-1">
+                <button type="submit" className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg uppercase text-xs">Odoslať na schválenie</button>
+                <button type="button" onClick={() => setShowAddTravelOrderForm(false)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-6 rounded-lg text-xs font-bold">Zrušiť</button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {rejectingTravelOrder && (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-slate-900 border border-rose-800/40 p-6 rounded-2xl w-full max-w-md shadow-2xl space-y-4">
+              <h3 className="text-lg font-bold text-white">Zamietnuť cestovný príkaz</h3>
+              <p className="text-xs text-slate-400">{rejectingTravelOrder.employeeName} — {rejectingTravelOrder.tripDate}</p>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Dôvod zamietnutia (voliteľné)</label>
+                <textarea rows={3} value={travelRejectionReason} onChange={(e) => setTravelRejectionReason(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" autoFocus />
+              </div>
+              <div className="flex gap-2">
+                <button onClick={handleRejectTravelOrder} className="flex-1 bg-rose-700 hover:bg-rose-800 text-white font-bold py-2.5 rounded-lg uppercase text-xs">Zamietnuť</button>
+                <button onClick={() => setRejectingTravelOrder(null)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-6 rounded-lg text-xs font-bold">Zrušiť</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'kniha-jazd' && (() => {
+          const entriesForVehicle = vehicleLogEntries.filter(v => v.vehicleId === selectedVehicleId);
+          return (
+            <div className="space-y-6 print:hidden animate-in fade-in duration-150 max-w-2xl mx-auto">
+              <h2 className="text-xl font-bold text-white flex items-center gap-2"><Camera className="text-indigo-400 h-5 w-5" /> Kniha jázd — firemné vozidlá</h2>
+
+              <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
+                <label className="block text-xs font-semibold text-slate-400">Vozidlo</label>
+                <div className="flex gap-2">
+                  <select value={selectedVehicleId} onChange={(e) => setSelectedVehicleId(e.target.value)} className="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white">
+                    <option value="">-- vyber vozidlo --</option>
+                    {vehicles.map(v => <option key={v.id} value={v.id}>{v.name}{v.licensePlate ? ` (${v.licensePlate})` : ''}</option>)}
+                  </select>
+                  {hasPermission('create_order') && <button onClick={() => setShowAddVehicleForm(true)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs px-3 py-2 rounded-lg shrink-0">+ Vozidlo</button>}
+                </div>
+              </div>
+
+              {selectedVehicleId && (
+                <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
+                  <h3 className="text-sm font-bold text-white">Nový záznam — odfoť tachometer</h3>
+                  {odometerPhotoPreview ? (
+                    <div className="relative">
+                      <img src={odometerPhotoPreview} alt="Tachometer" className="w-full h-48 object-cover rounded-lg border border-slate-800" />
+                      <button type="button" onClick={() => { setOdometerPhotoFile(null); setOdometerPhotoPreview(''); setConfirmedOdometerKm(''); setOdometerReadError(''); }} className="absolute top-1.5 right-1.5 bg-slate-950/80 text-rose-400 rounded-lg p-1.5"><X className="h-4 w-4" /></button>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center justify-center gap-1 border-2 border-dashed border-slate-800 rounded-lg py-8 cursor-pointer hover:border-indigo-600 transition-colors">
+                      <Camera className="h-6 w-6 text-slate-500" />
+                      <span className="text-xs text-slate-500">Odfotiť tachometer</span>
+                      <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => handleOdometerPhotoSelected(e.target.files[0])} />
+                    </label>
+                  )}
+                  {isReadingOdometer && <p className="text-xs text-indigo-400 flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> AI číta stav kilometrov z fotky...</p>}
+                  {odometerReadError && <p className="text-xs text-rose-400">{odometerReadError}</p>}
+                  {(confirmedOdometerKm || odometerReadError) && !isReadingOdometer && (
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-400 mb-1">Stav km (skontroluj, prípadne oprav)</label>
+                      <input type="number" value={confirmedOdometerKm} onChange={(e) => setConfirmedOdometerKm(e.target.value)} className="w-full bg-slate-900 border-2 border-indigo-600 rounded-lg px-3 py-2 text-lg font-bold text-white text-center" />
+                    </div>
+                  )}
+                  <div className="grid grid-cols-3 gap-2">
+                    <select value={newLogFuelType} onChange={(e) => setNewLogFuelType(e.target.value)} className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-2 text-xs text-white">
+                      <option value="">Netankoval</option>
+                      <option value="benzin">Benzín</option>
+                      <option value="nafta">Nafta</option>
+                    </select>
+                    <input type="number" step="0.01" value={newLogFuelLiters} onChange={(e) => setNewLogFuelLiters(e.target.value)} placeholder="Litrov" disabled={!newLogFuelType} className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-2 text-xs text-white disabled:opacity-40" />
+                    <input type="number" step="0.01" value={newLogFuelCost} onChange={(e) => setNewLogFuelCost(e.target.value)} placeholder="Suma €" disabled={!newLogFuelType} className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-2 text-xs text-white disabled:opacity-40" />
+                  </div>
+                  <button onClick={handleSaveVehicleLogEntry} disabled={!confirmedOdometerKm.trim()} className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2.5 rounded-lg uppercase text-xs">Uložiť záznam</button>
+                </div>
+              )}
+
+              {selectedVehicleId && (
+                <div className="space-y-2">
+                  <h3 className="text-sm font-bold text-white">História záznamov</h3>
+                  {entriesForVehicle.length === 0 ? (
+                    <div className="bg-slate-950 border border-slate-800 rounded-2xl p-8 text-center text-slate-500 italic">Zatiaľ žiadne záznamy pre toto vozidlo.</div>
+                  ) : (
+                    entriesForVehicle.map(v => (
+                      <div key={v.id} className="bg-slate-950 border border-slate-800 rounded-xl p-3 flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-bold text-white">{v.entryDate} — {v.odometerKm.toLocaleString('sk-SK')} km</p>
+                          <p className="text-[11px] text-slate-500">{v.employeeName}{v.fuelType ? ` • Tankoval ${v.fuelType === 'benzin' ? 'benzín' : 'naftu'}${v.fuelLiters ? ` (${v.fuelLiters} l)` : ''}${v.fuelCost ? ` za ${v.fuelCost.toFixed(2)} €` : ''}` : ''}</p>
+                        </div>
+                        {v.photoUrl && <a href={v.photoUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300 text-[11px] font-bold shrink-0">Fotka</a>}
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {showAddVehicleForm && (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <form onSubmit={handleAddVehicle} className="bg-slate-900 border border-slate-700 p-6 rounded-2xl w-full max-w-sm shadow-2xl space-y-3">
+              <div className="flex justify-between items-start">
+                <h3 className="text-lg font-bold text-white">Nové vozidlo</h3>
+                <button type="button" onClick={() => setShowAddVehicleForm(false)} className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white"><X className="h-5 w-5" /></button>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Názov vozidla</label>
+                <input type="text" required value={newVehicleName} onChange={(e) => setNewVehicleName(e.target.value)} placeholder="napr. Firemná dodávka" className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" autoFocus />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">ŠPZ (voliteľné)</label>
+                <input type="text" value={newVehiclePlate} onChange={(e) => setNewVehiclePlate(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" />
+              </div>
+              <div className="flex gap-2">
+                <button type="submit" className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg uppercase text-xs">Pridať</button>
+                <button type="button" onClick={() => setShowAddVehicleForm(false)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-6 rounded-lg text-xs font-bold">Zrušiť</button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {showAiOrderAssistant && (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-slate-900 border border-indigo-700/40 p-6 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl space-y-4">
+              <div className="flex justify-between items-start">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2"><Bot className="h-5 w-5 text-indigo-400" /> AI zadanie zákazky</h3>
+                <button onClick={() => setShowAiOrderAssistant(false)} className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white"><X className="h-5 w-5" /></button>
+              </div>
+
+              {!aiOrderResult && (
+                <>
+                  <div className="flex gap-2 bg-slate-950 p-1.5 rounded-xl border border-slate-800 w-fit">
+                    <button onClick={() => setAiOrderInputMode('voice')} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${aiOrderInputMode === 'voice' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>🎤 Hlas</button>
+                    <button onClick={() => setAiOrderInputMode('text')} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${aiOrderInputMode === 'text' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>📋 Text / Email</button>
+                    <button onClick={() => setAiOrderInputMode('photo')} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${aiOrderInputMode === 'photo' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>📷 Fotka</button>
+                  </div>
+
+                  {(aiOrderInputMode === 'voice' || aiOrderInputMode === 'text') && (
+                    <div className="space-y-2">
+                      {aiOrderInputMode === 'voice' && (
+                        <button onClick={handleToggleVoiceRecording} className={`w-full py-3 rounded-lg font-bold text-sm flex items-center justify-center gap-2 ${isRecordingVoice ? 'bg-rose-600 hover:bg-rose-700 text-white animate-pulse' : 'bg-indigo-600 hover:bg-indigo-700 text-white'}`}>
+                          <Camera className="h-4 w-4" /> {isRecordingVoice ? 'Nahrávam... (klikni pre zastavenie)' : 'Spustiť nahrávanie'}
+                        </button>
+                      )}
+                      <textarea rows={6} value={aiOrderText} onChange={(e) => setAiOrderText(e.target.value)} placeholder={aiOrderInputMode === 'voice' ? 'Prepísaný text sa objaví tu, dá sa aj ručne doplniť...' : 'Prilep sem text emailu s rozpisom objednávky...'} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" />
+                    </div>
+                  )}
+
+                  {aiOrderInputMode === 'photo' && (
+                    aiOrderImagePreview ? (
+                      <div className="relative">
+                        <img src={aiOrderImagePreview} alt="Objednávka" className="w-full h-56 object-contain bg-slate-950 rounded-lg border border-slate-800" />
+                        <button type="button" onClick={() => { setAiOrderImageFile(null); setAiOrderImagePreview(''); }} className="absolute top-1.5 right-1.5 bg-slate-950/80 text-rose-400 rounded-lg p-1.5"><X className="h-4 w-4" /></button>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center gap-1 border-2 border-dashed border-slate-800 rounded-lg py-8 cursor-pointer hover:border-indigo-600 transition-colors">
+                        <Camera className="h-6 w-6 text-slate-500" />
+                        <span className="text-xs text-slate-500">Odfotiť alebo nahrať screenshot objednávky</span>
+                        <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files[0]; if (f) { setAiOrderImageFile(f); setAiOrderImagePreview(URL.createObjectURL(f)); } }} />
+                      </label>
+                    )
+                  )}
+
+                  {aiOrderError && <p className="text-xs text-rose-400">{aiOrderError}</p>}
+                  <button onClick={handleProcessAiOrderInput} disabled={isProcessingAiOrder} className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold py-2.5 rounded-lg uppercase text-xs flex items-center justify-center gap-2">
+                    {isProcessingAiOrder ? <><Loader2 className="h-4 w-4 animate-spin" /> Spracúvam...</> : 'Spracovať AI'}
+                  </button>
+                </>
+              )}
+
+              {aiOrderResult && (
+                <div className="space-y-3">
+                  <p className="text-[10px] text-amber-400/80">⚠️ Skontroluj a uprav pred potvrdením — AI odhad môže byť nepresný.</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] text-slate-500 mb-1">Zákazník</label>
+                      <input type="text" value={aiOrderResult.customerName} onChange={(e) => setAiOrderResult({ ...aiOrderResult, customerName: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-slate-500 mb-1">Termín dodania</label>
+                      <input type="date" value={aiOrderResult.deliveryDate || ''} onChange={(e) => setAiOrderResult({ ...aiOrderResult, deliveryDate: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <span className="text-xs font-bold text-slate-300 uppercase">Rozpoznané položky ({aiOrderResult.items.length})</span>
+                    {aiOrderResult.items.map(it => (
+                      <div key={it.tempId} className="grid grid-cols-12 gap-1.5 items-center bg-slate-950 border border-slate-800 rounded-lg p-2">
+                        <select value={it.productId} onChange={(e) => handleUpdateAiResultItem(it.tempId, 'productId', e.target.value)} className={`col-span-5 bg-slate-900 border rounded p-1.5 text-xs text-white ${it.productId ? 'border-slate-800' : 'border-rose-700'}`}>
+                          <option value="">{it.productNameGuess ? `❓ "${it.productNameGuess}" — vyber produkt` : '-- vyber produkt --'}</option>
+                          {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </select>
+                        <input type="number" min="1" value={it.qty} onChange={(e) => handleUpdateAiResultItem(it.tempId, 'qty', parseInt(e.target.value) || 1)} className="col-span-2 bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" />
+                        <select value={it.gender} onChange={(e) => handleUpdateAiResultItem(it.tempId, 'gender', e.target.value)} className="col-span-2 bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white">
+                          <option value="men">Muži</option>
+                          <option value="women">Ženy</option>
+                          <option value="children">Deti</option>
+                        </select>
+                        <input type="text" placeholder="poznámka" value={it.notes} onChange={(e) => handleUpdateAiResultItem(it.tempId, 'notes', e.target.value)} className="col-span-2 bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" />
+                        <button onClick={() => handleRemoveAiResultItem(it.tempId)} className="col-span-1 text-rose-400 hover:text-rose-300"><X className="h-4 w-4 mx-auto" /></button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={handleConfirmAiOrderResult} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg uppercase text-xs">Potvrdiť a pridať do zákazky</button>
+                    <button onClick={() => setAiOrderResult(null)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-6 rounded-lg text-xs font-bold">Späť</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {selectedCustomerForDetail && customerDraft && (() => {
+          const customerOrders = orders.filter(o => o.customer === selectedCustomerForDetail).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+          const customerInvoices = invoices.filter(inv => inv.customerName === selectedCustomerForDetail).sort((a, b) => new Date(b.issueDate) - new Date(a.issueDate));
+          const stats = customerStats.find(c => c.name === selectedCustomerForDetail);
+          return (
+            <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+              <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl space-y-4">
+                <div className="flex justify-between items-start">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-bold text-white">{selectedCustomerForDetail}</h3>
+                    {stats && <span className={`text-[10px] font-extrabold px-2 py-1 rounded-full ${TIER_COLORS[stats.tier]}`}>{TIER_LABELS[stats.tier]}</span>}
+                  </div>
+                  <button onClick={() => { setSelectedCustomerForDetail(null); setCustomerDraft(null); }} className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white"><X className="h-5 w-5" /></button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 bg-slate-950 border border-slate-800 rounded-xl p-4">
+                  <div>
+                    <label className="block text-[10px] text-slate-500 mb-1">Kontaktná osoba</label>
+                    <input type="text" value={customerDraft.contactPerson} onChange={(e) => setCustomerDraft({ ...customerDraft, contactPerson: e.target.value })} className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-500 mb-1">Telefón</label>
+                    <input type="text" value={customerDraft.phone} onChange={(e) => setCustomerDraft({ ...customerDraft, phone: e.target.value })} className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-500 mb-1">Email</label>
+                    <input type="email" value={customerDraft.email} onChange={(e) => setCustomerDraft({ ...customerDraft, email: e.target.value })} className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-500 mb-1">Adresa</label>
+                    <input type="text" value={customerDraft.address} onChange={(e) => setCustomerDraft({ ...customerDraft, address: e.target.value })} className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-[10px] text-slate-500 mb-1">Všeobecná poznámka</label>
+                    <input type="text" value={customerDraft.notes} onChange={(e) => setCustomerDraft({ ...customerDraft, notes: e.target.value })} className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" />
+                  </div>
+                  <button onClick={handleSaveCustomerContactInfo} className="col-span-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs py-2 rounded-lg">Uložiť kontaktné údaje</button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="bg-slate-950 border border-slate-800 rounded-xl p-3">
+                    <h4 className="text-xs font-bold text-slate-300 uppercase mb-2">Objednávky ({customerOrders.length})</h4>
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                      {customerOrders.length === 0 && <p className="text-[11px] text-slate-500 italic">Zatiaľ žiadne.</p>}
+                      {customerOrders.map(o => (
+                        <button key={o.id} onClick={() => { setSelectedCustomerForDetail(null); setCustomerDraft(null); openOrderDetails(o); }} className="w-full text-left bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-lg px-2.5 py-1.5 text-[11px] text-slate-300">
+                          <span className="font-mono font-bold text-indigo-400">{o.orderNumber || o.id}</span> — {o.deliveryDate}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="bg-slate-950 border border-slate-800 rounded-xl p-3">
+                    <h4 className="text-xs font-bold text-slate-300 uppercase mb-2">Faktúry ({customerInvoices.length})</h4>
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                      {customerInvoices.length === 0 && <p className="text-[11px] text-slate-500 italic">Zatiaľ žiadne.</p>}
+                      {customerInvoices.map(inv => (
+                        <button key={inv.id} onClick={() => { setSelectedCustomerForDetail(null); setCustomerDraft(null); setSelectedInvoiceForDetail(inv); }} className="w-full text-left bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-lg px-2.5 py-1.5 text-[11px] text-slate-300 flex justify-between">
+                          <span><span className="font-mono font-bold text-indigo-400">{inv.invoiceNumber}</span> — {inv.issueDate}</span>
+                          <span className={inv.status === 'paid' ? 'text-emerald-400' : 'text-amber-400'}>{inv.total.toFixed(2)} €</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-slate-950 border border-slate-800 rounded-xl p-3">
+                  <h4 className="text-xs font-bold text-slate-300 uppercase mb-2">Komunikácia / poznámky</h4>
+                  <div className="flex gap-2 mb-2">
+                    <input type="text" value={newCustomerLogEntry} onChange={(e) => setNewCustomerLogEntry(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAddCustomerLogEntry()} placeholder="napr. Zavolal, chce ponuku na 50ks do mája..." className="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white" />
+                    <button onClick={handleAddCustomerLogEntry} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-lg shrink-0">Pridať</button>
+                  </div>
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                    {(customerDraft.interactionLog || []).length === 0 && <p className="text-[11px] text-slate-500 italic">Zatiaľ žiadne záznamy.</p>}
+                    {(customerDraft.interactionLog || []).map((entry, i) => (
+                      <div key={i} className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2">
+                        <p className="text-xs text-slate-200">{entry.text}</p>
+                        <p className="text-[10px] text-slate-500 mt-0.5">{entry.author} • {entry.date}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           );
@@ -6838,6 +8343,87 @@ export default function App() {
             </div>
           </div>
         )}
+
+        {showAddAssetForm && (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <form onSubmit={handleAddAsset} className="bg-slate-900 border border-slate-700 p-6 rounded-2xl w-full max-w-md shadow-2xl space-y-4">
+              <div className="flex justify-between items-start">
+                <h3 className="text-lg font-bold text-white">Nový majetok</h3>
+                <button type="button" onClick={() => setShowAddAssetForm(false)} className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white"><X className="h-5 w-5" /></button>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Názov majetku</label>
+                <input type="text" required value={newAssetName} onChange={(e) => setNewAssetName(e.target.value)} placeholder="napr. Sieťotlačový stroj M&R" className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" autoFocus />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Dátum obstarania</label>
+                  <input type="date" required value={newAssetDate} onChange={(e) => setNewAssetDate(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Vstupná cena (€)</label>
+                  <input type="number" step="0.01" min="0" required value={newAssetPrice} onChange={(e) => setNewAssetPrice(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Odpisová skupina</label>
+                <select value={newAssetGroup} onChange={(e) => { const g = parseInt(e.target.value); setNewAssetGroup(g); if (!ACCELERATED_COEFFICIENTS[g]) setNewAssetMethod('rovnomerne'); }} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white">
+                  {Object.entries(DEPRECIATION_GROUP_YEARS).map(([g, years]) => <option key={g} value={g}>{g}. skupina — {years} rokov</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Metóda odpisovania</label>
+                <div className="grid grid-cols-2 gap-1">
+                  <button type="button" onClick={() => setNewAssetMethod('rovnomerne')} className={`py-2 text-center text-xs font-bold rounded transition-colors ${newAssetMethod === 'rovnomerne' ? 'bg-indigo-600 text-white' : 'bg-slate-950 text-slate-400 hover:text-white'}`}>Rovnomerné</button>
+                  <button type="button" disabled={!ACCELERATED_COEFFICIENTS[newAssetGroup]} onClick={() => setNewAssetMethod('zrychlene')} className={`py-2 text-center text-xs font-bold rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${newAssetMethod === 'zrychlene' ? 'bg-indigo-600 text-white' : 'bg-slate-950 text-slate-400 hover:text-white'}`}>Zrýchlené</button>
+                </div>
+                {!ACCELERATED_COEFFICIENTS[newAssetGroup] && <p className="text-[10px] text-slate-600 mt-1 italic">Zrýchlené odpisovanie je zo zákona povolené len pre 2. a 3. odpisovú skupinu.</p>}
+              </div>
+              <div className="flex gap-2">
+                <button type="submit" className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg uppercase text-xs">Zaevidovať</button>
+                <button type="button" onClick={() => setShowAddAssetForm(false)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-6 rounded-lg text-xs font-bold">Zrušiť</button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {selectedAssetForDetail && (() => {
+          const schedule = calculateDepreciationSchedule(selectedAssetForDetail);
+          return (
+            <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+              <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-2xl space-y-4">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="text-lg font-bold text-white">{selectedAssetForDetail.name}</h3>
+                    <p className="text-xs text-slate-500">Obstarané {selectedAssetForDetail.acquisitionDate} • {selectedAssetForDetail.acquisitionPrice.toFixed(2)} € • {selectedAssetForDetail.depreciationGroup}. skupina • {selectedAssetForDetail.depreciationMethod === 'zrychlene' ? 'Zrýchlené' : 'Rovnomerné'} odpisovanie</p>
+                  </div>
+                  <button onClick={() => setSelectedAssetForDetail(null)} className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white"><X className="h-5 w-5" /></button>
+                </div>
+                <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/60">
+                  <table className="w-full text-left text-xs text-slate-300">
+                    <thead className="bg-slate-900 text-slate-400 uppercase tracking-wider">
+                      <tr><th className="px-3 py-2">Rok</th><th className="px-3 py-2 text-right">Odpis</th><th className="px-3 py-2 text-right">Zostatková cena</th></tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {schedule.map(row => (
+                        <tr key={row.year}>
+                          <td className="px-3 py-2 font-bold text-white">{row.year}</td>
+                          <td className="px-3 py-2 text-right font-mono">{row.odpis.toFixed(2)} €</td>
+                          <td className="px-3 py-2 text-right font-mono text-emerald-400">{row.zostatkovaCenaNaKoniec.toFixed(2)} €</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {selectedAssetForDetail.status === 'vyradeny' ? (
+                  <p className="text-xs text-slate-500 italic">Vyradený {selectedAssetForDetail.disposalDate}.</p>
+                ) : hasPermission('create_order') && (
+                  <button onClick={() => handleDisposeAsset(selectedAssetForDetail)} className="w-full bg-rose-800 hover:bg-rose-900 text-white font-bold py-2 rounded-lg text-xs">Vyradiť majetok</button>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {selectedOrderDetails && (
           <div className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-7xl max-h-[85vh] overflow-y-auto bg-slate-950 p-6 rounded-t-2xl border border-slate-800 border-b-0 shadow-2xl space-y-6 print:static print:inset-auto print:z-auto print:mx-0 print:w-auto print:max-w-none print:max-h-none print:overflow-visible print:bg-white print:text-black print:border-none print:shadow-none print:rounded-none print:p-0 animate-in slide-in-from-bottom-8 fade-in duration-200">
@@ -7161,6 +8747,37 @@ export default function App() {
                     </p>
                   )}
                 </div>
+              </div>
+
+              <div className="print:hidden bg-slate-900/60 border border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row justify-between items-start gap-4">
+                <div className="space-y-2 text-xs">
+                  <h4 className="font-extrabold text-[11px] uppercase tracking-wider text-slate-400 flex items-center gap-1.5"><QrCode className="h-3.5 w-3.5" /> QR platba pred vystavením faktúry</h4>
+                  <p className="text-slate-500">Variabilný symbol: <strong className="font-mono text-white">{selectedOrderDetails.variableSymbol || '—'}</strong> — rovnaký prevezme aj neskôr vystavená faktúra, takže platba zostane spárovateľná.</p>
+                  {hasPermission('create_order') && (
+                    <div className="flex items-center gap-2">
+                      <label className="text-slate-500">Očakávaná suma (€):</label>
+                      <input type="number" step="0.01" min="0" disabled={selectedOrderDetails.variableSymbolConfirmed} defaultValue={selectedOrderDetails.expectedAmount ?? ''} onBlur={(e) => handleUpdateOrderExpectedAmount(selectedOrderDetails.id, e.target.value)} placeholder="nezadané" className="w-28 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-white disabled:opacity-50" />
+                    </div>
+                  )}
+                  {!companySettings.iban && <p className="text-amber-400 text-[10px]">Chýba IBAN v Nastaveniach firmy — QR sa nevygeneruje.</p>}
+                  {companySettings.iban && !selectedOrderDetails.expectedAmount && <p className="text-slate-600 text-[10px] italic">Zadaj očakávanú sumu, aby sa dalo potvrdiť.</p>}
+                  {hasPermission('create_order') && companySettings.iban && selectedOrderDetails.expectedAmount && (
+                    selectedOrderDetails.variableSymbolConfirmed ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] bg-emerald-950/40 text-emerald-300 border border-emerald-800/40 px-2 py-1 rounded-full font-bold">✅ Potvrdené — QR je aktívny</span>
+                        <button onClick={() => handleSetVariableSymbolConfirmed(selectedOrderDetails.id, false)} className="text-[10px] text-rose-400 hover:text-rose-300 underline">Zrušiť potvrdenie</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => handleSetVariableSymbolConfirmed(selectedOrderDetails.id, true)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] px-3 py-1.5 rounded-lg">Potvrdiť sumu a aktivovať QR</button>
+                    )
+                  )}
+                </div>
+                {generateOrderBySquareQr(selectedOrderDetails) && (
+                  <div className="bg-white p-3 rounded-xl flex flex-col items-center border border-slate-300 shadow-sm shrink-0">
+                    <QRCodeSVG value={generateOrderBySquareQr(selectedOrderDetails)} size={100} level="M" />
+                    <p className="text-[9px] text-black font-bold mt-1">PAY by square</p>
+                  </div>
+                )}
               </div>
 
               <div className="print:hidden bg-slate-900/60 border border-slate-800 rounded-xl p-4 space-y-3">
