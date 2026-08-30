@@ -408,6 +408,8 @@ const mapHelpRequestFromDb = (r) => ({ id: r.id, orderId: r.order_id, itemId: r.
 const mapHelpRequestToDb = (h) => ({ id: h.id, order_id: h.orderId, item_id: h.itemId, station_id: h.stationId, raised_by_id: h.raisedById || null, raised_by_name: h.raisedByName || null, target_role: h.targetRole || null, target_employee_id: h.targetEmployeeId || null, target_employee_name: h.targetEmployeeName || null, message: h.message, image_url: h.imageUrl || null, status: h.status, replies: h.replies || [], resolved_at: h.resolvedAt || null });
 
 const BLANK_GOODS_TYPES = ['Tričko', 'Polokošeľa', 'Mikina', 'Tepláky', 'Šiltovka', 'Ponožky', 'Vlajka', 'Iné'];
+// Návrhy organizačných pozícií (len informatívny popis pri zamestnancovi, neovplyvňuje prístupové práva — tie rieši Rola)
+const ORGANIZATIONAL_POSITIONS = ['Riaditeľ výroby (dohliada na chod zákaziek)', 'Technický riaditeľ (technické záležitosti)', 'Vedúci grafického oddelenia', 'Operátor laseru', 'Operátor sublimácie', 'Operátor transferu', 'Operátor sieťotlače', 'Švadlena', 'Skladník / Balič'];
 
 const SK_MONTHS = ['Január', 'Február', 'Marec', 'Apríl', 'Máj', 'Jún', 'Júl', 'August', 'September', 'Október', 'November', 'December'];
 
@@ -7029,7 +7031,14 @@ export default function App() {
                       <div><label className="text-slate-400 block mb-0.5">Priezvisko</label><input type="text" placeholder="Priezvisko" required value={editingEmployee ? editingEmployee.lastName : newEmpLastName} onChange={(e) => editingEmployee ? setEditingEmployee({ ...editingEmployee, lastName: e.target.value }) : setNewEmpLastName(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" /></div>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                      <div><label className="text-slate-400 block mb-0.5">Pozícia</label><input type="text" placeholder="napr. Operátor laseru" value={editingEmployee ? editingEmployee.position : newEmpPosition} onChange={(e) => editingEmployee ? setEditingEmployee({ ...editingEmployee, position: e.target.value }) : setNewEmpPosition(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" /></div>
+                      <div>
+                        <label className="text-slate-400 block mb-0.5">Pozícia</label>
+                        <input type="text" list="organizational-positions-list" placeholder="napr. Operátor laseru, Riaditeľ výroby..." value={editingEmployee ? editingEmployee.position : newEmpPosition} onChange={(e) => editingEmployee ? setEditingEmployee({ ...editingEmployee, position: e.target.value }) : setNewEmpPosition(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" />
+                        <datalist id="organizational-positions-list">
+                          {ORGANIZATIONAL_POSITIONS.map(p => <option key={p} value={p} />)}
+                        </datalist>
+                        <p className="text-[9px] text-slate-600 mt-0.5">Len informatívny popis (napr. kto dohliada na zákazky, rieši technické veci, vedie grafikov) — na prístupové práva slúži Rola vyššie.</p>
+                      </div>
                       <div>
                         <label className="text-slate-400 block mb-0.5">Rola / Úroveň prístupu</label>
                         <select value={editingEmployee ? editingEmployee.role : newEmpRole} onChange={(e) => editingEmployee ? setEditingEmployee({ ...editingEmployee, role: e.target.value }) : setNewEmpRole(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white">
