@@ -331,6 +331,22 @@ function currentStageLabel(item) {
   return { label: 'Hotové', done: true };
 }
 
+// Uplynutý čas práce na stanici (v sekundách), s ohľadom na pozastavenia (počas riešenia žiadosti o pomoc)
+function computeStationElapsedSeconds(meta, nowMs) {
+  if (!meta?.startedAt) return 0;
+  const started = parseFormattedDateTime(meta.startedAt);
+  if (!started) return 0;
+  const pausedTotalMs = meta.pausedTotalMs || 0;
+  const endMs = meta.pausedAt ? (parseFormattedDateTime(meta.pausedAt)?.getTime() || nowMs) : nowMs;
+  return Math.max(0, Math.floor((endMs - started.getTime() - pausedTotalMs) / 1000));
+}
+function formatElapsedSeconds(totalSeconds) {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  const pad = (n) => String(n).padStart(2, '0');
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
 function isDotlackovkaUrgent(item) {
   if (item.productName !== 'Dotlačovka') return false;
   if (currentStageLabel(item).done) return false;
@@ -386,6 +402,10 @@ const mapInvoiceFromDb = (r) => ({ id: r.id, invoiceNumber: r.invoice_number, or
 const mapInvoiceToDb = (inv) => ({ id: inv.id, invoice_number: inv.invoiceNumber, order_id: inv.orderId || null, customer_name: inv.customerName, customer_address: inv.customerAddress, customer_ico: inv.customerIco, customer_dic: inv.customerDic, customer_ic_dph: inv.customerIcDph, issue_date: inv.issueDate, delivery_date: inv.deliveryDate, due_date: inv.dueDate, variable_symbol: inv.variableSymbol, items: inv.items, subtotal: inv.subtotal, vat_total: inv.vatTotal, total: inv.total, status: inv.status, notes: inv.notes, created_by: inv.createdBy, corrections: inv.corrections || [], customer_type: inv.customerType || 'sk_platca' });
 
 const PROBLEM_CATEGORIES = ['Chýba materiál', 'Chyba vo výrobe/tlači', 'Poškodený materiál', 'Nesúhlasí rozmer/farba', 'Porucha stroja', 'Iné'];
+
+// Ziadosti o pomoc medzi stanicami (odlisne od problem_reports vyssie — zivy chat s pauzou casomiery, nie zavinenie/naklady)
+const mapHelpRequestFromDb = (r) => ({ id: r.id, orderId: r.order_id, itemId: r.item_id, stationId: r.station_id, raisedById: r.raised_by_id || '', raisedByName: r.raised_by_name || '', targetRole: r.target_role || '', targetEmployeeId: r.target_employee_id || '', targetEmployeeName: r.target_employee_name || '', message: r.message, imageUrl: r.image_url || '', status: r.status, replies: r.replies || [], createdAt: r.created_at, resolvedAt: r.resolved_at });
+const mapHelpRequestToDb = (h) => ({ id: h.id, order_id: h.orderId, item_id: h.itemId, station_id: h.stationId, raised_by_id: h.raisedById || null, raised_by_name: h.raisedByName || null, target_role: h.targetRole || null, target_employee_id: h.targetEmployeeId || null, target_employee_name: h.targetEmployeeName || null, message: h.message, image_url: h.imageUrl || null, status: h.status, replies: h.replies || [], resolved_at: h.resolvedAt || null });
 
 const BLANK_GOODS_TYPES = ['Tričko', 'Polokošeľa', 'Mikina', 'Tepláky', 'Šiltovka', 'Ponožky', 'Vlajka', 'Iné'];
 
@@ -894,6 +914,18 @@ export default function App() {
   const [reportingMismatchFor, setReportingMismatchFor] = useState(null); // { item, stationId } | null
   const [mismatchNoteInput, setMismatchNoteInput] = useState('');
   const [mismatchQtyInput, setMismatchQtyInput] = useState('');
+  // Žiadosti o pomoc medzi stanicami (dedikované rozhranie pre Grafika a i.)
+  const [helpRequests, setHelpRequests] = useState([]);
+  const [showHelpRequestModal, setShowHelpRequestModal] = useState(null); // item object | null
+  const [helpRequestTarget, setHelpRequestTarget] = useState('sales');
+  const [helpRequestMessage, setHelpRequestMessage] = useState('');
+  const [helpRequestImageFile, setHelpRequestImageFile] = useState(null);
+  const [helpRequestImagePreview, setHelpRequestImagePreview] = useState('');
+  const [isSubmittingHelpRequest, setIsSubmittingHelpRequest] = useState(false);
+  const [activeHelpReplyId, setActiveHelpReplyId] = useState(null);
+  const [helpReplyText, setHelpReplyText] = useState('');
+  const [helpReplyImageFile, setHelpReplyImageFile] = useState(null);
+  const [stationNowTick, setStationNowTick] = useState(Date.now());
   const [companySettings, setCompanySettings] = useState({ companyName: '', address: '', ico: '', dic: '', icDph: '', iban: '', bankName: '', defaultVatRate: 20, nextInvoiceNumber: 1, invoiceNumberPrefix: '' });
   const [companySettingsDraft, setCompanySettingsDraft] = useState(null);
   const [invoices, setInvoices] = useState([]);
@@ -1253,7 +1285,7 @@ export default function App() {
     }
     async function loadAll() {
       try {
-        const [matRes, prodRes, tierRes, sportRes, empRes, aclRes, orderRes, whRes, rateRes, assignRes, stationDefaultRes, stationExclusionRes, checkinRes, attendanceRes, mismatchRes, problemRes, companyRes, invoiceRes, bankRes, journalRes, deadlineRes, cashDocRes, capacityRes, productTimesRes, assetRes, metricRes, tierRuleRes, travelRes, vehicleRes, vehicleLogRes, customerRes, dotlackovkaPriceRes, addonTypeRes] = await Promise.all([
+        const [matRes, prodRes, tierRes, sportRes, empRes, aclRes, orderRes, whRes, rateRes, assignRes, stationDefaultRes, stationExclusionRes, checkinRes, attendanceRes, mismatchRes, problemRes, companyRes, invoiceRes, bankRes, journalRes, deadlineRes, cashDocRes, capacityRes, productTimesRes, assetRes, metricRes, tierRuleRes, travelRes, vehicleRes, vehicleLogRes, customerRes, dotlackovkaPriceRes, addonTypeRes, helpRequestRes] = await Promise.all([
           supabase.from('materials').select('*').order('name'),
           supabase.from('products').select('*'),
           supabase.from('quality_tiers').select('*'),
@@ -1286,7 +1318,8 @@ export default function App() {
           supabase.from('vehicle_log_entries').select('*').order('entry_date', { ascending: false }),
           supabase.from('customers').select('*'),
           supabase.from('dotlacovka_price_list').select('*').order('sort_order'),
-          supabase.from('addon_types').select('*').order('sort_order')
+          supabase.from('addon_types').select('*').order('sort_order'),
+          supabase.from('help_requests').select('*').order('created_at', { ascending: false }).limit(200)
         ]);
         const firstErr = [matRes, prodRes, tierRes, sportRes, empRes, orderRes, whRes].find(r => r.error);
         if (firstErr) throw firstErr.error;
@@ -1330,6 +1363,7 @@ export default function App() {
         setCustomers(customerRes.error ? [] : (customerRes.data || []).map(mapCustomerFromDb));
         setDotlacovkaPriceList(dotlackovkaPriceRes.error ? [] : (dotlackovkaPriceRes.data || []).map(mapDotlackovkaPriceFromDb));
         setAddonTypes(addonTypeRes.error ? [] : (addonTypeRes.data || []).map(mapAddonTypeFromDb));
+        setHelpRequests(helpRequestRes.error ? [] : (helpRequestRes.data || []).map(mapHelpRequestFromDb));
 
         if (loadedWarehouses.length > 0) {
           setActiveWarehouseId(loadedWarehouses[0].id);
@@ -1401,6 +1435,18 @@ export default function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'customers' }, (payload) => applyRealtimeChange(setCustomers, payload, mapCustomerFromDb, 'name'))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'dotlacovka_price_list' }, (payload) => applyRealtimeChange(setDotlacovkaPriceList, payload, mapDotlackovkaPriceFromDb))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'addon_types' }, (payload) => applyRealtimeChange(setAddonTypes, payload, mapAddonTypeFromDb))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'help_requests' }, (payload) => {
+        applyRealtimeChange(setHelpRequests, payload, mapHelpRequestFromDb);
+        if (payload.eventType === 'INSERT') {
+          const h = mapHelpRequestFromDb(payload.new);
+          const me = currentUserRef.current;
+          const isRecipient = me && (me.role === 'master' || me.role === 'supervisor' || me.role === h.targetRole || me.id === h.targetEmployeeId);
+          if (isRecipient) {
+            playAlertBeep(2, 740);
+            showDesktopNotification('🆘 Žiadosť o pomoc', `${h.raisedByName} (${STATION_CONFIGS[h.stationId]?.name || h.stationId}): ${h.message}`);
+          }
+        }
+      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'station_capacity_config' }, (payload) => applyRealtimeChange(setCapacityConfigs, payload, mapCapacityConfigFromDb, 'stationId'))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'station_product_times' }, (payload) => applyRealtimeChange(setStationProductTimes, payload, mapProductTimeFromDb))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings' }, (payload) => { if (payload.new) setCompanySettings(mapCompanySettingsFromDb(payload.new)); })
@@ -1452,9 +1498,18 @@ export default function App() {
 
   useEffect(() => { employeesRef.current = employees; }, [employees]);
 
+  // Živý tikajúci časomer (napr. pre "Idem na to" na Grafike) — beží len keď je otvorená staničná obrazovka
+  useEffect(() => {
+    if (activeTab !== 'isolated-station') return;
+    const interval = setInterval(() => setStationNowTick(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [activeTab]);
+
   const problemReportsRef = useRef(problemReports);
   useEffect(() => { problemReportsRef.current = problemReports; }, [problemReports]);
   const dotlackovkaNotifiedDateRef = useRef('');
+  const currentUserRef = useRef(currentUser);
+  useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
 
   // Požiadať o povolenie desktop notifikácií, keď sa prihlási niekto, kto rieši problémy
   useEffect(() => {
@@ -1485,6 +1540,26 @@ export default function App() {
           playAlertBeep(1, 880);
           lastReminderRef.current = now;
         }
+      }
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [currentUser]);
+
+  // Eskalujúce pripomienky nevyriešených žiadostí o pomoc — cielené len na skutočného príjemcu (rola/konkrétny človek), nie na všetkých
+  const helpRequestsRef = useRef(helpRequests);
+  useEffect(() => { helpRequestsRef.current = helpRequests; }, [helpRequests]);
+  const lastHelpReminderRef = useRef(0);
+  useEffect(() => {
+    if (!currentUser) return;
+    const interval = setInterval(() => {
+      const relevant = helpRequestsRef.current.filter(h => h.status !== 'resolved' && (currentUser.role === 'master' || currentUser.role === 'supervisor' || currentUser.role === h.targetRole || currentUser.id === h.targetEmployeeId));
+      if (relevant.length === 0) return;
+      const now = Date.now();
+      const oldestMinutes = Math.max(...relevant.map(h => (now - new Date(h.createdAt).getTime()) / 60000));
+      const intervalMs = oldestMinutes >= 30 ? 60000 : 300000;
+      if (now - lastHelpReminderRef.current >= intervalMs) {
+        playAlertBeep(oldestMinutes >= 30 ? 3 : 1, 740);
+        lastHelpReminderRef.current = now;
       }
     }, 15000);
     return () => clearInterval(interval);
@@ -3989,8 +4064,9 @@ export default function App() {
       }
       if (statusId === 'hotove' && !existingMeta.completedAt) {
         const started = parseFormattedDateTime(newMeta.startedAt || existingMeta.startedAt);
-        const durationMinutes = started ? Math.max(0, Math.round((parseFormattedDateTime(now) - started) / 60000)) : null;
-        newMeta = { ...newMeta, completedAt: now, durationMinutes };
+        const pausedTotalMs = newMeta.pausedAt ? (newMeta.pausedTotalMs || 0) + (parseFormattedDateTime(now) - parseFormattedDateTime(newMeta.pausedAt)) : (newMeta.pausedTotalMs || 0);
+        const durationMinutes = started ? Math.max(0, Math.round((parseFormattedDateTime(now) - started - pausedTotalMs) / 60000)) : null;
+        newMeta = { ...newMeta, completedAt: now, durationMinutes, pausedTotalMs, pausedAt: null };
       }
 
       return { ...item, stationStatuses: { ...item.stationStatuses, [stationId]: statusId }, stationMeta: { ...item.stationMeta, [stationId]: newMeta }, materialDeducted: isDeductedNow, ...(extraItemFields || {}) };
@@ -4022,6 +4098,141 @@ export default function App() {
     if (error) { triggerNotification('error', error.message); return; }
     if (selectedOrderDetails?.id === orderId) setSelectedOrderDetails({ ...order, items: updatedItems });
     triggerNotification('success', `Stanica "${STATION_CONFIGS[stationId].name}" bola doplnená k položke ${itemId}.`);
+  };
+
+  // --- ŽIADOSTI O POMOC (dedikované rozhranie pre stanice, napr. Grafik) ---
+  const patchItemStationMeta = async (orderId, itemId, stationId, patch) => {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+    const updatedItems = order.items.map(item => item.itemId !== itemId ? item : {
+      ...item, stationMeta: { ...item.stationMeta, [stationId]: { ...(item.stationMeta?.[stationId] || {}), ...patch } }
+    });
+    const { error } = await supabase.from('orders').update({ items: updatedItems }).eq('id', orderId);
+    if (error) { triggerNotification('error', error.message); return; }
+    if (selectedOrderDetails?.id === orderId) setSelectedOrderDetails({ ...order, items: updatedItems });
+  };
+
+  const handlePauseStationTimer = (orderId, itemId, stationId) => patchItemStationMeta(orderId, itemId, stationId, { pausedAt: getFormattedDateTime() });
+
+  const handleResumeStationTimer = async (orderId, itemId, stationId) => {
+    const order = orders.find(o => o.id === orderId);
+    const item = order?.items.find(i => i.itemId === itemId);
+    const meta = item?.stationMeta?.[stationId];
+    if (!meta?.pausedAt) return;
+    const pausedMs = (parseFormattedDateTime(getFormattedDateTime())?.getTime() || Date.now()) - (parseFormattedDateTime(meta.pausedAt)?.getTime() || Date.now());
+    await patchItemStationMeta(orderId, itemId, stationId, { pausedAt: null, pausedTotalMs: (meta.pausedTotalMs || 0) + Math.max(0, pausedMs) });
+  };
+
+  const handleSubmitHelpRequest = async () => {
+    const item = showHelpRequestModal;
+    if (!item) return;
+    if (!helpRequestMessage.trim()) { alert('Napíš krátky popis, s čím potrebuješ pomôcť.'); return; }
+    setIsSubmittingHelpRequest(true);
+    try {
+      let imageUrl = '';
+      if (helpRequestImageFile) {
+        const path = `${Date.now()}-pomoc-${helpRequestImageFile.name}`;
+        const { error: upErr } = await supabase.storage.from('item-images').upload(path, helpRequestImageFile);
+        if (upErr) throw new Error(upErr.message);
+        imageUrl = supabase.storage.from('item-images').getPublicUrl(path).data.publicUrl;
+      }
+      const isSpecificEmployee = helpRequestTarget.startsWith('emp:');
+      const targetEmployeeId = isSpecificEmployee ? helpRequestTarget.slice(4) : '';
+      const targetEmployee = employees.find(e => e.id === targetEmployeeId);
+      const { error } = await supabase.from('help_requests').insert(mapHelpRequestToDb({
+        id: `hr-${Date.now()}`, orderId: item.orderId, itemId: item.itemId, stationId: activeStationFilter,
+        raisedById: currentUser.id, raisedByName: `${currentUser.firstName} ${currentUser.lastName}`,
+        targetRole: isSpecificEmployee ? '' : helpRequestTarget,
+        targetEmployeeId: targetEmployeeId, targetEmployeeName: targetEmployee ? `${targetEmployee.firstName} ${targetEmployee.lastName}` : '',
+        message: helpRequestMessage.trim(), imageUrl, status: 'open', replies: []
+      }));
+      if (error) throw error;
+      setShowHelpRequestModal(null);
+      setHelpRequestMessage('');
+      setHelpRequestImageFile(null);
+      setHelpRequestImagePreview('');
+      triggerNotification('success', 'Žiadosť o pomoc bola odoslaná a osoba dostala upozornenie.');
+    } catch (err) {
+      triggerNotification('error', `Chyba: ${err.message}`);
+    } finally {
+      setIsSubmittingHelpRequest(false);
+    }
+  };
+
+  const handleAddHelpReply = async (request) => {
+    if (!helpReplyText.trim() && !helpReplyImageFile) return;
+    let imageUrl = '';
+    if (helpReplyImageFile) {
+      const path = `${Date.now()}-pomoc-reply-${helpReplyImageFile.name}`;
+      const { error: upErr } = await supabase.storage.from('item-images').upload(path, helpReplyImageFile);
+      if (upErr) { triggerNotification('error', upErr.message); return; }
+      imageUrl = supabase.storage.from('item-images').getPublicUrl(path).data.publicUrl;
+    }
+    const reply = { author: `${currentUser.firstName} ${currentUser.lastName}`, text: helpReplyText.trim(), imageUrl, at: getFormattedDateTime() };
+    const { error } = await supabase.from('help_requests').update({ replies: [...request.replies, reply] }).eq('id', request.id);
+    if (error) { triggerNotification('error', error.message); return; }
+    setActiveHelpReplyId(null);
+    setHelpReplyText('');
+    setHelpReplyImageFile(null);
+  };
+
+  const handleResolveHelpRequest = async (request) => {
+    if (request.status === 'paused') await handleResumeStationTimer(request.orderId, request.itemId, request.stationId);
+    const { error } = await supabase.from('help_requests').update({ status: 'resolved', resolved_at: new Date().toISOString() }).eq('id', request.id);
+    if (error) { triggerNotification('error', error.message); return; }
+    triggerNotification('success', 'Žiadosť o pomoc označená ako vyriešená.');
+  };
+
+  const handlePauseForHelpRequest = async (request) => {
+    await handlePauseStationTimer(request.orderId, request.itemId, request.stationId);
+    const { error } = await supabase.from('help_requests').update({ status: 'paused' }).eq('id', request.id);
+    if (error) { triggerNotification('error', error.message); return; }
+    triggerNotification('success', 'Zákazka pozastavená, časomiera zastavená.');
+  };
+
+  // QR kód na rýchle vloženie do grafiky (copy-paste ku tlači) — jeden QR na materiál, so štítkom (zákazka, materiál)
+  const svgToPngBlob = (svgEl, canvasSize, captionLines) => new Promise((resolve, reject) => {
+    const svgData = new XMLSerializer().serializeToString(svgEl);
+    const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(svgBlob);
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = canvasSize;
+      canvas.height = canvasSize;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvasSize, canvasSize);
+      const qrSize = canvasSize * 0.62;
+      const qrX = (canvasSize - qrSize) / 2;
+      ctx.drawImage(img, qrX, canvasSize * 0.04, qrSize, qrSize);
+      URL.revokeObjectURL(url);
+      ctx.fillStyle = '#000000';
+      ctx.textAlign = 'center';
+      const fontPx = Math.round(canvasSize * 0.045); // cca výška písma 1cm pri 8x8cm výstupe
+      ctx.font = `bold ${fontPx}px sans-serif`;
+      let ty = canvasSize * 0.04 + qrSize + fontPx * 1.2;
+      captionLines.forEach(line => { ctx.fillText(line, canvasSize / 2, ty); ty += fontPx * 1.3; });
+      canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('Canvas export zlyhal'))), 'image/png');
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+
+  const handleDownloadMaterialQr = async (item, svgId, captionLines, fileSuffix) => {
+    const svgEl = document.getElementById(svgId);
+    if (!svgEl) return;
+    try {
+      const blob = await svgToPngBlob(svgEl, 945, captionLines);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `QR-${item.itemId}-${fileSuffix}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      triggerNotification('error', `Export QR zlyhal: ${err.message}`);
+    }
   };
 
   // --- SCHVAĽOVACÍ KROK PRED TRANSFER / SIEŤOTLAČ (Funkcia 2) ---
@@ -4549,6 +4760,14 @@ export default function App() {
               <AlertTriangle className="h-3.5 w-3.5" /> {problemReports.filter(p => p.status === 'open').length} nevyriešených problémov
             </button>
           )}
+          {(() => {
+            const myOpenHelpCount = helpRequests.filter(h => h.status !== 'resolved' && (hasPermission('view_reports') || currentUser.role === h.targetRole || currentUser.id === h.targetEmployeeId || currentUser.id === h.raisedById)).length;
+            return myOpenHelpCount > 0 && (
+              <button onClick={() => setActiveTab('problems')} className="px-3 py-1 rounded-md font-bold border bg-amber-600 text-white border-amber-500 animate-pulse flex items-center gap-1.5">
+                🆘 {myOpenHelpCount} žiadostí o pomoc
+              </button>
+            );
+          })()}
           {hasPermission('view_reports') && (() => {
             const pendingMismatchCount = allItems.reduce((sum, item) => sum + MATERIAL_CHECK_STATIONS.filter(sid => item.materialChecks?.[sid]?.mismatch?.status === 'pending').length, 0);
             return pendingMismatchCount > 0 && (
@@ -4629,7 +4848,7 @@ export default function App() {
               {canSeeTab(currentUser.role, 'designers') && (
                 <button onClick={() => setActiveTab('designers')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'designers' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Palette className="h-3.5 w-3.5" /> Dashboard Grafikov</button>
               )}
-              {hasPermission('view_reports') && canSeeTab(currentUser.role, 'problems') && (
+              {(hasPermission('view_reports') || currentUser.role === 'sales') && canSeeTab(currentUser.role, 'problems') && (
                 <button onClick={() => setActiveTab('problems')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'problems' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><AlertTriangle className="h-3.5 w-3.5" /> Problémy</button>
               )}
               {hasPermission('view_finance') && canSeeTab(currentUser.role, 'invoices') && (
@@ -5738,13 +5957,73 @@ export default function App() {
                             {itemOpenProblems.length > 0 && (
                               <span className="flex items-center gap-1 bg-rose-950/50 border border-rose-700/50 rounded-full px-2 py-0.5 text-[10px] text-rose-300 font-bold"><AlertTriangle className="h-3 w-3" /> Nahlásený problém</span>
                             )}
-                            <button onClick={() => { setReportingProblemForItem(item); setProblemCategory(PROBLEM_CATEGORIES[0]); setProblemDescription(''); }} className="ml-auto text-[10px] text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Nahlásiť problém</button>
+                            {helpRequests.some(h => h.itemId === item.itemId && h.status !== 'resolved') && (
+                              <span className="flex items-center gap-1 bg-amber-950/50 border border-amber-700/50 rounded-full px-2 py-0.5 text-[10px] text-amber-300 font-bold animate-pulse">🆘 Žiadosť o pomoc</span>
+                            )}
+                            {activeStationFilter !== 'grafik' && (
+                              <button onClick={() => { setReportingProblemForItem(item); setProblemCategory(PROBLEM_CATEGORIES[0]); setProblemDescription(''); }} className="ml-auto text-[10px] text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Nahlásiť problém</button>
+                            )}
                           </div>
                           <h3 className="font-extrabold text-base text-slate-100">{item.customer} ({item.qty} ks)</h3>
                           <p className="text-xs text-indigo-400 font-bold">{item.productName} - <span className="text-slate-100 uppercase">{item.qualityTier}</span></p>
                         </div>
                         <div className="flex flex-col sm:flex-row md:flex-col justify-between items-end gap-3 min-w-[220px]">
-                          {needsMaterialGate ? (
+                          {activeStationFilter === 'grafik' ? (() => {
+                            const meta = item.stationMeta?.grafik || {};
+                            const isPaused = !!meta.pausedAt;
+                            const elapsed = computeStationElapsedSeconds(meta, stationNowTick);
+                            const myOpenHelp = helpRequests.find(h => h.itemId === item.itemId && h.status !== 'resolved');
+                            const materialList = (item.materialsNeeded || []).length > 0 ? item.materialsNeeded : [null];
+                            return (
+                              <div className="w-full space-y-2 text-right">
+                                {currentStatusId === 'caka' ? (
+                                  <button onClick={() => updateStationStatus(item.orderId, item.itemId, 'grafik', 'priprava')} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs py-2.5 rounded-lg flex items-center justify-center gap-1.5">🎯 Idem na to</button>
+                                ) : currentStatusId === 'hotove' ? (
+                                  <div className="bg-emerald-950/30 border border-emerald-700/40 rounded-lg p-2 text-emerald-300 text-xs font-bold">✅ Hotové{meta.durationMinutes != null ? ` • ${formatDurationMinutes(meta.durationMinutes)}` : ''}</div>
+                                ) : (
+                                  <>
+                                    <div className={`rounded-lg p-2 font-mono font-extrabold text-lg text-center ${isPaused ? 'bg-amber-950/30 text-amber-400 border border-amber-700/40' : 'bg-slate-950 text-emerald-400 border border-slate-800'}`}>
+                                      {isPaused ? '⏸ ' : '⏱ '}{formatElapsedSeconds(elapsed)}
+                                    </div>
+                                    {myOpenHelp ? (
+                                      <div className="bg-rose-950/30 border border-rose-700/40 rounded-lg p-2 text-left space-y-1.5">
+                                        <p className="text-[10px] text-rose-300 font-bold">🆘 Žiadosť o pomoc {myOpenHelp.status === 'paused' ? '(pozastavené)' : '(otvorené)'}</p>
+                                        <p className="text-[10px] text-slate-300">{myOpenHelp.message}</p>
+                                        {myOpenHelp.replies.map((r, i) => <p key={i} className="text-[10px] text-slate-400 pl-2 border-l border-slate-700">{r.author}: {r.text}</p>)}
+                                        <div className="flex gap-1">
+                                          {myOpenHelp.status !== 'paused' && <button onClick={() => handlePauseForHelpRequest(myOpenHelp)} className="flex-1 bg-amber-800 hover:bg-amber-700 text-white text-[10px] font-bold py-1 rounded">Pozastavujem</button>}
+                                          <button onClick={() => handleResolveHelpRequest(myOpenHelp)} className="flex-1 bg-emerald-700 hover:bg-emerald-600 text-white text-[10px] font-bold py-1 rounded">{myOpenHelp.status === 'paused' ? 'Vyriešené — pokračujem' : 'Vyriešené'}</button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <button onClick={() => { setShowHelpRequestModal(item); setHelpRequestTarget('sales'); setHelpRequestMessage(''); }} className="w-full bg-slate-800 hover:bg-slate-700 text-amber-400 text-[10px] font-bold py-1.5 rounded-lg flex items-center justify-center gap-1"><AlertTriangle className="h-3 w-3" /> Problém — pomoc</button>
+                                    )}
+                                    <div className="grid grid-cols-2 gap-1">
+                                      <button onClick={() => updateStationStatus(item.orderId, item.itemId, 'grafik', 'export')} className={`px-2 py-1.5 rounded text-[10px] font-bold ${currentStatusId === 'export' ? 'bg-sky-600 text-white ring-2 ring-indigo-500' : 'bg-slate-800 text-slate-400 hover:text-slate-200'}`}>Export dát a tlač</button>
+                                      <button onClick={() => updateStationStatus(item.orderId, item.itemId, 'grafik', 'hotove')} className="px-2 py-1.5 rounded text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white">🎉 Hotovo</button>
+                                    </div>
+                                    <div className="space-y-1.5 pt-1 border-t border-slate-800">
+                                      <span className="text-[9px] text-slate-500 uppercase font-bold block text-left">QR na vloženie do grafiky (8×8cm){materialList.length > 1 ? ` — ${materialList.length}× materiál` : ''}</span>
+                                      {materialList.map((mat, mi) => {
+                                        const svgId = `qr-svg-${item.itemId}-${mat?.materialId || 'main'}`;
+                                        const matName = mat ? (materials.find(m => m.id === mat.materialId)?.name || mat.layerName) : item.productName;
+                                        return (
+                                          <div key={mi} className="bg-white rounded-lg p-2 flex items-center gap-2">
+                                            <QRCodeSVG id={svgId} value={`${item.itemId}::${mat?.materialId || 'main'}`} size={56} level="M" />
+                                            <div className="flex-1 text-left">
+                                              <p className="text-[9px] text-black font-extrabold leading-tight">{item.orderNumber || item.orderId} • {item.customer}</p>
+                                              <p className="text-[9px] text-slate-700 leading-tight">{matName}</p>
+                                            </div>
+                                            <button onClick={() => handleDownloadMaterialQr(item, svgId, [`${item.orderNumber || item.orderId} • ${item.customer}`, matName], mat?.materialId || 'main')} className="text-indigo-600 hover:text-indigo-800 shrink-0"><Download className="h-4 w-4" /></button>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            );
+                          })() : needsMaterialGate ? (
                             <div className="w-full space-y-1.5">
                               <span className="text-[10px] text-amber-400 uppercase font-bold block mb-1">Pred tlačou over prijatý textil:</span>
                               <button onClick={() => handleConfirmMaterialCheck(item.orderId, item.itemId, activeStationFilter)} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] px-3 py-2 rounded-lg flex items-center justify-center gap-1.5"><Check className="h-3.5 w-3.5" /> Potvrdiť — spočítané, sedí</button>
@@ -6398,6 +6677,52 @@ export default function App() {
                   {isUploadingProblemImage ? <><Loader2 className="h-4 w-4 animate-spin" /> Nahrávam...</> : 'Nahlásiť'}
                 </button>
                 <button onClick={() => { setReportingProblemForItem(null); setProblemImageFile(null); setProblemImagePreview(''); }} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-6 rounded-lg text-xs font-bold">Zrušiť</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showHelpRequestModal && (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-slate-900 border border-amber-800/40 p-6 rounded-2xl w-full max-w-md shadow-2xl space-y-4">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-amber-400" /> Problém — pomoc</h3>
+                  <p className="text-xs text-slate-500 font-mono">{showHelpRequestModal.itemId} • {showHelpRequestModal.customer}</p>
+                </div>
+                <button onClick={() => setShowHelpRequestModal(null)} className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white"><X className="h-5 w-5" /></button>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">S kým potrebuješ poradiť?</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" onClick={() => setHelpRequestTarget('sales')} className={`py-2 rounded-lg text-xs font-bold ${helpRequestTarget === 'sales' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Obchodník — nejasné zadanie</button>
+                  <button type="button" onClick={() => setHelpRequestTarget('supervisor')} className={`py-2 rounded-lg text-xs font-bold ${helpRequestTarget === 'supervisor' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Supervízor — problém s materiálom</button>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Popis problému</label>
+                <textarea rows={4} value={helpRequestMessage} onChange={(e) => setHelpRequestMessage(e.target.value)} placeholder="Čo presne potrebuješ vyriešiť?" className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" autoFocus />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Fotka (voliteľné)</label>
+                {helpRequestImagePreview ? (
+                  <div className="relative">
+                    <img src={helpRequestImagePreview} alt="" className="w-full h-32 object-cover rounded-lg border border-slate-800" />
+                    <button type="button" onClick={() => { setHelpRequestImageFile(null); setHelpRequestImagePreview(''); }} className="absolute top-1.5 right-1.5 bg-slate-950/80 text-rose-400 rounded-lg p-1.5"><X className="h-4 w-4" /></button>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center gap-1 border-2 border-dashed border-slate-800 rounded-lg py-4 cursor-pointer hover:border-amber-600 transition-colors">
+                    <Camera className="h-5 w-5 text-slate-500" />
+                    <span className="text-[10px] text-slate-500">Odfotiť / nahrať obrázok</span>
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files[0]; if (f) { setHelpRequestImageFile(f); setHelpRequestImagePreview(URL.createObjectURL(f)); } }} />
+                  </label>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <button onClick={handleSubmitHelpRequest} disabled={isSubmittingHelpRequest} className="flex-1 bg-amber-700 hover:bg-amber-800 disabled:opacity-50 text-white font-bold py-2.5 rounded-lg uppercase text-xs flex items-center justify-center gap-2">
+                  {isSubmittingHelpRequest ? <><Loader2 className="h-4 w-4 animate-spin" /> Odosielam...</> : 'Odoslať žiadosť'}
+                </button>
+                <button onClick={() => setShowHelpRequestModal(null)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-6 rounded-lg text-xs font-bold">Zrušiť</button>
               </div>
             </div>
           </div>
@@ -7353,6 +7678,53 @@ export default function App() {
               )}
                 </>
               )}
+            </div>
+          );
+        })()}
+
+        {activeTab === 'problems' && (() => {
+          const myRequests = helpRequests.filter(h => hasPermission('view_reports') || currentUser.role === h.targetRole || currentUser.id === h.targetEmployeeId || currentUser.id === h.raisedById);
+          const openRequests = myRequests.filter(h => h.status !== 'resolved').sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+          if (openRequests.length === 0) return null;
+          return (
+            <div className="space-y-3 print:hidden">
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">🆘 Žiadosti o pomoc ({openRequests.length})</h2>
+              {openRequests.map(h => {
+                const found = findItemByItemId(h.itemId || '');
+                const canAct = currentUser.id === h.raisedById || hasPermission('view_reports');
+                return (
+                  <div key={h.id} className={`bg-slate-950 border rounded-xl p-4 space-y-2 ${h.status === 'paused' ? 'border-amber-700/50' : 'border-rose-700/50'}`}>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${h.status === 'paused' ? 'bg-amber-900/50 text-amber-300' : 'bg-rose-900/50 text-rose-300'}`}>{h.status === 'paused' ? 'Pozastavené' : 'Otvorené'}</span>
+                      <span className="bg-slate-800 text-slate-300 text-[10px] font-bold px-2 py-0.5 rounded">{h.targetRole === 'sales' ? 'Pre obchodníka' : h.targetRole === 'supervisor' ? 'Pre supervízora' : h.targetEmployeeName ? `Pre: ${h.targetEmployeeName}` : ''}</span>
+                      <span className="font-mono text-[10px] text-slate-500">{h.itemId} • {STATION_CONFIGS[h.stationId]?.name || h.stationId}</span>
+                    </div>
+                    <p className="text-sm text-white">{h.message}</p>
+                    {h.imageUrl && <img src={h.imageUrl} alt="" className="w-full max-w-xs h-32 object-cover rounded-lg border border-slate-800 cursor-pointer" onClick={() => window.open(h.imageUrl, '_blank')} />}
+                    {found && <p className="text-[11px] text-slate-500">Zákazka: <strong className="text-slate-300">{found.order.customer}</strong> — {found.item.productName}</p>}
+                    <p className="text-[10px] text-slate-500">Nahlásil: <strong className="text-slate-400">{h.raisedByName}</strong> • {new Date(h.createdAt).toLocaleString('sk-SK')}</p>
+                    {h.replies.length > 0 && (
+                      <div className="space-y-1 pl-2 border-l border-slate-800">
+                        {h.replies.map((r, i) => <p key={i} className="text-xs text-slate-300"><strong className="text-slate-400">{r.author}:</strong> {r.text}{r.imageUrl && <img src={r.imageUrl} alt="" className="w-full max-w-xs h-24 object-cover rounded-lg border border-slate-800 mt-1 cursor-pointer" onClick={() => window.open(r.imageUrl, '_blank')} />}</p>)}
+                      </div>
+                    )}
+                    <div className="flex flex-wrap items-end gap-2">
+                      {found && <button onClick={() => openOrderDetails(found.order)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold px-3 py-1.5 rounded-lg shrink-0">Otvoriť zákazku</button>}
+                      {activeHelpReplyId === h.id ? (
+                        <div className="flex-1 min-w-[200px] flex gap-1.5 items-center">
+                          <input type="text" value={helpReplyText} onChange={(e) => setHelpReplyText(e.target.value)} placeholder="Odpoveď..." className="flex-1 bg-slate-900 border border-slate-800 rounded px-2 py-1.5 text-xs text-white" autoFocus />
+                          <label className="bg-slate-800 hover:bg-slate-700 text-slate-400 p-1.5 rounded cursor-pointer shrink-0"><Camera className="h-4 w-4" /><input type="file" accept="image/*" className="hidden" onChange={(e) => setHelpReplyImageFile(e.target.files[0] || null)} /></label>
+                          <button onClick={() => handleAddHelpReply(h)} className="bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg shrink-0">Poslať</button>
+                        </div>
+                      ) : (
+                        <button onClick={() => { setActiveHelpReplyId(h.id); setHelpReplyText(''); setHelpReplyImageFile(null); }} className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold px-3 py-1.5 rounded-lg shrink-0">Odpovedať</button>
+                      )}
+                      {canAct && h.status !== 'paused' && <button onClick={() => handlePauseForHelpRequest(h)} className="bg-amber-800 hover:bg-amber-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg shrink-0">Pozastaviť</button>}
+                      {canAct && <button onClick={() => handleResolveHelpRequest(h)} className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg shrink-0">Vyriešené</button>}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           );
         })()}
