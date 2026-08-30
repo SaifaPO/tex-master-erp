@@ -910,13 +910,11 @@ export default function App() {
   const [resolutionCostAmount, setResolutionCostAmount] = useState('');
   const [showErrorLeaderboard, setShowErrorLeaderboard] = useState(false);
   const [errorLeaderboardPeriod, setErrorLeaderboardPeriod] = useState('month'); // 'month' | '3months' | '6months' | 'year'
-  // Nezrovnalosť materiálu pred Transfer/Sieťotlač (Funkcia 2)
-  const [reportingMismatchFor, setReportingMismatchFor] = useState(null); // { item, stationId } | null
-  const [mismatchNoteInput, setMismatchNoteInput] = useState('');
-  const [mismatchQtyInput, setMismatchQtyInput] = useState('');
   // Žiadosti o pomoc medzi stanicami (dedikované rozhranie pre Grafika a i.)
   const [helpRequests, setHelpRequests] = useState([]);
   const [showHelpRequestModal, setShowHelpRequestModal] = useState(null); // item object | null
+  const [helpRequestStationId, setHelpRequestStationId] = useState('');
+  const [helpRequestTargetOptions, setHelpRequestTargetOptions] = useState([]); // [{value, label}]
   const [helpRequestTarget, setHelpRequestTarget] = useState('sales');
   const [helpRequestMessage, setHelpRequestMessage] = useState('');
   const [helpRequestImageFile, setHelpRequestImageFile] = useState(null);
@@ -4139,14 +4137,23 @@ export default function App() {
       const isSpecificEmployee = helpRequestTarget.startsWith('emp:');
       const targetEmployeeId = isSpecificEmployee ? helpRequestTarget.slice(4) : '';
       const targetEmployee = employees.find(e => e.id === targetEmployeeId);
+      const stationId = helpRequestStationId || activeStationFilter;
       const { error } = await supabase.from('help_requests').insert(mapHelpRequestToDb({
-        id: `hr-${Date.now()}`, orderId: item.orderId, itemId: item.itemId, stationId: activeStationFilter,
+        id: `hr-${Date.now()}`, orderId: item.orderId, itemId: item.itemId, stationId,
         raisedById: currentUser.id, raisedByName: `${currentUser.firstName} ${currentUser.lastName}`,
         targetRole: isSpecificEmployee ? '' : helpRequestTarget,
         targetEmployeeId: targetEmployeeId, targetEmployeeName: targetEmployee ? `${targetEmployee.firstName} ${targetEmployee.lastName}` : '',
         message: helpRequestMessage.trim(), imageUrl, status: 'open', replies: []
       }));
       if (error) throw error;
+      if (MATERIAL_CHECK_STATIONS.includes(stationId)) {
+        const order = orders.find(o => o.id === item.orderId);
+        if (order) {
+          const updatedItems = order.items.map(it => it.itemId !== item.itemId ? it : { ...it, stationStatuses: { ...it.stationStatuses, [stationId]: 'caka_na_vyriesenie' } });
+          await supabase.from('orders').update({ items: updatedItems }).eq('id', order.id);
+          if (selectedOrderDetails?.id === order.id) setSelectedOrderDetails({ ...order, items: updatedItems });
+        }
+      }
       setShowHelpRequestModal(null);
       setHelpRequestMessage('');
       setHelpRequestImageFile(null);
@@ -4178,6 +4185,20 @@ export default function App() {
 
   const handleResolveHelpRequest = async (request) => {
     if (request.status === 'paused') await handleResumeStationTimer(request.orderId, request.itemId, request.stationId);
+    if (MATERIAL_CHECK_STATIONS.includes(request.stationId)) {
+      const order = orders.find(o => o.id === request.orderId);
+      if (order) {
+        const now = getFormattedDateTime();
+        const resolverName = `${currentUser.firstName} ${currentUser.lastName}`;
+        const updatedItems = order.items.map(it => it.itemId !== request.itemId ? it : {
+          ...it,
+          stationStatuses: { ...it.stationStatuses, [request.stationId]: 'caka' },
+          materialChecks: { ...it.materialChecks, [request.stationId]: { ...(it.materialChecks?.[request.stationId] || {}), confirmed: true, confirmedBy: resolverName, confirmedAt: now } }
+        });
+        await supabase.from('orders').update({ items: updatedItems }).eq('id', order.id);
+        if (selectedOrderDetails?.id === order.id) setSelectedOrderDetails({ ...order, items: updatedItems });
+      }
+    }
     const { error } = await supabase.from('help_requests').update({ status: 'resolved', resolved_at: new Date().toISOString() }).eq('id', request.id);
     if (error) { triggerNotification('error', error.message); return; }
     triggerNotification('success', 'Žiadosť o pomoc označená ako vyriešená.');
@@ -4249,34 +4270,6 @@ export default function App() {
     if (error) { triggerNotification('error', error.message); return; }
     if (selectedOrderDetails?.id === orderId) setSelectedOrderDetails({ ...order, items: updatedItems });
     triggerNotification('success', 'Potvrdené — textil sedí s objednávkou. Môžeš spustiť tlač.');
-  };
-
-  const handleSubmitMismatchReport = async () => {
-    if (!reportingMismatchFor) return;
-    if (!mismatchNoteInput.trim()) { triggerNotification('error', 'Napíš, čo presne chýba/nesedí.'); return; }
-    if (!hasPermission('update_status')) { triggerNotification('error', 'Nemáte oprávnenie meniť stavy staníc.'); return; }
-    const { item, stationId } = reportingMismatchFor;
-    const order = orders.find(o => o.id === item.orderId);
-    if (!order) return;
-    const now = getFormattedDateTime();
-    const updatedItems = order.items.map(it => it.itemId !== item.itemId ? it : {
-      ...it,
-      stationStatuses: { ...it.stationStatuses, [stationId]: 'caka_na_vyriesenie' },
-      materialChecks: {
-        ...it.materialChecks,
-        [stationId]: {
-          confirmed: false,
-          mismatch: { status: 'pending', note: mismatchNoteInput.trim(), qty: mismatchQtyInput.trim(), reportedBy: `${currentUser.firstName} ${currentUser.lastName}`, reportedAt: now, resolvedBy: null, resolvedAt: null }
-        }
-      }
-    });
-    const { error } = await supabase.from('orders').update({ items: updatedItems }).eq('id', order.id);
-    if (error) { triggerNotification('error', error.message); return; }
-    if (selectedOrderDetails?.id === order.id) setSelectedOrderDetails({ ...order, items: updatedItems });
-    setReportingMismatchFor(null);
-    setMismatchNoteInput('');
-    setMismatchQtyInput('');
-    triggerNotification('success', 'Nezrovnalosť bola nahlásená. Master/Supervisor to uvidí.');
   };
 
   const handleResolveMismatch = async (item, stationId, resolution) => {
@@ -5996,7 +5989,7 @@ export default function App() {
                                         </div>
                                       </div>
                                     ) : (
-                                      <button onClick={() => { setShowHelpRequestModal(item); setHelpRequestTarget('sales'); setHelpRequestMessage(''); }} className="w-full bg-slate-800 hover:bg-slate-700 text-amber-400 text-[10px] font-bold py-1.5 rounded-lg flex items-center justify-center gap-1"><AlertTriangle className="h-3 w-3" /> Problém — pomoc</button>
+                                      <button onClick={() => { setShowHelpRequestModal(item); setHelpRequestStationId('grafik'); setHelpRequestTargetOptions([{ value: 'sales', label: 'Obchodník — nejasné zadanie' }, { value: 'supervisor', label: 'Supervízor — problém s materiálom' }]); setHelpRequestTarget('sales'); setHelpRequestMessage(''); }} className="w-full bg-slate-800 hover:bg-slate-700 text-amber-400 text-[10px] font-bold py-1.5 rounded-lg flex items-center justify-center gap-1"><AlertTriangle className="h-3 w-3" /> Problém — pomoc</button>
                                     )}
                                     <div className="grid grid-cols-2 gap-1">
                                       <button onClick={() => updateStationStatus(item.orderId, item.itemId, 'grafik', 'export')} className={`px-2 py-1.5 rounded text-[10px] font-bold ${currentStatusId === 'export' ? 'bg-sky-600 text-white ring-2 ring-indigo-500' : 'bg-slate-800 text-slate-400 hover:text-slate-200'}`}>Export dát a tlač</button>
@@ -6023,18 +6016,47 @@ export default function App() {
                                 )}
                               </div>
                             );
-                          })() : needsMaterialGate ? (
-                            <div className="w-full space-y-1.5">
-                              <span className="text-[10px] text-amber-400 uppercase font-bold block mb-1">Pred tlačou over prijatý textil:</span>
-                              <button onClick={() => handleConfirmMaterialCheck(item.orderId, item.itemId, activeStationFilter)} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] px-3 py-2 rounded-lg flex items-center justify-center gap-1.5"><Check className="h-3.5 w-3.5" /> Potvrdiť — spočítané, sedí</button>
-                              <button onClick={() => { setReportingMismatchFor({ item, stationId: activeStationFilter }); setMismatchNoteInput(''); setMismatchQtyInput(''); }} className="w-full bg-rose-950/50 hover:bg-rose-900/50 border border-rose-700/50 text-rose-300 font-bold text-[11px] px-3 py-2 rounded-lg flex items-center justify-center gap-1.5"><AlertTriangle className="h-3.5 w-3.5" /> Nahlásiť nezrovnalosť</button>
-                            </div>
-                          ) : isWaitingForResolution ? (
-                            <div className="w-full bg-orange-950/30 border border-orange-700/40 rounded-lg p-3 space-y-1 text-right">
-                              <span className="text-[10px] text-orange-300 uppercase font-bold block">Čaká na vyriešenie nadriadeným</span>
-                              {pendingMismatch?.note && <p className="text-[11px] text-orange-200">{pendingMismatch.note}{pendingMismatch.qty ? ` (${pendingMismatch.qty})` : ''}</p>}
-                            </div>
-                          ) : (
+                          })() : needsMaterialGate ? (() => {
+                            const assignedGrafik = item.stationMeta?.grafik;
+                            return (
+                              <div className="w-full space-y-1.5">
+                                <span className="text-[10px] text-amber-400 uppercase font-bold block mb-1">Pred tlačou over textil podľa rozpisu a transfery:</span>
+                                <button onClick={() => handleConfirmMaterialCheck(item.orderId, item.itemId, activeStationFilter)} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] px-3 py-2 rounded-lg flex items-center justify-center gap-1.5"><Check className="h-3.5 w-3.5" /> Skontrolované — všetko OK, môže tlačiť</button>
+                                <button
+                                  onClick={() => {
+                                    setShowHelpRequestModal(item);
+                                    setHelpRequestStationId(activeStationFilter);
+                                    const grafikOpt = assignedGrafik?.assignedEmployeeId
+                                      ? { value: `emp:${assignedGrafik.assignedEmployeeId}`, label: `Pomoc grafik (${assignedGrafik.assignedEmployeeName}) — problém s grafikou/rozpisom/transfermi` }
+                                      : { value: 'supervisor', label: 'Pomoc — problém s grafikou/rozpisom/transfermi (grafik nepriradený, ide na supervízora)' };
+                                    setHelpRequestTargetOptions([grafikOpt, { value: 'supervisor', label: 'Pomoc supervízor — problém s textilom (chyba, rozpis nesedí, nedodaný textil)' }]);
+                                    setHelpRequestTarget(grafikOpt.value);
+                                    setHelpRequestMessage('');
+                                  }}
+                                  className="w-full bg-rose-950/50 hover:bg-rose-900/50 border border-rose-700/50 text-rose-300 font-bold text-[11px] px-3 py-2 rounded-lg flex items-center justify-center gap-1.5"
+                                ><AlertTriangle className="h-3.5 w-3.5" /> Problém — pomoc</button>
+                              </div>
+                            );
+                          })() : isWaitingForResolution ? (() => {
+                            const myOpenHelp = helpRequests.find(h => h.itemId === item.itemId && h.stationId === activeStationFilter && h.status !== 'resolved');
+                            return (
+                              <div className="w-full bg-orange-950/30 border border-orange-700/40 rounded-lg p-3 space-y-1.5 text-left">
+                                <span className="text-[10px] text-orange-300 uppercase font-bold block text-right">Čaká na vyriešenie</span>
+                                {myOpenHelp ? (
+                                  <>
+                                    <p className="text-[11px] text-orange-200">{myOpenHelp.message}</p>
+                                    {myOpenHelp.replies.map((r, i) => <p key={i} className="text-[10px] text-slate-400 pl-2 border-l border-slate-700">{r.author}: {r.text}</p>)}
+                                    <div className="flex gap-1 pt-1">
+                                      {myOpenHelp.status !== 'paused' && <button onClick={() => handlePauseForHelpRequest(myOpenHelp)} className="flex-1 bg-amber-800 hover:bg-amber-700 text-white text-[10px] font-bold py-1 rounded">Pozastavujem</button>}
+                                      <button onClick={() => handleResolveHelpRequest(myOpenHelp)} className="flex-1 bg-emerald-700 hover:bg-emerald-600 text-white text-[10px] font-bold py-1 rounded">{myOpenHelp.status === 'paused' ? 'Vyriešené — pokračovať' : 'Vyriešené'}</button>
+                                    </div>
+                                  </>
+                                ) : pendingMismatch?.note ? (
+                                  <p className="text-[11px] text-orange-200 text-right">{pendingMismatch.note}{pendingMismatch.qty ? ` (${pendingMismatch.qty})` : ''}</p>
+                                ) : null}
+                              </div>
+                            );
+                          })() : (
                             <div className="w-full text-right space-y-1.5">
                               <span className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Stav procesu:</span>
                               <div className="grid grid-cols-2 gap-1">
@@ -6694,9 +6716,10 @@ export default function App() {
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">S kým potrebuješ poradiť?</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button type="button" onClick={() => setHelpRequestTarget('sales')} className={`py-2 rounded-lg text-xs font-bold ${helpRequestTarget === 'sales' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Obchodník — nejasné zadanie</button>
-                  <button type="button" onClick={() => setHelpRequestTarget('supervisor')} className={`py-2 rounded-lg text-xs font-bold ${helpRequestTarget === 'supervisor' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Supervízor — problém s materiálom</button>
+                <div className="grid grid-cols-1 gap-2">
+                  {helpRequestTargetOptions.map(opt => (
+                    <button key={opt.value} type="button" onClick={() => setHelpRequestTarget(opt.value)} className={`py-2 rounded-lg text-xs font-bold ${helpRequestTarget === opt.value ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'}`}>{opt.label}</button>
+                  ))}
                 </div>
               </div>
               <div>
@@ -6723,32 +6746,6 @@ export default function App() {
                   {isSubmittingHelpRequest ? <><Loader2 className="h-4 w-4 animate-spin" /> Odosielam...</> : 'Odoslať žiadosť'}
                 </button>
                 <button onClick={() => setShowHelpRequestModal(null)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-6 rounded-lg text-xs font-bold">Zrušiť</button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {reportingMismatchFor && (
-          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-            <div className="bg-slate-900 border border-rose-800/40 p-6 rounded-2xl w-full max-w-md shadow-2xl space-y-4">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h3 className="text-lg font-bold text-white flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-amber-400" /> Nahlásiť nezrovnalosť materiálu</h3>
-                  <p className="text-xs text-slate-500 font-mono">{reportingMismatchFor.item.itemId} • {reportingMismatchFor.item.customer} • {STATION_CONFIGS[reportingMismatchFor.stationId]?.name}</p>
-                </div>
-                <button onClick={() => setReportingMismatchFor(null)} className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white"><X className="h-5 w-5" /></button>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Čo chýba / nesedí?</label>
-                <textarea rows={4} value={mismatchNoteInput} onChange={(e) => setMismatchNoteInput(e.target.value)} placeholder="napr. chýbajú 2 ks trička veľkosť M, prišla iná farba..." className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" autoFocus />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Počet kusov (voliteľné)</label>
-                <input type="text" value={mismatchQtyInput} onChange={(e) => setMismatchQtyInput(e.target.value)} placeholder="napr. 2 ks" className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" />
-              </div>
-              <div className="flex gap-2">
-                <button onClick={handleSubmitMismatchReport} className="flex-1 bg-rose-700 hover:bg-rose-800 text-white font-bold py-2.5 rounded-lg uppercase text-xs">Nahlásiť</button>
-                <button onClick={() => setReportingMismatchFor(null)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-6 rounded-lg text-xs font-bold">Zrušiť</button>
               </div>
             </div>
           </div>
