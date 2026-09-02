@@ -315,7 +315,7 @@ function flattenOrderItems(ordersList) {
   const flat = [];
   ordersList.forEach(order => {
     (order.items || []).forEach(item => {
-      flat.push({ ...item, orderId: order.id, orderNumber: order.orderNumber, companyBrand: order.companyBrand, customer: order.customer, deliveryDate: order.deliveryDate, productionDate: item.productionDate || order.deliveryDate, createdAt: order.createdAt, driveLink: order.driveLink, orderNotes: order.notes, paymentType: order.paymentType, lastModifiedAt: order.lastModifiedAt, lastModifiedNote: order.lastModifiedNote });
+      flat.push({ ...item, orderId: order.id, orderNumber: order.orderNumber, legacyOrderNumber: order.legacyOrderNumber, companyBrand: order.companyBrand, customer: order.customer, deliveryDate: order.deliveryDate, productionDate: item.productionDate || order.deliveryDate, createdAt: order.createdAt, driveLink: order.driveLink, orderNotes: order.notes, paymentType: order.paymentType, lastModifiedAt: order.lastModifiedAt, lastModifiedNote: order.lastModifiedNote });
     });
   });
   return flat;
@@ -1545,6 +1545,38 @@ export default function App() {
     document.addEventListener('fullscreenchange', handleFsChange);
     return () => document.removeEventListener('fullscreenchange', handleFsChange);
   }, []);
+
+  // Pinch-to-zoom dvoma prstami na dotykových obrazovkách (mobil/tablet) pre Plánovaciu Maticu
+  useEffect(() => {
+    const el = matrixTableWrapRef.current;
+    if (!el) return;
+    let pinchStartDist = null;
+    let pinchStartZoom = zoomLevel;
+    const getDist = (touches) => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+    const onTouchStart = (e) => {
+      if (e.touches.length === 2) {
+        pinchStartDist = getDist(e.touches);
+        pinchStartZoom = zoomLevel;
+      }
+    };
+    const onTouchMove = (e) => {
+      if (e.touches.length === 2 && pinchStartDist) {
+        e.preventDefault();
+        const ratio = getDist(e.touches) / pinchStartDist;
+        setMatrixAutoFit(false);
+        setZoomLevel(Math.min(110, Math.max(40, Math.round(pinchStartZoom * ratio))));
+      }
+    };
+    const onTouchEnd = (e) => { if (e.touches.length < 2) pinchStartDist = null; };
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    el.addEventListener('touchend', onTouchEnd, { passive: true });
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [activeTab, plannerViewMode, zoomLevel]);
 
   const handleToggleMatrixFullscreen = () => {
     if (document.fullscreenElement) {
@@ -4604,6 +4636,16 @@ export default function App() {
 
   const todaysDueDotlackovky = allItems.filter(it => it.productName === 'Dotlačovka' && it.deliveryDate === new Date().toISOString().slice(0, 10) && !currentStageLabel(it).done);
 
+  // Zamestnanci, ktorí reálne pracujú na Grafike (podľa priradenia na stanicu) — na výber pri "Priradený grafik", aby tam nepadli napr. operátori sublimácie
+  const grafikEmployees = (() => {
+    const ids = new Set([
+      ...stationDefaults.filter(d => d.stationId === 'grafik').map(d => d.employeeId),
+      ...stationAssignments.filter(a => a.stationId === 'grafik').map(a => a.employeeId)
+    ]);
+    const filtered = employees.filter(e => ids.has(e.id));
+    return filtered.length > 0 ? filtered : employees;
+  })();
+
   useEffect(() => {
     if (!currentUser || currentUser.role !== 'predajna') return;
     const today = new Date().toISOString().slice(0, 10);
@@ -4733,6 +4775,8 @@ export default function App() {
     const matchesSearch = item.customer.toLowerCase().includes(rowSearch.toLowerCase()) ||
       item.orderId.toLowerCase().includes(rowSearch.toLowerCase()) ||
       item.itemId.toLowerCase().includes(rowSearch.toLowerCase()) ||
+      (item.orderNumber || '').toLowerCase().includes(rowSearch.toLowerCase()) ||
+      (item.legacyOrderNumber || '').toLowerCase().includes(rowSearch.toLowerCase()) ||
       item.productName.toLowerCase().includes(rowSearch.toLowerCase());
     const matchesDate = rowDateFilter === 'vsetko' || item.deliveryDate === rowDateFilter;
     return matchesSearch && matchesDate;
@@ -5265,7 +5309,7 @@ export default function App() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-slate-900 p-4 rounded-xl border border-slate-800 text-xs">
                     <div className="relative">
                       <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
-                      <input type="text" placeholder="Hľadať ID, odberateľa, produkt..." value={rowSearch} onChange={(e) => setRowSearch(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-xs text-slate-100 focus:outline-none" />
+                      <input type="text" placeholder="Hľadať odberateľa, číslo zákazky, staré číslo, produkt..." value={rowSearch} onChange={(e) => setRowSearch(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-xs text-slate-100 focus:outline-none" />
                     </div>
                     <div>
                       <select value={rowDateFilter} onChange={(e) => setRowDateFilter(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-100">
@@ -5569,8 +5613,9 @@ export default function App() {
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-400 mb-1">Firma</label>
-                      <div className="grid grid-cols-2 gap-1">
+                      <div className="grid grid-cols-3 gap-1">
                         <button type="button" onClick={() => setNewOrderCompany('ATAK')} className={`py-2 text-center text-xs font-bold rounded transition-colors ${newOrderCompany === 'ATAK' ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-white'}`}>ATAK</button>
+                        <button type="button" onClick={() => setNewOrderCompany('ADY')} className={`py-2 text-center text-xs font-bold rounded transition-colors ${newOrderCompany === 'ADY' ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-white'}`}>ADY</button>
                         <button type="button" onClick={() => setNewOrderCompany('PBT')} className={`py-2 text-center text-xs font-bold rounded transition-colors ${newOrderCompany === 'PBT' ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-white'}`}>PBT</button>
                       </div>
                     </div>
@@ -5656,7 +5701,7 @@ export default function App() {
                           <label className="block text-xs font-semibold text-slate-400 mb-1">Priradený grafik (voliteľné)</label>
                           <select value={selectedDesignerId} onChange={(e) => setSelectedDesignerId(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white">
                             <option value="">-- Nepriradený (uvidí ktokoľvek na Grafike) --</option>
-                            {employees.map(e => <option key={e.id} value={e.id}>{e.avatar} {e.firstName} {e.lastName}</option>)}
+                            {grafikEmployees.map(e => <option key={e.id} value={e.id}>{e.avatar} {e.firstName} {e.lastName}</option>)}
                           </select>
                         </div>
                       )}
@@ -7743,7 +7788,7 @@ export default function App() {
                                   className="text-[9px] bg-slate-950 border border-slate-800 rounded px-1 py-0.5 text-slate-300"
                                 >
                                   <option value="">Nepriradiť</option>
-                                  {employees.map(e => <option key={e.id} value={e.id}>{e.avatar} {e.firstName}</option>)}
+                                  {grafikEmployees.map(e => <option key={e.id} value={e.id}>{e.avatar} {e.firstName}</option>)}
                                 </select>
                               </div>
                             </div>
@@ -9636,7 +9681,7 @@ export default function App() {
                           <label className="block text-[10px] text-slate-500 mb-1">Priradený grafik (voliteľné)</label>
                           <select value={addItemDesignerId} onChange={(e) => setAddItemDesignerId(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-xs text-white">
                             <option value="">-- Nepriradený --</option>
-                            {employees.map(e => <option key={e.id} value={e.id}>{e.avatar} {e.firstName} {e.lastName}</option>)}
+                            {grafikEmployees.map(e => <option key={e.id} value={e.id}>{e.avatar} {e.firstName} {e.lastName}</option>)}
                           </select>
                         </div>
                       )}
