@@ -4,7 +4,8 @@ import * as XLSX from 'xlsx';
 import { QRCodeSVG } from 'qrcode.react';
 import { encode as encodeBySquare, CurrencyCode, PaymentOptions } from 'bysquare/pay';
 import { Html5Qrcode } from 'html5-qrcode';
-import { 
+import CenovePonukyTab from './CenovePonukyTab';
+import {
   ClipboardList, Package, Cpu, QrCode, Plus, User, Clock, Layers, Search, Check, X, Calendar,
   Palette, Scissors, Printer, Sliders, Sparkles, ZoomIn, ZoomOut, FileText, PlusCircle, Table,
   Shield, Users, Lock, Edit2, Trash2, Tag, Scale, CalendarDays, FileEdit, Gift, Loader2, AlertTriangle,
@@ -166,7 +167,7 @@ const ALL_ROLES = ['master', 'supervisor', 'sales', 'employee', 'uctovnik', 'sof
 const ROLE_LABELS = { master: 'Master', supervisor: 'Supervisor', sales: 'Obchodník', employee: 'Zamestnanec', uctovnik: 'Účtovník', sofer: 'Šofér', predajna: 'Predajňa' };
 // Úzke role vidia len vymenované karty v hornom menu; role bez záznamu tu (master/supervisor/sales/employee) vidia všetko ako doteraz.
 const ROLE_TAB_ALLOWLIST = {
-  uctovnik: ['invoices', 'materials', 'reports', 'manual'],
+  uctovnik: ['invoices', 'quotes', 'materials', 'reports', 'manual'],
   sofer: ['cestaky', 'kniha-jazd', 'manual'],
   predajna: ['orders', 'planner', 'manual']
 };
@@ -594,7 +595,7 @@ function calculateTravelOrderCost(t) {
   };
 }
 
-const mapTierRuleFromDb = (r) => ({ tier: r.tier, sortOrder: r.sort_order, minOrders: r.min_orders || 0, minVolume: r.min_volume || 0, dueDays: r.due_days || 14 });
+const mapTierRuleFromDb = (r) => ({ tier: r.tier, sortOrder: r.sort_order, minOrders: r.min_orders || 0, minVolume: r.min_volume || 0, dueDays: r.due_days || 14, discountPercent: r.discount_percent || 0 });
 const TIER_LABELS = { standard: 'Standard', bronze: 'Bronze', silver: 'Silver', gold: 'Gold' };
 const TIER_COLORS = { standard: 'bg-slate-700 text-slate-200', bronze: 'bg-amber-800 text-amber-100', silver: 'bg-slate-400 text-slate-900', gold: 'bg-yellow-500 text-yellow-950' };
 
@@ -5017,6 +5018,9 @@ export default function App() {
               {hasPermission('view_finance') && canSeeTab(currentUser.role, 'invoices') && (
                 <button onClick={() => setActiveTab('invoices')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'invoices' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><FileEdit className="h-3.5 w-3.5" /> Financie{orders.filter(o => o.accountingStatus === 'pending_review').length > 0 && <span className="bg-amber-500 text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full ml-1">{orders.filter(o => o.accountingStatus === 'pending_review').length}</span>}</button>
               )}
+              {hasPermission('view_finance') && canSeeTab(currentUser.role, 'quotes') && (
+                <button onClick={() => setActiveTab('quotes')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'quotes' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><FileText className="h-3.5 w-3.5" /> Cenové ponuky</button>
+              )}
               {canSeeTab(currentUser.role, 'archive') && (
                 <button onClick={() => setActiveTab('archive')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'archive' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Search className="h-3.5 w-3.5" /> História Zákaziek</button>
               )}
@@ -8503,7 +8507,7 @@ export default function App() {
                     <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
                       <table className="w-full text-left text-xs text-slate-300">
                         <thead className="bg-slate-900 text-slate-400 uppercase tracking-wider">
-                          <tr><th className="px-3 py-3">Úroveň</th><th className="px-3 py-3 text-center">Min. počet objednávok</th><th className="px-3 py-3 text-center">Min. objem (€)</th><th className="px-3 py-3 text-center">Splatnosť (dní)</th></tr>
+                          <tr><th className="px-3 py-3">Úroveň</th><th className="px-3 py-3 text-center">Min. počet objednávok</th><th className="px-3 py-3 text-center">Min. objem (€)</th><th className="px-3 py-3 text-center">Splatnosť (dní)</th><th className="px-3 py-3 text-center">Zľava v ponukách (%)</th></tr>
                         </thead>
                         <tbody className="divide-y divide-slate-800">
                           {[...tierRules].sort((a, b) => a.sortOrder - b.sortOrder).map(rule => (
@@ -8512,6 +8516,7 @@ export default function App() {
                               <td className="px-3 py-3 text-center"><input type="number" step="1" defaultValue={rule.minOrders} onBlur={(e) => handleUpdateTierRule(rule.tier, 'min_orders', e.target.value)} className="w-20 bg-slate-950 border border-slate-800 rounded p-1 text-center text-white" /></td>
                               <td className="px-3 py-3 text-center"><input type="number" step="1" defaultValue={rule.minVolume} onBlur={(e) => handleUpdateTierRule(rule.tier, 'min_volume', e.target.value)} className="w-24 bg-slate-950 border border-slate-800 rounded p-1 text-center text-white" /></td>
                               <td className="px-3 py-3 text-center"><input type="number" step="1" defaultValue={rule.dueDays} onBlur={(e) => handleUpdateTierRule(rule.tier, 'due_days', e.target.value)} className="w-16 bg-slate-950 border border-slate-800 rounded p-1 text-center text-white" /></td>
+                              <td className="px-3 py-3 text-center"><input type="number" step="0.1" defaultValue={rule.discountPercent} onBlur={(e) => handleUpdateTierRule(rule.tier, 'discount_percent', e.target.value)} className="w-16 bg-slate-950 border border-slate-800 rounded p-1 text-center text-white" /></td>
                             </tr>
                           ))}
                         </tbody>
@@ -8572,6 +8577,18 @@ export default function App() {
             </div>
           );
         })()}
+
+        {activeTab === 'quotes' && hasPermission('view_finance') && (
+          <CenovePonukyTab
+            supabase={supabase}
+            customers={customers}
+            companySettings={companySettings}
+            tierRules={tierRules}
+            getCustomerTier={getCustomerTier}
+            currentUser={currentUser}
+            triggerNotification={triggerNotification}
+          />
+        )}
 
         {activeTab === 'archive' && (() => {
           const query = archiveSearchQuery.trim().toLowerCase();
