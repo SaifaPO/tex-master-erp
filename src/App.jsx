@@ -542,6 +542,11 @@ const mapCustomerToDb = (c) => ({ name: c.name, phone: c.phone || null, email: c
 const mapDotlackovkaPriceFromDb = (r) => ({ id: r.id, label: r.label, price: r.price || 0, costPrice: r.cost_price || 0, sortOrder: r.sort_order || 0 });
 const mapAddonTypeFromDb = (r) => ({ id: r.id, label: r.label, sortOrder: r.sort_order || 0 });
 
+// Medzifiremne vyuctovanie sluzieb (ATAK <-> PBT) — ktore stanice patria ktorej firme, na urcenie smeru fakturacie
+const PBT_STATIONS = ['sublimacia', 'laser', 'transfer', 'sietotlac'];
+const ATAK_STATIONS = ['strihanie', 'sitie'];
+const mapIntercompanyRateFromDb = (r) => ({ serviceKey: r.service_key, label: r.label, unit: r.unit, price: r.price || 0, markupPercent: r.markup_percent || 0 });
+
 // Body na papierovom dotlačovom listku, ktoré vie predajňa rýchlo označiť (predné + zadné schéma trička/nohavíc).
 // Pohľad je na osobu spredu/zozadu (ako keby sme sa na ňu pozerali) — jej ľavá strana je preto na PRAVEJ strane obrázka.
 const DOTLACOVKA_PLACEMENT_POINTS = [
@@ -1026,6 +1031,10 @@ export default function App() {
   const [customers, setCustomers] = useState([]);
   const [dotlacovkaPriceList, setDotlacovkaPriceList] = useState([]);
   const [addonTypes, setAddonTypes] = useState([]);
+  const [intercompanyRates, setIntercompanyRates] = useState([]);
+  const [showIntercompanyRateEditor, setShowIntercompanyRateEditor] = useState(false);
+  const [intercompanyDirection, setIntercompanyDirection] = useState('ATAK_TO_PBT'); // ATAK_TO_PBT = PBT fakturuje ATAK; PBT_TO_ATAK = ATAK fakturuje PBT
+  const [intercompanyMonth, setIntercompanyMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
   const [showAddonEditor, setShowAddonEditor] = useState(false);
   const [newAddonLabel, setNewAddonLabel] = useState('');
   const [selectedCustomerForDetail, setSelectedCustomerForDetail] = useState(null);
@@ -1303,7 +1312,7 @@ export default function App() {
     }
     async function loadAll() {
       try {
-        const [matRes, prodRes, tierRes, sportRes, empRes, aclRes, orderRes, whRes, rateRes, assignRes, stationDefaultRes, stationExclusionRes, checkinRes, attendanceRes, mismatchRes, problemRes, companyRes, invoiceRes, bankRes, journalRes, deadlineRes, cashDocRes, capacityRes, productTimesRes, assetRes, metricRes, tierRuleRes, travelRes, vehicleRes, vehicleLogRes, customerRes, dotlackovkaPriceRes, addonTypeRes, helpRequestRes] = await Promise.all([
+        const [matRes, prodRes, tierRes, sportRes, empRes, aclRes, orderRes, whRes, rateRes, assignRes, stationDefaultRes, stationExclusionRes, checkinRes, attendanceRes, mismatchRes, problemRes, companyRes, invoiceRes, bankRes, journalRes, deadlineRes, cashDocRes, capacityRes, productTimesRes, assetRes, metricRes, tierRuleRes, travelRes, vehicleRes, vehicleLogRes, customerRes, dotlackovkaPriceRes, addonTypeRes, helpRequestRes, intercompanyRateRes] = await Promise.all([
           supabase.from('materials').select('*').order('name'),
           supabase.from('products').select('*'),
           supabase.from('quality_tiers').select('*'),
@@ -1337,7 +1346,8 @@ export default function App() {
           supabase.from('customers').select('*'),
           supabase.from('dotlacovka_price_list').select('*').order('sort_order'),
           supabase.from('addon_types').select('*').order('sort_order'),
-          supabase.from('help_requests').select('*').order('created_at', { ascending: false }).limit(200)
+          supabase.from('help_requests').select('*').order('created_at', { ascending: false }).limit(200),
+          supabase.from('intercompany_rates').select('*')
         ]);
         const firstErr = [matRes, prodRes, tierRes, sportRes, empRes, orderRes, whRes].find(r => r.error);
         if (firstErr) throw firstErr.error;
@@ -1382,6 +1392,7 @@ export default function App() {
         setDotlacovkaPriceList(dotlackovkaPriceRes.error ? [] : (dotlackovkaPriceRes.data || []).map(mapDotlackovkaPriceFromDb));
         setAddonTypes(addonTypeRes.error ? [] : (addonTypeRes.data || []).map(mapAddonTypeFromDb));
         setHelpRequests(helpRequestRes.error ? [] : (helpRequestRes.data || []).map(mapHelpRequestFromDb));
+        setIntercompanyRates(intercompanyRateRes.error ? [] : (intercompanyRateRes.data || []).map(mapIntercompanyRateFromDb));
 
         if (loadedWarehouses.length > 0) {
           setActiveWarehouseId(loadedWarehouses[0].id);
@@ -1409,7 +1420,7 @@ export default function App() {
     if (!supabase) return;
     const channel = supabase.channel('tex-master-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'materials' }, (payload) => applyRealtimeChange(setMaterials, payload, mapMaterialFromDb))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'warehouses' }, (payload) => applyRealtimeChange(setWarehouses, payload, (r) => ({ id: r.id, name: r.name })))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'warehouses' }, (payload) => applyRealtimeChange(setWarehouses, payload, (r) => ({ id: r.id, name: r.name, company: r.company || '' })))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'cost_rates' }, (payload) => {
         setCostRates(prev => {
           if (payload.eventType === 'DELETE') return prev.filter(x => x.stationId !== payload.old.station_id);
@@ -1453,6 +1464,7 @@ export default function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'customers' }, (payload) => applyRealtimeChange(setCustomers, payload, mapCustomerFromDb, 'name'))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'dotlacovka_price_list' }, (payload) => applyRealtimeChange(setDotlacovkaPriceList, payload, mapDotlackovkaPriceFromDb))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'addon_types' }, (payload) => applyRealtimeChange(setAddonTypes, payload, mapAddonTypeFromDb))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'intercompany_rates' }, (payload) => applyRealtimeChange(setIntercompanyRates, payload, mapIntercompanyRateFromDb, 'serviceKey'))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'help_requests' }, (payload) => {
         applyRealtimeChange(setHelpRequests, payload, mapHelpRequestFromDb);
         if (payload.eventType === 'INSERT') {
@@ -3592,6 +3604,73 @@ export default function App() {
     const dbField = field === 'costPrice' ? 'cost_price' : field;
     const payload = isNumericField ? { [dbField]: Number(value) || 0 } : { [dbField]: value };
     await supabase.from('dotlacovka_price_list').update(payload).eq('id', id);
+  };
+
+  const handleUpdateIntercompanyRate = async (serviceKey, field, value) => {
+    setIntercompanyRates(prev => prev.map(r => r.serviceKey === serviceKey ? { ...r, [field]: Number(value) || 0 } : r));
+    const dbField = field === 'markupPercent' ? 'markup_percent' : field;
+    await supabase.from('intercompany_rates').update({ [dbField]: Number(value) || 0 }).eq('service_key', serviceKey);
+  };
+
+  const handleUpdateWarehouseCompany = async (warehouseId, company) => {
+    setWarehouses(prev => prev.map(w => w.id === warehouseId ? { ...w, company } : w));
+    await supabase.from('warehouses').update({ company: company || null }).eq('id', warehouseId);
+  };
+
+  // Vygeneruje riadky medzifiremneho dodacieho listu (ATAK <-> PBT) za zvoleny mesiac a smer.
+  const getIntercompanyLineItems = (monthStr, direction) => {
+    const invoicerCompany = direction === 'ATAK_TO_PBT' ? 'PBT' : 'ATAK';
+    const payerBrand = direction === 'ATAK_TO_PBT' ? 'ATAK' : 'PBT';
+    const billableStations = direction === 'ATAK_TO_PBT' ? PBT_STATIONS : ATAK_STATIONS;
+    const relevantOrders = orders.filter(o => {
+      if (o.companyBrand !== payerBrand) return false;
+      const created = parseFormattedDateTime(o.createdAt);
+      if (!created) return false;
+      const ym = `${created.getFullYear()}-${String(created.getMonth() + 1).padStart(2, '0')}`;
+      return ym === monthStr;
+    });
+    const lines = [];
+    relevantOrders.forEach(order => {
+      (order.items || []).forEach(item => {
+        billableStations.forEach(sid => {
+          const status = item.stationStatuses?.[sid];
+          if (!status || status === 'neaktivne') return;
+          const rate = intercompanyRates.find(r => r.serviceKey === sid);
+          if (!rate) return;
+          const qty = rate.unit === 'bm' ? (item.materialsNeeded || []).reduce((s, m) => s + (m.qtyNeeded || 0), 0) : item.qty;
+          if (!qty) return;
+          const unitPrice = parseFloat((rate.price * (1 + rate.markupPercent / 100)).toFixed(2));
+          lines.push({ orderNumber: order.orderNumber || order.id, productName: `${item.productName} — ${rate.label}`, unit: rate.unit, qty: parseFloat(qty.toFixed(2)), unitPrice, total: parseFloat((qty * unitPrice).toFixed(2)) });
+        });
+        if (direction === 'PBT_TO_ATAK') {
+          const reziaRate = intercompanyRates.find(r => r.serviceKey === 'rezia');
+          if (reziaRate && item.qty) {
+            const unitPrice = parseFloat((reziaRate.price * (1 + reziaRate.markupPercent / 100)).toFixed(2));
+            lines.push({ orderNumber: order.orderNumber || order.id, productName: `${item.productName} — Réžia`, unit: 'ks', qty: item.qty, unitPrice, total: parseFloat((item.qty * unitPrice).toFixed(2)) });
+          }
+        }
+        (item.materialsNeeded || []).forEach(needed => {
+          const mat = materials.find(m => m.id === needed.materialId);
+          const wh = warehouses.find(w => w.id === mat?.warehouseId);
+          if (mat && wh?.company === invoicerCompany) {
+            const matRate = intercompanyRates.find(r => r.serviceKey === 'material');
+            const markup = matRate?.markupPercent || 0;
+            const unitPrice = parseFloat(((mat.pricePerM || 0) * (1 + markup / 100)).toFixed(2));
+            lines.push({ orderNumber: order.orderNumber || order.id, productName: `${item.productName} — Materiál (${mat.name})`, unit: mat.unit || 'm', qty: needed.qtyNeeded, unitPrice, total: parseFloat((needed.qtyNeeded * unitPrice).toFixed(2)) });
+          }
+        });
+      });
+    });
+    return lines.map((l, i) => ({ seq: i + 1, ...l }));
+  };
+
+  const handleExportIntercompanyList = (lines, direction, monthStr) => {
+    const invoicer = direction === 'ATAK_TO_PBT' ? 'PBT' : 'ATAK';
+    const payer = direction === 'ATAK_TO_PBT' ? 'ATAK' : 'PBT';
+    const rows = lines.map(l => ({ 'P.č.': l.seq, 'Číslo zákazky': l.orderNumber, 'Produkt': l.productName, 'Množstvo': l.qty, 'MJ': l.unit, 'Cena/MJ bez DPH': l.unitPrice, 'Cena spolu bez DPH': l.total }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Dodaci list');
+    XLSX.writeFile(wb, `dodaci_list_${invoicer}_${payer}_${monthStr}.xlsx`);
   };
 
   const handleAddAddonType = async () => {
@@ -6380,6 +6459,19 @@ export default function App() {
                         )}
                       </button>
                     )}
+                    {currentUser.role === 'master' && (
+                      <select
+                        value={wh.company || ''}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => handleUpdateWarehouseCompany(wh.id, e.target.value)}
+                        title="Ktorej firme sklad patrí — pre medzifiremné vyúčtovanie"
+                        className="ml-1 text-[9px] bg-slate-950 border border-slate-800 rounded px-1 py-0.5 text-slate-400"
+                      >
+                        <option value="">— firma —</option>
+                        <option value="ATAK">ATAK</option>
+                        <option value="PBT">PBT</option>
+                      </select>
+                    )}
                   </div>
                 ))}
                 {hasPermission('edit_stock') && (
@@ -8147,6 +8239,9 @@ export default function App() {
                 <button onClick={() => setFinanceSubTab('journal')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'journal' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Účtovný denník</button>
                 <button onClick={() => setFinanceSubTab('assets')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'assets' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Majetok</button>
                 <button onClick={() => setFinanceSubTab('customers')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'customers' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Zákazníci</button>
+                {currentUser.role === 'master' && (
+                  <button onClick={() => setFinanceSubTab('intercompany')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'intercompany' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Medzifiremné (ATAK↔PBT)</button>
+                )}
                 <button onClick={() => setFinanceSubTab('ai')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap flex items-center gap-1 ${financeSubTab === 'ai' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}><Bot className="h-3.5 w-3.5" /> AI Asistent</button>
               </div>
 
@@ -8615,6 +8710,87 @@ export default function App() {
                   </div>
                 </div>
               )}
+
+              {financeSubTab === 'intercompany' && currentUser.role === 'master' && (() => {
+                const lines = getIntercompanyLineItems(intercompanyMonth, intercompanyDirection);
+                const grandTotal = lines.reduce((s, l) => s + l.total, 0);
+                const invoicer = intercompanyDirection === 'ATAK_TO_PBT' ? 'PBT' : 'ATAK';
+                const payer = intercompanyDirection === 'ATAK_TO_PBT' ? 'ATAK' : 'PBT';
+                return (
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900 p-3 rounded-xl border border-slate-800">
+                      <div className="flex items-center gap-2">
+                        <div className="grid grid-cols-2 gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
+                          <button onClick={() => setIntercompanyDirection('ATAK_TO_PBT')} className={`px-3 py-1.5 rounded text-xs font-bold ${intercompanyDirection === 'ATAK_TO_PBT' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>PBT → ATAK (zákazky ATAK)</button>
+                          <button onClick={() => setIntercompanyDirection('PBT_TO_ATAK')} className={`px-3 py-1.5 rounded text-xs font-bold ${intercompanyDirection === 'PBT_TO_ATAK' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>ATAK → PBT (zákazky PBT)</button>
+                        </div>
+                        <input type="month" value={intercompanyMonth} onChange={(e) => setIntercompanyMonth(e.target.value)} className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white" />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => setShowIntercompanyRateEditor(v => !v)} className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5"><Sliders className="h-3.5 w-3.5" /> Cenník a marže</button>
+                        <button onClick={() => handleExportIntercompanyList(lines, intercompanyDirection, intercompanyMonth)} disabled={lines.length === 0} className="bg-emerald-700 hover:bg-emerald-800 disabled:opacity-40 text-white font-bold text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5"><Download className="h-3.5 w-3.5" /> Export XLSX</button>
+                        <button onClick={() => window.print()} disabled={lines.length === 0} className="bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 font-bold text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5"><FileText className="h-3.5 w-3.5" /> Tlač</button>
+                      </div>
+                    </div>
+
+                    {showIntercompanyRateEditor && (
+                      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-2">
+                        <span className="text-xs font-bold text-slate-300 uppercase block mb-1">Cenník medzifiremných služieb (bez DPH) + marža</span>
+                        <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 text-[9px] text-slate-500 uppercase font-bold px-0.5">
+                          <span>Služba</span><span className="text-center">Cena / MJ</span><span className="text-center">MJ</span><span className="text-center">Marža %</span>
+                        </div>
+                        {intercompanyRates.map(r => (
+                          <div key={r.serviceKey} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center text-xs">
+                            <span className="text-slate-300">{r.label}</span>
+                            <input type="number" step="0.1" min="0" value={r.price} onChange={(e) => handleUpdateIntercompanyRate(r.serviceKey, 'price', e.target.value)} className="w-20 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-white text-right" />
+                            <span className="w-10 text-center text-slate-500">{r.unit}</span>
+                            <input type="number" step="1" min="0" value={r.markupPercent} onChange={(e) => handleUpdateIntercompanyRate(r.serviceKey, 'markupPercent', e.target.value)} className="w-16 bg-slate-950 border border-amber-800/40 rounded px-2 py-1 text-amber-300 text-right" />
+                          </div>
+                        ))}
+                        <p className="text-[9px] text-slate-600 italic pt-1">Materiál sa pripočíta automaticky, ak bol pri danej položke použitý zo skladu, ktorý má nastavenú firmu {invoicer} (nastavíš pri skladoch v Materiáloch).</p>
+                      </div>
+                    )}
+
+                    <div className="bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
+                      <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+                        <div>
+                          <h3 className="font-bold text-white">Dodací list — {invoicer} fakturuje {payer}</h3>
+                          <p className="text-xs text-slate-500">Obdobie: {intercompanyMonth} • {lines.length} položiek</p>
+                        </div>
+                        <span className="text-xl font-mono font-extrabold text-emerald-400">{grandTotal.toFixed(2)} €</span>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs text-slate-300">
+                          <thead className="bg-slate-900 text-slate-400 uppercase tracking-wider">
+                            <tr>
+                              <th className="px-3 py-2">P.č.</th>
+                              <th className="px-3 py-2">Číslo zákazky</th>
+                              <th className="px-3 py-2">Produkt</th>
+                              <th className="px-3 py-2 text-center">Množstvo</th>
+                              <th className="px-3 py-2 text-center">Cena/MJ bez DPH</th>
+                              <th className="px-3 py-2 text-center">Cena spolu bez DPH</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-800">
+                            {lines.length === 0 ? (
+                              <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500 italic">Za zvolený mesiac a smer nie sú žiadne položky na vyúčtovanie.</td></tr>
+                            ) : lines.map(l => (
+                              <tr key={l.seq} className="hover:bg-slate-900/40">
+                                <td className="px-3 py-2 font-mono text-slate-500">{l.seq}</td>
+                                <td className="px-3 py-2 font-mono">{l.orderNumber}</td>
+                                <td className="px-3 py-2">{l.productName}</td>
+                                <td className="px-3 py-2 text-center">{l.qty} {l.unit}</td>
+                                <td className="px-3 py-2 text-center">{l.unitPrice.toFixed(2)} €</td>
+                                <td className="px-3 py-2 text-center font-bold">{l.total.toFixed(2)} €</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {financeSubTab === 'ai' && (
                 <div className="bg-slate-950 border border-slate-800 rounded-xl h-[560px] flex flex-col overflow-hidden">
