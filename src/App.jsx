@@ -6,11 +6,13 @@ import { encode as encodeBySquare, CurrencyCode, PaymentOptions } from 'bysquare
 import { Html5Qrcode } from 'html5-qrcode';
 import CenovePonukyTab from './CenovePonukyTab';
 import VlajkyAdmin from './printstudio/VlajkyAdmin';
+import PrintStudioAdmin from './printstudio/PrintStudioAdmin';
+import DtfMetrazTab from './printstudio/DtfMetrazTab';
 import {
   ClipboardList, Package, Cpu, QrCode, Plus, User, Clock, Layers, Search, Check, X, Calendar,
   Palette, Scissors, Printer, Sliders, Sparkles, ZoomIn, ZoomOut, FileText, PlusCircle, Table,
   Shield, Users, Lock, Edit2, Trash2, Tag, Scale, CalendarDays, FileEdit, Gift, Loader2, AlertTriangle,
-  Shirt, Box, Banknote, GripVertical, Download, Upload, ArrowUp, ArrowDown, BarChart3, Camera, Bot, Zap, Star, RefreshCw, BookOpen, Flag
+  Shirt, Box, Banknote, GripVertical, Download, Upload, ArrowUp, ArrowDown, BarChart3, Camera, Bot, Zap, Star, RefreshCw, BookOpen, Flag, Scroll
 } from 'lucide-react';
 
 // ============================================================
@@ -5124,6 +5126,9 @@ export default function App() {
               {canSeeTab(currentUser.role, 'vlajky') && (
                 <button onClick={() => setActiveTab('vlajky')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'vlajky' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Flag className="h-3.5 w-3.5" /> Plážové Vlajky</button>
               )}
+              {canSeeTab(currentUser.role, 'dtf-metraz') && (
+                <button onClick={() => setActiveTab('dtf-metraz')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'dtf-metraz' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Scroll className="h-3.5 w-3.5" /> DTF Metráž</button>
+              )}
               {canSeeTab(currentUser.role, 'materials') && (
                 <button onClick={() => setActiveTab('materials')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'materials' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Package className="h-3.5 w-3.5" /> Sklad</button>
               )}
@@ -5141,6 +5146,9 @@ export default function App() {
               )}
               {(hasPermission('view_reports') || currentUser.role === 'sales') && canSeeTab(currentUser.role, 'problems') && (
                 <button onClick={() => setActiveTab('problems')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'problems' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><AlertTriangle className="h-3.5 w-3.5" /> Problémy</button>
+              )}
+              {currentUser.role === 'master' && (
+                <button onClick={() => setActiveTab('printstudio')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'printstudio' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Shirt className="h-3.5 w-3.5" /> PrintStudio Pro</button>
               )}
               {hasPermission('view_finance') && canSeeTab(currentUser.role, 'invoices') && (
                 <button onClick={() => setActiveTab('invoices')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'invoices' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><FileEdit className="h-3.5 w-3.5" /> Financie{orders.filter(o => o.accountingStatus === 'pending_review').length > 0 && <span className="bg-amber-500 text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full ml-1">{orders.filter(o => o.accountingStatus === 'pending_review').length}</span>}</button>
@@ -6207,6 +6215,16 @@ export default function App() {
           <div className="space-y-6 print:hidden animate-in fade-in duration-150">
             <VlajkyAdmin supabase={supabase} />
           </div>
+        )}
+
+        {activeTab === 'dtf-metraz' && (
+          <div className="space-y-6 print:hidden animate-in fade-in duration-150">
+            <DtfMetrazTab supabase={supabase} />
+          </div>
+        )}
+
+        {activeTab === 'printstudio' && currentUser.role === 'master' && (
+          <PrintStudioAdmin supabase={supabase} />
         )}
 
         {activeTab === 'isolated-station' && (

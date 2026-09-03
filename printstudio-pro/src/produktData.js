@@ -1,4 +1,4 @@
-const ZONE_KEYS = ['predok', 'chrbat', 'lavy_rukav', 'pravy_rukav'];
+const ZONE_KEYS = ['predok', 'chrbat', 'lavy_rukav', 'pravy_rukav', 'stitok_golier'];
 const TECHNOLOGIA_PORADIE = ['sublimacia', 'dtf', 'sietotlac', 'rezany'];
 
 export async function nacitajKategorieAProdukty(supabase) {
@@ -11,12 +11,13 @@ export async function nacitajKategorieAProdukty(supabase) {
 
 // Načíta plný detail produktu — farby, veľkosti a ich max. rozmery potlače pre každú zónu.
 export async function nacitajDetailProduktu(supabase, produktId) {
-  const [{ data: produkt }, { data: farbyLinks }, { data: velkosti }, { data: technologieLinks }, { data: mockupyData }] = await Promise.all([
+  const [{ data: produkt }, { data: farbyLinks }, { data: velkosti }, { data: technologieLinks }, { data: mockupyData }, { data: variantyData }] = await Promise.all([
     supabase.from('produkty').select('*').eq('id', produktId).single(),
-    supabase.from('produkt_farby').select('farby(id, nazov, hex, je_tmava)').eq('produkt_id', produktId),
+    supabase.from('produkt_farby').select('farby(id, nazov, hex, je_tmava, je_biela)').eq('produkt_id', produktId),
     supabase.from('produkt_velkosti').select('*, produkt_velkost_zony(*)').eq('produkt_id', produktId).order('poradie'),
     supabase.from('produkt_technologie').select('technologia').eq('produkt_id', produktId),
     supabase.from('produkt_mockupy').select('*').eq('produkt_id', produktId),
+    supabase.from('produkt_shopify_varianty').select('farba_id, velkost, shopify_variant_id').eq('produkt_id', produktId),
   ]);
 
   const colors = (farbyLinks || []).map(l => l.farby).filter(Boolean);
@@ -46,5 +47,30 @@ export async function nacitajDetailProduktu(supabase, produktId) {
     };
   });
 
-  return { ...produkt, colors, sizes, zony, technologie, mockupy };
+  // shopifyVarianty[farbaId][velkost] = shopify_variant_id — pre reálne /cart/add.js volanie
+  const shopifyVarianty = {};
+  (variantyData || []).forEach(v => {
+    if (!shopifyVarianty[v.farba_id]) shopifyVarianty[v.farba_id] = {};
+    shopifyVarianty[v.farba_id][v.velkost] = v.shopify_variant_id;
+  });
+
+  return { ...produkt, colors, sizes, zony, technologie, mockupy, shopifyVarianty };
+}
+
+// Cenové stupne "Personalizácia potlače" (napr. 0.50 € -> variant 44123456789), zoradené vzostupne.
+export async function nacitajPersonalizacieVarianty(supabase) {
+  const { data } = await supabase.from('cennik_personalizacia_varianty').select('*').order('cena_eur');
+  return data || [];
+}
+
+// Zaokrúhli cenu potlače na najbližší DOSTUPNÝ cenový stupeň (nikdy nezaokrúhli nadol pod skutočnú cenu,
+// aby appka pri chýbajúcich stupňoch radšej mierne preúčtovala než podúčtovala).
+export function najblizsiPersonalizacnyVariant(varianty, cenaPotlace) {
+  if (!varianty || varianty.length === 0) return null;
+  const vyhovujuce = varianty.filter(v => Number(v.cena_eur) >= cenaPotlace);
+  if (vyhovujuce.length > 0) {
+    return vyhovujuce.reduce((min, v) => Number(v.cena_eur) < Number(min.cena_eur) ? v : min);
+  }
+  // cena potlače presahuje aj najvyšší nastavený stupeň — použi ten najvyšší dostupný
+  return varianty.reduce((max, v) => Number(v.cena_eur) > Number(max.cena_eur) ? v : max);
 }

@@ -35,7 +35,10 @@ export default function Katalog({ kategorie, produkty, onVyberProduktu }) {
       <h2 className="text-xl font-extrabold text-slate-900 mb-5">{aktivnaKategoria.nazov}</h2>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         {produktyKategorie.map(p => (
-          <button key={p.id} onClick={() => onVyberProduktu(p.id)} className="bg-white border border-slate-200 rounded-2xl p-4 text-left hover:border-indigo-400 hover:shadow-sm transition">
+          <button key={p.id} onClick={() => onVyberProduktu(p.id)} className="relative bg-white border border-slate-200 rounded-2xl p-4 text-left hover:border-indigo-400 hover:shadow-sm transition">
+            {p.typ_konfiguratora === '3d_dres' && (
+              <span className="absolute top-2.5 right-2.5 text-[9px] font-extrabold uppercase tracking-wider bg-indigo-600 text-white px-1.5 py-0.5 rounded-full">3D</span>
+            )}
             <div className="w-full h-20 rounded-lg mb-2 flex items-center justify-center bg-slate-50 text-slate-300 text-xs">{p.nazov}</div>
             <div className="font-semibold text-sm text-slate-900">{p.nazov}</div>
             <div className="text-xs text-slate-400">{NAZVY_POHLAVIA[p.pohlavie] || ''} · {Number(p.zakladna_cena).toFixed(2)} €</div>

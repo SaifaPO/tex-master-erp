@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Camera, Loader2, Trash2, Check } from 'lucide-react';
 
-const ZONE_KEYS = ['predok', 'chrbat', 'lavy_rukav', 'pravy_rukav'];
-const NAZVY_ZON = { predok: 'Predok', chrbat: 'Chrbát', lavy_rukav: 'Ľavý rukáv', pravy_rukav: 'Pravý rukáv' };
+const ZONE_KEYS = ['predok', 'chrbat', 'lavy_rukav', 'pravy_rukav', 'stitok_golier'];
+const NAZVY_ZON = { predok: 'Predok', chrbat: 'Chrbát', lavy_rukav: 'Ľavý rukáv', pravy_rukav: 'Pravý rukáv', stitok_golier: 'Štítok (golier)' };
 const BUCKET = 'produkt-fotky';
 const predvolenyRect = () => ({ x: 30, y: 15, w: 40, h: 50 });
 const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);

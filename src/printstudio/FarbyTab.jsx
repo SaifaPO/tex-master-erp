@@ -18,6 +18,7 @@ export default function FarbyTab({ supabase }) {
   const [nazov, setNazov] = useState('');
   const [hex, setHex] = useState('#2563eb');
   const [jeTmava, setJeTmava] = useState(false);
+  const [jeBiela, setJeBiela] = useState(false);
   const [error, setError] = useState('');
 
   const nacitaj = async () => {
@@ -29,8 +30,8 @@ export default function FarbyTab({ supabase }) {
 
   useEffect(() => { nacitaj(); }, []);
 
-  const otvorNovu = () => { setEditing(null); setNazov(''); setHex('#2563eb'); setJeTmava(jeHexTmavy('#2563eb')); setError(''); };
-  const otvorUpravu = (f) => { setEditing(f); setNazov(f.nazov); setHex(f.hex); setJeTmava(!!f.je_tmava); setError(''); };
+  const otvorNovu = () => { setEditing(null); setNazov(''); setHex('#2563eb'); setJeTmava(jeHexTmavy('#2563eb')); setJeBiela(false); setError(''); };
+  const otvorUpravu = (f) => { setEditing(f); setNazov(f.nazov); setHex(f.hex); setJeTmava(!!f.je_tmava); setJeBiela(!!f.je_biela); setError(''); };
   const zavri = () => setEditing(undefined);
 
   const zmenHex = (novyHex) => { setHex(novyHex); setJeTmava(jeHexTmavy(novyHex)); };
@@ -38,10 +39,10 @@ export default function FarbyTab({ supabase }) {
   const uloz = async () => {
     if (!nazov.trim()) { setError('Vyplň názov farby.'); return; }
     if (editing) {
-      const { error: err } = await supabase.from('farby').update({ nazov: nazov.trim(), hex, je_tmava: jeTmava }).eq('id', editing.id);
+      const { error: err } = await supabase.from('farby').update({ nazov: nazov.trim(), hex, je_tmava: jeTmava, je_biela: jeBiela }).eq('id', editing.id);
       if (err) { setError(err.message); return; }
     } else {
-      const { error: err } = await supabase.from('farby').insert({ nazov: nazov.trim(), hex, je_tmava: jeTmava });
+      const { error: err } = await supabase.from('farby').insert({ nazov: nazov.trim(), hex, je_tmava: jeTmava, je_biela: jeBiela });
       if (err) { setError(err.message); return; }
     }
     zavri();
@@ -84,6 +85,10 @@ export default function FarbyTab({ supabase }) {
             <input type="checkbox" checked={jeTmava} onChange={(e) => setJeTmava(e.target.checked)} className="rounded bg-slate-950 border-slate-700" />
             Tmavý textil (na sieťotlač treba 2 vrstvy farby — automaticky navrhnuté podľa hexu, dá sa prebiť)
           </label>
+          <label className="flex items-center gap-2 text-sm text-slate-300">
+            <input type="checkbox" checked={jeBiela} onChange={(e) => setJeBiela(e.target.checked)} className="rounded bg-slate-950 border-slate-700" />
+            Biela farba vhodná na sublimáciu (sublimácia sa dá tlačiť len na túto/tieto farby)
+          </label>
           {error && <p className="text-xs text-rose-400">{error}</p>}
           <div className="flex gap-2 pt-1">
             <button onClick={uloz} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-semibold">Uložiť</button>
@@ -101,7 +106,7 @@ export default function FarbyTab({ supabase }) {
               <span className="w-9 h-9 rounded-full border border-slate-700 shrink-0" style={{ background: f.hex }}></span>
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-sm text-white truncate">{f.nazov}</div>
-                <div className="text-xs text-slate-500 font-mono">{f.hex} {f.je_tmava && <span className="text-slate-400">· tmavý textil</span>}</div>
+                <div className="text-xs text-slate-500 font-mono">{f.hex} {f.je_tmava && <span className="text-slate-400">· tmavý textil</span>} {f.je_biela && <span className="text-slate-400">· pre sublimáciu</span>}</div>
               </div>
               <button onClick={() => otvorUpravu(f)} className="text-slate-400 hover:text-indigo-400 p-1"><Edit2 className="w-4 h-4" /></button>
               <button onClick={() => zmaz(f)} className="text-slate-400 hover:text-rose-400 p-1"><Trash2 className="w-4 h-4" /></button>

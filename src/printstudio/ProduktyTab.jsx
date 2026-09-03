@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, Edit2, Trash2, Box, Loader2 } from 'lucide-react';
 
-const ZONE_KEYS = ['predok', 'chrbat', 'lavy_rukav', 'pravy_rukav'];
-const NAZVY_ZON = { predok: 'Predok', chrbat: 'Chrbát', lavy_rukav: 'Ľ. rukáv', pravy_rukav: 'P. rukáv' };
+const ZONE_KEYS = ['predok', 'chrbat', 'lavy_rukav', 'pravy_rukav', 'stitok_golier'];
+const NAZVY_ZON = { predok: 'Predok', chrbat: 'Chrbát', lavy_rukav: 'Ľ. rukáv', pravy_rukav: 'P. rukáv', stitok_golier: 'Štítok (golier)' };
 const NAZVY_POHLAVIA = { muz: 'Muž', zena: 'Žena', dieta: 'Dieťa', unisex: 'Unisex' };
 const TECHNOLOGIE = [
   { value: 'sublimacia', label: 'Sublimácia' },

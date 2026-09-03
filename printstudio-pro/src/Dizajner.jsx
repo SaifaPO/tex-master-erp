@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { fabric } from 'fabric';
 import { Trash2, Download, ShoppingBag, Type, Image as ImageIcon, Sparkles, Shirt as ShirtIcon, Trophy, CheckCircle2, Loader2 } from 'lucide-react';
-import { nacitajDetailProduktu } from './produktData';
+import { nacitajDetailProduktu, nacitajPersonalizacieVarianty, najblizsiPersonalizacnyVariant } from './produktData';
 import { nacitajCennik, vypocitajCenuPotlace } from './cenotvorba';
 import { getSessionId } from './supabaseClient';
 
-const ZONE_KEYS = ['predok', 'chrbat', 'lavy_rukav', 'pravy_rukav'];
-const NAZVY_ZON = { predok: 'Predná strana', chrbat: 'Chrbát', lavy_rukav: 'Ľavý rukáv', pravy_rukav: 'Pravý rukáv' };
+const ZONE_KEYS = ['predok', 'chrbat', 'lavy_rukav', 'pravy_rukav', 'stitok_golier'];
+const NAZVY_ZON = { predok: 'Predná strana', chrbat: 'Chrbát', lavy_rukav: 'Ľavý rukáv', pravy_rukav: 'Pravý rukáv', stitok_golier: 'Štítok (golier)' };
 const NAZVY_TECHNOLOGIE = { sublimacia: 'Sublimácia', dtf: 'Digitálny transfer (DTF)', sietotlac: 'Sieťotlač', rezany: 'Rezaný transfer' };
 const CANVAS_PX_W = 240;
 const CANVAS_PX_H = 340;
@@ -98,7 +98,7 @@ export default function Dizajner({ supabase, produktId }) {
   const [quantity, setQuantity] = useState(1);
   const [selectedObj, setSelectedObj] = useState(null);
   const [liveSize, setLiveSize] = useState(null); // { w, h, presahuje }
-  const [priceInfo, setPriceInfo] = useState({ cenaKus: 0, total: 0 });
+  const [priceInfo, setPriceInfo] = useState({ cenaKus: 0, cenaPotlace: 0, total: 0 });
   const [cartConfirmation, setCartConfirmation] = useState(null);
   const [techPanelOpen, setTechPanelOpen] = useState(false);
   const [techPanelContent, setTechPanelContent] = useState('');
@@ -113,6 +113,8 @@ export default function Dizajner({ supabase, produktId }) {
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiGenError, setAiGenError] = useState('');
+  const [personalizacieVarianty, setPersonalizacieVarianty] = useState([]);
+  const [cartError, setCartError] = useState('');
 
   const canvasElRef = useRef(null);
   const fabricRef = useRef(null);
@@ -131,17 +133,19 @@ export default function Dizajner({ supabase, produktId }) {
     let zrusene = false;
     setIsLoading(true);
     (async () => {
-      const [detail, cen, { data: fontyData }, { data: grafikyData }] = await Promise.all([
+      const [detail, cen, { data: fontyData }, { data: grafikyData }, personalizacie] = await Promise.all([
         nacitajDetailProduktu(supabase, produktId),
         nacitajCennik(supabase),
         supabase.from('fonty').select('*').order('id'),
         supabase.from('grafiky').select('*').order('id', { ascending: false }),
+        nacitajPersonalizacieVarianty(supabase),
       ]);
       if (zrusene) return;
       setProdukt(detail);
       setCennik(cen);
       setFonty(fontyData || []);
       setGrafiky(grafikyData || []);
+      setPersonalizacieVarianty(personalizacie);
       setCurrentColor(detail.colors[0]?.hex || '#ffffff');
       setCurrentSize(detail.sizes[0]?.velkost || '');
       setCurrentZona(detail.zony[0] || '');
@@ -246,7 +250,7 @@ export default function Dizajner({ supabase, produktId }) {
     const { plocha, farby } = plochaAFarbyVsetkychZon();
     const cenaPotlace = vypocitajCenuPotlace(cennik, tech, plocha, farby, jeTmavyTextil, currentFolia);
     const cenaKus = Number(p.zakladna_cena) + cenaPotlace;
-    setPriceInfo({ cenaKus, total: cenaKus * quantity });
+    setPriceInfo({ cenaKus, cenaPotlace, total: cenaKus * quantity });
   };
 
   // handlersRef.current musí vždy ukazovať na TÚTO (najnovšiu) verziu handlerov — pozri komentár vyššie pri handlersRef.
@@ -281,6 +285,21 @@ export default function Dizajner({ supabase, produktId }) {
   const zmenFarbu = (hex) => {
     setCurrentColor(hex);
     nastavMierku(currentSize, currentZona, hex);
+    aktualizujCenu();
+  };
+
+  // Sublimácia sa fyzicky dá tlačiť len na bielu (svetlú polyesterovú) látku — pri prepnutí na ňu
+  // preskoč na prvú dostupnú bielu farbu, ak práve zvolená farba nie je biela.
+  const zmenTechnologiu = (t) => {
+    setCurrentTechnologia(t);
+    if (t === 'sublimacia') {
+      const p = produktRef.current;
+      const aktualna = p?.colors.find(c => c.hex === currentColor);
+      if (!aktualna?.je_biela) {
+        const biela = p?.colors.find(c => c.je_biela);
+        if (biela) zmenFarbu(biela.hex);
+      }
+    }
     aktualizujCenu();
   };
 
@@ -509,6 +528,22 @@ export default function Dizajner({ supabase, produktId }) {
     const p = produktRef.current;
     const canvas = fabricRef.current;
     if (!p || !canvas) return;
+    setCartError('');
+
+    // Skutočné Shopify Variant ID musia byť nastavené v Master Admin (karta "Shopify prepojenie"),
+    // inak by appka pridala do košíka niečo nezmyselné/prázdne.
+    const farba = p.colors.find(c => c.hex === currentColor);
+    const blankVariantId = farba ? p.shopifyVarianty?.[farba.id]?.[currentSize] : null;
+    if (!blankVariantId) {
+      setCartError(`Pre "${p.nazov}" (${farba?.nazov || currentColor} / ${currentSize}) chýba nastavené Shopify Variant ID — doplň ho v Master Admin → Shopify prepojenie.`);
+      return;
+    }
+    const personalizacia = najblizsiPersonalizacnyVariant(personalizacieVarianty, priceInfo.cenaPotlace);
+    if (!personalizacia) {
+      setCartError('V Master Admin → Shopify prepojenie nie je nastavený žiadny cenový stupeň pre "Personalizácia potlače".');
+      return;
+    }
+
     setIsAddingToCart(true);
     zoneStateRef.current[currentZona] = JSON.stringify(canvas);
 
@@ -527,28 +562,49 @@ export default function Dizajner({ supabase, produktId }) {
 
     const { plocha: plochaCelkom, farby: pocetFarieb } = plochaAFarbyVsetkychZon();
 
-    // Shopify cart/add.js — presná integrácia (variant ID, personalizačná položka vs. Draft Order)
-    // sa dorieši po potvrdení prístupu k cenotvorbe v Shopify košíku; zatiaľ pripravujeme payload lokálne.
     const shopifyPayload = {
-      items: [{
-        id: `<VARIANT_ID pre ${p.shopify_handle}-${currentSize}-${currentColor}>`,
-        quantity,
-        properties: {
-          Farba: currentColor,
-          Veľkosť: currentSize,
-          _design_id: designId,
-          _technologia: currentTechnologia || p.technologia,
-          ...(currentTechnologia === 'rezany' ? { _typ_folie: cennik.folie.find(f => f.id === currentFolia)?.nazov || '' } : {}),
-          _potlacene_zony: zonyPouzite.map(z => NAZVY_ZON[z]).join(', '),
-          _plocha_cm2_spolu: Math.round(plochaCelkom),
-          _pocet_farieb: pocetFarieb,
-          ...tlacoveSubory,
+      items: [
+        {
+          id: blankVariantId,
+          quantity,
+          properties: {
+            Farba: farba.nazov,
+            Veľkosť: currentSize,
+            _design_id: designId,
+            _technologia: currentTechnologia || p.technologia,
+            ...(currentTechnologia === 'rezany' ? { _typ_folie: cennik.folie.find(f => f.id === currentFolia)?.nazov || '' } : {}),
+            _potlacene_zony: zonyPouzite.map(z => NAZVY_ZON[z]).join(', '),
+            _plocha_cm2_spolu: Math.round(plochaCelkom),
+            _pocet_farieb: pocetFarieb,
+            ...tlacoveSubory,
+          },
         },
-      }],
+        {
+          id: personalizacia.shopify_variant_id,
+          quantity,
+          properties: { _design_id: designId, _pre_produkt: p.nazov },
+        },
+      ],
     };
 
     setTechPanelContent(JSON.stringify(shopifyPayload, null, 2));
-    setCartConfirmation(`${p.nazov} · ${currentSize} · potlač: ${zonyPouzite.map(z => NAZVY_ZON[z]).join(', ') || '—'} · ${quantity} ks — ${priceInfo.total.toFixed(2)} €`);
+
+    try {
+      const res = await fetch('/cart/add.js', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(shopifyPayload),
+      });
+      if (!res.ok) {
+        const chyba = await res.json().catch(() => null);
+        throw new Error(chyba?.description || `Shopify vrátil chybu ${res.status}`);
+      }
+      setCartConfirmation(`${p.nazov} · ${currentSize} · potlač: ${zonyPouzite.map(z => NAZVY_ZON[z]).join(', ') || '—'} · ${quantity} ks — ${priceInfo.total.toFixed(2)} € (zaokrúhlená personalizácia: ${Number(personalizacia.cena_eur).toFixed(2)} €/ks)`);
+    } catch (e) {
+      // Mimo skutočného Shopify obchodu (napr. lokálny vývoj) /cart/add.js neexistuje — to je očakávané,
+      // payload si aspoň vieš overiť v technickom paneli nižšie.
+      setCartError('Volanie /cart/add.js zlyhalo (' + e.message + '). Mimo Shopify obchodu je to očakávané — over si payload v technickom paneli nižšie.');
+    }
     setIsAddingToCart(false);
   };
 
@@ -591,18 +647,19 @@ export default function Dizajner({ supabase, produktId }) {
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Farba textilu</label>
                 <div className="flex flex-wrap gap-3">
-                  {produkt.colors.map(c => (
+                  {(currentTechnologia === 'sublimacia' ? produkt.colors.filter(c => c.je_biela) : produkt.colors).map(c => (
                     <button key={c.id} onClick={() => zmenFarbu(c.hex)} title={c.nazov} className={`w-8 h-8 rounded-full border-2 transition ${currentColor === c.hex ? 'border-indigo-600 scale-110 shadow' : 'border-slate-300 hover:scale-105'}`} style={{ backgroundColor: c.hex }} />
                   ))}
                   {produkt.colors.length === 0 && <p className="text-xs text-slate-400">Žiadne farby nastavené pre tento produkt.</p>}
                 </div>
+                {currentTechnologia === 'sublimacia' && <p className="text-[11px] text-slate-400 mt-1.5">Sublimácia sa dá tlačiť len na bielu látku.</p>}
               </div>
               {produkt.technologie.length > 1 && (
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Spôsob potlače</label>
                   <div className="flex flex-wrap gap-2">
                     {produkt.technologie.map(t => (
-                      <button key={t} onClick={() => setCurrentTechnologia(t)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold border-2 transition ${currentTechnologia === t ? 'border-indigo-600 bg-indigo-50 text-indigo-600' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>{NAZVY_TECHNOLOGIE[t] || t}</button>
+                      <button key={t} onClick={() => zmenTechnologiu(t)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold border-2 transition ${currentTechnologia === t ? 'border-indigo-600 bg-indigo-50 text-indigo-600' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>{NAZVY_TECHNOLOGIE[t] || t}</button>
                     ))}
                   </div>
                 </div>
@@ -832,6 +889,11 @@ export default function Dizajner({ supabase, produktId }) {
           <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5">
             <div className="flex items-center gap-2 text-emerald-800 font-bold text-sm mb-1"><CheckCircle2 className="w-5 h-5" /> Pridané do košíka</div>
             <p className="text-xs text-emerald-700">{cartConfirmation}</p>
+          </div>
+        )}
+        {cartError && (
+          <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4">
+            <p className="text-xs text-rose-700">{cartError}</p>
           </div>
         )}
 
