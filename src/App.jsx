@@ -5,11 +5,12 @@ import { QRCodeSVG } from 'qrcode.react';
 import { encode as encodeBySquare, CurrencyCode, PaymentOptions } from 'bysquare/pay';
 import { Html5Qrcode } from 'html5-qrcode';
 import CenovePonukyTab from './CenovePonukyTab';
+import VlajkyAdmin from './printstudio/VlajkyAdmin';
 import {
   ClipboardList, Package, Cpu, QrCode, Plus, User, Clock, Layers, Search, Check, X, Calendar,
   Palette, Scissors, Printer, Sliders, Sparkles, ZoomIn, ZoomOut, FileText, PlusCircle, Table,
   Shield, Users, Lock, Edit2, Trash2, Tag, Scale, CalendarDays, FileEdit, Gift, Loader2, AlertTriangle,
-  Shirt, Box, Banknote, GripVertical, Download, Upload, ArrowUp, ArrowDown, BarChart3, Camera, Bot, Zap, Star, RefreshCw, BookOpen
+  Shirt, Box, Banknote, GripVertical, Download, Upload, ArrowUp, ArrowDown, BarChart3, Camera, Bot, Zap, Star, RefreshCw, BookOpen, Flag
 } from 'lucide-react';
 
 // ============================================================
@@ -5041,6 +5042,9 @@ export default function App() {
               {canSeeTab(currentUser.role, 'isolated-station') && (
                 <button onClick={() => setActiveTab('isolated-station')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'isolated-station' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Sliders className="h-3.5 w-3.5" /> Samostatné Dielne</button>
               )}
+              {canSeeTab(currentUser.role, 'vlajky') && (
+                <button onClick={() => setActiveTab('vlajky')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'vlajky' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Flag className="h-3.5 w-3.5" /> Plážové Vlajky</button>
+              )}
               {canSeeTab(currentUser.role, 'materials') && (
                 <button onClick={() => setActiveTab('materials')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'materials' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Package className="h-3.5 w-3.5" /> Sklad</button>
               )}
@@ -5243,6 +5247,18 @@ export default function App() {
                                                 <span
                                                   title={`Zákazka bola nedávno upravená: ${item.lastModifiedAt} — ${item.lastModifiedNote}`}
                                                   className="absolute -top-1.5 -right-1.5 bg-rose-600 text-white rounded-full p-0.5 shadow-lg animate-pulse cursor-help z-10"
+                                                >
+                                                  <AlertTriangle className="h-3 w-3" />
+                                                </span>
+                                              );
+                                            })()}
+                                            {(() => {
+                                              const openHelp = helpRequests.find(h => h.itemId === item.itemId && h.status !== 'resolved');
+                                              if (!openHelp) return null;
+                                              return (
+                                                <span
+                                                  title={`Žiadosť o pomoc (${openHelp.status === 'paused' ? 'pozastavené' : 'otvorené'}): ${openHelp.message}`}
+                                                  className="absolute -top-1.5 -left-1.5 bg-amber-500 text-slate-950 rounded-full p-0.5 shadow-lg animate-pulse cursor-help z-10"
                                                 >
                                                   <AlertTriangle className="h-3 w-3" />
                                                 </span>
@@ -6105,6 +6121,12 @@ export default function App() {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {activeTab === 'vlajky' && (
+          <div className="space-y-6 print:hidden animate-in fade-in duration-150">
+            <VlajkyAdmin supabase={supabase} />
           </div>
         )}
 
