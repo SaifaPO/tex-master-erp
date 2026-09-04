@@ -3,6 +3,7 @@ import { Upload, Download, Lock, RefreshCw, SplitSquareHorizontal, Image as Imag
 import { renderHalftone } from './lib/halftone.js';
 import { generateLpiTestSheet } from './lib/testSheet.js';
 import { renderSeparation, DEFAULT_CHANNEL_ANGLES, CHANNEL_LABELS } from './lib/separation.js';
+import { renderDtgFullColor } from './lib/dtgFullColor.js';
 
 const ACCESS_CODE = import.meta.env.VITE_ACCESS_CODE || 'grafik2026';
 const STORAGE_KEY = 'dtf-sep-unlocked';
@@ -21,6 +22,8 @@ const ALGORITHMS = [
   { value: 'floyd', label: 'Error diffusion (Floyd-Steinberg)' }
 ];
 const CHANNEL_VIEWS = ['composite', 'c', 'm', 'y', 'k', 'white'];
+const DTG_VIEWS = ['composite', 'white', 'stencil'];
+const DTG_VIEW_LABELS = { composite: 'Plnofarebný výsledok', white: 'Biely podklad', stencil: 'Raster (náhľad bodiek)' };
 const SHIRT_SWATCHES = ['#ffffff', '#0f172a', '#1e293b', '#7f1d1d', '#14532d', '#78350f'];
 
 function PasscodeGate({ onUnlock }) {
@@ -57,13 +60,14 @@ function PasscodeGate({ onUnlock }) {
 
 export default function App() {
   const [unlocked, setUnlocked] = useState(() => localStorage.getItem(STORAGE_KEY) === '1');
-  const [sourceCanvas, setSourceCanvas] = useState(null); // full-res
-  const [previewSourceCanvas, setPreviewSourceCanvas] = useState(null); // downscaled for live preview
+  const [sourceCanvas, setSourceCanvas] = useState(null); // full-res, presne ako bolo nahrate (nemenne)
+  const [workingCanvas, setWorkingCanvas] = useState(null); // full-res, po volitelnom prispôsobení na cieľovú veľkosť tlače — pouziva sa na render/export
+  const [workingPreviewCanvas, setWorkingPreviewCanvas] = useState(null); // downscaly workingCanvas, pre plynuly live nahlad
   const [fileName, setFileName] = useState('');
   const [viewMode, setViewMode] = useState('split'); // 'original' | 'separation' | 'split' (rezim 'spot')
   const [splitPos, setSplitPos] = useState(50);
 
-  const [mode, setMode] = useState('spot'); // 'spot' | 'cmyk'
+  const [mode, setMode] = useState('spot'); // 'spot' | 'cmyk' | 'dtg'
   const [lpi, setLpi] = useState(35);
   const [angleDeg, setAngleDeg] = useState(22.5);
   const [dotShape, setDotShape] = useState('circle');
@@ -80,9 +84,16 @@ export default function App() {
   const [whiteThreshold, setWhiteThreshold] = useState(0.04);
   const [previewBg, setPreviewBg] = useState('#1e293b');
   const [channelView, setChannelView] = useState('composite');
+  const [dtgView, setDtgView] = useState('composite');
+  const [bgRemovalEnabled, setBgRemovalEnabled] = useState(false);
+  const [bgTolerance, setBgTolerance] = useState(40);
+  const [bgFeather, setBgFeather] = useState(8);
+  const [resizeEnabled, setResizeEnabled] = useState(false);
+  const [targetWidthCm, setTargetWidthCm] = useState(10);
 
   const [previewResultCanvas, setPreviewResultCanvas] = useState(null); // rezim 'spot'
   const [separationResult, setSeparationResult] = useState(null); // rezim 'cmyk' — { channels, white, composite }
+  const [dtgResult, setDtgResult] = useState(null); // rezim 'dtg' — { composite, white, dotStencil }
   const [isRendering, setIsRendering] = useState(false);
   const canvasWrapRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -96,52 +107,89 @@ export default function App() {
       full.height = img.height;
       full.getContext('2d').drawImage(img, 0, 0);
       setSourceCanvas(full);
-
-      const scale = Math.min(1, PREVIEW_MAX / Math.max(img.width, img.height));
-      const prev = document.createElement('canvas');
-      prev.width = Math.max(1, Math.round(img.width * scale));
-      prev.height = Math.max(1, Math.round(img.height * scale));
-      prev.getContext('2d').drawImage(img, 0, 0, prev.width, prev.height);
-      prev._scale = scale;
-      setPreviewSourceCanvas(prev);
       setFileName(file.name);
+      // Predvyplnit cielovu sirku podla realnej velkosti zdroja pri aktualnom Output DPI,
+      // aby zapnutie prispôsobenia samo o sebe nic nezmenilo, kym Martin sirku sam nezvysi.
+      setTargetWidthCm(Number(((img.width / outputDpi) * 2.54).toFixed(1)));
     };
     img.src = URL.createObjectURL(file);
   };
 
+  // Volitelne prisposobenie na cielovu velkost tlace (jednoduche prevzorkovanie, NIE AI dokreslenie detailu) —
+  // prepocita sa vzdy, ked sa zmeni zdroj, cielova sirka alebo output DPI, a vyrobi z neho aj znizenu
+  // "pracovnu" verziu pre plynuly live nahlad.
+  useEffect(() => {
+    if (!sourceCanvas) { setWorkingCanvas(null); setWorkingPreviewCanvas(null); return; }
+    let target = sourceCanvas;
+    if (resizeEnabled && targetWidthCm > 0) {
+      const targetWidthPx = Math.max(1, Math.round((targetWidthCm / 2.54) * outputDpi));
+      if (targetWidthPx !== sourceCanvas.width) {
+        const scale = targetWidthPx / sourceCanvas.width;
+        const targetHeightPx = Math.max(1, Math.round(sourceCanvas.height * scale));
+        const resized = document.createElement('canvas');
+        resized.width = targetWidthPx;
+        resized.height = targetHeightPx;
+        const rctx = resized.getContext('2d');
+        rctx.imageSmoothingEnabled = true;
+        rctx.imageSmoothingQuality = 'high';
+        rctx.drawImage(sourceCanvas, 0, 0, targetWidthPx, targetHeightPx);
+        target = resized;
+      }
+    }
+    setWorkingCanvas(target);
+
+    const scale = Math.min(1, PREVIEW_MAX / Math.max(target.width, target.height));
+    const prev = document.createElement('canvas');
+    prev.width = Math.max(1, Math.round(target.width * scale));
+    prev.height = Math.max(1, Math.round(target.height * scale));
+    const pctx = prev.getContext('2d');
+    pctx.imageSmoothingEnabled = true;
+    pctx.imageSmoothingQuality = 'high';
+    pctx.drawImage(target, 0, 0, prev.width, prev.height);
+    prev._scale = scale;
+    setWorkingPreviewCanvas(prev);
+  }, [sourceCanvas, resizeEnabled, targetWidthCm, outputDpi]);
+
   // Live nahlad — prepocita sa (debounced) pri kazdej zmene parametra, na znizenom rozliseni kvoli rychlosti.
   useEffect(() => {
-    if (!previewSourceCanvas) return;
+    if (!workingPreviewCanvas) return;
     setIsRendering(true);
     const t = setTimeout(() => {
-      const scaledOutputDpi = Math.max(20, Math.round(outputDpi * (previewSourceCanvas._scale || 1)));
+      const scaledOutputDpi = Math.max(20, Math.round(outputDpi * (workingPreviewCanvas._scale || 1)));
       if (mode === 'cmyk') {
-        const result = renderSeparation(previewSourceCanvas, {
+        const result = renderSeparation(workingPreviewCanvas, {
           lpi, outputDpi: scaledOutputDpi, dotShape, algorithm, blackPoint, whitePoint, channelAngles,
           whiteBase: { enabled: whiteBaseEnabled, chokePx, threshold: whiteThreshold, previewBackground: previewBg }
         });
         setSeparationResult(result);
+      } else if (mode === 'dtg') {
+        const result = renderDtgFullColor(workingPreviewCanvas, {
+          lpi, angleDeg, dotShape, algorithm, outputDpi: scaledOutputDpi, blackPoint, whitePoint, invert,
+          backgroundRemoval: { enabled: bgRemovalEnabled, tolerance: bgTolerance, feather: bgFeather },
+          whiteBase: { enabled: whiteBaseEnabled, chokePx, threshold: whiteThreshold }
+        });
+        setDtgResult(result);
       } else {
-        const result = renderHalftone(previewSourceCanvas, { lpi, angleDeg, dotShape, algorithm, inkColor, outputDpi: scaledOutputDpi, blackPoint, whitePoint, invert });
+        const result = renderHalftone(workingPreviewCanvas, { lpi, angleDeg, dotShape, algorithm, inkColor, outputDpi: scaledOutputDpi, blackPoint, whitePoint, invert });
         setPreviewResultCanvas(result);
       }
       setIsRendering(false);
     }, 180);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [previewSourceCanvas, mode, lpi, angleDeg, dotShape, algorithm, inkColor, outputDpi, blackPoint, whitePoint, invert, channelAngles, whiteBaseEnabled, chokePx, whiteThreshold, previewBg]);
+  }, [workingPreviewCanvas, mode, lpi, angleDeg, dotShape, algorithm, inkColor, outputDpi, blackPoint, whitePoint, invert, channelAngles, whiteBaseEnabled, chokePx, whiteThreshold, previewBg, bgRemovalEnabled, bgTolerance, bgFeather]);
 
   const drawCanvasRef = useCallback((node) => {
-    if (!node || !previewSourceCanvas) return;
+    if (!node || !workingPreviewCanvas) return;
     const ctx = node.getContext('2d');
-    node.width = previewSourceCanvas.width;
-    node.height = previewSourceCanvas.height;
+    node.width = workingPreviewCanvas.width;
+    node.height = workingPreviewCanvas.height;
     ctx.clearRect(0, 0, node.width, node.height);
 
     if (mode === 'cmyk') {
       ctx.fillStyle = previewBg;
       ctx.fillRect(0, 0, node.width, node.height);
-      if (!separationResult) { ctx.drawImage(previewSourceCanvas, 0, 0); return; }
+      if (!separationResult) { ctx.drawImage(workingPreviewCanvas, 0, 0); return; }
       const layer = channelView === 'composite' ? separationResult.composite
         : channelView === 'white' ? separationResult.white
         : separationResult.channels[channelView];
@@ -149,21 +197,30 @@ export default function App() {
       return;
     }
 
+    if (mode === 'dtg') {
+      ctx.fillStyle = previewBg;
+      ctx.fillRect(0, 0, node.width, node.height);
+      if (!dtgResult) { ctx.drawImage(workingPreviewCanvas, 0, 0); return; }
+      const layer = dtgView === 'white' ? dtgResult.white : dtgView === 'stencil' ? dtgResult.dotStencil : dtgResult.composite;
+      if (layer) ctx.drawImage(layer, 0, 0);
+      return;
+    }
+
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, node.width, node.height);
     if (viewMode === 'original' || !previewResultCanvas) {
-      ctx.drawImage(previewSourceCanvas, 0, 0);
+      ctx.drawImage(workingPreviewCanvas, 0, 0);
     } else if (viewMode === 'separation') {
       ctx.drawImage(previewResultCanvas, 0, 0);
     } else {
       const splitX = Math.round((splitPos / 100) * node.width);
-      ctx.drawImage(previewSourceCanvas, 0, 0, splitX, node.height, 0, 0, splitX, node.height);
+      ctx.drawImage(workingPreviewCanvas, 0, 0, splitX, node.height, 0, 0, splitX, node.height);
       ctx.drawImage(previewResultCanvas, splitX, 0, node.width - splitX, node.height, splitX, 0, node.width - splitX, node.height);
       ctx.strokeStyle = '#6366f1';
       ctx.lineWidth = 2;
       ctx.beginPath(); ctx.moveTo(splitX, 0); ctx.lineTo(splitX, node.height); ctx.stroke();
     }
-  }, [previewSourceCanvas, previewResultCanvas, separationResult, viewMode, splitPos, mode, channelView, previewBg]);
+  }, [workingPreviewCanvas, previewResultCanvas, separationResult, dtgResult, viewMode, splitPos, mode, channelView, dtgView, previewBg]);
 
   useEffect(() => {
     if (canvasWrapRef.current) drawCanvasRef(canvasWrapRef.current);
@@ -177,9 +234,9 @@ export default function App() {
   };
 
   const handleDownloadPng = () => {
-    if (!sourceCanvas) return;
+    if (!workingCanvas) return;
     if (mode === 'cmyk') {
-      const full = renderSeparation(sourceCanvas, {
+      const full = renderSeparation(workingCanvas, {
         lpi, outputDpi, dotShape, algorithm, blackPoint, whitePoint, channelAngles,
         whiteBase: { enabled: whiteBaseEnabled, chokePx, threshold: whiteThreshold, previewBackground: previewBg }
       });
@@ -190,7 +247,17 @@ export default function App() {
       if (full.white) downloadCanvas(full.white, 'White-underbase');
       return;
     }
-    const result = renderHalftone(sourceCanvas, { lpi, angleDeg, dotShape, algorithm, inkColor, outputDpi, blackPoint, whitePoint, invert });
+    if (mode === 'dtg') {
+      const full = renderDtgFullColor(workingCanvas, {
+        lpi, angleDeg, dotShape, algorithm, outputDpi, blackPoint, whitePoint, invert,
+        backgroundRemoval: { enabled: bgRemovalEnabled, tolerance: bgTolerance, feather: bgFeather },
+        whiteBase: { enabled: whiteBaseEnabled, chokePx, threshold: whiteThreshold }
+      });
+      downloadCanvas(full.composite, `dtg_${lpi}lpi_${Math.round(angleDeg)}deg`);
+      if (full.white) downloadCanvas(full.white, 'White-underbase');
+      return;
+    }
+    const result = renderHalftone(workingCanvas, { lpi, angleDeg, dotShape, algorithm, inkColor, outputDpi, blackPoint, whitePoint, invert });
     downloadCanvas(result, `halftone_${lpi}lpi_${Math.round(angleDeg)}deg`);
   };
 
@@ -207,13 +274,13 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <header className="border-b border-slate-800 px-6 py-4 flex items-center justify-between">
-        <h1 className="font-bold text-lg flex items-center gap-2"><ImageIcon className="h-5 w-5 text-indigo-400" /> DTF/DTG Separátor <span className="text-xs text-slate-500 font-normal">— Fáza 2: viacfarebná separácia + biely podklad</span></h1>
+        <h1 className="font-bold text-lg flex items-center gap-2"><ImageIcon className="h-5 w-5 text-indigo-400" /> DTF/DTG Separátor <span className="text-xs text-slate-500 font-normal">— Fáza 3: plnofarebný DTF/DTG režim + odstránenie pozadia</span></h1>
         <button onClick={handleDownloadTestSheet} className="bg-slate-800 hover:bg-slate-700 text-xs font-bold px-3 py-2 rounded-lg">Stiahnuť LPI test sheet</button>
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 p-6">
         <div className="space-y-3">
-          {!previewSourceCanvas ? (
+          {!workingPreviewCanvas ? (
             <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-slate-700 rounded-2xl py-24 cursor-pointer hover:border-indigo-500 transition-colors">
               <Upload className="h-8 w-8 text-slate-500" />
               <span className="text-sm text-slate-400">Klikni a nahraj obrázok (PNG/JPG)</span>
@@ -234,6 +301,12 @@ export default function App() {
                       </div>
                     )}
                   </>
+                ) : mode === 'dtg' ? (
+                  DTG_VIEWS.map(v => (
+                    <button key={v} onClick={() => setDtgView(v)} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${dtgView === v ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}>
+                      {DTG_VIEW_LABELS[v]}
+                    </button>
+                  ))
                 ) : (
                   CHANNEL_VIEWS.map(v => (
                     <button key={v} onClick={() => setChannelView(v)} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${channelView === v ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}>
@@ -243,7 +316,7 @@ export default function App() {
                 )}
                 {isRendering && <span className="text-[10px] text-indigo-400 flex items-center gap-1 ml-auto pr-2"><RefreshCw className="h-3 w-3 animate-spin" /> počítam...</span>}
               </div>
-              {mode === 'cmyk' && (
+              {(mode === 'cmyk' || mode === 'dtg') && (
                 <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-xl p-2 text-xs text-slate-400">
                   <span>Náhľad na farbe textílie:</span>
                   {SHIRT_SWATCHES.map(c => (
@@ -252,7 +325,7 @@ export default function App() {
                   <input type="color" value={previewBg} onChange={(e) => setPreviewBg(e.target.value)} className="h-6 w-8 bg-transparent border border-slate-700 rounded cursor-pointer" />
                 </div>
               )}
-              <div className="rounded-xl overflow-hidden border border-slate-800 flex items-center justify-center" style={{ backgroundColor: mode === 'cmyk' ? previewBg : '#ffffff' }}>
+              <div className="rounded-xl overflow-hidden border border-slate-800 flex items-center justify-center" style={{ backgroundColor: (mode === 'cmyk' || mode === 'dtg') ? previewBg : '#ffffff' }}>
                 <canvas ref={(node) => { canvasWrapRef.current = node; drawCanvasRef(node); }} className="max-w-full h-auto" />
               </div>
               <button onClick={() => fileInputRef.current?.click()} className="text-xs text-slate-500 hover:text-slate-300 underline">Nahrať iný obrázok</button>
@@ -264,9 +337,10 @@ export default function App() {
         <div className="space-y-4 bg-slate-900 border border-slate-800 rounded-2xl p-4 h-fit max-h-[calc(100vh-3rem)] overflow-y-auto">
           <div>
             <label className="text-xs text-slate-400 block mb-1">Režim separácie</label>
-            <div className="grid grid-cols-2 gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
-              <button onClick={() => setMode('spot')} className={`py-1.5 rounded text-xs font-bold ${mode === 'spot' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Spot color (1 farba)</button>
-              <button onClick={() => setMode('cmyk')} className={`py-1.5 rounded text-xs font-bold ${mode === 'cmyk' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>CMYK proces (4 farby)</button>
+            <div className="grid grid-cols-1 gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
+              <button onClick={() => setMode('spot')} className={`py-1.5 rounded text-xs font-bold ${mode === 'spot' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Spot color (1 farba) — sieťotlač</button>
+              <button onClick={() => setMode('cmyk')} className={`py-1.5 rounded text-xs font-bold ${mode === 'cmyk' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>CMYK proces (4 farby) — sieťotlač</button>
+              <button onClick={() => setMode('dtg')} className={`py-1.5 rounded text-xs font-bold ${mode === 'dtg' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>DTF/DTG plnofarebné (raster efekt)</button>
             </div>
           </div>
 
@@ -275,7 +349,7 @@ export default function App() {
             <input type="range" min="15" max="55" value={lpi} onChange={(e) => setLpi(Number(e.target.value))} className="w-full" />
           </div>
 
-          {mode === 'spot' ? (
+          {mode === 'spot' || mode === 'dtg' ? (
             <div>
               <label className="text-xs text-slate-400 flex justify-between mb-1"><span>Uhol rastra</span><span className="text-white font-mono">{angleDeg}°</span></label>
               <input type="range" min="0" max="90" step="0.5" value={angleDeg} onChange={(e) => setAngleDeg(Number(e.target.value))} disabled={algorithm === 'floyd'} className="w-full disabled:opacity-40" />
@@ -311,10 +385,29 @@ export default function App() {
                 <input type="color" value={inkColor} onChange={(e) => setInkColor(e.target.value)} className="w-full h-8 bg-slate-950 border border-slate-800 rounded cursor-pointer" />
               </div>
             )}
-            <div className={mode === 'cmyk' ? 'col-span-2' : ''}>
+            <div className={mode === 'cmyk' || mode === 'dtg' ? 'col-span-2' : ''}>
               <label className="text-xs text-slate-400 block mb-1">Output DPI</label>
               <input type="number" min="72" max="600" step="1" value={outputDpi} onChange={(e) => setOutputDpi(Number(e.target.value) || 300)} className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-xs text-white" />
             </div>
+          </div>
+
+          <div className="border-t border-slate-800 pt-3 space-y-2">
+            <label className="flex items-center gap-2 text-xs text-slate-300 font-bold cursor-pointer">
+              <input type="checkbox" checked={resizeEnabled} onChange={(e) => setResizeEnabled(e.target.checked)} className="accent-indigo-600" /> Prispôsobiť na cieľovú veľkosť tlače
+            </label>
+            {resizeEnabled && (
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Cieľová šírka tlače (cm) pri {outputDpi} DPI</label>
+                <input type="number" min="0.5" step="0.5" value={targetWidthCm} onChange={(e) => setTargetWidthCm(Number(e.target.value) || 0)} className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-xs text-white" />
+                {sourceCanvas && (
+                  <p className="text-[9px] text-slate-600 mt-1 leading-relaxed">
+                    Zdroj: {sourceCanvas.width}×{sourceCanvas.height}px (~{((sourceCanvas.width / outputDpi) * 2.54).toFixed(1)} cm pri {outputDpi} DPI).
+                    {workingCanvas && ` Po prispôsobení: ${workingCanvas.width}×${workingCanvas.height}px.`}
+                    {workingCanvas && workingCanvas.width > sourceCanvas.width && ' Zväčšuje sa nad reálne rozlíšenie zdroja — ide o jednoduché prevzorkovanie (nie AI dokreslenie detailu), výsledok bude mäkší.'}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="border-t border-slate-800 pt-3 space-y-3">
@@ -327,14 +420,35 @@ export default function App() {
               <label className="text-xs text-slate-400 flex justify-between mb-1"><span>Biely bod</span><span className="text-white font-mono">{whitePoint}</span></label>
               <input type="range" min="1" max="255" value={whitePoint} onChange={(e) => setWhitePoint(Math.max(Number(e.target.value), blackPoint + 1))} className="w-full" />
             </div>
-            {mode === 'spot' && (
+            {(mode === 'spot' || mode === 'dtg') && (
               <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
                 <input type="checkbox" checked={invert} onChange={(e) => setInvert(e.target.checked)} className="accent-indigo-600" /> Invertovať (svetlé = viac atramentu)
               </label>
             )}
           </div>
 
-          {mode === 'cmyk' && (
+          {mode === 'dtg' && (
+            <div className="border-t border-slate-800 pt-3 space-y-3">
+              <label className="flex items-center gap-2 text-xs text-slate-300 font-bold cursor-pointer">
+                <input type="checkbox" checked={bgRemovalEnabled} onChange={(e) => setBgRemovalEnabled(e.target.checked)} className="accent-indigo-600" /> Odstrániť pozadie (okraje do stratena)
+              </label>
+              <p className="text-[9px] text-slate-600">Odhadne farbu pozadia z rohov obrázka (čierne, biele, akékoľvek) a plynulo ju vybledne — vhodné, ak obrázok nemá čisto orezané pozadie.</p>
+              {bgRemovalEnabled && (
+                <>
+                  <div>
+                    <label className="text-xs text-slate-400 flex justify-between mb-1"><span>Tolerancia (citlivosť na farbu pozadia)</span><span className="text-white font-mono">{bgTolerance}</span></label>
+                    <input type="range" min="5" max="150" value={bgTolerance} onChange={(e) => setBgTolerance(Number(e.target.value))} className="w-full" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 flex justify-between mb-1"><span>Mäkkosť prechodu (feather)</span><span className="text-white font-mono">{bgFeather}px</span></label>
+                    <input type="range" min="0" max="60" value={bgFeather} onChange={(e) => setBgFeather(Number(e.target.value))} className="w-full" />
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {(mode === 'cmyk' || mode === 'dtg') && (
             <div className="border-t border-slate-800 pt-3 space-y-3">
               <label className="flex items-center gap-2 text-xs text-slate-300 font-bold cursor-pointer">
                 <input type="checkbox" checked={whiteBaseEnabled} onChange={(e) => setWhiteBaseEnabled(e.target.checked)} className="accent-indigo-600" /> Generovať bielu podkladovú vrstvu (underbase)
@@ -344,7 +458,7 @@ export default function App() {
                   <div>
                     <label className="text-xs text-slate-400 flex justify-between mb-1"><span>Choke (zmenšenie okraja)</span><span className="text-white font-mono">{chokePx}px</span></label>
                     <input type="range" min="0" max="2" step="0.25" value={chokePx} onChange={(e) => setChokePx(Number(e.target.value))} className="w-full" />
-                    <p className="text-[9px] text-slate-600 mt-0.5">Zabraňuje bielemu opáru presvitajúcemu okolo halftone bodov (anti-haze).</p>
+                    <p className="text-[9px] text-slate-600 mt-0.5">Zabraňuje bielemu opáru presvitajúcemu okolo halftone bodov (anti-haze). Nastav na 0, ak nechceš okraj zmenšovať.</p>
                   </div>
                   <div>
                     <label className="text-xs text-slate-400 flex justify-between mb-1"><span>Prah citlivosti</span><span className="text-white font-mono">{whiteThreshold.toFixed(2)}</span></label>
@@ -355,8 +469,8 @@ export default function App() {
             </div>
           )}
 
-          <button onClick={handleDownloadPng} disabled={!sourceCanvas} className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-bold py-2.5 rounded-lg text-sm flex items-center justify-center gap-2">
-            <Download className="h-4 w-4" /> {mode === 'cmyk' ? 'Stiahnuť vrstvy (C, M, Y, K, White)' : 'Stiahnuť PNG (plné rozlíšenie)'}
+          <button onClick={handleDownloadPng} disabled={!workingCanvas} className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-bold py-2.5 rounded-lg text-sm flex items-center justify-center gap-2">
+            <Download className="h-4 w-4" /> {mode === 'cmyk' ? 'Stiahnuť vrstvy (C, M, Y, K, White)' : mode === 'dtg' ? 'Stiahnuť PNG (plnofarebné + biely podklad)' : 'Stiahnuť PNG (plné rozlíšenie)'}
           </button>
         </div>
       </div>
