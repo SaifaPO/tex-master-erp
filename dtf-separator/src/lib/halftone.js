@@ -156,13 +156,9 @@ function renderFloyd(ctx, gray, width, height, { lpi, outputDpi, dotShape, inkCo
   }
 }
 
-// Hlavna funkcia — vykresli halftone separaciu zdrojoveho canvasu do noveho vystupneho canvasu.
-export function renderHalftone(sourceCanvas, params) {
-  const { width, height } = sourceCanvas;
-  const srcCtx = sourceCanvas.getContext('2d');
-  const imageData = srcCtx.getImageData(0, 0, width, height);
-  const { gray } = computeCoverageGrid(imageData, params);
-
+// Vykresli halftone z uz hotovej "kryti" mriezky (0..1 na pixel) do zadaneho canvasu.
+// Pouziva to jednak renderHalftone (luminance z obrazku), jednak separacia po kanaloch (CMYK).
+export function renderHalftoneFromCoverage(gray, width, height, params) {
   const out = document.createElement('canvas');
   out.width = width;
   out.height = height;
@@ -171,10 +167,17 @@ export function renderHalftone(sourceCanvas, params) {
     ctx.fillStyle = params.background;
     ctx.fillRect(0, 0, width, height);
   }
-
   if (params.algorithm === 'bayer') renderBayer(ctx, gray, width, height, params);
   else if (params.algorithm === 'floyd') renderFloyd(ctx, gray, width, height, params);
   else renderAm(ctx, gray, width, height, params);
-
   return out;
+}
+
+// Hlavna funkcia — vykresli halftone separaciu zdrojoveho canvasu do noveho vystupneho canvasu (1 farba, podla svetlosti).
+export function renderHalftone(sourceCanvas, params) {
+  const { width, height } = sourceCanvas;
+  const srcCtx = sourceCanvas.getContext('2d');
+  const imageData = srcCtx.getImageData(0, 0, width, height);
+  const { gray } = computeCoverageGrid(imageData, params);
+  return renderHalftoneFromCoverage(gray, width, height, params);
 }
