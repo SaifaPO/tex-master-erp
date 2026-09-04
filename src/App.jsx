@@ -5051,9 +5051,16 @@ export default function App() {
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const timestamps = [];
     for (let i = 0; i < 14; i++) timestamps.push(addDaysLocal(today, i).getTime());
+    // Neplatna/chybna hodnota (napr. niekde v starych datach omylom text namiesto datumu) sa musi
+    // ticho preskocit — inak by jedno NaN zhodilo cely Math.min/max vypocet rozsahu (a teda cely vypis dni).
+    const pushIfValidDate = (d) => {
+      if (!d) return;
+      const t = new Date(d + 'T00:00:00').getTime();
+      if (!isNaN(t)) timestamps.push(t);
+    };
     allItems.forEach(it => {
-      if (it.stationDates) Object.values(it.stationDates).forEach(d => { if (d) timestamps.push(new Date(d + 'T00:00:00').getTime()); });
-      else if (it.productionDate) timestamps.push(new Date(it.productionDate + 'T00:00:00').getTime());
+      if (it.stationDates) Object.values(it.stationDates).forEach(pushIfValidDate);
+      else if (it.productionDate) pushIfValidDate(it.productionDate);
     });
     if (timestamps.length === 0) return [];
     const DAY_MS = 24 * 3600 * 1000;
