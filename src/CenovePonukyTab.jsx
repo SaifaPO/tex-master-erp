@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Fragment } from 'react';
 import {
   FileText, Plus, Trash2, Copy, Eye, Code, Save, Search, FolderOpen,
   Image as ImageIcon, Upload, Award, ListChecks, Clock, ShoppingCart, Loader2
@@ -8,8 +8,13 @@ import {
 const TIER_LABELS = { standard: 'Standard', bronze: 'Bronze', silver: 'Silver', gold: 'Gold' };
 const TIER_COLORS = { standard: 'bg-slate-700 text-slate-200', bronze: 'bg-amber-800 text-amber-100', silver: 'bg-slate-400 text-slate-900', gold: 'bg-yellow-500 text-yellow-950' };
 
-const mapPriceItemFromDb = (r) => ({ id: r.id, name: r.name, description: r.description || '', price: r.price || 0, sortOrder: r.sort_order || 0 });
-const mapPriceItemToDb = (i) => ({ id: i.id, name: i.name, description: i.description || null, price: i.price, sort_order: i.sortOrder || 0 });
+// Predpripravené kategórie cenníka pre rýchle zostavenie všeobecnej ponuky
+// (vlajky, beachvlajky, dotlače) — podľa Martinovej požiadavky, aby karta
+// Cenové ponuky nebola len prázdna, ale mala vopred pripravené sekcie.
+const PRICE_CATEGORIES = ['Vlajky', 'Beachvlajky', 'Dotlač - Transfer', 'Dotlač - Sieťotlač', 'Dotlač - Výšivka', 'Ostatné'];
+
+const mapPriceItemFromDb = (r) => ({ id: r.id, name: r.name, description: r.description || '', price: r.price || 0, sortOrder: r.sort_order || 0, category: r.category || 'Ostatné' });
+const mapPriceItemToDb = (i) => ({ id: i.id, name: i.name, description: i.description || null, price: i.price, sort_order: i.sortOrder || 0, category: i.category || 'Ostatné' });
 
 const mapQuoteFromDb = (r) => ({ id: r.id, offerNumber: r.offer_number, quoteDate: r.quote_date, customerName: r.customer_name || '', customerEmail: r.customer_email || '', title: r.title || '', total: r.total || 0, status: r.status || 'Odoslaná', data: r.data || {} });
 
@@ -250,7 +255,8 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
   const [historyStatusFilter, setHistoryStatusFilter] = useState('ALL');
   const [quickCatalogId, setQuickCatalogId] = useState('');
   const [quickCatalogQty, setQuickCatalogQty] = useState(1);
-  const [newPriceItem, setNewPriceItem] = useState({ name: '', description: '', price: '' });
+  const [newPriceItem, setNewPriceItem] = useState({ name: '', description: '', price: '', category: PRICE_CATEGORIES[0] });
+  const [pricelistCategoryFilter, setPricelistCategoryFilter] = useState('ALL');
   const fileInputRef = useRef(null);
 
   const [form, setForm] = useState(() => emptyForm({
@@ -377,11 +383,11 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
 
   const addPriceListItem = async () => {
     if (!supabase || !newPriceItem.name.trim()) return;
-    const item = { id: `qpl-${Date.now()}`, name: newPriceItem.name.trim(), description: newPriceItem.description, price: parseFloat(newPriceItem.price) || 0, sortOrder: priceList.length };
+    const item = { id: `qpl-${Date.now()}`, name: newPriceItem.name.trim(), description: newPriceItem.description, price: parseFloat(newPriceItem.price) || 0, sortOrder: priceList.length, category: newPriceItem.category || 'Ostatné' };
     const { error } = await supabase.from('quote_price_list').insert(mapPriceItemToDb(item));
     if (error) { triggerNotification('error', error.message); return; }
     setPriceList(prev => [...prev, item]);
-    setNewPriceItem({ name: '', description: '', price: '' });
+    setNewPriceItem({ name: '', description: '', price: '', category: newPriceItem.category || PRICE_CATEGORIES[0] });
     triggerNotification('success', 'Položka pridaná do cenníka.');
   };
 
@@ -389,7 +395,7 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
     const parsed = field === 'price' ? (parseFloat(value) || 0) : value;
     setPriceList(prev => prev.map(p => p.id === id ? { ...p, [field]: parsed } : p));
     if (!supabase) return;
-    const dbField = field === 'name' ? 'name' : field === 'description' ? 'description' : 'price';
+    const dbField = field === 'name' ? 'name' : field === 'description' ? 'description' : field === 'category' ? 'category' : 'price';
     await supabase.from('quote_price_list').update({ [dbField]: parsed }).eq('id', id);
   };
 
@@ -464,7 +470,15 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
                 <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800 flex gap-2">
                   <select value={quickCatalogId} onChange={(e) => setQuickCatalogId(e.target.value)} className={`${inputCls} flex-1`}>
                     <option value="">-- Vybrať z cenníka --</option>
-                    {priceList.map(p => <option key={p.id} value={p.id}>{p.name} ({fmtMoney(p.price)})</option>)}
+                    {PRICE_CATEGORIES.map(cat => {
+                      const items = priceList.filter(p => (p.category || 'Ostatné') === cat);
+                      if (items.length === 0) return null;
+                      return (
+                        <optgroup key={cat} label={cat}>
+                          {items.map(p => <option key={p.id} value={p.id}>{p.name} ({fmtMoney(p.price)})</option>)}
+                        </optgroup>
+                      );
+                    })}
                   </select>
                   <input type="number" min="1" value={quickCatalogQty} onChange={(e) => setQuickCatalogQty(e.target.value)} className="w-16 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white text-center" />
                   <button onClick={addCatalogItemToForm} className="bg-slate-800 hover:bg-slate-700 text-white text-xs px-3 rounded-lg font-bold">Pridať</button>
@@ -639,30 +653,55 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
         <div className="bg-slate-900/40 rounded-2xl border border-slate-800 p-5 space-y-4">
           <div>
             <h3 className="text-sm font-bold text-white flex items-center gap-2"><ShoppingCart className="h-4 w-4 text-indigo-400" /> Cenník položiek pre rýchle pridávanie do ponuky</h3>
-            <p className="text-[11px] text-slate-500 mt-1">Tento cenník slúži len pre generátor cenových ponúk — nie je prepojený s katalógom modelov ani so skladom.</p>
+            <p className="text-[11px] text-slate-500 mt-1">Tento cenník slúži len pre generátor cenových ponúk — nie je prepojený s katalógom modelov ani so skladom. Položky sú rozdelené do kategórií (vlajky, beachvlajky, dotlače) pre rýchle zostavenie všeobecnej ponuky.</p>
           </div>
           <div className="grid grid-cols-12 gap-2 bg-slate-950 p-3 rounded-xl border border-slate-800">
-            <input type="text" value={newPriceItem.name} onChange={(e) => setNewPriceItem({ ...newPriceItem, name: e.target.value })} placeholder="Názov položky" className="col-span-4 bg-slate-900 border border-slate-800 rounded px-2 py-1.5 text-xs text-white" />
-            <input type="text" value={newPriceItem.description} onChange={(e) => setNewPriceItem({ ...newPriceItem, description: e.target.value })} placeholder="Popis" className="col-span-5 bg-slate-900 border border-slate-800 rounded px-2 py-1.5 text-xs text-white" />
+            <input type="text" value={newPriceItem.name} onChange={(e) => setNewPriceItem({ ...newPriceItem, name: e.target.value })} placeholder="Názov položky" className="col-span-3 bg-slate-900 border border-slate-800 rounded px-2 py-1.5 text-xs text-white" />
+            <input type="text" value={newPriceItem.description} onChange={(e) => setNewPriceItem({ ...newPriceItem, description: e.target.value })} placeholder="Popis" className="col-span-4 bg-slate-900 border border-slate-800 rounded px-2 py-1.5 text-xs text-white" />
+            <select value={newPriceItem.category} onChange={(e) => setNewPriceItem({ ...newPriceItem, category: e.target.value })} className="col-span-2 bg-slate-900 border border-slate-800 rounded px-2 py-1.5 text-xs text-white">
+              {PRICE_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+            </select>
             <input type="number" step="0.01" value={newPriceItem.price} onChange={(e) => setNewPriceItem({ ...newPriceItem, price: e.target.value })} placeholder="Cena €" className="col-span-2 bg-slate-900 border border-slate-800 rounded px-2 py-1.5 text-xs text-white" />
             <button onClick={addPriceListItem} className="col-span-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded flex items-center justify-center"><Plus className="h-4 w-4" /></button>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button onClick={() => setPricelistCategoryFilter('ALL')} className={`px-2.5 py-1 rounded-full text-[11px] font-semibold ${pricelistCategoryFilter === 'ALL' ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-slate-400 hover:bg-slate-800'}`}>Všetko</button>
+            {PRICE_CATEGORIES.map(cat => (
+              <button key={cat} onClick={() => setPricelistCategoryFilter(cat)} className={`px-2.5 py-1 rounded-full text-[11px] font-semibold ${pricelistCategoryFilter === cat ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-slate-400 hover:bg-slate-800'}`}>{cat}</button>
+            ))}
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs text-slate-300">
               <thead className="bg-slate-950 text-slate-400 uppercase font-semibold border-b border-slate-800">
-                <tr><th className="p-3">Názov</th><th className="p-3">Popis</th><th className="p-3 text-right">Cena bez DPH</th><th className="p-3 text-center">Akcie</th></tr>
+                <tr><th className="p-3">Názov</th><th className="p-3">Popis</th><th className="p-3">Kategória</th><th className="p-3 text-right">Cena bez DPH</th><th className="p-3 text-center">Akcie</th></tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {priceList.map(p => (
-                  <tr key={p.id} className="hover:bg-slate-800/40">
-                    <td className="p-2"><input type="text" defaultValue={p.name} onBlur={(e) => updatePriceListItem(p.id, 'name', e.target.value)} className="bg-transparent w-full p-1 rounded hover:bg-slate-900 focus:bg-slate-900" /></td>
-                    <td className="p-2"><input type="text" defaultValue={p.description} onBlur={(e) => updatePriceListItem(p.id, 'description', e.target.value)} className="bg-transparent w-full p-1 rounded hover:bg-slate-900 focus:bg-slate-900" /></td>
-                    <td className="p-2 text-right"><input type="number" step="0.01" defaultValue={p.price} onBlur={(e) => updatePriceListItem(p.id, 'price', e.target.value)} className="bg-transparent w-24 text-right p-1 rounded hover:bg-slate-900 focus:bg-slate-900 text-emerald-400 font-bold" /></td>
-                    <td className="p-2 text-center"><button onClick={() => deletePriceListItem(p.id)} className="text-slate-500 hover:text-rose-400 p-1"><Trash2 className="h-3.5 w-3.5" /></button></td>
-                  </tr>
-                ))}
+                {PRICE_CATEGORIES.filter(cat => pricelistCategoryFilter === 'ALL' || pricelistCategoryFilter === cat).map(cat => {
+                  const items = priceList.filter(p => (p.category || 'Ostatné') === cat);
+                  if (items.length === 0) return null;
+                  return (
+                    <Fragment key={cat}>
+                      <tr className="bg-slate-900/60">
+                        <td colSpan={5} className="px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-indigo-400">{cat}</td>
+                      </tr>
+                      {items.map(p => (
+                        <tr key={p.id} className="hover:bg-slate-800/40">
+                          <td className="p-2"><input type="text" defaultValue={p.name} onBlur={(e) => updatePriceListItem(p.id, 'name', e.target.value)} className="bg-transparent w-full p-1 rounded hover:bg-slate-900 focus:bg-slate-900" /></td>
+                          <td className="p-2"><input type="text" defaultValue={p.description} onBlur={(e) => updatePriceListItem(p.id, 'description', e.target.value)} className="bg-transparent w-full p-1 rounded hover:bg-slate-900 focus:bg-slate-900" /></td>
+                          <td className="p-2">
+                            <select defaultValue={p.category || 'Ostatné'} onChange={(e) => updatePriceListItem(p.id, 'category', e.target.value)} className="bg-transparent p-1 rounded hover:bg-slate-900 focus:bg-slate-900 text-[11px]">
+                              {PRICE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                          </td>
+                          <td className="p-2 text-right"><input type="number" step="0.01" defaultValue={p.price} onBlur={(e) => updatePriceListItem(p.id, 'price', e.target.value)} className="bg-transparent w-24 text-right p-1 rounded hover:bg-slate-900 focus:bg-slate-900 text-emerald-400 font-bold" /></td>
+                          <td className="p-2 text-center"><button onClick={() => deletePriceListItem(p.id)} className="text-slate-500 hover:text-rose-400 p-1"><Trash2 className="h-3.5 w-3.5" /></button></td>
+                        </tr>
+                      ))}
+                    </Fragment>
+                  );
+                })}
                 {priceList.length === 0 && (
-                  <tr><td colSpan={4} className="p-4 text-center text-slate-500">Cenník je prázdny — pridajte prvú položku vyššie.</td></tr>
+                  <tr><td colSpan={5} className="p-4 text-center text-slate-500">Cenník je prázdny — pridajte prvú položku vyššie.</td></tr>
                 )}
               </tbody>
             </table>
