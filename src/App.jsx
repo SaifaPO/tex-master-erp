@@ -3879,6 +3879,15 @@ export default function App() {
 
       if (groups.size === 0) { triggerNotification('error', 'Nenašiel sa žiadny platný riadok (chýba číslo zákazky, zákazník alebo produkt).'); return; }
 
+      // Poistka proti duplicitnému importu — ak zákazka s rovnakým (Firma + Číslo zákazky legacy)
+      // už v ERP existuje (napr. súbor obsahuje aj export už existujúcich zákaziek), preskočí sa.
+      const existingLegacyKeys = new Set(orders.filter(o => o.legacyOrderNumber).map(o => `${o.companyBrand}|${o.legacyOrderNumber}`));
+      let skippedExisting = 0;
+      for (const [key] of [...groups.entries()]) {
+        if (existingLegacyKeys.has(key)) { groups.delete(key); skippedExisting++; }
+      }
+      if (groups.size === 0) { triggerNotification('error', `Všetkých ${skippedExisting} zákaziek už v ERP existuje (podľa čísla zákazky) — nič nové na import.`); return; }
+
       const now = getFormattedDateTime();
       const createdBy = `${currentUser.firstName} ${currentUser.lastName}`;
       const priorityBase = flattenOrderItems(orders).length;
@@ -3940,7 +3949,10 @@ export default function App() {
         await supabase.from('order_number_counters').upsert({ company, year: fullYear, next_number: nextNum }, { onConflict: 'company,year' });
       }
 
-      triggerNotification('success', `Naimportovaných ${toInsertOrders.length} zákaziek (${rows.length - skipped} položiek)${skipped > 0 ? `, preskočených ${skipped} neplatných riadkov` : ''}.`);
+      const skippedParts = [];
+      if (skipped > 0) skippedParts.push(`${skipped} neplatných riadkov`);
+      if (skippedExisting > 0) skippedParts.push(`${skippedExisting} zákaziek už existovalo v ERP`);
+      triggerNotification('success', `Naimportovaných ${toInsertOrders.length} zákaziek.${skippedParts.length ? ` Preskočené: ${skippedParts.join(', ')}.` : ''}`);
     } catch (err) {
       triggerNotification('error', `Chyba pri čítaní súboru: ${err.message}`);
     } finally {
