@@ -961,6 +961,7 @@ export default function App() {
   const [bankTransactions, setBankTransactions] = useState([]);
   const [journalEntries, setJournalEntries] = useState([]);
   const [isImportingBankStatement, setIsImportingBankStatement] = useState(false);
+  const [isImportingOrders, setIsImportingOrders] = useState(false);
   const [isAutoMatching, setIsAutoMatching] = useState(false);
   const [aiChat, setAiChat] = useState([{ sender: 'bot', text: 'Ahoj! Som tvoj AI účtovný asistent. Mám prístup k tvojim aktuálnym faktúram a platbám. S čím ti dnes pomôžem?' }]);
   const [aiPrompt, setAiPrompt] = useState('');
@@ -1306,6 +1307,7 @@ export default function App() {
   const qrInputRef = useRef(null);
   const importFileInputRef = useRef(null);
   const productImportFileInputRef = useRef(null);
+  const orderImportFileInputRef = useRef(null);
 
   useEffect(() => {
     if (!supabase) {
@@ -3818,6 +3820,135 @@ export default function App() {
     }
   };
 
+  // --- IMPORT / EXPORT ZÁKAZIEK DO EXCELU (napr. z externého plánu vo forme tabuľky) ---
+  // Riadok = jedna položka; viacero riadkov s rovnakou "Cislo zakazky (legacy)" + "Firma" sa
+  // pri importe zoskupí do jednej zákazky s viacerými položkami (rovnaký princíp ako manuálne zadanie).
+  const ORDER_IMPORT_STATION_LABELS = { strihanie: 'CUT', sublimacia: 'SUBLI', sietotlac: 'PRINT', transfer: 'TRANSFER', sitie: 'KONF' };
+  const ORDER_IMPORT_LABEL_TO_STATION = Object.fromEntries(Object.entries(ORDER_IMPORT_STATION_LABELS).map(([k, v]) => [v, k]));
+
+  const handleExportOrders = () => {
+    const rows = [];
+    orders.forEach(o => {
+      (o.items || []).forEach(it => {
+        rows.push({
+          'Cislo zakazky (legacy)': o.legacyOrderNumber || o.orderNumber || o.id,
+          'Firma': o.companyBrand,
+          'Zakaznik': o.customer,
+          'Produkt': it.productName,
+          'Pocet ks': it.qty,
+          'Jednotka': 'ks',
+          'Stanice': Object.keys(it.stationStatuses || {}).map(s => ORDER_IMPORT_STATION_LABELS[s] || s).join(', '),
+          'Terminy po staniciach': Object.entries(it.stationDates || {}).map(([s, d]) => `${ORDER_IMPORT_STATION_LABELS[s] || s}:${d}`).join(' | '),
+          'Navrhovany termin dodania': o.deliveryDate,
+          'Poznamka': it.notes || '',
+        });
+      });
+    });
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Zakazky');
+    XLSX.writeFile(wb, `zakazky_export_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+  const handleImportOrdersFile = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!hasPermission('create_order')) { triggerNotification('error', 'Nemáte právo na vytváranie zákaziek.'); e.target.value = ''; return; }
+    setIsImportingOrders(true);
+    try {
+      const data = await file.arrayBuffer();
+      const wb = XLSX.read(data);
+      const sheetName = wb.SheetNames.includes('Zakazky') ? 'Zakazky' : wb.SheetNames[0];
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: '' });
+      if (rows.length === 0) { triggerNotification('error', 'Súbor neobsahuje žiadne riadky.'); return; }
+
+      const groups = new Map();
+      let skipped = 0;
+      rows.forEach(row => {
+        const legacyNumber = String(row['Cislo zakazky (legacy)'] || row['Číslo zákazky (legacy)'] || '').trim();
+        const company = String(row['Firma'] || 'ATAK').trim().toUpperCase();
+        const customer = String(row['Zakaznik'] || row['Zákazník'] || '').trim();
+        const productName = String(row['Produkt'] || '').trim();
+        if (!legacyNumber || !customer || !productName) { skipped++; return; }
+        const key = `${company}|${legacyNumber}`;
+        if (!groups.has(key)) groups.set(key, { company, legacyNumber, customer, deliveryDate: '', rows: [] });
+        const g = groups.get(key);
+        g.rows.push(row);
+        const rowDate = String(row['Navrhovany termin dodania'] || row['Navrhovaný termín dodania'] || '').trim();
+        if (rowDate && (!g.deliveryDate || rowDate > g.deliveryDate)) g.deliveryDate = rowDate;
+      });
+
+      if (groups.size === 0) { triggerNotification('error', 'Nenašiel sa žiadny platný riadok (chýba číslo zákazky, zákazník alebo produkt).'); return; }
+
+      const now = getFormattedDateTime();
+      const createdBy = `${currentUser.firstName} ${currentUser.lastName}`;
+      const priorityBase = flattenOrderItems(orders).length;
+      let priorityCounter = priorityBase;
+      const fullYear = new Date().getFullYear();
+      const shortYear = String(fullYear).slice(-2);
+      const counters = {};
+      const toInsertOrders = [];
+      let orderIdx = 0;
+
+      for (const g of groups.values()) {
+        if (!counters[g.company]) {
+          const { data: counterData } = await supabase.from('order_number_counters').select('*').eq('company', g.company).eq('year', fullYear).maybeSingle();
+          counters[g.company] = counterData?.next_number || 1;
+        }
+        const orderId = `ZAK-${Date.now()}-${orderIdx++}`;
+        const orderNumber = `${g.company}-${shortYear}-${String(counters[g.company]).padStart(4, '0')}`;
+        counters[g.company] += 1;
+
+        const items = g.rows.map((row, idx) => {
+          const itemId = `${orderId}-${idx + 1}`;
+          const qty = parseFloat(String(row['Pocet ks'] || 0).replace(',', '.')) || 0;
+          const stationLabels = String(row['Stanice'] || '').split(',').map(s => s.trim()).filter(Boolean);
+          const activeStations = stationLabels.map(l => ORDER_IMPORT_LABEL_TO_STATION[l]).filter(Boolean);
+          const stationDates = {};
+          String(row['Terminy po staniciach'] || '').split('|').forEach(pair => {
+            const [labelRaw, dateRaw] = pair.split(':').map(s => (s || '').trim());
+            const sid = ORDER_IMPORT_LABEL_TO_STATION[labelRaw];
+            if (sid && dateRaw) stationDates[sid] = dateRaw;
+          });
+          const stationStatuses = {};
+          activeStations.forEach(sid => {
+            stationStatuses[sid] = 'caka';
+            if (!stationDates[sid]) stationDates[sid] = g.deliveryDate || null;
+          });
+          priorityCounter += 1;
+          const productionDate = Object.values(stationDates).sort()[0] || g.deliveryDate;
+          return {
+            itemId, productId: null, productName: String(row['Produkt'] || '').trim(), customCode: '', qualityTier: '', gender: 'neutral', qty,
+            notes: String(row['Poznamka'] || '').trim(), imageUrl: '', assignedDesignerId: '', addons: [],
+            rozpisUrl: '', rozpisFileName: '', rozpisMimeType: '',
+            materialsNeeded: [], threadQtyM: 0, priority: priorityCounter, productionDate, stationDates, stationStatuses, materialDeducted: false
+          };
+        });
+
+        toInsertOrders.push(mapOrderToDb({
+          id: orderId, customer: g.customer, createdAt: now, deliveryDate: g.deliveryDate || new Date().toISOString().slice(0, 10),
+          driveLink: '', notes: '', paymentType: 'faktura', items,
+          orderLog: [{ date: now, author: createdBy, text: `Importované z externého plánu (Excel), pôvodné číslo ${g.legacyNumber}.` }],
+          legacyOrderNumber: g.legacyNumber, companyBrand: g.company, orderNumber,
+          variableSymbol: generateVariableSymbol(orderId), expectedAmount: null
+        }));
+      }
+
+      const { error } = await supabase.from('orders').insert(toInsertOrders);
+      if (error) { triggerNotification('error', `Chyba pri importe: ${error.message}`); return; }
+
+      for (const [company, nextNum] of Object.entries(counters)) {
+        await supabase.from('order_number_counters').upsert({ company, year: fullYear, next_number: nextNum }, { onConflict: 'company,year' });
+      }
+
+      triggerNotification('success', `Naimportovaných ${toInsertOrders.length} zákaziek (${rows.length - skipped} položiek)${skipped > 0 ? `, preskočených ${skipped} neplatných riadkov` : ''}.`);
+    } catch (err) {
+      triggerNotification('error', `Chyba pri čítaní súboru: ${err.message}`);
+    } finally {
+      setIsImportingOrders(false);
+      e.target.value = '';
+    }
+  };
+
   const handleGenerateOrder = async () => {
     if (!hasPermission('create_order')) { triggerNotification('error', 'Chyba: Vaša úroveň nemá právo na zadávanie zákaziek.'); return; }
     if (!newOrderCustomer.trim()) { alert('Vyplňte odberateľa.'); return; }
@@ -5719,9 +5850,12 @@ export default function App() {
                     </div>
                   </div>
                 )}
-                <div className="flex justify-end gap-2">
+                <div className="flex justify-end gap-2 flex-wrap">
                   <button onClick={() => { setShowAiOrderAssistant(true); setAiOrderResult(null); setAiOrderError(''); setAiOrderText(''); setAiOrderImageFile(null); setAiOrderImagePreview(''); setAiOrderInputMode('voice'); }} className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs px-4 py-2.5 rounded-lg flex items-center gap-1.5 shadow-lg"><Bot className="h-4 w-4" /> AI zadanie zákazky</button>
                   <button onClick={() => { setShowExpressDotlackovka(true); setExpressCreatedBy(`${currentUser.firstName} ${currentUser.lastName}`); setExpressNeededDate(new Date().toISOString().slice(0, 10)); }} className="bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs px-4 py-2.5 rounded-lg flex items-center gap-1.5 shadow-lg"><Zap className="h-4 w-4" /> Expresné pridanie dotlačovej zákazky</button>
+                  <button onClick={handleExportOrders} className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs px-4 py-2.5 rounded-lg flex items-center gap-1.5 border border-slate-700"><Download className="h-4 w-4" /> Export zákaziek (Excel)</button>
+                  <button onClick={() => orderImportFileInputRef.current?.click()} disabled={isImportingOrders} className="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 font-bold text-xs px-4 py-2.5 rounded-lg flex items-center gap-1.5 border border-slate-700"><Upload className="h-4 w-4" /> {isImportingOrders ? 'Importujem...' : 'Import zákaziek (Excel)'}</button>
+                  <input ref={orderImportFileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImportOrdersFile} />
                 </div>
                 <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 shadow-xl">
                   <h2 className="text-xl font-bold text-white flex items-center gap-2 mb-4"><User className="text-indigo-400 h-5 w-5" /> 1. Zákazník & Harmonogram</h2>
