@@ -91,6 +91,41 @@ const MATRIX_NATURAL_WIDTH = MATRIX_DATE_COL_WIDTH + STATION_ORDER.length * MATR
 // Ako dlho po úprave zákazky sa má na sprievodke zobrazovať upozornenie na nedávnu zmenu (Funkcia 4)
 const RECENT_ORDER_CHANGE_HOURS = 72;
 
+// Slovenske statne sviatky a dni pracovneho pokoja — pre zvyraznenie vo Planovacej Matici.
+// Pevne datumy + pohyblive (Vekonocny Piatok/Pondelok) odvodene z Velkej noci (Meeus/Jones/Butcher algoritmus).
+function computeEasterSunday(year) {
+  const a = year % 19, b = Math.floor(year / 100), c = year % 100;
+  const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(year, month - 1, day);
+}
+function addDaysLocal(date, days) { const d = new Date(date); d.setDate(d.getDate() + days); return d; }
+function toIsoLocal(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+const SK_FIXED_HOLIDAYS = ['01-01', '01-06', '05-01', '05-08', '07-05', '08-29', '09-01', '09-15', '11-01', '11-17', '12-24', '12-25', '12-26'];
+function getSkHolidaySet(year) {
+  const set = new Set(SK_FIXED_HOLIDAYS.map(md => `${year}-${md}`));
+  const easter = computeEasterSunday(year);
+  set.add(toIsoLocal(addDaysLocal(easter, -2))); // Velky piatok
+  set.add(toIsoLocal(addDaysLocal(easter, 1))); // Velkonocny pondelok
+  return set;
+}
+const SK_HOLIDAY_CACHE = {};
+function isSkHoliday(dateStr) {
+  if (!dateStr) return false;
+  const year = parseInt(dateStr.slice(0, 4), 10);
+  if (!SK_HOLIDAY_CACHE[year]) SK_HOLIDAY_CACHE[year] = getSkHolidaySet(year);
+  return SK_HOLIDAY_CACHE[year].has(dateStr);
+}
+function isWeekendDate(dateStr) {
+  if (!dateStr) return false;
+  const day = new Date(dateStr + 'T00:00:00').getDay();
+  return day === 0 || day === 6;
+}
+
 // Stanice, kde musí zamestnanec pred spustením tlače/balenia potvrdiť kontrolu (rozpis/textil/kvalita) (Funkcia 2)
 const MATERIAL_CHECK_STATIONS = ['transfer', 'sietotlac', 'balenie'];
 // Zistí, či na danej stanici/položke ešte treba prejsť potvrdením materiálu pred spustením práce
@@ -1148,6 +1183,7 @@ export default function App() {
   const [draggedRowItem, setDraggedRowItem] = useState(null);
   const [draggedMatrixCard, setDraggedMatrixCard] = useState(null);
   const [dragOverMatrixCell, setDragOverMatrixCell] = useState(null); // { date, stationId } | null
+  const [matrixCompact, setMatrixCompact] = useState(false);
   const [showExpressDotlackovka, setShowExpressDotlackovka] = useState(false);
   const [expressCompany, setExpressCompany] = useState('ADY');
   const [expressCustomerName, setExpressCustomerName] = useState('');
@@ -5007,18 +5043,27 @@ export default function App() {
 
   const distinctDeliveryDates = Array.from(new Set(allItems.map(i => i.deliveryDate).filter(Boolean))).sort();
 
+  // Vracia SUVISLY rad dni (bez medzier) — kazdy den v rozsahu sa zobrazi aj ked pre neho nie je
+  // ziadna zakazka (aby bolo vidno vikendy/sviatky/volne dni), nie len dni s datami ako predtym.
+  // POZOR: pouzivame vyhradne lokalne getFullYear/getMonth/getDate (nie toISOString/UTC), inak sa
+  // pri lokalnom case pred UTC (napr. Europe/Bratislava) datum posunie o den dozadu.
   const getPlannerDates = () => {
-    const set = new Set();
-    const today = new Date();
-    for (let i = 0; i < 14; i++) {
-      const d = new Date(today); d.setDate(today.getDate() + i);
-      set.add(d.toISOString().slice(0, 10));
-    }
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const timestamps = [];
+    for (let i = 0; i < 14; i++) timestamps.push(addDaysLocal(today, i).getTime());
     allItems.forEach(it => {
-      if (it.stationDates) Object.values(it.stationDates).forEach(d => { if (d) set.add(d); });
-      else if (it.productionDate) set.add(it.productionDate);
+      if (it.stationDates) Object.values(it.stationDates).forEach(d => { if (d) timestamps.push(new Date(d + 'T00:00:00').getTime()); });
+      else if (it.productionDate) timestamps.push(new Date(it.productionDate + 'T00:00:00').getTime());
     });
-    return Array.from(set).sort();
+    if (timestamps.length === 0) return [];
+    const DAY_MS = 24 * 3600 * 1000;
+    const MAX_SPAN_DAYS = 200; // poistka proti extremnemu rozsahu pri chybnom/vzdialenom datume
+    let minT = Math.min(...timestamps);
+    let maxT = Math.max(...timestamps);
+    if ((maxT - minT) / DAY_MS > MAX_SPAN_DAYS) minT = maxT - MAX_SPAN_DAYS * DAY_MS;
+    const result = [];
+    for (let t = minT; t <= maxT; t += DAY_MS) result.push(toIsoLocal(new Date(t)));
+    return result;
   };
   const plannerDates = getPlannerDates();
   const capacityByStation = {};
@@ -5386,6 +5431,9 @@ export default function App() {
                     </div>
                     <div className="flex items-center gap-3">
                       <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                        <input type="checkbox" checked={matrixCompact} onChange={(e) => setMatrixCompact(e.target.checked)} className="accent-indigo-600" /> Kompaktné zobrazenie
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer select-none">
                         <input type="checkbox" checked={showCapacityBars} onChange={(e) => setShowCapacityBars(e.target.checked)} className="accent-indigo-600" /> Zobraziť vyťaženie
                       </label>
                       {hasPermission('manage_catalog') && (
@@ -5410,10 +5458,20 @@ export default function App() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800">
-                        {plannerDates.map(date => (
-                          <tr key={date} className="hover:bg-slate-900/10">
-                            <td className={`p-3 font-bold text-xs bg-slate-900/40 border-r border-slate-850 sticky left-0 z-10 ${isUrgentDate(date) ? 'bg-rose-900/50 text-rose-300' : 'text-slate-200'}`}>
-                              {formatDeliveryDate(date)}
+                        {plannerDates.map((date, dateIdx) => {
+                          const holiday = isSkHoliday(date);
+                          const weekend = isWeekendDate(date);
+                          const zebra = dateIdx % 2 === 1;
+                          const rowTintClass = holiday ? 'bg-amber-950/20' : weekend ? 'bg-slate-800/30' : zebra ? 'bg-slate-900/25' : 'bg-slate-950/10';
+                          const dayLabel = holiday ? 'sviatok' : weekend ? 'víkend' : '';
+                          return (
+                          <tr key={date} className={`hover:bg-indigo-950/10 ${rowTintClass}`}>
+                            <td className={`p-0 font-bold text-xs border-r border-slate-850 sticky left-0 z-10 align-top ${rowTintClass} ${isUrgentDate(date) ? '!bg-rose-900/50 text-rose-300' : 'text-slate-200'}`}>
+                              <div className={`${matrixCompact ? 'min-h-[54px]' : 'min-h-[110px]'} h-full flex flex-col justify-between items-start py-2 px-3 gap-1`}>
+                                <span className="text-[9px] font-semibold text-slate-500/70">{formatDeliveryDate(date)}</span>
+                                <span className="text-xs">{formatDeliveryDate(date)}{dayLabel && <span className={`block text-[9px] font-extrabold uppercase tracking-wide mt-0.5 ${holiday ? 'text-amber-400' : 'text-slate-400'}`}>{dayLabel}</span>}</span>
+                                <span className="text-[9px] font-semibold text-slate-500/70">{formatDeliveryDate(date)}</span>
+                              </div>
                             </td>
                             {STATION_ORDER.map(stationId => {
                               const config = STATION_CONFIGS[stationId];
@@ -5443,10 +5501,10 @@ export default function App() {
                                     handleMoveAndReorder(draggedMatrixCard, stationId, date, target?.targetItemId || null, target?.position || 'after');
                                     setDraggedMatrixCard(null);
                                   }}
-                                  className={`p-1 border-r border-slate-850 align-top min-h-[110px] min-w-[260px] transition-all duration-150 ${
+                                  className={`p-1 border-r border-slate-850 align-top ${matrixCompact ? 'min-h-[54px]' : 'min-h-[110px]'} min-w-[260px] transition-all duration-150 ${
                                     isHoveringThisCell
                                       ? 'bg-indigo-950/50 ring-2 ring-inset ring-indigo-500'
-                                      : draggedMatrixCard?.stationId === stationId ? 'bg-slate-950/40 outline outline-1 outline-dashed outline-indigo-700/40' : 'bg-slate-950/15'
+                                      : draggedMatrixCard?.stationId === stationId ? 'bg-slate-950/40 outline outline-1 outline-dashed outline-indigo-700/40' : rowTintClass
                                   }`}
                                 >
                                   {load && load.capacityMinutes > 0 && (
@@ -5490,7 +5548,7 @@ export default function App() {
                                               setDragOverMatrixCell(prev => (prev && prev.targetItemId === item.itemId && prev.position === pos ? prev : { date, stationId, targetItemId: item.itemId, position: pos }));
                                             }}
                                             onClick={() => openOrderDetails(orders.find(o => o.id === item.orderId))}
-                                            className={`relative bg-slate-900 hover:bg-slate-800 border-l-4 ${orderColor.border} border-t border-r border-b border-slate-750 p-2 rounded cursor-pointer transition-all flex flex-col justify-between text-[10px] space-y-1 shadow hover:scale-[1.02] transform ${hasPermission('edit_priority') ? 'active:cursor-grabbing' : ''} ${(item.ultraPriority || isDotlackovkaUrgent(item)) ? (statusId === 'hotove' ? 'ultra-priority-static' : 'ultra-priority-card') : ''}`}
+                                            className={`relative bg-slate-900 hover:bg-slate-800 border-l-4 ${orderColor.border} border-t border-r border-b border-slate-750 ${matrixCompact ? 'p-1 space-y-0.5' : 'p-2 space-y-1'} rounded cursor-pointer transition-all flex flex-col justify-between text-[10px] shadow hover:scale-[1.02] transform ${hasPermission('edit_priority') ? 'active:cursor-grabbing' : ''} ${(item.ultraPriority || isDotlackovkaUrgent(item)) ? (statusId === 'hotove' ? 'ultra-priority-static' : 'ultra-priority-card') : ''}`}
                                           >
                                             {(() => {
                                               if (!item.lastModifiedAt) return null;
@@ -5518,42 +5576,66 @@ export default function App() {
                                                 </span>
                                               );
                                             })()}
-                                            <div className="flex items-center justify-between gap-1">
-                                              <span className="font-mono font-bold text-indigo-400 text-xs">{(item.ultraPriority || isDotlackovkaUrgent(item)) && '🔴 '}#{item.priority} • {item.itemId}</span>
-                                              <div className="flex items-center gap-1 shrink-0">
-                                                {item.stationMeta?.[stationId]?.assignedEmployeeAvatar && (
-                                                  <span title={item.stationMeta[stationId].assignedEmployeeName} className="text-base leading-none cursor-help">{item.stationMeta[stationId].assignedEmployeeAvatar}</span>
+                                            {matrixCompact ? (
+                                              <>
+                                                <div className="flex items-center justify-between gap-1">
+                                                  <span className="font-mono font-bold text-indigo-400 text-[10px] truncate">{(item.ultraPriority || isDotlackovkaUrgent(item)) && '🔴 '}{item.orderNumber || item.orderId}</span>
+                                                  <CashBadge paymentType={item.paymentType} size="small" />
+                                                </div>
+                                                <p className="font-extrabold text-slate-100 text-[10px] truncate">{item.customer}</p>
+                                                <p className="text-[9px] text-slate-400 truncate">{item.productName} • {item.qty} ks</p>
+                                                <select
+                                                  value={statusId}
+                                                  onClick={(e) => e.stopPropagation()}
+                                                  onChange={(e) => updateStationStatus(item.orderId, item.itemId, stationId, e.target.value)}
+                                                  disabled={!hasPermission('update_status')}
+                                                  className={`text-[9px] px-1 py-0.5 rounded text-center font-bold ${statusCfg.color} truncate w-full focus:outline-none`}
+                                                >
+                                                  {config.statuses.filter(s => s.id !== 'neaktivne').map(st => (
+                                                    <option key={st.id} value={st.id} className="bg-slate-900 text-slate-300">{st.label}</option>
+                                                  ))}
+                                                </select>
+                                              </>
+                                            ) : (
+                                              <>
+                                                <div className="flex items-center justify-between gap-1">
+                                                  <span className="font-mono font-bold text-indigo-400 text-xs">{(item.ultraPriority || isDotlackovkaUrgent(item)) && '🔴 '}#{item.priority} • {item.itemId}</span>
+                                                  <div className="flex items-center gap-1 shrink-0">
+                                                    {item.stationMeta?.[stationId]?.assignedEmployeeAvatar && (
+                                                      <span title={item.stationMeta[stationId].assignedEmployeeName} className="text-base leading-none cursor-help">{item.stationMeta[stationId].assignedEmployeeAvatar}</span>
+                                                    )}
+                                                    <CashBadge paymentType={item.paymentType} size="small" />
+                                                  </div>
+                                                </div>
+                                                <p className="font-extrabold text-slate-100 text-[11px] truncate">{item.customer}</p>
+                                                <p className="text-[10px] text-slate-300 truncate">{item.productName} ({item.qualityTier})</p>
+                                                <p className="text-[10px] text-slate-400 font-bold">{item.qty} ks</p>
+                                                <div className={`text-[9px] px-1.5 py-1 rounded ${isUrgentDate(item.deliveryDate) ? 'bg-rose-950/60 text-rose-300 font-bold' : 'bg-slate-950/60 text-slate-500'}`}>
+                                                  Termín: {formatDeliveryDate(item.deliveryDate)}
+                                                </div>
+                                                {hasPermission('edit_priority') && (
+                                                  <input
+                                                    type="date"
+                                                    value={getItemStationDate(item, stationId) || ''}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    onChange={(e) => handleMoveProductionDate(item.orderId, item.itemId, stationId, e.target.value)}
+                                                    className="text-[9px] bg-slate-950 border border-slate-800 rounded px-1 py-0.5 text-slate-400 w-full"
+                                                    title="Presunúť túto stanicu na iný deň (alebo pretiahni kartu — pusti hore/dole nad inou kartou pre presné poradie)"
+                                                  />
                                                 )}
-                                                <CashBadge paymentType={item.paymentType} size="small" />
-                                              </div>
-                                            </div>
-                                            <p className="font-extrabold text-slate-100 text-[11px] truncate">{item.customer}</p>
-                                            <p className="text-[10px] text-slate-300 truncate">{item.productName} ({item.qualityTier})</p>
-                                            <p className="text-[10px] text-slate-400 font-bold">{item.qty} ks</p>
-                                            <div className={`text-[9px] px-1.5 py-1 rounded ${isUrgentDate(item.deliveryDate) ? 'bg-rose-950/60 text-rose-300 font-bold' : 'bg-slate-950/60 text-slate-500'}`}>
-                                              Termín: {formatDeliveryDate(item.deliveryDate)}
-                                            </div>
-                                            {hasPermission('edit_priority') && (
-                                              <input
-                                                type="date"
-                                                value={getItemStationDate(item, stationId) || ''}
-                                                onClick={(e) => e.stopPropagation()}
-                                                onChange={(e) => handleMoveProductionDate(item.orderId, item.itemId, stationId, e.target.value)}
-                                                className="text-[9px] bg-slate-950 border border-slate-800 rounded px-1 py-0.5 text-slate-400 w-full"
-                                                title="Presunúť túto stanicu na iný deň (alebo pretiahni kartu — pusti hore/dole nad inou kartou pre presné poradie)"
-                                              />
+                                                <select
+                                                  value={statusId}
+                                                  onClick={(e) => e.stopPropagation()}
+                                                  onChange={(e) => updateStationStatus(item.orderId, item.itemId, stationId, e.target.value)}
+                                                  disabled={!hasPermission('update_status')}
+                                                  className={`text-[10px] px-1 py-1 rounded text-center font-bold ${statusCfg.color} truncate w-full focus:outline-none`}
+                                                >
+                                                  {config.statuses.filter(s => s.id !== 'neaktivne').map(st => (
+                                                    <option key={st.id} value={st.id} className="bg-slate-900 text-slate-300">{st.label}</option>
+                                                  ))}
+                                                </select>
+                                              </>
                                             )}
-                                            <select
-                                              value={statusId}
-                                              onClick={(e) => e.stopPropagation()}
-                                              onChange={(e) => updateStationStatus(item.orderId, item.itemId, stationId, e.target.value)}
-                                              disabled={!hasPermission('update_status')}
-                                              className={`text-[10px] px-1 py-1 rounded text-center font-bold ${statusCfg.color} truncate w-full focus:outline-none`}
-                                            >
-                                              {config.statuses.filter(s => s.id !== 'neaktivne').map(st => (
-                                                <option key={st.id} value={st.id} className="bg-slate-900 text-slate-300">{st.label}</option>
-                                              ))}
-                                            </select>
                                           </div>
                                           {showPlaceholderAfter && (
                                             <div className="h-2 rounded-full bg-indigo-400 animate-pulse pointer-events-none" />
@@ -5566,7 +5648,8 @@ export default function App() {
                               );
                             })}
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
