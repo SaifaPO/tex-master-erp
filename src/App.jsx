@@ -1069,6 +1069,9 @@ export default function App() {
   const [reportPeriod, setReportPeriod] = useState('month');
   const [vatSummaryYear, setVatSummaryYear] = useState(new Date().getFullYear());
   const [activeWarehouseId, setActiveWarehouseId] = useState('');
+  const [matSortField, setMatSortField] = useState('name');
+  const [matSortDir, setMatSortDir] = useState('asc');
+  const [warehouseDeleteUndo, setWarehouseDeleteUndo] = useState(null); // { warehouseId, warehouseName, materials } | null
   const [editingWarehouseId, setEditingWarehouseId] = useState(null);
   const [editingWarehouseName, setEditingWarehouseName] = useState('');
   const [newWarehouseName, setNewWarehouseName] = useState('');
@@ -2939,6 +2942,31 @@ export default function App() {
     }
   };
 
+  // Rychle vyprazdnenie celeho skladu jednym krokom (s moznostou vratit spat, kym sa neprepise dalsou akciou)
+  const handleEmptyWarehouse = async (wh) => {
+    if (!hasPermission('edit_stock')) { triggerNotification('error', 'Nemáte prístup ku správe skladu.'); return; }
+    const itemsInside = materials.filter(m => m.warehouseId === wh.id);
+    if (itemsInside.length === 0) { triggerNotification('error', `Sklad "${wh.name}" je už prázdny.`); return; }
+    if (!window.confirm(`Naozaj vymazať VŠETKÝCH ${itemsInside.length} položiek zo skladu "${wh.name}"? Hneď potom budeš mať možnosť vrátiť to späť.`)) return;
+    const { error } = await supabase.from('materials').delete().eq('warehouse_id', wh.id);
+    if (error) { triggerNotification('error', error.message); return; }
+    setWarehouseDeleteUndo({ warehouseId: wh.id, warehouseName: wh.name, materials: itemsInside });
+    triggerNotification('success', `Sklad "${wh.name}" bol vyprázdnený (${itemsInside.length} položiek).`);
+  };
+
+  const handleUndoEmptyWarehouse = async () => {
+    if (!warehouseDeleteUndo) return;
+    const { error } = await supabase.from('materials').insert(warehouseDeleteUndo.materials.map(mapMaterialToDb));
+    if (error) { triggerNotification('error', error.message); return; }
+    triggerNotification('success', `Obnovených ${warehouseDeleteUndo.materials.length} položiek do skladu "${warehouseDeleteUndo.warehouseName}".`);
+    setWarehouseDeleteUndo(null);
+  };
+
+  const handleSortMaterials = (field) => {
+    if (matSortField === field) setMatSortDir(prev => prev === 'asc' ? 'desc' : 'asc');
+    else { setMatSortField(field); setMatSortDir('asc'); }
+  };
+
   const handleMoveMaterialToWarehouse = async (materialId, newWarehouseId) => {
     if (!hasPermission('edit_stock')) { triggerNotification('error', 'Nemáte prístup ku správe skladu.'); return; }
     const { error } = await supabase.from('materials').update({ warehouse_id: newWarehouseId }).eq('id', materialId);
@@ -3103,12 +3131,16 @@ export default function App() {
         const matchedWarehouse = warehouseName ? warehouses.find(w => w.name.toLowerCase() === String(warehouseName).toLowerCase()) : null;
         const targetWarehouseId = matchedWarehouse?.id || activeWarehouseId;
         const qty = parseFloat(row.Mnozstvo || row['Množstvo'] || 0) || 0;
+        const rawHex = row.Farba_hex ?? row['Farba_hex'] ?? row['Farba hex'] ?? row['Farba (hex)'] ?? row['Hex'] ?? row['hex'] ?? row['HEX'] ?? row['Hex kód'] ?? row['Hex kod'] ?? '';
+        let colorHex = String(rawHex).trim();
+        if (colorHex && !colorHex.startsWith('#')) colorHex = `#${colorHex}`;
+        if (colorHex && !/^#[0-9a-fA-F]{6}$/.test(colorHex)) colorHex = '';
         toInsert.push(mapMaterialToDb({
           id: `tex-${Date.now()}-${idx}`,
           name: String(name),
           manufacturer: row.Vyrobca || row['Výrobca'] || '',
           color: row.Farba || row['Farba'] || '',
-          colorHex: row.Farba_hex || '',
+          colorHex,
           width: row.Sirka_cm ? parseInt(row.Sirka_cm) : null,
           weight: row.Gramaz_gm2 ? parseInt(row.Gramaz_gm2) : null,
           unit: row.Jednotka || 'm',
@@ -6524,23 +6556,50 @@ export default function App() {
                         <button onClick={() => importFileInputRef.current?.click()} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] px-3 py-1.5 rounded-lg flex items-center gap-1.5"><Upload className="h-3.5 w-3.5" /> Import z Excelu</button>
                         <input ref={importFileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImportFileChange} className="hidden" />
                         <button onClick={handleDownloadImportTemplate} className="bg-slate-800 hover:bg-slate-700 text-slate-400 font-bold text-[11px] px-3 py-1.5 rounded-lg flex items-center gap-1.5"><FileText className="h-3.5 w-3.5" /> Stiahnuť šablónu</button>
+                        <button onClick={() => handleEmptyWarehouse(warehouses.find(w => w.id === activeWarehouseId))} className="bg-rose-950/50 hover:bg-rose-900/50 border border-rose-700/50 text-rose-300 font-bold text-[11px] px-3 py-1.5 rounded-lg flex items-center gap-1.5"><X className="h-3.5 w-3.5" /> Vymazať celý sklad</button>
                       </>
                     )}
                   </div>
                 </div>
+                {warehouseDeleteUndo && (
+                  <div className="bg-amber-950/30 border border-amber-700/40 rounded-lg px-4 py-2.5 flex items-center justify-between gap-3">
+                    <span className="text-xs text-amber-300">Sklad "{warehouseDeleteUndo.warehouseName}" bol vyprázdnený ({warehouseDeleteUndo.materials.length} položiek).</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button onClick={handleUndoEmptyWarehouse} className="bg-amber-700 hover:bg-amber-800 text-white font-bold text-[11px] px-3 py-1.5 rounded-lg">Vrátiť späť</button>
+                      <button onClick={() => setWarehouseDeleteUndo(null)} className="text-amber-500 hover:text-amber-300"><X className="h-4 w-4" /></button>
+                    </div>
+                  </div>
+                )}
                 {hasPermission('edit_stock') && (
                   <p className="text-[10px] text-slate-500 italic">Import naskladní každý riadok zo súboru ako novú položku do aktuálne otvoreného skladu ({warehouses.find(w => w.id === activeWarehouseId)?.name || ''}) — ak riadok obsahuje stĺpec "Sklad" so zhodným názvom existujúceho skladu, položka sa zaradí tam.</p>
                 )}
                 <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
                   <table className="w-full text-left text-xs text-slate-300">
                     <thead className="bg-slate-900 text-slate-400 uppercase tracking-wider">
-                      <tr><th className="px-4 py-3">Názov položky</th><th className="px-3 py-3 text-center">Šírka</th><th className="px-3 py-3 text-center">Gramáž</th><th className="px-3 py-3 text-center">Cena / jedn. bez DPH</th><th className="px-3 py-3 text-center">Zostatok</th><th className="px-3 py-3 text-center">Presunúť do</th><th className="px-4 py-3 text-center">Karta</th></tr>
+                      <tr>
+                        {[
+                          ['name', 'Názov položky', 'px-4 py-3 text-left'],
+                          ['width', 'Šírka', 'px-3 py-3 text-center'],
+                          ['weight', 'Gramáž', 'px-3 py-3 text-center'],
+                          ['pricePerM', 'Cena / jedn. bez DPH', 'px-3 py-3 text-center'],
+                          ['qty', 'Zostatok', 'px-3 py-3 text-center']
+                        ].map(([field, label, cls]) => (
+                          <th key={field} className={`${cls} cursor-pointer select-none hover:text-white`} onClick={() => handleSortMaterials(field)}>
+                            {label}{matSortField === field ? (matSortDir === 'asc' ? ' ▲' : ' ▼') : ''}
+                          </th>
+                        ))}
+                        <th className="px-3 py-3 text-center">Presunúť do</th><th className="px-4 py-3 text-center">Karta</th></tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800">
                       {materials.filter(m => m.warehouseId === activeWarehouseId).length === 0 && (
                         <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-500 italic">V tomto sklade zatiaľ nie sú žiadne položky.</td></tr>
                       )}
-                      {materials.filter(m => m.warehouseId === activeWarehouseId).map(item => {
+                      {materials.filter(m => m.warehouseId === activeWarehouseId).sort((a, b) => {
+                        const av = a[matSortField], bv = b[matSortField];
+                        const dir = matSortDir === 'asc' ? 1 : -1;
+                        if (typeof av === 'string' || typeof bv === 'string') return String(av || '').localeCompare(String(bv || '')) * dir;
+                        return ((av || 0) - (bv || 0)) * dir;
+                      }).map(item => {
                         const isLow = item.qty <= item.minQty;
                         return (
                           <tr key={item.id} className="hover:bg-slate-800/40">
