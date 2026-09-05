@@ -715,6 +715,45 @@ function getItemStationDate(item, stationId) {
   return item.stationDates?.[stationId] || item.productionDate || item.deliveryDate;
 }
 
+// Razítko "Oprava" / "Expres oprava" (na priloženie k súborom pre tlač) — vykreslené ako SVG (skryté,
+// slúži len ako predloha na export do PNG cez handleDownloadBadge). variant: 'oprava' | 'expres'.
+function OpravaBadgeSvg({ variant, svgId }) {
+  const isExpres = variant === 'expres';
+  const bg = isExpres ? '#ED1C24' : '#FFC800';
+  const textColor = isExpres ? '#ffffff' : '#111111';
+  return (
+    <svg id={svgId} width="300" height="300" viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg" style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden' }} aria-hidden="true">
+      <rect x="4" y="4" width="292" height="292" rx="26" fill={bg} />
+      <rect x="18" y="18" width="264" height="168" rx="16" fill="#ffffff" />
+      {isExpres && (
+        <g stroke={bg} strokeWidth="6" strokeLinecap="round">
+          <line x1="34" y1="66" x2="88" y2="66" />
+          <line x1="34" y1="86" x2="104" y2="86" />
+          <line x1="34" y1="106" x2="82" y2="106" />
+          <line x1="34" y1="126" x2="98" y2="126" />
+        </g>
+      )}
+      <circle cx="150" cy="102" r="58" fill="none" stroke={bg} strokeWidth="7" strokeDasharray={isExpres ? '300 65' : 'none'} strokeLinecap="round" transform={isExpres ? 'rotate(215 150 102)' : undefined} />
+      <g transform="translate(150 102)">
+        <rect x="-13" y="-58" width="26" height="116" rx="9" fill="#111111" transform="rotate(-45)" />
+        <circle cx="0" cy="-58" r="17" fill="none" stroke="#111111" strokeWidth="9" transform="rotate(-45)" />
+        <rect x="-7" y="-58" width="14" height="116" rx="5" fill="#111111" transform="rotate(45)" />
+        <path d="M -9 -70 L 9 -70 L 5 -55 L -5 -55 Z" fill="#111111" transform="rotate(45)" />
+        <circle cx="0" cy="58" r="6" fill="#ffffff" stroke="#111111" strokeWidth="2.5" transform="rotate(45)" />
+      </g>
+      <rect x="4" y="186" width="292" height="110" rx="0" fill={bg} />
+      {isExpres ? (
+        <>
+          <text x="150" y="234" textAnchor="middle" fontFamily="Arial, sans-serif" fontWeight="900" fontSize="34" fill={textColor}>EXPRES</text>
+          <text x="150" y="272" textAnchor="middle" fontFamily="Arial, sans-serif" fontWeight="900" fontSize="34" fill={textColor}>OPRAVA</text>
+        </>
+      ) : (
+        <text x="150" y="255" textAnchor="middle" fontFamily="Arial, sans-serif" fontWeight="900" fontSize="44" fill={textColor}>OPRAVA</text>
+      )}
+    </svg>
+  );
+}
+
 // Kedy položka "prišla" (prvé naskenovanie/rozbehnutie akejkoľvek stanice) a "odišla" (dokončenie poslednej aktívnej stanice)
 function getArrivalDeparture(item) {
   const metaEntries = Object.entries(item.stationMeta || {}).filter(([sid]) => item.stationStatuses?.[sid] && item.stationStatuses[sid] !== 'neaktivne');
@@ -4738,6 +4777,35 @@ export default function App() {
     img.src = url;
   });
 
+  // Razítko "Oprava" / "Expres oprava" na priloženie k súborom na tlač (rovnaký princíp ako QR vyššie —
+  // vykreslené ako SVG, na stiahnutie sa prevedie na PNG cez canvas).
+  const handleDownloadBadge = (svgId, filename) => {
+    const svgEl = document.getElementById(svgId);
+    if (!svgEl) return;
+    const svgData = new XMLSerializer().serializeToString(svgEl);
+    const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(svgBlob);
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 600;
+      canvas.height = 600;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        const dUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = dUrl;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(dUrl);
+      }, 'image/png');
+    };
+    img.src = url;
+  };
+
   const handleDownloadMaterialQr = async (item, svgId, captionLines, fileSuffix) => {
     const svgEl = document.getElementById(svgId);
     if (!svgEl) return;
@@ -6645,6 +6713,21 @@ export default function App() {
                                           </div>
                                         );
                                       })}
+                                    </div>
+                                    <div className="space-y-1.5 pt-1 border-t border-slate-800">
+                                      <span className="text-[9px] text-slate-500 uppercase font-bold block text-left">Razítko na priloženie k tlači</span>
+                                      <div className="grid grid-cols-2 gap-1.5">
+                                        <button onClick={() => handleDownloadBadge(`badge-oprava-${item.itemId}`, `Oprava-${item.itemId}.png`)} className="bg-white hover:bg-slate-100 rounded-lg p-1.5 flex flex-col items-center gap-0.5">
+                                          <OpravaBadgeSvg variant="oprava" svgId={`badge-oprava-${item.itemId}`} />
+                                          <span className="text-[9px] font-extrabold text-slate-900">🟡 OPRAVA</span>
+                                          <Download className="h-3.5 w-3.5 text-indigo-600" />
+                                        </button>
+                                        <button onClick={() => handleDownloadBadge(`badge-expres-${item.itemId}`, `Expres-oprava-${item.itemId}.png`)} className="bg-white hover:bg-slate-100 rounded-lg p-1.5 flex flex-col items-center gap-0.5">
+                                          <OpravaBadgeSvg variant="expres" svgId={`badge-expres-${item.itemId}`} />
+                                          <span className="text-[9px] font-extrabold text-slate-900">🔴 EXPRES OPRAVA</span>
+                                          <Download className="h-3.5 w-3.5 text-indigo-600" />
+                                        </button>
+                                      </div>
                                     </div>
                                   </>
                                 )}
