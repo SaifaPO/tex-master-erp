@@ -27,7 +27,7 @@ const mapPriceItemToDb = (i) => ({ id: i.id, name: i.name, description: i.descri
 
 const mapQuoteFromDb = (r) => ({ id: r.id, offerNumber: r.offer_number, quoteDate: r.quote_date, customerName: r.customer_name || '', customerEmail: r.customer_email || '', title: r.title || '', total: r.total || 0, status: r.status || 'Odoslaná', data: r.data || {} });
 
-const mapCompanyFromDb = (r) => ({ id: r.id, name: r.name || '', address: r.address || '', ico: r.ico || '', dic: r.dic || '', icDph: r.ic_dph || '', email: r.email || '', phone: r.phone || '', logoUrl: r.logo_url || '', signatureName: r.signature_name || '', signatureRole: r.signature_role || '', sortOrder: r.sort_order || 0 });
+const mapCompanyFromDb = (r) => ({ id: r.id, name: r.name || '', address: r.address || '', ico: r.ico || '', dic: r.dic || '', icDph: r.ic_dph || '', email: r.email || '', phone: r.phone || '', logoUrl: r.logo_url || '', logoScale: r.logo_scale ?? 100, signatureName: r.signature_name || '', signatureRole: r.signature_role || '', sortOrder: r.sort_order || 0 });
 
 const mapPrintMaterialFromDb = (r) => ({ id: r.id, metoda: r.metoda, nazov: r.nazov, jednotka: r.jednotka || 'bm', cenaZaJednotku: r.cena_za_jednotku || 0, sortOrder: r.sort_order || 0 });
 const mapPrintSizeFromDb = (r) => ({ id: r.id, metoda: r.metoda, label: r.label, spotreba: r.spotreba || 0, sortOrder: r.sort_order || 0 });
@@ -100,8 +100,11 @@ function buildEmailHtml(form, company) {
     company.email ? `E-mail: ${company.email}` : '',
     company.phone ? `Tel: ${company.phone}` : '',
   ].filter(Boolean).join(' &nbsp;|&nbsp; ');
+  const logoScale = Number(company.logoScale) || 100;
+  const logoMaxHeight = Math.round(34 * (logoScale / 100));
+  const logoMaxWidth = Math.round(170 * (logoScale / 100));
   const logoHtml = company.logoUrl
-    ? `<img src="${company.logoUrl}" alt="${escapeHtml(companyName)}" style="max-height:34px;max-width:170px;display:block;margin-bottom:6px;" />`
+    ? `<img src="${company.logoUrl}" alt="${escapeHtml(companyName)}" style="max-height:${logoMaxHeight}px;max-width:${logoMaxWidth}px;display:block;" />`
     : '';
 
   let discountBanner = '';
@@ -208,7 +211,12 @@ function buildEmailHtml(form, company) {
 
 <tr><td style="background:linear-gradient(135deg,#1E293B 0%,#0F172A 100%);padding:22px 28px;border-bottom:3px solid #4F46E5;">
   <table width="100%" border="0" cellspacing="0" cellpadding="0"><tr>
-    <td>${logoHtml}<div style="color:#ffffff;font-size:18px;font-weight:800;">${escapeHtml(companyName)}</div></td>
+    <td>
+      <table border="0" cellspacing="0" cellpadding="0"><tr>
+        ${logoHtml ? `<td valign="middle" style="padding-right:12px;">${logoHtml}</td>` : ''}
+        <td valign="middle"><div style="color:#ffffff;font-size:18px;font-weight:800;">${escapeHtml(companyName)}</div></td>
+      </tr></table>
+    </td>
     <td align="right" valign="middle">
       <div style="background-color:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:6px 12px;display:inline-block;text-align:right;">
         <div style="font-size:10px;color:#CBD5E1;text-transform:uppercase;letter-spacing:0.5px;">CENOVÁ PONUKA</div>
@@ -386,7 +394,7 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
   const updateCompanyField = async (id, field, value) => {
     setCompanies(prev => prev.map(c => c.id === id ? { ...c, [field]: value } : c));
     if (!supabase) return;
-    const dbField = { name: 'name', address: 'address', ico: 'ico', dic: 'dic', icDph: 'ic_dph', email: 'email', phone: 'phone', logoUrl: 'logo_url', signatureName: 'signature_name', signatureRole: 'signature_role' }[field];
+    const dbField = { name: 'name', address: 'address', ico: 'ico', dic: 'dic', icDph: 'ic_dph', email: 'email', phone: 'phone', logoUrl: 'logo_url', logoScale: 'logo_scale', signatureName: 'signature_name', signatureRole: 'signature_role' }[field];
     if (!dbField) return;
     await supabase.from('quote_companies').update({ [dbField]: value }).eq('id', id);
   };
@@ -1004,7 +1012,14 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
                   <div className="h-14 w-28 bg-slate-900 border border-slate-800 rounded-lg flex items-center justify-center overflow-hidden shrink-0">
                     {c.logoUrl ? <img src={c.logoUrl} alt={c.name} className="max-h-full max-w-full object-contain" /> : <span className="text-[10px] text-slate-600">bez loga</span>}
                   </div>
-                  <button onClick={() => { logoInputRef.current?.setAttribute('data-company-id', c.id); logoInputRef.current?.click(); }} className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] px-3 py-1.5 rounded-lg border border-slate-700 flex items-center gap-1.5"><Upload className="h-3.5 w-3.5" /> Nahrať logo</button>
+                  <div className="flex flex-col gap-1.5">
+                    <button onClick={() => { logoInputRef.current?.setAttribute('data-company-id', c.id); logoInputRef.current?.click(); }} className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] px-3 py-1.5 rounded-lg border border-slate-700 flex items-center gap-1.5"><Upload className="h-3.5 w-3.5" /> Nahrať logo</button>
+                    <div className="flex items-center gap-1.5">
+                      <label className="text-[10px] text-slate-500 whitespace-nowrap">Veľkosť loga</label>
+                      <input type="number" min="20" max="300" step="5" defaultValue={c.logoScale} onBlur={(e) => updateCompanyField(c.id, 'logoScale', parseFloat(e.target.value) || 100)} className="w-16 bg-slate-900 border border-slate-800 rounded px-1.5 py-1 text-[11px] text-white" />
+                      <span className="text-[10px] text-slate-500">%</span>
+                    </div>
+                  </div>
                 </div>
                 <div><label className={labelCls}>Názov firmy</label><input type="text" defaultValue={c.name} onBlur={(e) => updateCompanyField(c.id, 'name', e.target.value)} className={inputCls} /></div>
                 <div><label className={labelCls}>Adresa (sídlo)</label><input type="text" defaultValue={c.address} onBlur={(e) => updateCompanyField(c.id, 'address', e.target.value)} className={inputCls} /></div>
