@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, Fragment } from 'react';
 import {
   FileText, Plus, Trash2, Copy, Eye, Code, Save, Search, FolderOpen,
-  Image as ImageIcon, Upload, Award, ListChecks, Clock, ShoppingCart, Loader2
+  Image as ImageIcon, Upload, Award, ListChecks, Clock, ShoppingCart, Loader2, Paperclip, Download
 } from 'lucide-react';
 
 // --- Lokálne konštanty (duplicitne s App.jsx, aby tento súbor zostal samostatný) ---
@@ -26,6 +26,13 @@ const PRINT_METHODS = [
 
 const mapPriceItemFromDb = (r) => ({ id: r.id, name: r.name, description: r.description || '', price: r.price || 0, sortOrder: r.sort_order || 0, category: r.category || 'Ostatné' });
 const mapPriceItemToDb = (i) => ({ id: i.id, name: i.name, description: i.description || null, price: i.price, sort_order: i.sortOrder || 0, category: i.category || 'Ostatné' });
+
+// Prilohy k cenovej ponuke (velkostne tabulky, strihy) - PDF subory ulozene v Storage, priklada sa
+// k ponuke ako odkaz na stiahnutie (appka posiela ponuky ako skopirovany HTML do e-mailu, nie cez
+// vlastny mail server, takze skutocna priloha sa neda vlozit automaticky - odkaz je najblizsia nahrada,
+// prip. si Martin subor stiahne tu a v e-mailovom klientovi ho priprida rucne ako skutocnu prilohu).
+const DOCUMENT_CATEGORIES = ['Veľkostná tabuľka', 'Strih na tričko', 'Strih na beachvlajku', 'Iné'];
+const mapDocumentFromDb = (r) => ({ id: r.id, category: r.category || 'Iné', name: r.name, description: r.description || '', fileUrl: r.file_url, fileName: r.file_name || '', sortOrder: r.sort_order || 0 });
 
 const mapQuoteFromDb = (r) => ({ id: r.id, offerNumber: r.offer_number, quoteDate: r.quote_date, customerName: r.customer_name || '', customerEmail: r.customer_email || '', title: r.title || '', total: r.total || 0, status: r.status || 'Odoslaná', data: r.data || {} });
 
@@ -61,6 +68,7 @@ function emptyForm(defaults = {}) {
     offerNumber: defaultOfferNumber(),
     offerValidity: '30 dní',
     companyId: defaults.companyId || '',
+    attachedDocumentIds: [],
     customerName: '',
     customerEmail: '',
     offerTitle: '',
@@ -91,7 +99,7 @@ function computeTotals(form) {
   return { subtotal, discountVal, afterDiscount, vat, total };
 }
 
-function buildEmailHtml(form, company) {
+function buildEmailHtml(form, company, attachedDocuments = []) {
   const totals = computeTotals(form);
   const companyName = company.name || company.companyName || 'Vaša firma';
   const addrLine = [
@@ -202,6 +210,24 @@ function buildEmailHtml(form, company) {
     </table>`;
   }
 
+  let documentsHtml = '';
+  if (attachedDocuments.length > 0) {
+    const docRows = attachedDocuments.map(d => `
+      <tr><td style="padding:6px 0;">
+        <a href="${d.fileUrl}" style="display:inline-flex;align-items:center;gap:8px;color:#4F46E5;text-decoration:none;font-size:12px;font-weight:700;">
+          📎 ${escapeHtml(d.name)}
+        </a>
+        ${d.description ? `<div style="font-size:11px;color:#94A3B8;margin-top:1px;">${escapeHtml(d.description)}</div>` : ''}
+      </td></tr>`).join('');
+    documentsHtml = `
+    <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-top:10px;margin-bottom:24px;background-color:#F8FAFC;border:1px dashed #CBD5E1;border-radius:8px;">
+      <tr><td style="padding:16px;">
+        <div style="font-size:11px;font-weight:800;text-transform:uppercase;color:#1E293B;margin-bottom:8px;letter-spacing:0.5px;">PRÍLOHY</div>
+        <table width="100%" border="0" cellspacing="0" cellpadding="0">${docRows}</table>
+      </td></tr>
+    </table>`;
+  }
+
   const mailtoSubject = encodeURIComponent(`Cenová ponuka č. ${form.offerNumber}`);
   const mailtoBody = encodeURIComponent(`Dobrý deň,\n\nreagujem na cenovú ponuku č. ${form.offerNumber} (${form.offerTitle}).\n\n`);
 
@@ -244,6 +270,7 @@ function buildEmailHtml(form, company) {
   ${summaryHtml}
   ${visualHtml}
   ${servicesHtml}
+  ${documentsHtml}
 
   <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color:#EEF2FF;border:2px solid #6366F1;border-radius:12px;margin-bottom:25px;">
     <tr><td style="padding:20px;text-align:center;">
@@ -302,8 +329,12 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
   const [calcAdminMethod, setCalcAdminMethod] = useState('flex');
   const [newMaterialDraft, setNewMaterialDraft] = useState({ nazov: '', jednotka: 'bm', cenaZaJednotku: '' });
   const [newSizeDraft, setNewSizeDraft] = useState({ label: '', spotreba: '' });
+  const [documents, setDocuments] = useState([]);
+  const [newDocumentDraft, setNewDocumentDraft] = useState({ category: DOCUMENT_CATEGORIES[0], name: '', description: '', file: null });
+  const [isUploadingDocument, setIsUploadingDocument] = useState(false);
   const fileInputRef = useRef(null);
   const logoInputRef = useRef(null);
+  const documentFileInputRef = useRef(null);
 
   const [form, setForm] = useState(() => emptyForm({
     repName: currentUser ? `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() : '',
@@ -316,18 +347,20 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
   useEffect(() => {
     if (!supabase) { setLoading(false); return; }
     (async () => {
-      const [priceRes, quoteRes, companyRes, materialRes, sizeRes] = await Promise.all([
+      const [priceRes, quoteRes, companyRes, materialRes, sizeRes, documentRes] = await Promise.all([
         supabase.from('quote_price_list').select('*').order('sort_order'),
         supabase.from('price_quotes').select('*').order('created_at', { ascending: false }),
         supabase.from('quote_companies').select('*').order('sort_order'),
         supabase.from('quote_print_materials').select('*').order('sort_order'),
         supabase.from('quote_print_sizes').select('*').order('sort_order'),
+        supabase.from('quote_documents').select('*').order('sort_order'),
       ]);
       setPriceList(priceRes.error ? [] : (priceRes.data || []).map(mapPriceItemFromDb));
       setQuotes(quoteRes.error ? [] : (quoteRes.data || []).map(mapQuoteFromDb));
       setCompanies(companyRes.error ? [] : (companyRes.data || []).map(mapCompanyFromDb));
       setPrintMaterials(materialRes.error ? [] : (materialRes.data || []).map(mapPrintMaterialFromDb));
       setPrintSizes(sizeRes.error ? [] : (sizeRes.data || []).map(mapPrintSizeFromDb));
+      setDocuments(documentRes.error ? [] : (documentRes.data || []).map(mapDocumentFromDb));
       setLoading(false);
     })();
   }, [supabase]);
@@ -409,6 +442,49 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
     reader.readAsDataURL(file);
   };
 
+  const handleUploadDocument = async () => {
+    if (!supabase || !newDocumentDraft.file || !newDocumentDraft.name.trim()) return;
+    setIsUploadingDocument(true);
+    try {
+      const file = newDocumentDraft.file;
+      const path = `quote-documents/${Date.now()}-${file.name}`;
+      const { error: upErr } = await supabase.storage.from('item-images').upload(path, file);
+      if (upErr) { triggerNotification('error', `Nahratie súboru zlyhalo: ${upErr.message}`); return; }
+      const fileUrl = supabase.storage.from('item-images').getPublicUrl(path).data.publicUrl;
+      const item = {
+        id: `qdoc-${Date.now()}`, category: newDocumentDraft.category, name: newDocumentDraft.name.trim(),
+        description: newDocumentDraft.description.trim(), fileUrl, fileName: file.name, sortOrder: documents.length,
+      };
+      const { error } = await supabase.from('quote_documents').insert({
+        id: item.id, category: item.category, name: item.name, description: item.description || null,
+        file_url: item.fileUrl, file_name: item.fileName, sort_order: item.sortOrder,
+      });
+      if (error) { triggerNotification('error', error.message); return; }
+      setDocuments(prev => [...prev, item]);
+      setNewDocumentDraft({ category: newDocumentDraft.category, name: '', description: '', file: null });
+      if (documentFileInputRef.current) documentFileInputRef.current.value = '';
+      triggerNotification('success', 'Dokument bol nahraný.');
+    } finally {
+      setIsUploadingDocument(false);
+    }
+  };
+
+  const deleteDocument = async (doc) => {
+    if (!supabase) return;
+    if (!window.confirm(`Vymazať dokument "${doc.name}"?`)) return;
+    const { error } = await supabase.from('quote_documents').delete().eq('id', doc.id);
+    if (error) { triggerNotification('error', error.message); return; }
+    setDocuments(prev => prev.filter(d => d.id !== doc.id));
+    setForm(prev => ({ ...prev, attachedDocumentIds: (prev.attachedDocumentIds || []).filter(id => id !== doc.id) }));
+  };
+
+  const toggleAttachedDocument = (docId) => {
+    setForm(prev => {
+      const current = prev.attachedDocumentIds || [];
+      return { ...prev, attachedDocumentIds: current.includes(docId) ? current.filter(id => id !== docId) : [...current, docId] };
+    });
+  };
+
   const addPrintMaterial = async () => {
     if (!supabase || !newMaterialDraft.nazov.trim()) return;
     const item = { id: `pm-${Date.now()}`, metoda: calcAdminMethod, nazov: newMaterialDraft.nazov.trim(), jednotka: newMaterialDraft.jednotka || 'bm', cenaZaJednotku: parseFloat(newMaterialDraft.cenaZaJednotku) || 0, sortOrder: printMaterials.filter(m => m.metoda === calcAdminMethod).length };
@@ -471,7 +547,8 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
     reader.readAsDataURL(file);
   };
 
-  const emailHtml = buildEmailHtml(form, selectedCompany);
+  const attachedDocuments = (form.attachedDocumentIds || []).map(id => documents.find(d => d.id === id)).filter(Boolean);
+  const emailHtml = buildEmailHtml(form, selectedCompany, attachedDocuments);
 
   const copyRawHtml = async () => {
     try {
@@ -582,6 +659,7 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
           <button onClick={() => setSubTab('pricelist')} className={`px-3.5 py-2 rounded-lg flex items-center gap-2 ${subTab === 'pricelist' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><ListChecks className="h-3.5 w-3.5" /> Cenník</button>
           <button onClick={() => setSubTab('kalkulacka')} className={`px-3.5 py-2 rounded-lg flex items-center gap-2 ${subTab === 'kalkulacka' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><ShoppingCart className="h-3.5 w-3.5" /> Kalkulačka tlače</button>
           <button onClick={() => setSubTab('firmy')} className={`px-3.5 py-2 rounded-lg flex items-center gap-2 ${subTab === 'firmy' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Award className="h-3.5 w-3.5" /> Firmy</button>
+          <button onClick={() => setSubTab('dokumenty')} className={`px-3.5 py-2 rounded-lg flex items-center gap-2 ${subTab === 'dokumenty' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Paperclip className="h-3.5 w-3.5" /> Prílohy</button>
         </div>
       </div>
 
@@ -776,6 +854,32 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
               <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-400">Služby zahrnuté v cene</h3>
               <textarea rows={3} value={form.services} onChange={(e) => updateForm({ services: e.target.value })} className={inputCls} placeholder={'Jedna služba na riadok, napr.:\nGrafický návrh a schválenie\nVýroba do 10 pracovných dní'} />
             </div>
+
+            {documents.length > 0 && (
+              <div className="space-y-3 border-b border-slate-800 pb-4">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1.5"><Paperclip className="h-3.5 w-3.5" /> Prílohy k ponuke</h3>
+                <p className="text-[10px] text-slate-500">Zaškrtnuté dokumenty sa vložia do ponuky ako odkazy na stiahnutie (veľkostné tabuľky, strihy...).</p>
+                <div className="space-y-2">
+                  {DOCUMENT_CATEGORIES.map(cat => {
+                    const items = documents.filter(d => d.category === cat);
+                    if (items.length === 0) return null;
+                    return (
+                      <div key={cat}>
+                        <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-500">{cat}</span>
+                        <div className="space-y-1 mt-1">
+                          {items.map(d => (
+                            <label key={d.id} className="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 cursor-pointer text-xs text-slate-200">
+                              <input type="checkbox" checked={(form.attachedDocumentIds || []).includes(d.id)} onChange={() => toggleAttachedDocument(d.id)} className="accent-indigo-600" />
+                              {d.name}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <div className="space-y-3">
               <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-400">Vybavuje</h3>
@@ -1045,6 +1149,54 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
             )}
           </div>
           <input ref={logoInputRef} type="file" accept="image/*" onChange={(e) => { const id = logoInputRef.current?.getAttribute('data-company-id'); if (id) handleLogoUpload(id, e); e.target.value = ''; }} className="hidden" />
+        </div>
+      )}
+
+      {subTab === 'dokumenty' && (
+        <div className="bg-slate-900/40 rounded-2xl border border-slate-800 p-5 space-y-4">
+          <div>
+            <h3 className="text-sm font-bold text-white flex items-center gap-2"><Paperclip className="h-4 w-4 text-indigo-400" /> Prílohy k cenovým ponukám</h3>
+            <p className="text-[11px] text-slate-500 mt-1">Nahraj PDF súbory (veľkostné tabuľky, strihy...), ktoré vieš pri tvorbe ponuky jedným klikom priložiť ako odkaz na stiahnutie. Ak potrebuješ dokument poslať ako skutočnú prílohu (nie odkaz), stiahni si ho tu a v e-mailovom klientovi ho pripoj ručne.</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-slate-950 p-3 rounded-xl border border-slate-800">
+            <input type="text" value={newDocumentDraft.name} onChange={(e) => setNewDocumentDraft({ ...newDocumentDraft, name: e.target.value })} placeholder="Názov (napr. Veľkostná tabuľka - dámske tričká, regular strih)" className="sm:col-span-2 bg-slate-900 border border-slate-800 rounded px-2 py-1.5 text-xs text-white" />
+            <select value={newDocumentDraft.category} onChange={(e) => setNewDocumentDraft({ ...newDocumentDraft, category: e.target.value })} className="bg-slate-900 border border-slate-800 rounded px-2 py-1.5 text-xs text-white">
+              {DOCUMENT_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+            </select>
+            <input type="text" value={newDocumentDraft.description} onChange={(e) => setNewDocumentDraft({ ...newDocumentDraft, description: e.target.value })} placeholder="Popis (voliteľné)" className="bg-slate-900 border border-slate-800 rounded px-2 py-1.5 text-xs text-white" />
+            <div className="sm:col-span-2 flex items-center gap-2">
+              <input ref={documentFileInputRef} type="file" accept="application/pdf" onChange={(e) => setNewDocumentDraft({ ...newDocumentDraft, file: e.target.files?.[0] || null })} className="flex-1 text-[11px] text-slate-300" />
+              <button onClick={handleUploadDocument} disabled={isUploadingDocument || !newDocumentDraft.file || !newDocumentDraft.name.trim()} className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 shrink-0"><Upload className="h-3.5 w-3.5" /> {isUploadingDocument ? 'Nahrávam...' : 'Nahrať'}</button>
+            </div>
+          </div>
+          <div className="space-y-4">
+            {DOCUMENT_CATEGORIES.map(cat => {
+              const items = documents.filter(d => d.category === cat);
+              if (items.length === 0) return null;
+              return (
+                <div key={cat}>
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-400">{cat}</span>
+                  <div className="space-y-1.5 mt-1.5">
+                    {items.map(d => (
+                      <div key={d.id} className="flex items-center justify-between gap-2 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2">
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-white truncate">{d.name}</p>
+                          {d.description && <p className="text-[10px] text-slate-500 truncate">{d.description}</p>}
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <a href={d.fileUrl} target="_blank" rel="noreferrer" className="p-1.5 text-indigo-400 hover:text-indigo-300"><Download className="h-3.5 w-3.5" /></a>
+                          <button onClick={() => deleteDocument(d)} className="p-1.5 text-slate-500 hover:text-rose-400"><Trash2 className="h-3.5 w-3.5" /></button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+            {documents.length === 0 && (
+              <p className="text-[11px] text-slate-500 text-center py-6">Zatiaľ žiadne nahraté dokumenty.</p>
+            )}
+          </div>
         </div>
       )}
     </div>
