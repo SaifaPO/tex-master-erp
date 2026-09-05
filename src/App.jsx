@@ -1183,7 +1183,8 @@ export default function App() {
   const [draggedRowItem, setDraggedRowItem] = useState(null);
   const [draggedMatrixCard, setDraggedMatrixCard] = useState(null);
   const [dragOverMatrixCell, setDragOverMatrixCell] = useState(null); // { date, stationId } | null
-  const [matrixCompact, setMatrixCompact] = useState(false);
+  const [matrixDensity, setMatrixDensity] = useState('full'); // 'full' | 'compact' | 'ultra'
+  const [ultraStatusEditKey, setUltraStatusEditKey] = useState(null); // `${itemId}|${stationId}` alebo null
   const [showExpressDotlackovka, setShowExpressDotlackovka] = useState(false);
   const [expressCompany, setExpressCompany] = useState('ADY');
   const [expressCustomerName, setExpressCustomerName] = useState('');
@@ -1587,10 +1588,13 @@ export default function App() {
       const fitZoom = Math.min(110, Math.max(40, Math.floor((availableWidth / MATRIX_NATURAL_WIDTH) * 100)));
       setZoomLevel(fitZoom);
     };
-    applyFit();
+    // Prve meranie odlozene na dalsi animacny frame — hned po prepnuti zalozky/rezimu este nemusi byt
+    // layout definitivne ustaleny (sirka wrappera vie byt 0 tesne pred commitom), co sposobovalo, ze
+    // "Prispôsobiť šírke" naozaj zabralo az po rucnej zmene mierky (ktora prinutila efekt bezat znova).
+    const raf = requestAnimationFrame(applyFit);
     const observer = new ResizeObserver(applyFit);
     observer.observe(el);
-    return () => observer.disconnect();
+    return () => { cancelAnimationFrame(raf); observer.disconnect(); };
   }, [activeTab, plannerViewMode, matrixAutoFit, isMatrixFullscreen]);
 
   // Fullscreen API pre Plánovaciu Maticu — sleduje, či si používateľ zavrel fullscreen aj mimo nášho tlačidla (napr. klávesou Esc)
@@ -5073,6 +5077,7 @@ export default function App() {
     return result;
   };
   const plannerDates = getPlannerDates();
+  const matrixRowMinH = matrixDensity === 'ultra' ? 'min-h-[34px]' : matrixDensity === 'compact' ? 'min-h-[54px]' : 'min-h-[110px]';
   const capacityByStation = {};
   capacityConfigs.forEach(c => { capacityByStation[c.stationId] = c; });
   const productTimesByStation = {};
@@ -5437,9 +5442,11 @@ export default function App() {
                       </button>
                     </div>
                     <div className="flex items-center gap-3">
-                      <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                        <input type="checkbox" checked={matrixCompact} onChange={(e) => setMatrixCompact(e.target.checked)} className="accent-indigo-600" /> Kompaktné zobrazenie
-                      </label>
+                      <div className="flex items-center bg-slate-800 rounded-lg p-0.5 gap-0.5">
+                        {[['full', 'Klasické'], ['compact', 'Kompaktné'], ['ultra', 'Riadkové']].map(([val, label]) => (
+                          <button key={val} onClick={() => setMatrixDensity(val)} className={`px-2 py-1 rounded text-[11px] font-bold transition-colors ${matrixDensity === val ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:text-white'}`}>{label}</button>
+                        ))}
+                      </div>
                       <label className="flex items-center gap-1.5 cursor-pointer select-none">
                         <input type="checkbox" checked={showCapacityBars} onChange={(e) => setShowCapacityBars(e.target.checked)} className="accent-indigo-600" /> Zobraziť vyťaženie
                       </label>
@@ -5474,7 +5481,7 @@ export default function App() {
                           return (
                           <tr key={date} className={`hover:bg-indigo-950/10 ${rowTintClass}`}>
                             <td className={`p-0 font-bold text-xs border-r border-slate-850 sticky left-0 z-10 align-top ${rowTintClass} ${isUrgentDate(date) ? '!bg-rose-900/50 text-rose-300' : 'text-slate-200'}`}>
-                              <div className={`${matrixCompact ? 'min-h-[54px]' : 'min-h-[110px]'} h-full flex flex-col justify-between items-start py-2 px-3 gap-1`}>
+                              <div className={`${matrixRowMinH} h-full flex flex-col justify-between items-start py-2 px-3 gap-1`}>
                                 <span className="text-[9px] font-semibold text-slate-500/70">{formatDeliveryDate(date)}</span>
                                 <span className="text-xs">{formatDeliveryDate(date)}{dayLabel && <span className={`block text-[9px] font-extrabold uppercase tracking-wide mt-0.5 ${holiday ? 'text-amber-400' : 'text-slate-400'}`}>{dayLabel}</span>}</span>
                                 <span className="text-[9px] font-semibold text-slate-500/70">{formatDeliveryDate(date)}</span>
@@ -5508,7 +5515,7 @@ export default function App() {
                                     handleMoveAndReorder(draggedMatrixCard, stationId, date, target?.targetItemId || null, target?.position || 'after');
                                     setDraggedMatrixCard(null);
                                   }}
-                                  className={`p-1 border-r border-slate-850 align-top ${matrixCompact ? 'min-h-[54px]' : 'min-h-[110px]'} min-w-[260px] transition-all duration-150 ${
+                                  className={`p-1 border-r border-slate-850 align-top ${matrixRowMinH} min-w-[260px] transition-all duration-150 ${
                                     isHoveringThisCell
                                       ? 'bg-indigo-950/50 ring-2 ring-inset ring-indigo-500'
                                       : draggedMatrixCard?.stationId === stationId ? 'bg-slate-950/40 outline outline-1 outline-dashed outline-indigo-700/40' : rowTintClass
@@ -5555,7 +5562,8 @@ export default function App() {
                                               setDragOverMatrixCell(prev => (prev && prev.targetItemId === item.itemId && prev.position === pos ? prev : { date, stationId, targetItemId: item.itemId, position: pos }));
                                             }}
                                             onClick={() => openOrderDetails(orders.find(o => o.id === item.orderId))}
-                                            className={`relative bg-slate-900 hover:bg-slate-800 border-l-4 ${orderColor.border} border-t border-r border-b border-slate-750 ${matrixCompact ? 'p-1 space-y-0.5' : 'p-2 space-y-1'} rounded cursor-pointer transition-all flex flex-col justify-between text-[10px] shadow hover:scale-[1.02] transform ${hasPermission('edit_priority') ? 'active:cursor-grabbing' : ''} ${(item.ultraPriority || isDotlackovkaUrgent(item)) ? (statusId === 'hotove' ? 'ultra-priority-static' : 'ultra-priority-card') : ''}`}
+                                            onDoubleClick={(e) => { if (matrixDensity === 'ultra') { e.stopPropagation(); setUltraStatusEditKey(`${item.itemId}|${stationId}`); } }}
+                                            className={`relative ${matrixDensity === 'ultra' ? `${statusCfg.color} hover:brightness-110` : 'bg-slate-900 hover:bg-slate-800'} border-l-4 ${orderColor.border} border-t border-r border-b border-slate-750 ${matrixDensity === 'ultra' ? 'p-1' : matrixDensity === 'compact' ? 'p-1 space-y-0.5' : 'p-2 space-y-1'} rounded cursor-pointer transition-all flex flex-col justify-between text-[10px] shadow hover:scale-[1.02] transform ${hasPermission('edit_priority') ? 'active:cursor-grabbing' : ''} ${(item.ultraPriority || isDotlackovkaUrgent(item)) ? (statusId === 'hotove' ? 'ultra-priority-static' : 'ultra-priority-card') : ''}`}
                                           >
                                             {(() => {
                                               if (!item.lastModifiedAt) return null;
@@ -5583,7 +5591,32 @@ export default function App() {
                                                 </span>
                                               );
                                             })()}
-                                            {matrixCompact ? (
+                                            {matrixDensity === 'ultra' ? (
+                                              <>
+                                                <div className="flex items-center justify-between gap-1">
+                                                  <span className="font-mono font-bold text-[9px] truncate">{(item.ultraPriority || isDotlackovkaUrgent(item)) && '🔴 '}{item.orderNumber || item.orderId} • {item.customer}</span>
+                                                  {item.stationMeta?.[stationId]?.assignedEmployeeAvatar && (
+                                                    <span title={item.stationMeta[stationId].assignedEmployeeName} className="text-xs leading-none shrink-0 cursor-help">{item.stationMeta[stationId].assignedEmployeeAvatar}</span>
+                                                  )}
+                                                </div>
+                                                <p className="font-bold text-[9px] truncate opacity-90">{item.productName}</p>
+                                                {ultraStatusEditKey === `${item.itemId}|${stationId}` && (
+                                                  <select
+                                                    autoFocus
+                                                    value={statusId}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    onChange={(e) => { updateStationStatus(item.orderId, item.itemId, stationId, e.target.value); setUltraStatusEditKey(null); }}
+                                                    onBlur={() => setUltraStatusEditKey(null)}
+                                                    disabled={!hasPermission('update_status')}
+                                                    className="mt-0.5 text-[9px] px-1 py-0.5 rounded text-center font-bold bg-slate-950 text-white w-full focus:outline-none border border-white/40"
+                                                  >
+                                                    {config.statuses.filter(s => s.id !== 'neaktivne').map(st => (
+                                                      <option key={st.id} value={st.id} className="bg-slate-900 text-slate-300">{st.label}</option>
+                                                    ))}
+                                                  </select>
+                                                )}
+                                              </>
+                                            ) : matrixDensity === 'compact' ? (
                                               <>
                                                 <div className="flex items-center justify-between gap-1">
                                                   <span className="font-mono font-bold text-indigo-400 text-[10px] truncate">{(item.ultraPriority || isDotlackovkaUrgent(item)) && '🔴 '}{item.orderNumber || item.orderId}</span>
