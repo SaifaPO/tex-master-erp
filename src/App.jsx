@@ -8656,14 +8656,16 @@ export default function App() {
                       <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
                         <h3 className="text-sm font-bold text-white mb-3">Príjmy a DPH podľa roka</h3>
                         {years.length === 0 ? <p className="text-xs text-slate-500 italic">Zatiaľ žiadne dáta.</p> : (
-                          <table className="w-full text-xs text-slate-300">
-                            <thead className="text-slate-500 border-b border-slate-800"><tr><th className="text-left py-1.5">Rok</th><th className="text-right py-1.5">Príjmy</th><th className="text-right py-1.5">DPH</th><th className="text-right py-1.5">Faktúr</th></tr></thead>
-                            <tbody className="divide-y divide-slate-800/60">
-                              {years.map(y => (
-                                <tr key={y}><td className="py-1.5 font-bold text-white">{y}</td><td className="py-1.5 text-right">{byYear[y].income.toFixed(2)} €</td><td className="py-1.5 text-right text-amber-400">{byYear[y].vat.toFixed(2)} €</td><td className="py-1.5 text-right">{byYear[y].count}</td></tr>
-                              ))}
-                            </tbody>
-                          </table>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-xs text-slate-300">
+                              <thead className="text-slate-500 border-b border-slate-800"><tr><th className="text-left py-1.5">Rok</th><th className="text-right py-1.5">Príjmy</th><th className="text-right py-1.5">DPH</th><th className="text-right py-1.5">Faktúr</th></tr></thead>
+                              <tbody className="divide-y divide-slate-800/60">
+                                {years.map(y => (
+                                  <tr key={y}><td className="py-1.5 font-bold text-white">{y}</td><td className="py-1.5 text-right">{byYear[y].income.toFixed(2)} €</td><td className="py-1.5 text-right text-amber-400">{byYear[y].vat.toFixed(2)} €</td><td className="py-1.5 text-right">{byYear[y].count}</td></tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
                         )}
                       </div>
 
@@ -8671,14 +8673,16 @@ export default function App() {
                         <h3 className="text-sm font-bold text-white mb-1">DPH podľa typu odberateľa (orientačné)</h3>
                         <p className="text-[10px] text-slate-500 mb-3">⚠️ Over si presné zaradenie do KV DPH so svojím účtovníkom — pravidlá pre neplatcov a EÚ sa líšia.</p>
                         {Object.keys(byCustomerType).length === 0 ? <p className="text-xs text-slate-500 italic">Zatiaľ žiadne dáta.</p> : (
-                          <table className="w-full text-xs text-slate-300">
-                            <thead className="text-slate-500 border-b border-slate-800"><tr><th className="text-left py-1.5">Typ</th><th className="text-right py-1.5">Suma</th><th className="text-right py-1.5">DPH</th><th className="text-right py-1.5">Faktúr</th></tr></thead>
-                            <tbody className="divide-y divide-slate-800/60">
-                              {Object.entries(byCustomerType).map(([type, v]) => (
-                                <tr key={type}><td className="py-1.5">{customerTypeLabels[type] || type}</td><td className="py-1.5 text-right font-bold text-white">{v.total.toFixed(2)} €</td><td className="py-1.5 text-right text-amber-400">{v.vat.toFixed(2)} €</td><td className="py-1.5 text-right">{v.count}</td></tr>
-                              ))}
-                            </tbody>
-                          </table>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-xs text-slate-300">
+                              <thead className="text-slate-500 border-b border-slate-800"><tr><th className="text-left py-1.5">Typ</th><th className="text-right py-1.5">Suma</th><th className="text-right py-1.5">DPH</th><th className="text-right py-1.5">Faktúr</th></tr></thead>
+                              <tbody className="divide-y divide-slate-800/60">
+                                {Object.entries(byCustomerType).map(([type, v]) => (
+                                  <tr key={type}><td className="py-1.5">{customerTypeLabels[type] || type}</td><td className="py-1.5 text-right font-bold text-white">{v.total.toFixed(2)} €</td><td className="py-1.5 text-right text-amber-400">{v.vat.toFixed(2)} €</td><td className="py-1.5 text-right">{v.count}</td></tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -8809,7 +8813,7 @@ export default function App() {
                             <p className="font-bold text-white text-sm">{o.customer}</p>
                             <p className="text-[11px] text-slate-500">{(o.items || []).map(it => it.productName).join(', ')}</p>
                           </div>
-                          <div className="flex gap-2 shrink-0">
+                          <div className="flex flex-wrap gap-2 w-full sm:w-auto sm:shrink-0">
                             <button onClick={() => openOrderDetails(o)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-[11px] px-3 py-2 rounded-lg">Otvoriť zákazku</button>
                             <button onClick={() => handleSwitchOrderToCash(o)} className="bg-rose-800 hover:bg-rose-900 text-white font-bold text-[11px] px-3 py-2 rounded-lg flex items-center gap-1"><Banknote className="h-3.5 w-3.5" /> Prehodiť na hotovosť</button>
                             <button onClick={() => handleStartNewInvoice(o)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] px-3 py-2 rounded-lg flex items-center gap-1"><FileEdit className="h-3.5 w-3.5" /> Vystaviť faktúru</button>

@@ -11,7 +11,9 @@ const TIER_COLORS = { standard: 'bg-slate-700 text-slate-200', bronze: 'bg-amber
 // Predpripravené kategórie cenníka pre rýchle zostavenie všeobecnej ponuky
 // (vlajky, beachvlajky, dotlače) — podľa Martinovej požiadavky, aby karta
 // Cenové ponuky nebola len prázdna, ale mala vopred pripravené sekcie.
-const PRICE_CATEGORIES = ['Vlajky', 'Beachvlajky', 'Dotlač - Transfer', 'Dotlač - Sieťotlač', 'Dotlač - Výšivka', 'Ostatné'];
+// Dotlac (transfer/sietotlac/vysivka) uz ma vlastnu strukturovanu kalkulacku (viz "Potlac" nizsie
+// a zalozka "Kalkulačka tlače") — v tomto vseobecnom cenniku pre "Vyrobu" preto uz nema byt.
+const PRICE_CATEGORIES = ['Vlajky', 'Beachvlajky', 'Ostatné'];
 
 // Metódy potlače pre kalkulačku - Flex a Sieťotlač majú voliteľný počet farieb (viac vrstiev = viac materiálu),
 // DTF a Výšivka majú cenu závislú len od veľkosti motívu.
@@ -574,7 +576,7 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
     <div className="space-y-6 animate-in fade-in duration-150">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <h2 className="text-xl font-bold text-white flex items-center gap-2"><FileText className="text-indigo-400 h-5 w-5" /> Cenové ponuky</h2>
-        <div className="flex items-center bg-slate-900/60 p-1 rounded-xl border border-slate-800 text-xs font-semibold">
+        <div className="flex flex-wrap items-center gap-1 bg-slate-900/60 p-1 rounded-xl border border-slate-800 text-xs font-semibold">
           <button onClick={() => setSubTab('builder')} className={`px-3.5 py-2 rounded-lg flex items-center gap-2 ${subTab === 'builder' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Plus className="h-3.5 w-3.5" /> Nová ponuka</button>
           <button onClick={() => setSubTab('history')} className={`px-3.5 py-2 rounded-lg flex items-center gap-2 ${subTab === 'history' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Clock className="h-3.5 w-3.5" /> História <span className="bg-slate-700 text-slate-200 text-[10px] px-1.5 rounded-full">{quotes.length}</span></button>
           <button onClick={() => setSubTab('pricelist')} className={`px-3.5 py-2 rounded-lg flex items-center gap-2 ${subTab === 'pricelist' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><ListChecks className="h-3.5 w-3.5" /> Cenník</button>
