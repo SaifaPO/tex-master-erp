@@ -715,6 +715,23 @@ function getItemStationDate(item, stationId) {
   return item.stationDates?.[stationId] || item.productionDate || item.deliveryDate;
 }
 
+// Zoradi zoznam materialov pre danu vrstvu produktu podla toho, ako casto sa realne pouzivali
+// v minulych zakazkach tohto produktu (najpouzivanejsi hore) — aby sa pri produktoch s vela
+// moznymi latkami (5+) dalo rychlo najst to, co sa pre nu bezne pouziva, namiesto prehladavania
+// celeho skladu abecedne. Materialy bez historie ostavaju na konci v povodnom (abecednom) poradi.
+function sortMaterialsByUsage(materialsList, allOrderItems, productId, layerName) {
+  if (!productId) return materialsList;
+  const counts = new Map();
+  allOrderItems.forEach(it => {
+    if (it.productId !== productId) return;
+    (it.materialsNeeded || []).forEach(n => {
+      if (n.layerName === layerName && n.materialId) counts.set(n.materialId, (counts.get(n.materialId) || 0) + 1);
+    });
+  });
+  if (counts.size === 0) return materialsList;
+  return [...materialsList].sort((a, b) => (counts.get(b.id) || 0) - (counts.get(a.id) || 0));
+}
+
 // Razítko "Oprava" / "Expres oprava" (na priloženie k súborom pre tlač) — vykreslené ako SVG (skryté,
 // slúži len ako predloha na export do PNG cez handleDownloadBadge). variant: 'oprava' | 'expres'.
 function OpravaBadgeSvg({ variant, svgId }) {
@@ -6248,7 +6265,7 @@ export default function App() {
                           <div>
                             <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Primárna látka: {calculateLayerConsumption(selectedProduct, selectedGender, 'layer1', itemQty)} m</label>
                             <select value={selectedLayer1Mat} onChange={(e) => setSelectedLayer1Mat(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-1 text-xs">
-                              {materials.map(m => <option key={m.id} value={m.id}>{m.name} ({m.color})</option>)}
+                              {sortMaterialsByUsage(materials, allItems, selectedProduct.id, 'Primárna látka').map(m => <option key={m.id} value={m.id}>{m.name} ({m.color})</option>)}
                             </select>
                           </div>
                         )}
@@ -6257,7 +6274,7 @@ export default function App() {
                             <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Sekundárna látka: {selectedLayer2Mat ? `${calculateLayerConsumption(selectedProduct, selectedGender, 'layer2', itemQty)} m` : 'nepoužije sa'}</label>
                             <select value={selectedLayer2Mat} onChange={(e) => setSelectedLayer2Mat(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-1 text-xs">
                               <option value="">-- Nepoužiť túto vrstvu --</option>
-                              {materials.map(m => <option key={m.id} value={m.id}>{m.name} ({m.color})</option>)}
+                              {sortMaterialsByUsage(materials, allItems, selectedProduct.id, 'Sekundárna látka').map(m => <option key={m.id} value={m.id}>{m.name} ({m.color})</option>)}
                             </select>
                           </div>
                         )}
@@ -6266,7 +6283,7 @@ export default function App() {
                             <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Terciárna látka: {selectedLayer3Mat ? `${calculateLayerConsumption(selectedProduct, selectedGender, 'layer3', itemQty)} m` : 'nepoužije sa'}</label>
                             <select value={selectedLayer3Mat} onChange={(e) => setSelectedLayer3Mat(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-1 text-xs">
                               <option value="">-- Nepoužiť túto vrstvu --</option>
-                              {materials.map(m => <option key={m.id} value={m.id}>{m.name} ({m.color})</option>)}
+                              {sortMaterialsByUsage(materials, allItems, selectedProduct.id, 'Terciárna látka').map(m => <option key={m.id} value={m.id}>{m.name} ({m.color})</option>)}
                             </select>
                           </div>
                         )}
@@ -10244,7 +10261,7 @@ export default function App() {
                               <div>
                                 <label className="block text-[10px] text-slate-500 mb-0.5">Primárna látka</label>
                                 <select value={addItemLayer1Mat} onChange={(e) => setAddItemLayer1Mat(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-xs text-white">
-                                  {materials.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                  {sortMaterialsByUsage(materials, allItems, prod.id, 'Primárna látka').map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                                 </select>
                               </div>
                             )}
@@ -10253,7 +10270,7 @@ export default function App() {
                                 <label className="block text-[10px] text-slate-500 mb-0.5">Sekundárna látka</label>
                                 <select value={addItemLayer2Mat} onChange={(e) => setAddItemLayer2Mat(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-xs text-white">
                                   <option value="">-- Nepoužiť --</option>
-                                  {materials.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                  {sortMaterialsByUsage(materials, allItems, prod.id, 'Sekundárna látka').map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                                 </select>
                               </div>
                             )}
@@ -10262,7 +10279,7 @@ export default function App() {
                                 <label className="block text-[10px] text-slate-500 mb-0.5">Terciárna látka</label>
                                 <select value={addItemLayer3Mat} onChange={(e) => setAddItemLayer3Mat(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-xs text-white">
                                   <option value="">-- Nepoužiť --</option>
-                                  {materials.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                  {sortMaterialsByUsage(materials, allItems, prod.id, 'Terciárna látka').map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                                 </select>
                               </div>
                             )}
