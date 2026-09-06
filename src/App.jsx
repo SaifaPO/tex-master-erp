@@ -4794,33 +4794,63 @@ export default function App() {
     img.src = url;
   });
 
-  // Razítko "Oprava" / "Expres oprava" na priloženie k súborom na tlač (rovnaký princíp ako QR vyššie —
-  // vykreslené ako SVG, na stiahnutie sa prevedie na PNG cez canvas).
-  const handleDownloadBadge = (svgId, filename) => {
-    const svgEl = document.getElementById(svgId);
-    if (!svgEl) return;
+  // Vseobecny prevod ktoreho-kolvek SVG elementu na PNG blob cez canvas (bez popisku) — pouziva sa
+  // pre razitka aj pre priamy drag&drop obrazkov von z prehliadaca (viz nizsie).
+  const svgElementToPngBlob = (svgEl, size) => new Promise((resolve, reject) => {
     const svgData = new XMLSerializer().serializeToString(svgEl);
     const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
     const url = URL.createObjectURL(svgBlob);
     const img = new Image();
     img.onload = () => {
       const canvas = document.createElement('canvas');
-      canvas.width = 600;
-      canvas.height = 600;
+      canvas.width = size;
+      canvas.height = size;
       const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, size, size);
       URL.revokeObjectURL(url);
-      canvas.toBlob((blob) => {
-        if (!blob) return;
-        const dUrl = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = dUrl;
-        a.download = filename;
-        a.click();
-        URL.revokeObjectURL(dUrl);
-      }, 'image/png');
+      canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('Canvas export zlyhal'))), 'image/png');
     };
+    img.onerror = reject;
     img.src = url;
+  });
+
+  // Razítko "Oprava" / "Expres oprava" na priloženie k súborom na tlač (rovnaký princíp ako QR vyššie —
+  // vykreslené ako SVG, na stiahnutie sa prevedie na PNG cez canvas).
+  const handleDownloadBadge = async (svgId, filename) => {
+    const svgEl = document.getElementById(svgId);
+    if (!svgEl) return;
+    try {
+      const blob = await svgElementToPngBlob(svgEl, 600);
+      const dUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = dUrl;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(dUrl);
+    } catch (err) {
+      triggerNotification('error', `Export razítka zlyhal: ${err.message}`);
+    }
+  };
+
+  // Drag&drop obrazkov (QR, razitka) priamo von z prehliadaca do ineho programu (napr. CorelDraw) —
+  // pripravi sa PNG blob URL vopred (pri najazde mysou, este pred zacatim tahania) a pri dragstart sa
+  // vlozi do DataTransfer cez konvenciu "DownloadURL", ktoru chromium-based prehliadace (Chrome, Edge)
+  // pouzivaju na "pretiahni obrazok na plochu/do inej appky a uloz ako subor". Vo Firefoxe nemusi fungovat
+  // rovnako spolahlivo — tlacidlo na stiahnutie ostava ako isty fallback.
+  const dragImageCacheRef = useRef({});
+  const ensureDragImageReady = (cacheKey, generatePngBlob) => {
+    if (dragImageCacheRef.current[cacheKey]) return;
+    dragImageCacheRef.current[cacheKey] = 'pending';
+    generatePngBlob().then(blob => {
+      dragImageCacheRef.current[cacheKey] = URL.createObjectURL(blob);
+    }).catch(() => { delete dragImageCacheRef.current[cacheKey]; });
+  };
+  const handleImageDragStart = (e, cacheKey, filename) => {
+    const url = dragImageCacheRef.current[cacheKey];
+    if (!url || url === 'pending') return;
+    e.dataTransfer.setData('DownloadURL', `image/png:${filename}:${url}`);
+    e.dataTransfer.setData('text/uri-list', url);
+    e.dataTransfer.effectAllowed = 'copy';
   };
 
   const handleDownloadMaterialQr = async (item, svgId, captionLines, fileSuffix) => {
@@ -6719,9 +6749,18 @@ export default function App() {
                                       <span className="text-[9px] text-slate-500 uppercase font-bold block text-left">QR na vloženie do grafiky (8×8cm){materialList.length > 1 ? ` — ${materialList.length}× materiál` : ''}</span>
                                       {materialList.map((mat, mi) => {
                                         const svgId = `qr-svg-${item.itemId}-${mat?.materialId || 'main'}`;
-                                        const matName = mat ? (materials.find(m => m.id === mat.materialId)?.name || mat.layerName) : item.productName;
+                                        const matName = mat ? (materials.find(m => m.id === mat.materialId)?.name || `⚠️ materiál nenájdený v sklade (${mat.layerName})`) : item.productName;
+                                        const qrCacheKey = `qr-${svgId}`;
+                                        const qrFileName = `QR-${item.itemId}-${mat?.materialId || 'main'}.png`;
                                         return (
-                                          <div key={mi} className="bg-white rounded-lg p-2 flex items-center gap-2">
+                                          <div
+                                            key={mi}
+                                            className="bg-white rounded-lg p-2 flex items-center gap-2 cursor-grab active:cursor-grabbing"
+                                            draggable
+                                            onMouseEnter={() => ensureDragImageReady(qrCacheKey, () => svgToPngBlob(document.getElementById(svgId), 945, [`${item.orderNumber || item.orderId} • ${item.customer}`, matName]))}
+                                            onDragStart={(e) => handleImageDragStart(e, qrCacheKey, qrFileName)}
+                                            title="Pretiahni priamo do svojho programu, alebo klikni na ikonu na stiahnutie"
+                                          >
                                             <QRCodeSVG id={svgId} value={`${item.itemId}::${mat?.materialId || 'main'}`} size={56} level="M" />
                                             <div className="flex-1 text-left">
                                               <p className="text-[9px] text-black font-extrabold leading-tight">{item.orderNumber || item.orderId} • {item.customer}</p>
@@ -6735,12 +6774,26 @@ export default function App() {
                                     <div className="space-y-1.5 pt-1 border-t border-slate-800">
                                       <span className="text-[9px] text-slate-500 uppercase font-bold block text-left">Razítko na priloženie k tlači</span>
                                       <div className="grid grid-cols-2 gap-1.5">
-                                        <button onClick={() => handleDownloadBadge(`badge-oprava-${item.itemId}`, `Oprava-${item.itemId}.png`)} className="bg-white hover:bg-slate-100 rounded-lg p-1.5 flex flex-col items-center gap-0.5">
+                                        <button
+                                          onClick={() => handleDownloadBadge(`badge-oprava-${item.itemId}`, `Oprava-${item.itemId}.png`)}
+                                          draggable
+                                          onMouseEnter={() => ensureDragImageReady(`badge-oprava-${item.itemId}`, () => svgElementToPngBlob(document.getElementById(`badge-oprava-${item.itemId}`), 600))}
+                                          onDragStart={(e) => handleImageDragStart(e, `badge-oprava-${item.itemId}`, `Oprava-${item.itemId}.png`)}
+                                          title="Pretiahni priamo do svojho programu, alebo klikni na stiahnutie"
+                                          className="bg-white hover:bg-slate-100 rounded-lg p-1.5 flex flex-col items-center gap-0.5 cursor-grab active:cursor-grabbing"
+                                        >
                                           <OpravaBadgeSvg variant="oprava" svgId={`badge-oprava-${item.itemId}`} />
                                           <span className="text-[9px] font-extrabold text-slate-900">🟡 OPRAVA</span>
                                           <Download className="h-3.5 w-3.5 text-indigo-600" />
                                         </button>
-                                        <button onClick={() => handleDownloadBadge(`badge-expres-${item.itemId}`, `Expres-oprava-${item.itemId}.png`)} className="bg-white hover:bg-slate-100 rounded-lg p-1.5 flex flex-col items-center gap-0.5">
+                                        <button
+                                          onClick={() => handleDownloadBadge(`badge-expres-${item.itemId}`, `Expres-oprava-${item.itemId}.png`)}
+                                          draggable
+                                          onMouseEnter={() => ensureDragImageReady(`badge-expres-${item.itemId}`, () => svgElementToPngBlob(document.getElementById(`badge-expres-${item.itemId}`), 600))}
+                                          onDragStart={(e) => handleImageDragStart(e, `badge-expres-${item.itemId}`, `Expres-oprava-${item.itemId}.png`)}
+                                          title="Pretiahni priamo do svojho programu, alebo klikni na stiahnutie"
+                                          className="bg-white hover:bg-slate-100 rounded-lg p-1.5 flex flex-col items-center gap-0.5 cursor-grab active:cursor-grabbing"
+                                        >
                                           <OpravaBadgeSvg variant="expres" svgId={`badge-expres-${item.itemId}`} />
                                           <span className="text-[9px] font-extrabold text-slate-900">🔴 EXPRES OPRAVA</span>
                                           <Download className="h-3.5 w-3.5 text-indigo-600" />
