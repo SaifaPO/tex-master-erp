@@ -4991,8 +4991,9 @@ export default function App() {
   const handleToggleAcl = async (actionKey, roleKey) => {
     if (currentUser.role !== 'master') return;
     const updatedRules = { ...acl, [actionKey]: { ...acl[actionKey], [roleKey]: !acl[actionKey][roleKey] } };
+    setAcl(updatedRules); // okamzita zmena v UI, nespoliehat sa len na spatny realtime prenos
     const { error } = await supabase.from('acl_settings').update({ rules: updatedRules }).eq('id', 1);
-    if (error) triggerNotification('error', error.message);
+    if (error) { triggerNotification('error', error.message); setAcl(acl); } // vratit spat pri zlyhani zapisu
   };
 
   const allItems = flattenOrderItems(orders);
