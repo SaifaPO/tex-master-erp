@@ -32,11 +32,24 @@ const mapPriceItemToDb = (i) => ({ id: i.id, name: i.name, description: i.descri
 // vlastny mail server, takze skutocna priloha sa neda vlozit automaticky - odkaz je najblizsia nahrada,
 // prip. si Martin subor stiahne tu a v e-mailovom klientovi ho priprida rucne ako skutocnu prilohu).
 const DOCUMENT_CATEGORIES = ['Veľkostná tabuľka', 'Strih na tričko', 'Strih na beachvlajku', 'Iné'];
+
+// Pismo pre nazov firmy v hlavicke ponuky. Klavika je platene pismo (nie je na Google Fonts, takze sa
+// neda voci nej vytvorit verejny odkaz) - namiesto nej ponukame vizualne podobne volne dostupne pismo
+// (Oswald), pokial Martin niekedy nedoda vlastny licencovany subor s pismom.
+const HEADING_FONT_OPTIONS = [
+  { value: 'default', label: 'Predvolené (Helvetica/Arial)', family: "'Helvetica Neue',Helvetica,Arial,sans-serif", googleFont: null },
+  { value: 'bebas', label: 'Bebas Neue', family: "'Bebas Neue',Impact,'Arial Narrow',sans-serif", googleFont: 'Bebas+Neue' },
+  { value: 'oswald', label: 'Oswald (podobné Klavike — tá je platená, nie je na Google Fonts)', family: "'Oswald',Impact,sans-serif", googleFont: 'Oswald:wght@600;700' },
+  { value: 'poppins', label: 'Poppins', family: "'Poppins',Arial,sans-serif", googleFont: 'Poppins:wght@600;700' },
+];
+function getHeadingFontConfig(key) {
+  return HEADING_FONT_OPTIONS.find(f => f.value === key) || HEADING_FONT_OPTIONS[0];
+}
 const mapDocumentFromDb = (r) => ({ id: r.id, category: r.category || 'Iné', name: r.name, description: r.description || '', fileUrl: r.file_url, fileName: r.file_name || '', sortOrder: r.sort_order || 0 });
 
 const mapQuoteFromDb = (r) => ({ id: r.id, offerNumber: r.offer_number, quoteDate: r.quote_date, customerName: r.customer_name || '', customerEmail: r.customer_email || '', title: r.title || '', total: r.total || 0, status: r.status || 'Odoslaná', data: r.data || {} });
 
-const mapCompanyFromDb = (r) => ({ id: r.id, name: r.name || '', address: r.address || '', ico: r.ico || '', dic: r.dic || '', icDph: r.ic_dph || '', email: r.email || '', phone: r.phone || '', logoUrl: r.logo_url || '', logoScale: r.logo_scale ?? 100, signatureName: r.signature_name || '', signatureRole: r.signature_role || '', sortOrder: r.sort_order || 0 });
+const mapCompanyFromDb = (r) => ({ id: r.id, name: r.name || '', address: r.address || '', ico: r.ico || '', dic: r.dic || '', icDph: r.ic_dph || '', email: r.email || '', phone: r.phone || '', logoUrl: r.logo_url || '', logoScale: r.logo_scale ?? 100, headingFont: r.heading_font || 'default', signatureName: r.signature_name || '', signatureRole: r.signature_role || '', sortOrder: r.sort_order || 0 });
 
 const mapPrintMaterialFromDb = (r) => ({ id: r.id, metoda: r.metoda, nazov: r.nazov, jednotka: r.jednotka || 'bm', cenaZaJednotku: r.cena_za_jednotku || 0, sortOrder: r.sort_order || 0 });
 const mapPrintSizeFromDb = (r) => ({ id: r.id, metoda: r.metoda, label: r.label, spotreba: r.spotreba || 0, sortOrder: r.sort_order || 0 });
@@ -115,6 +128,14 @@ function buildEmailHtml(form, company, attachedDocuments = []) {
   const logoMaxWidth = Math.round(170 * (logoScale / 100));
   const logoHtml = company.logoUrl
     ? `<img src="${company.logoUrl}" alt="${escapeHtml(companyName)}" style="max-height:${logoMaxHeight}px;max-width:${logoMaxWidth}px;display:block;" />`
+    : '';
+  // Font nazvu firmy — Google Font sa nacita cez <link> v <head>. Funguje v nahlade a vo vacsine
+  // moderných e-mailových klientov, ale POZOR: Outlook (desktop) ho ignoruje a niekedy sa aj samotný
+  // <link> stratí pri kopírovaní naformátovaného textu do e-mailu — preto je nastavený rozumný
+  // tucny sans-serif fallback, aby nazov firmy vyzeral dobre aj bez nacitaneho fontu.
+  const headingFontCfg = getHeadingFontConfig(company.headingFont);
+  const headingFontLinkHtml = headingFontCfg.googleFont
+    ? `<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=${headingFontCfg.googleFont}&display=swap" rel="stylesheet">`
     : '';
 
   let discountBanner = '';
@@ -232,7 +253,7 @@ function buildEmailHtml(form, company, attachedDocuments = []) {
   const mailtoBody = encodeURIComponent(`Dobrý deň,\n\nreagujem na cenovú ponuku č. ${form.offerNumber} (${form.offerTitle}).\n\n`);
 
   return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8" /><title>Cenová ponuka</title></head>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8" /><title>Cenová ponuka</title>${headingFontLinkHtml}</head>
 <body style="margin:0;padding:0;background-color:#F1F5F9;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
 <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color:#F1F5F9;padding:20px 10px;"><tr><td align="center">
 <table width="600" border="0" cellspacing="0" cellpadding="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 10px 25px -5px rgba(0,0,0,0.08);border:1px solid #E2E8F0;">
@@ -242,7 +263,7 @@ function buildEmailHtml(form, company, attachedDocuments = []) {
     <td>
       <table border="0" cellspacing="0" cellpadding="0"><tr>
         ${logoHtml ? `<td valign="middle" style="padding-right:12px;">${logoHtml}</td>` : ''}
-        <td valign="middle"><div style="color:#ffffff;font-size:18px;font-weight:800;">${escapeHtml(companyName)}</div></td>
+        <td valign="middle"><div style="color:#ffffff;font-size:20px;font-weight:800;font-family:${headingFontCfg.family};letter-spacing:0.3px;">${escapeHtml(companyName)}</div></td>
       </tr></table>
     </td>
     <td align="right" valign="middle">
@@ -429,7 +450,7 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
   const updateCompanyField = async (id, field, value) => {
     setCompanies(prev => prev.map(c => c.id === id ? { ...c, [field]: value } : c));
     if (!supabase) return;
-    const dbField = { name: 'name', address: 'address', ico: 'ico', dic: 'dic', icDph: 'ic_dph', email: 'email', phone: 'phone', logoUrl: 'logo_url', logoScale: 'logo_scale', signatureName: 'signature_name', signatureRole: 'signature_role' }[field];
+    const dbField = { name: 'name', address: 'address', ico: 'ico', dic: 'dic', icDph: 'ic_dph', email: 'email', phone: 'phone', logoUrl: 'logo_url', logoScale: 'logo_scale', headingFont: 'heading_font', signatureName: 'signature_name', signatureRole: 'signature_role' }[field];
     if (!dbField) return;
     await supabase.from('quote_companies').update({ [dbField]: value }).eq('id', id);
   };
@@ -1128,6 +1149,13 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
                   </div>
                 </div>
                 <div><label className={labelCls}>Názov firmy</label><input type="text" defaultValue={c.name} onBlur={(e) => updateCompanyField(c.id, 'name', e.target.value)} className={inputCls} /></div>
+                <div>
+                  <label className={labelCls}>Font názvu firmy v ponuke</label>
+                  <select defaultValue={c.headingFont || 'default'} onChange={(e) => updateCompanyField(c.id, 'headingFont', e.target.value)} className={inputCls}>
+                    {HEADING_FONT_OPTIONS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+                  </select>
+                  <p className="text-[9px] text-slate-600 mt-1">Platí pre náhľad a väčšinu e-mailových klientov — Outlook (desktop) vlastné fonty nepodporuje a zobrazí náhradné písmo.</p>
+                </div>
                 <div><label className={labelCls}>Adresa (sídlo)</label><input type="text" defaultValue={c.address} onBlur={(e) => updateCompanyField(c.id, 'address', e.target.value)} className={inputCls} /></div>
                 <div className="grid grid-cols-2 gap-2">
                   <div><label className={labelCls}>IČO</label><input type="text" defaultValue={c.ico} onBlur={(e) => updateCompanyField(c.id, 'ico', e.target.value)} className={inputCls} /></div>
