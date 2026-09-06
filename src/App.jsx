@@ -1173,7 +1173,9 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState('planner'); 
   const [activeStationFilter, setActiveStationFilter] = useState('grafik'); 
-  const [addMissingItemId, setAddMissingItemId] = useState('');
+  const [addMissingSearch, setAddMissingSearch] = useState('');
+  const [addMissingSelectedIds, setAddMissingSelectedIds] = useState(() => new Set());
+  const [isBulkAddingToStation, setIsBulkAddingToStation] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(85);
   const [matrixAutoFit, setMatrixAutoFit] = useState(true);
   const [isMatrixFullscreen, setIsMatrixFullscreen] = useState(false);
@@ -4638,18 +4640,26 @@ export default function App() {
     if (selectedOrderDetails?.id === orderId) setSelectedOrderDetails({ ...order, items: updatedItems });
   };
 
-  // Doplnenie stanice, ktorá pri položke chýba (napr. omylom nezaškrtnutá alebo náhodne odstránená)
-  const handleAddStationToItem = async (orderId, itemId, stationId) => {
+  // Hromadne doplnenie stanice na viacero vybranych polozok naraz (napr. po hromadnom importe
+  // zakaziek, ktore este nemaju priradenu ziadnu stanicu) — zoskupi polozky podla zakazky,
+  // aby sa na kazdu zakazku poslal len jeden update namiesto jedneho volania na kazdu polozku.
+  const handleBulkAddStationToItems = async (itemIds, stationId) => {
     if (!hasPermission('update_status')) { triggerNotification('error', 'Nemáte oprávnenie meniť stavy staníc.'); return; }
-    const order = orders.find(o => o.id === orderId);
-    if (!order) return;
-    const updatedItems = order.items.map(item => item.itemId === itemId
-      ? { ...item, stationStatuses: { ...item.stationStatuses, [stationId]: 'caka' } }
-      : item);
-    const { error } = await supabase.from('orders').update({ items: updatedItems }).eq('id', orderId);
-    if (error) { triggerNotification('error', error.message); return; }
-    if (selectedOrderDetails?.id === orderId) setSelectedOrderDetails({ ...order, items: updatedItems });
-    triggerNotification('success', `Stanica "${STATION_CONFIGS[stationId].name}" bola doplnená k položke ${itemId}.`);
+    if (itemIds.length === 0) return;
+    setIsBulkAddingToStation(true);
+    const itemIdSet = new Set(itemIds);
+    const affectedOrders = orders.filter(o => o.items.some(it => itemIdSet.has(it.itemId)));
+    let errorCount = 0;
+    for (const order of affectedOrders) {
+      const updatedItems = order.items.map(item => itemIdSet.has(item.itemId)
+        ? { ...item, stationStatuses: { ...item.stationStatuses, [stationId]: 'caka' } }
+        : item);
+      const { error } = await supabase.from('orders').update({ items: updatedItems }).eq('id', order.id);
+      if (error) { errorCount++; triggerNotification('error', `Zákazka ${order.orderNumber || order.id}: ${error.message}`); }
+    }
+    setIsBulkAddingToStation(false);
+    setAddMissingSelectedIds(new Set());
+    if (errorCount === 0) triggerNotification('success', `Stanica "${STATION_CONFIGS[stationId].name}" bola doplnená na ${itemIds.length} položiek (${affectedOrders.length} zákaziek).`);
   };
 
   // --- ŽIADOSTI O POMOC (dedikované rozhranie pre stanice, napr. Grafik) ---
@@ -6637,29 +6647,54 @@ export default function App() {
                 </div>
               </div>
 
-              {hasPermission('update_status') && (
-                <div className="bg-slate-900/60 border border-dashed border-indigo-800/40 p-4 rounded-xl mb-4 flex flex-col sm:flex-row items-center gap-2">
-                  <span className="text-xs text-slate-400 shrink-0">Chýba tu položka, ktorá by mala byť na tejto stanici (napr. omylom vynechaná)?</span>
-                  <select value={addMissingItemId} onChange={(e) => setAddMissingItemId(e.target.value)} className="flex-1 w-full sm:w-auto bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white">
-                    <option value="">-- Vyber položku --</option>
-                    {allItems.filter(it => !it.stationStatuses[activeStationFilter] || it.stationStatuses[activeStationFilter] === 'neaktivne').map(it => (
-                      <option key={it.itemId} value={it.itemId}>{it.itemId} • {it.customer} • {it.productName}</option>
-                    ))}
-                  </select>
-                  <button
-                    onClick={() => {
-                      const target = allItems.find(it => it.itemId === addMissingItemId);
-                      if (!target) return;
-                      handleAddStationToItem(target.orderId, target.itemId, activeStationFilter);
-                      setAddMissingItemId('');
-                    }}
-                    disabled={!addMissingItemId}
-                    className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5 shrink-0"
-                  >
-                    <Plus className="h-3.5 w-3.5" /> Pridať na stanicu
-                  </button>
-                </div>
-              )}
+              {hasPermission('update_status') && (() => {
+                const missingItems = allItems.filter(it => !it.stationStatuses[activeStationFilter] || it.stationStatuses[activeStationFilter] === 'neaktivne');
+                const search = addMissingSearch.trim().toLowerCase();
+                const filteredMissing = search
+                  ? missingItems.filter(it => `${it.itemId} ${it.customer} ${it.productName} ${it.orderNumber || ''} ${it.legacyOrderNumber || ''}`.toLowerCase().includes(search))
+                  : missingItems;
+                const filteredIds = filteredMissing.map(it => it.itemId);
+                const allFilteredSelected = filteredIds.length > 0 && filteredIds.every(id => addMissingSelectedIds.has(id));
+                const toggleOne = (itemId) => setAddMissingSelectedIds(prev => {
+                  const next = new Set(prev);
+                  if (next.has(itemId)) next.delete(itemId); else next.add(itemId);
+                  return next;
+                });
+                return (
+                  <div className="bg-slate-900/60 border border-dashed border-indigo-800/40 p-4 rounded-xl mb-4 space-y-2.5">
+                    <span className="text-xs text-slate-400 block">Chýbajú tu položky, ktoré by mali byť na tejto stanici (napr. hromadne importované zákazky)? Vyber viacero naraz a pridaj ich jedným klikom.</span>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input type="text" value={addMissingSearch} onChange={(e) => setAddMissingSearch(e.target.value)} placeholder="Hľadať odberateľa, produkt, číslo zákazky..." className="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white" />
+                      <div className="flex gap-2 shrink-0">
+                        <button onClick={() => setAddMissingSelectedIds(prev => allFilteredSelected ? new Set([...prev].filter(id => !filteredIds.includes(id))) : new Set([...prev, ...filteredIds]))} disabled={filteredIds.length === 0} className="bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 font-bold text-xs px-3 py-2 rounded-lg whitespace-nowrap">{allFilteredSelected ? 'Odznačiť všetko' : 'Vybrať všetko'}</button>
+                        <button
+                          onClick={() => handleBulkAddStationToItems([...addMissingSelectedIds], activeStationFilter)}
+                          disabled={addMissingSelectedIds.size === 0 || isBulkAddingToStation}
+                          className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5 whitespace-nowrap"
+                        >
+                          <Plus className="h-3.5 w-3.5" /> {isBulkAddingToStation ? 'Pridávam...' : `Pridať na stanicu (${addMissingSelectedIds.size})`}
+                        </button>
+                      </div>
+                    </div>
+                    {missingItems.length === 0 ? (
+                      <p className="text-[11px] text-slate-500 italic">Žiadne položky mimo tejto stanice.</p>
+                    ) : (
+                      <div className="max-h-64 overflow-y-auto space-y-1 bg-slate-950/60 rounded-lg p-2 border border-slate-800">
+                        {filteredMissing.length === 0 ? (
+                          <p className="text-[11px] text-slate-500 italic px-1">Nič nezodpovedá hľadaniu.</p>
+                        ) : filteredMissing.map(it => (
+                          <label key={it.itemId} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-slate-900 cursor-pointer text-xs text-slate-200">
+                            <input type="checkbox" checked={addMissingSelectedIds.has(it.itemId)} onChange={() => toggleOne(it.itemId)} className="accent-indigo-600 shrink-0" />
+                            <span className="font-mono text-indigo-400 shrink-0">{it.orderNumber || it.orderId}</span>
+                            <span className="font-bold shrink-0">{it.customer}</span>
+                            <span className="text-slate-400 truncate">{it.productName}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               <div className="space-y-4">
                 {allItems.filter(it => it.stationStatuses[activeStationFilter] && it.stationStatuses[activeStationFilter] !== 'neaktivne').length === 0 ? (
