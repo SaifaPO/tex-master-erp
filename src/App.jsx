@@ -5557,7 +5557,7 @@ export default function App() {
               {plannerViewMode === 'matrix' && (
                 <div className="space-y-4">
                   <div className="flex flex-wrap justify-between items-center gap-2 bg-slate-900 p-3 rounded-xl border border-slate-800 text-xs text-slate-400">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span>Mierka:</span>
                       <button onClick={() => { setMatrixAutoFit(false); setZoomLevel(prev => Math.max(40, prev - 5)); }} className="p-1 bg-slate-800 hover:bg-slate-700 rounded"><ZoomOut className="h-3.5 w-3.5" /></button>
                       <span className="font-bold text-white w-8 text-center">{zoomLevel}%</span>
@@ -5567,7 +5567,7 @@ export default function App() {
                         {isMatrixFullscreen ? '✕ Zavrieť celú obrazovku' : '⛶ Celá obrazovka'}
                       </button>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                       <div className="flex items-center bg-slate-800 rounded-lg p-0.5 gap-0.5">
                         {[['full', 'Klasické'], ['compact', 'Kompaktné'], ['ultra', 'Riadkové']].map(([val, label]) => (
                           <button key={val} onClick={() => setMatrixDensity(val)} className={`px-2 py-1 rounded text-[11px] font-bold transition-colors ${matrixDensity === val ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:text-white'}`}>{label}</button>
