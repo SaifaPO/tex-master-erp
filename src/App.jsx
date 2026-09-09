@@ -10171,9 +10171,9 @@ export default function App() {
 
         {selectedOrderDetails && (
           <div className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-7xl max-h-[85vh] overflow-y-auto bg-slate-950 p-6 rounded-t-2xl border border-slate-800 border-b-0 shadow-2xl space-y-6 print:static print:inset-auto print:z-auto print:mx-0 print:w-auto print:max-w-none print:max-h-none print:overflow-visible print:bg-white print:text-black print:border-none print:shadow-none print:rounded-none print:p-0 animate-in slide-in-from-bottom-8 fade-in duration-200">
-            <div className="sticky -top-6 -mx-6 px-6 pt-6 -mt-6 bg-slate-950 flex justify-between items-center border-b border-slate-800 pb-4 print:hidden print:static print:m-0 print:p-0 print:border-0 z-10">
+            <div className="sticky -top-6 -mx-6 px-6 pt-6 -mt-6 bg-slate-950 flex flex-wrap justify-between items-center gap-3 border-b border-slate-800 pb-4 print:hidden print:static print:m-0 print:p-0 print:border-0 z-10">
               <div className="flex items-center gap-2"><FileText className="text-indigo-400 h-5 w-5" /><h3 className="text-lg font-bold">Sprievodka pre: <span className="font-mono text-indigo-400">{selectedOrderDetails.id}</span></h3></div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 {!isEditingOrder && hasPermission('create_order') && (
                   <button onClick={handleStartEditOrder} className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Edit2 className="h-4 w-4" /> Upraviť zákazku</button>
                 )}
