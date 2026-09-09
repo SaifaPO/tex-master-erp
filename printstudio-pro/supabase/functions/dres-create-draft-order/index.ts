@@ -3,8 +3,37 @@
 // cena po množstevnej zľave) — celá súpiska (meno/číslo/veľkosť na hráča) sa posiela
 // v jednej _roster_json property, spolu so zdieľanými vlastnosťami dizajnu.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { corsHeaders } from '../_shared/cors.ts';
-import { vypocitajCenuDresu } from '../_shared/dresCena.ts';
+
+// Subor je zamerne SAMOSTATNY (ziadne importy z ../_shared/) — Supabase Dashboard (rucne
+// vlepenie kodu bez CLI) nevie zbalit viacsuborove funkcie a hlasi "Module not found".
+// vypocitajCenuDresu je duplikat z ../_shared/dresCena.ts — pri zmene vzorca uprav oba subory
+// (aj src/dres3d/dres3dCenotvorba.js).
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+interface DresZlava { min_pocet: number; zlava_percent: number; }
+interface DresCenaVstup { zakladnaCena: number; priplatokMaterial: number; pocetHracov: number; zlavy: DresZlava[]; }
+
+function najdiZlavuPreMnozstvo(zlavy: DresZlava[], pocet: number): number {
+  const vyhovujuce = (zlavy || [])
+    .filter((z) => pocet >= Number(z.min_pocet))
+    .sort((a, b) => Number(b.min_pocet) - Number(a.min_pocet));
+  return vyhovujuce.length ? Number(vyhovujuce[0].zlava_percent) : 0;
+}
+
+function vypocitajCenuDresu({ zakladnaCena, priplatokMaterial, pocetHracov, zlavy }: DresCenaVstup) {
+  const zakladnaCenaNum = Number(zakladnaCena) || 0;
+  const priplatokNum = Number(priplatokMaterial) || 0;
+  const jednotkovaCenaPredZlavou = zakladnaCenaNum + priplatokNum;
+  const pocet = Math.max(1, Number(pocetHracov) || 1);
+  const zlavaPercent = najdiZlavuPreMnozstvo(zlavy, pocet);
+  const jednotkovaCena = jednotkovaCenaPredZlavou * (1 - zlavaPercent / 100);
+  const cenaSpolu = jednotkovaCena * pocet;
+
+  return { jednotkovaCenaPredZlavou, zlavaPercent, jednotkovaCena, pocet, cenaSpolu };
+}
 
 function odpoved(body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });

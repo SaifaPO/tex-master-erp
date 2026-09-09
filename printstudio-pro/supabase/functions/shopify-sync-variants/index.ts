@@ -1,7 +1,12 @@
 // Stiahne varianty JEDNÉHO Shopify produktu (podľa handle) cez Admin API — len na čítanie (read_products).
 // Volá sa len keď admin klikne "Synchronizovať zo Shopify" pri konkrétnom, už predtým ručne
 // vybranom produkte — appka nikdy sama nesťahuje celý katalóg.
-import { corsHeaders } from '../_shared/cors.ts';
+// Subor je zamerne SAMOSTATNY (ziadny import z ../_shared/) — Supabase Dashboard (rucne
+// vlepenie kodu bez CLI) nevie zbalit viacsuborove funkcie a hlasi "Module not found".
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
 function odpoved(body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });

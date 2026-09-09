@@ -3,8 +3,49 @@
 // aby stačilo pár cenových stupňov). Cena sa VŽDY prepočíta server-side z aktuálnych
 // katalógových riadkov v DB — klientom poslaná cena sa nikdy nepoužije priamo.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { corsHeaders } from '../_shared/cors.ts';
-import { vypocitajCenuVlajky } from '../_shared/vlajkaCena.ts';
+
+// Subor je zamerne SAMOSTATNY (ziadne importy z ../_shared/) — Supabase Dashboard (rucne
+// vlepenie kodu bez CLI) nevie zbalit viacsuborove funkcie a hlasi "Module not found".
+// vypocitajCenuVlajky je duplikat z ../_shared/vlajkaCena.ts — pri zmene vzorca uprav oba subory
+// (aj src/printstudio/vlajkaCenotvorba.js a printstudio-pro/src/beachflag/vlajkaCenotvorba.js).
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+interface VlajkaCenaVstup {
+  velkost: { cena: number } | null;
+  dokoncenie: { cena: number } | null;
+  stoziar: { cena: number } | null;
+  doplnky: { cena: number; mnozstvo: number }[];
+  expresne: boolean;
+  pocetKs: number;
+  nastavenia: { dph_percent: number; expresny_priplatok_percent: number };
+}
+
+function vypocitajCenuVlajky({ velkost, dokoncenie, stoziar, doplnky, expresne, pocetKs, nastavenia }: VlajkaCenaVstup) {
+  const cenaVelkosti = Number(velkost?.cena) || 0;
+  const cenaDokoncenia = Number(dokoncenie?.cena) || 0;
+  const cenaStoziara = Number(stoziar?.cena) || 0;
+  const zaklad = cenaVelkosti + cenaDokoncenia + cenaStoziara;
+
+  const doplnkySpolu = (doplnky || []).reduce((sum, d) => sum + (Number(d.cena) || 0) * (Number(d.mnozstvo) || 0), 0);
+
+  const ks = Math.max(1, Number(pocetKs) || 1);
+  const subtotal = (zaklad + doplnkySpolu) * ks;
+
+  const expresnyPercent = Number(nastavenia?.expresny_priplatok_percent) || 0;
+  const expresnyPriplatok = expresne ? subtotal * (expresnyPercent / 100) : 0;
+
+  const cenaBezDph = subtotal + expresnyPriplatok;
+
+  const dphPercent = Number(nastavenia?.dph_percent) || 0;
+  const dphSuma = cenaBezDph * (dphPercent / 100);
+
+  const cenaSpolu = cenaBezDph + dphSuma;
+
+  return { zaklad, doplnkySpolu, subtotal, expresnyPriplatok, cenaBezDph, dphSuma, cenaSpolu };
+}
 
 function odpoved(body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });

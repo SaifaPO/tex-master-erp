@@ -3,7 +3,13 @@
 // ich do dres_objednavky s pôvodným stavom "na_schvalenie" — žiadne automatické vytváranie
 // výrobnej zákazky, to si ERP owner robí ručne po schválení.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { corsHeaders } from '../_shared/cors.ts';
+
+// Subor je zamerne SAMOSTATNY (ziadny import z ../_shared/) — Supabase Dashboard (rucne
+// vlepenie kodu bez CLI) nevie zbalit viacsuborove funkcie a hlasi "Module not found".
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
 function odpoved(status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
