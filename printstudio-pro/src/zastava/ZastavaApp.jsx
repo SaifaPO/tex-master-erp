@@ -103,6 +103,69 @@ export default function ZastavaApp({ supabase }) {
     fabricRef.current?.setBackgroundColor(bgColor, () => fabricRef.current?.renderAll());
   }, [bgColor]);
 
+  // Vykreslenie modularneho hardveru (tunely/ocka/karabinky/popruh) na zivy nahlad —
+  // vizualna reprezentacia, presne poradie vrstiev/velkosti su len ilustracne.
+  useEffect(() => {
+    const canvas = fabricRef.current;
+    if (!canvas) return;
+    canvas.getObjects().filter(o => o.isHardwareOverlay).forEach(o => canvas.remove(o));
+
+    const w = canvas.getWidth();
+    const h = canvas.getHeight();
+    const pridaj = (obj) => { obj.set({ selectable: false, evented: false, isHardwareOverlay: true }); canvas.add(obj); };
+
+    // Spevnujuci popruh — farebny pas pri okraji
+    const strapColor = 'rgba(234, 179, 8, 0.5)';
+    const strapT = Math.max(6, Math.min(w, h) * 0.03);
+    if (popruhy.left) pridaj(new fabric.Rect({ left: 0, top: 0, width: strapT, height: h, fill: strapColor }));
+    if (popruhy.top) pridaj(new fabric.Rect({ left: 0, top: 0, width: w, height: strapT, fill: strapColor }));
+    if (popruhy.right) pridaj(new fabric.Rect({ left: w - strapT, top: 0, width: strapT, height: h, fill: strapColor }));
+    if (popruhy.bottom) pridaj(new fabric.Rect({ left: 0, top: h - strapT, width: w, height: strapT, fill: strapColor }));
+
+    // Tunely — sirsi pas so stehovanym okrajom
+    const tunnelT = Math.max(16, Math.min(w, h) * 0.09);
+    tunely.forEach((t) => {
+      const p = t.side === 'top' ? { left: 0, top: 0, width: w, height: tunnelT }
+        : t.side === 'bottom' ? { left: 0, top: h - tunnelT, width: w, height: tunnelT }
+        : t.side === 'left' ? { left: 0, top: 0, width: tunnelT, height: h }
+        : { left: w - tunnelT, top: 0, width: tunnelT, height: h };
+      pridaj(new fabric.Rect({ ...p, fill: 'rgba(203, 213, 225, 0.75)', stroke: '#64748b', strokeWidth: 2, strokeDashArray: [6, 4] }));
+    });
+
+    // Kovove priechodky (ocka) — kruhy pozdlz strany/strán
+    const kruh = (x, y) => pridaj(new fabric.Circle({ left: x - 6, top: y - 6, radius: 6, fill: '#475569', stroke: '#cbd5e1', strokeWidth: 2 }));
+    ocka.forEach((g) => {
+      const cnt = Math.max(1, g.count || 1);
+      const strany = g.side === 'all' ? ['top', 'bottom', 'left', 'right'] : g.side === 'corners' ? ['corners'] : [g.side];
+      strany.forEach((s) => {
+        if (s === 'left') for (let i = 0; i < cnt; i++) kruh(15, (h / (cnt + 1)) * (i + 1));
+        if (s === 'right') for (let i = 0; i < cnt; i++) kruh(w - 15, (h / (cnt + 1)) * (i + 1));
+        if (s === 'top') for (let i = 0; i < cnt; i++) kruh((w / (cnt + 1)) * (i + 1), 15);
+        if (s === 'bottom') for (let i = 0; i < cnt; i++) kruh((w / (cnt + 1)) * (i + 1), h - 15);
+        if (s === 'corners') { kruh(15, 15); kruh(w - 15, 15); kruh(15, h - 15); kruh(w - 15, h - 15); }
+      });
+    });
+
+    // Kovove karabinky — obdlzniky pozdlz strany/strán
+    const karabina = (x, y, horiz) => pridaj(new fabric.Rect({
+      ...(horiz ? { left: x - 6, top: y - 5, width: 12, height: 10 } : { left: x - 5, top: y - 6, width: 10, height: 12 }),
+      fill: '#dc2626', stroke: '#991b1b', strokeWidth: 1,
+    }));
+    karabinky.forEach((c) => {
+      const cnt = Math.max(1, c.count || 1);
+      const strany = c.side === 'all' ? ['left', 'right', 'top', 'bottom'] : [c.side];
+      strany.forEach((s) => {
+        if (s === 'left') for (let i = 0; i < cnt; i++) karabina(6, (h / (cnt + 1)) * (i + 1), false);
+        if (s === 'right') for (let i = 0; i < cnt; i++) karabina(w - 6, (h / (cnt + 1)) * (i + 1), false);
+        if (s === 'top') for (let i = 0; i < cnt; i++) karabina((w / (cnt + 1)) * (i + 1), 6, true);
+        if (s === 'bottom') for (let i = 0; i < cnt; i++) karabina((w / (cnt + 1)) * (i + 1), h - 6, true);
+      });
+    });
+
+    canvas.getObjects().filter(o => o.isSafeGuide).forEach(o => canvas.bringToFront(o));
+    canvas.renderAll();
+  }, [tunely, ocka, karabinky, popruhy, sirkaCm, vyskaCm]);
+
   const pridajText = () => {
     const canvas = fabricRef.current;
     if (!canvas || !customText.trim()) return;
