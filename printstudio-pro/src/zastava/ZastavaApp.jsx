@@ -9,7 +9,7 @@ import StatnaVlajkaPicker from './StatnaVlajkaPicker';
 import DoplnkyTab from './DoplnkyTab';
 
 const BUCKET = 'print-designs';
-const PREVIEW_MAX_PX = 480;
+const PREVIEW_MAX_PX_DEFAULT = 480;
 
 const SABLONY = {
   stoziar: { tunely: [{ side: 'top' }], ocka: [], karabinky: [{ side: 'left', count: 4 }], popruhy: { left: true } },
@@ -52,9 +52,27 @@ export default function ZastavaApp({ supabase }) {
 
   const [canvasReady, setCanvasReady] = useState(false);
   const [debugObjCount, setDebugObjCount] = useState(0);
+  const [previewMaxPx, setPreviewMaxPx] = useState(PREVIEW_MAX_PX_DEFAULT);
   const canvasElRef = useRef(null);
   const fabricRef = useRef(null);
   const stateFlagImgRef = useRef(null);
+  const previewBoxRef = useRef(null);
+
+  // Nahlad sa prisposobi realnej sirke svojho kontajnera (napr. na uzsej mobilnej obrazovke) —
+  // predtym bola pevna sirka 480px, ktora na uzsom okne pretiekla mimo viditelnu oblast a odrezala
+  // pravu stranu platna (aj s hardverom, co bol tam nakresleny).
+  useEffect(() => {
+    // Kym je isLoading, previewBoxRef este nie je namontovany v DOM (zobrazuje sa len "Načítavam…") —
+    // efekt s prazdnym [] by preto zbehol predtym, nez ref vobec existuje, a ResizeObserver by sa
+    // nikdy nenapojil. Zavisi aj na isLoading, aby sa spravne napojil hned po realnom namontovani.
+    const el = previewBoxRef.current;
+    if (!el) return;
+    const update = () => setPreviewMaxPx(Math.max(180, Math.min(PREVIEW_MAX_PX_DEFAULT, el.clientWidth - 16)));
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [isLoading]);
 
   useEffect(() => {
     let zrusene = false;
@@ -79,8 +97,8 @@ export default function ZastavaApp({ supabase }) {
   useEffect(() => {
     if (isLoading || !canvasElRef.current || fabricRef.current) return;
     const ratio = sirkaCm / vyskaCm;
-    const w = ratio >= 1 ? PREVIEW_MAX_PX : PREVIEW_MAX_PX * ratio;
-    const h = ratio >= 1 ? PREVIEW_MAX_PX / ratio : PREVIEW_MAX_PX;
+    const w = ratio >= 1 ? previewMaxPx : previewMaxPx * ratio;
+    const h = ratio >= 1 ? previewMaxPx / ratio : previewMaxPx;
     const canvas = new fabric.Canvas(canvasElRef.current, { backgroundColor: bgColor, width: w, height: h });
     fabricRef.current = canvas;
     setCanvasReady(true);
@@ -94,8 +112,8 @@ export default function ZastavaApp({ supabase }) {
     const canvas = fabricRef.current;
     if (!canvas || !canvasReady) return;
     const ratio = sirkaCm / vyskaCm;
-    const w = ratio >= 1 ? PREVIEW_MAX_PX : PREVIEW_MAX_PX * ratio;
-    const h = ratio >= 1 ? PREVIEW_MAX_PX / ratio : PREVIEW_MAX_PX;
+    const w = ratio >= 1 ? previewMaxPx : previewMaxPx * ratio;
+    const h = ratio >= 1 ? previewMaxPx / ratio : previewMaxPx;
     if (canvas.getWidth() !== w || canvas.getHeight() !== h) {
       canvas.setDimensions({ width: w, height: h });
     }
@@ -117,7 +135,7 @@ export default function ZastavaApp({ supabase }) {
     });
 
     canvas.requestRenderAll();
-  }, [sirkaCm, vyskaCm, canvasReady]);
+  }, [sirkaCm, vyskaCm, canvasReady, previewMaxPx]);
 
   useEffect(() => {
     const canvas = fabricRef.current;
@@ -409,7 +427,7 @@ export default function ZastavaApp({ supabase }) {
             <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2"><Eye className="w-4 h-4 text-indigo-600" /> Živý náhľad zástavy</h3>
             <span className="text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono flex items-center gap-1"><Flag className="w-3 h-3" /> {sirkaCm}×{vyskaCm} cm</span>
           </div>
-          <div className="relative bg-slate-100 rounded-xl border border-slate-300 p-2 flex items-center justify-center min-h-[380px] sm:min-h-[440px] overflow-hidden" onContextMenu={(e) => e.preventDefault()}>
+          <div ref={previewBoxRef} className="relative bg-slate-100 rounded-xl border border-slate-300 p-2 flex items-center justify-center min-h-[380px] sm:min-h-[440px] overflow-hidden" onContextMenu={(e) => e.preventDefault()}>
             <canvas ref={canvasElRef} className="shadow-md rounded" />
           </div>
           <p className="mt-3 text-[11px] text-slate-500">Zelená čiara je odporúčaná bezpečná zóna pre text/logo.</p>

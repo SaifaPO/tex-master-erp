@@ -35,7 +35,9 @@ export default function ZastavaMaterialyTab({ supabase }) {
         <h2 className="text-xl font-bold text-white flex items-center gap-2"><Layers className="text-indigo-400 h-5 w-5" /> Materiály vlajkoviny</h2>
         <p className="text-xs text-slate-400 mt-1">
           "Náklad €/m²" je VÝROBNÁ (nákupná) cena materiálu — zákazník ju nikdy neuvidí. Predajná cena sa
-          dopočítava jednotným maržovým vzorcom zo záložky Cenotvorba.
+          dopočítava jednotným maržovým vzorcom zo záložky Cenotvorba. "Šírka rolky" je bežný fyzický údaj
+          (zákazník ho vidí) — obmedzuje, akú najväčšiu šírku môže mať vlajka z tohto materiálu; dĺžka/výška
+          nie je šírkou rolky obmedzená.
         </p>
       </div>
 
@@ -46,6 +48,9 @@ export default function ZastavaMaterialyTab({ supabase }) {
               <input type="text" value={m.nazov} onChange={(e) => uprav(m.id, { nazov: e.target.value })} placeholder="Názov" className="flex-1 min-w-[160px] px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" />
               <div className="flex items-center gap-1 text-xs text-slate-400 shrink-0">
                 <input type="number" step="0.1" value={m.naklad_m2} onChange={(e) => uprav(m.id, { naklad_m2: parseFloat(e.target.value) || 0 })} className="w-24 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /> € naklad/m²
+              </div>
+              <div className="flex items-center gap-1 text-xs text-slate-400 shrink-0">
+                <input type="number" step="1" value={m.sirka_rolky_cm ?? 150} onChange={(e) => uprav(m.id, { sirka_rolky_cm: parseFloat(e.target.value) || 150 })} className="w-20 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /> cm šírka rolky
               </div>
               <label className="flex items-center gap-1.5 text-xs text-slate-400 shrink-0">
                 <input type="checkbox" checked={m.aktivny} onChange={(e) => uprav(m.id, { aktivny: e.target.checked })} /> aktívny

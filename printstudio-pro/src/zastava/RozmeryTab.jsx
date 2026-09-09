@@ -1,13 +1,17 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Ruler, Layers, Scissors, Sparkles } from 'lucide-react';
 
-// Proporcne rozmery podla pomeru bezneho 150x100 (3:2) — 150x100 je oznaceny ako "Štandard",
-// ostatne su vacsie/mensie varianty v rovnakom pomere (nie neproporcne bannerove tvary).
+// Proporcne rozmery podla pomeru bezneho standardu 150x100 (3:2). Sirka je fyzicky obmedzena
+// sirkou rolky materialu (vlajka nemoze byt sirsia ako vlajkovina) — vyska/dlzka nie je sirkou
+// rolky obmedzena, len prakticky (bezne robime do cca 500cm).
+const POMER = 150 / 100; // 3:2
 const STD_ROZMERY = [
-  { w: 100, h: 67, label: '100×67' },
+  { w: 30, h: Math.round(30 / POMER), label: '30×proporčné' },
+  { w: 50, h: Math.round(50 / POMER), label: '50×proporčné' },
+  { w: 75, h: Math.round(75 / POMER), label: '75×proporčné' },
+  { w: 100, h: Math.round(100 / POMER), label: '100×proporčné' },
   { w: 150, h: 100, label: '150×100', standard: true },
-  { w: 200, h: 133, label: '200×133' },
-  { w: 300, h: 200, label: '300×200' },
+  { w: Math.round(150 * POMER), h: 150, label: 'proporčné×150' },
 ];
 
 const SABLONY = [
@@ -24,35 +28,46 @@ export default function RozmeryTab({
   onSablona,
   onDalej,
 }) {
+  const vybranyMaterial = materialy.find(m => m.kod === materialKod);
+  const maxSirka = Number(vybranyMaterial?.sirka_rolky_cm) || 150;
+  const nastavRozmery = (w, h) => onRozmery(Math.min(w, maxSirka), h);
+
+  // Ak zakaznik prepne na material s uzsou rolkou, nez ma aktualne zadanu sirku, treba ju
+  // znizit na novy limit (inak by ostala "neplatna" sirka nad realnou sirkou vlajkoviny).
+  useEffect(() => {
+    if (sirkaCm > maxSirka) onRozmery(maxSirka, vyskaCm);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [maxSirka]);
+
   return (
     <div className="p-4 sm:p-6 space-y-6">
       <div>
         <div className="flex items-center justify-between mb-2">
           <label className="text-sm font-bold text-slate-900 flex items-center gap-2"><Ruler className="w-4 h-4 text-indigo-600" /> Rozmery vlajky (cm)</label>
-          <div className="flex gap-1">
-            {STD_ROZMERY.map((r) => (
-              <button
-                key={r.label}
-                onClick={() => onRozmery(r.w, r.h)}
-                title={r.standard ? 'Štandardný pomer 3:2' : undefined}
-                className={`text-[11px] px-2 py-1 rounded ${r.standard ? 'bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-bold ring-1 ring-indigo-300' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}`}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
+        </div>
+        <div className="flex flex-wrap gap-1 mb-3">
+          {STD_ROZMERY.map((r) => (
+            <button
+              key={r.label}
+              onClick={() => nastavRozmery(r.w, r.h)}
+              title={r.standard ? 'Štandardný pomer 3:2' : undefined}
+              className={`text-[11px] px-2 py-1 rounded ${r.standard ? 'bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-bold ring-1 ring-indigo-300' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}`}
+            >
+              {r.label}
+            </button>
+          ))}
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <span className="block text-[11px] text-slate-500 mb-1">Šírka (cm)</span>
-            <input type="number" min="20" max="1000" value={sirkaCm} onChange={(e) => onRozmery(parseInt(e.target.value) || 20, vyskaCm)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-semibold" />
+            <span className="block text-[11px] text-slate-500 mb-1">Šírka (cm) — max {maxSirka} pre vybraný materiál</span>
+            <input type="number" min="20" max={maxSirka} value={sirkaCm} onChange={(e) => nastavRozmery(parseInt(e.target.value) || 20, vyskaCm)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-semibold" />
           </div>
           <div>
-            <span className="block text-[11px] text-slate-500 mb-1">Výška (cm)</span>
+            <span className="block text-[11px] text-slate-500 mb-1">Výška/dĺžka (cm)</span>
             <input type="number" min="20" max="1000" value={vyskaCm} onChange={(e) => onRozmery(sirkaCm, parseInt(e.target.value) || 20)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-semibold" />
           </div>
         </div>
-        <p className="text-[11px] text-slate-500 mt-1">Plocha: {((sirkaCm * vyskaCm) / 10000).toFixed(2)} m²</p>
+        <p className="text-[11px] text-slate-500 mt-1">Plocha: {((sirkaCm * vyskaCm) / 10000).toFixed(2)} m² • Šírka je obmedzená šírkou rolky materiálu, dĺžka nie je (bežne do cca 500 cm).</p>
       </div>
 
       <div>
