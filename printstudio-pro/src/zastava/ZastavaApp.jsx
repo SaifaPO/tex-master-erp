@@ -50,6 +50,7 @@ export default function ZastavaApp({ supabase }) {
   const [cenaChyba, setCenaChyba] = useState('');
   const [cenaNacitava, setCenaNacitava] = useState(false);
 
+  const [canvasReady, setCanvasReady] = useState(false);
   const canvasElRef = useRef(null);
   const fabricRef = useRef(null);
   const stateFlagImgRef = useRef(null);
@@ -76,7 +77,8 @@ export default function ZastavaApp({ supabase }) {
     if (isLoading || !canvasElRef.current || fabricRef.current) return;
     const canvas = new fabric.Canvas(canvasElRef.current, { backgroundColor: bgColor });
     fabricRef.current = canvas;
-    return () => { canvas.dispose(); fabricRef.current = null; };
+    setCanvasReady(true);
+    return () => { canvas.dispose(); fabricRef.current = null; setCanvasReady(false); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading]);
 
@@ -97,7 +99,7 @@ export default function ZastavaApp({ supabase }) {
     });
     canvas.add(guide);
     canvas.renderAll();
-  }, [sirkaCm, vyskaCm]);
+  }, [sirkaCm, vyskaCm, canvasReady]);
 
   useEffect(() => {
     fabricRef.current?.setBackgroundColor(bgColor, () => fabricRef.current?.renderAll());
@@ -164,7 +166,7 @@ export default function ZastavaApp({ supabase }) {
 
     canvas.getObjects().filter(o => o.isSafeGuide).forEach(o => canvas.bringToFront(o));
     canvas.renderAll();
-  }, [tunely, ocka, karabinky, popruhy, sirkaCm, vyskaCm]);
+  }, [tunely, ocka, karabinky, popruhy, sirkaCm, vyskaCm, canvasReady]);
 
   const pridajText = () => {
     const canvas = fabricRef.current;
