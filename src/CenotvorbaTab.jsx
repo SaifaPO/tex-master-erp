@@ -79,28 +79,44 @@ export default function CenotvorbaTab({ supabase, products, triggerNotification 
     else { setSortField(field); setSortDir('asc'); }
   };
 
+  // Update do 'products' sa v App.jsx aj spatne premietne cez realtime, ale to moze meskat/vypadnut
+  // (rovnaky problem ako pri ACL zaskrtavatku) - preto zmenu ukazeme v tabulke okamzite lokalne
+  // a vratime sposat len ak zapis do DB zlyha.
+  const [localOverrides, setLocalOverrides] = useState({});
+  const mergedProducts = useMemo(() => products.map(p => localOverrides[p.id] ? { ...p, ...localOverrides[p.id] } : p), [products, localOverrides]);
+
   const handleRowFieldBlur = async (product, field, rawValue) => {
-    let patch;
+    let patch, localPatch;
     if (field === 'productionCost') {
       const num = rawValue.trim() === '' ? null : parseFloat(rawValue.replace(',', '.'));
-      patch = { production_cost: Number.isFinite(num) ? num : null };
+      const val = Number.isFinite(num) ? num : null;
+      patch = { production_cost: val };
+      localPatch = { productionCost: val };
     } else {
-      patch = { price_group: rawValue.trim() === '' ? null : rawValue.trim() };
+      const val = rawValue.trim() === '' ? null : rawValue.trim();
+      patch = { price_group: val };
+      localPatch = { priceGroup: val || '' };
     }
+    setLocalOverrides(prev => ({ ...prev, [product.id]: { ...prev[product.id], ...localPatch } }));
     setSavingRowId(product.id);
     const { error } = await supabase.from('products').update(patch).eq('id', product.id);
     setSavingRowId(null);
-    if (error) triggerNotification('error', error.message);
+    if (error) {
+      triggerNotification('error', error.message);
+      setLocalOverrides(prev => { const next = { ...prev }; delete next[product.id]; return next; });
+    }
   };
+
+  const handleFieldKeyDown = (e) => { if (e.key === 'Enter') e.target.blur(); };
 
   const groupOptions = useMemo(() => {
     const set = new Set();
-    products.forEach(p => { if (p.priceGroup) set.add(p.priceGroup); });
+    mergedProducts.forEach(p => { if (p.priceGroup) set.add(p.priceGroup); });
     return Array.from(set).sort();
-  }, [products]);
+  }, [mergedProducts]);
 
   const sortedProducts = useMemo(() => {
-    const arr = [...products];
+    const arr = [...mergedProducts];
     const dir = sortDir === 'asc' ? 1 : -1;
     arr.sort((a, b) => {
       if (sortField === 'cost') return ((a.productionCost ?? -1) - (b.productionCost ?? -1)) * dir;
@@ -108,7 +124,7 @@ export default function CenotvorbaTab({ supabase, products, triggerNotification 
       return (a.name || '').localeCompare(b.name || '') * dir;
     });
     return arr;
-  }, [products, sortField, sortDir]);
+  }, [mergedProducts, sortField, sortDir]);
 
   const handleRefQtyPreset = (q) => { setRefQty(q); setRefQtyText(String(q)); };
   const handleRefQtyText = (v) => {
@@ -231,17 +247,17 @@ export default function CenotvorbaTab({ supabase, products, triggerNotification 
                   <tr className="border-b border-slate-800/60 hover:bg-slate-800/30">
                     <td className="p-2 text-slate-200 whitespace-nowrap">{p.name}</td>
                     <td className="p-1.5">
-                      <input list="cenotvorba-groups" defaultValue={p.priceGroup || ''} onBlur={e => handleRowFieldBlur(p, 'priceGroup', e.target.value)} placeholder="—" className="w-28 bg-slate-950 border border-slate-800 rounded p-1 text-white" />
+                      <input list="cenotvorba-groups" key={`grp-${p.id}-${p.priceGroup || ''}`} defaultValue={p.priceGroup || ''} onBlur={e => handleRowFieldBlur(p, 'priceGroup', e.target.value)} onKeyDown={handleFieldKeyDown} placeholder="—" className="w-28 bg-slate-950 border border-slate-800 rounded p-1 text-white" />
                     </td>
                     <td className="p-1.5">
                       <div className="flex items-center gap-1">
-                        <input type="text" inputMode="decimal" defaultValue={cost != null ? String(cost) : ''} onBlur={e => handleRowFieldBlur(p, 'productionCost', e.target.value)} placeholder="0.00" className="w-20 bg-slate-950 border border-slate-800 rounded p-1 text-white" />
+                        <input type="text" inputMode="decimal" key={`cost-${p.id}-${cost ?? ''}`} defaultValue={cost != null ? String(cost) : ''} onBlur={e => handleRowFieldBlur(p, 'productionCost', e.target.value)} onKeyDown={handleFieldKeyDown} placeholder="0.00" className="w-20 bg-slate-950 border border-slate-800 rounded p-1 text-white" />
                         {savingRowId === p.id && <Loader2 className="h-3 w-3 animate-spin text-indigo-400" />}
-                        {!hasCost && <AlertTriangle className="h-3.5 w-3.5 text-amber-500" title="Chýba výrobná cena" />}
                       </div>
+                      {!hasCost && <div className="flex items-center gap-1 text-amber-500 text-[10px] mt-0.5"><AlertTriangle className="h-3 w-3 shrink-0" /> chýba výrobná cena</div>}
                     </td>
                     <td className="p-2 font-bold text-indigo-300 bg-indigo-950/20 whitespace-nowrap">
-                      {hasCost ? `${priceAt(cost, refQty, config).toFixed(2)} € (${marginAt(cost, refQty, config).toFixed(0)}%)` : '—'}
+                      {hasCost ? `${priceAt(cost, refQty, config).toFixed(2)} € (${marginAt(cost, refQty, config).toFixed(0)}%)` : '⚠️ chýba výrobná cena'}
                     </td>
                     {QUANTITY_LEVELS.map(q => (
                       <td key={q} className="p-2 text-slate-300 whitespace-nowrap">{hasCost ? `${priceAt(cost, q, config).toFixed(2)} €` : '—'}</td>
