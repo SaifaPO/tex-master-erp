@@ -323,20 +323,23 @@ export default function Dizajner({ supabase, produktId }) {
     setCustomText('');
   };
 
+  // Zmena fontSize/fontFamily/fontWeight/fontStyle menia šírku textu rovnako ako ťahanie za rožok,
+  // ale doteraz sa po nich nevolal zobrazZivyRozmer — takže text mohol nepozorovane vyrásť mimo
+  // tlačovej zóny (a tým aj mimo canvasu, kde je natvrdo odseknutý) bez akéhokoľvek upozornenia.
   const updateTextProperty = (prop, value) => {
     const canvas = fabricRef.current;
     const obj = canvas?.getActiveObject();
-    if (obj && obj.type === 'text') { obj.set(prop, value); canvas.requestRenderAll(); aktualizujCenu(); setSelectedObj(snapshotObj(obj)); }
+    if (obj && obj.type === 'text') { obj.set(prop, value); canvas.requestRenderAll(); aktualizujCenu(); setSelectedObj(snapshotObj(obj)); zobrazZivyRozmer(obj); }
   };
   const toggleFontWeight = () => {
     const canvas = fabricRef.current;
     const o = canvas?.getActiveObject();
-    if (o && o.type === 'text') { o.set('fontWeight', o.fontWeight === 'bold' ? 'normal' : 'bold'); canvas.requestRenderAll(); }
+    if (o && o.type === 'text') { o.set('fontWeight', o.fontWeight === 'bold' ? 'normal' : 'bold'); canvas.requestRenderAll(); zobrazZivyRozmer(o); }
   };
   const toggleFontStyle = () => {
     const canvas = fabricRef.current;
     const o = canvas?.getActiveObject();
-    if (o && o.type === 'text') { o.set('fontStyle', o.fontStyle === 'italic' ? 'normal' : 'italic'); canvas.requestRenderAll(); }
+    if (o && o.type === 'text') { o.set('fontStyle', o.fontStyle === 'italic' ? 'normal' : 'italic'); canvas.requestRenderAll(); zobrazZivyRozmer(o); }
   };
   const alignText = (align) => {
     const canvas = fabricRef.current;
@@ -831,8 +834,17 @@ export default function Dizajner({ supabase, produktId }) {
             {zonaBox?.mockup ? (
               <img src={zonaBox.mockup.fotoUrl} alt={produkt.nazov} className="absolute inset-0 w-full h-full object-cover" draggable={false} />
             ) : (
+              // Bez nakalibrovanej fotky pre danú farbu/zónu aspoň siluetu trička, nie plochý farebný obdĺžnik —
+              // zákazník tak vidí návrh v reálnom kontexte odevu, nie len na "kúsku farby".
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="w-[300px] h-[380px] rounded-xl" style={{ background: currentColor, opacity: 0.9 }} />
+                <svg viewBox="0 0 300 380" width="300" height="380" style={{ filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.12))' }}>
+                  <path
+                    d="M95 8 L120 30 Q150 48 180 30 L205 8 L268 42 Q286 52 276 70 L248 118 Q240 130 226 122 L205 110 L205 360 Q205 372 193 372 L107 372 Q95 372 95 360 L95 110 L74 122 Q60 130 52 118 L24 70 Q14 52 32 42 Z"
+                    fill={currentColor || '#ffffff'}
+                    stroke="#cbd5e1"
+                    strokeWidth="3"
+                  />
+                </svg>
               </div>
             )}
             {zonaBox && (
@@ -843,13 +855,13 @@ export default function Dizajner({ supabase, produktId }) {
                 <span className="text-[10px] text-indigo-500 font-medium tracking-widest uppercase bg-white/90 px-2 py-0.5 rounded mt-1 absolute -top-6 left-1/2 -translate-x-1/2 whitespace-nowrap">Tlačová zóna · {zoneMax.w}×{zoneMax.h} cm</span>
               </div>
             )}
-            <canvas
-              ref={canvasElRef}
-              width={CANVAS_PX_W}
-              height={CANVAS_PX_H}
-              className="absolute z-10"
-              style={zonaBox ? { left: zonaBox.canvasLeft, top: zonaBox.canvasTop } : undefined}
-            />
+            {/* Fabric.js pri new fabric.Canvas(el) obalí <canvas> do vlastného .canvas-container divu
+                (position: relative, bez left/top) — inline left/top štýl nastavený priamo na <canvas>
+                sa tým stratí a plátno vždy skončí v (0,0) rohu boxu namiesto na kalibrovanej pozícii
+                zóny. Preto pozíciu nesie tento obalový div a canvas v ňom je len 0,0. */}
+            <div className="absolute z-10" style={zonaBox ? { left: zonaBox.canvasLeft, top: zonaBox.canvasTop } : undefined}>
+              <canvas ref={canvasElRef} width={CANVAS_PX_W} height={CANVAS_PX_H} />
+            </div>
             {liveSize && (
               <div className={`absolute bottom-3 left-1/2 -translate-x-1/2 text-white text-xs font-bold px-3 py-1.5 rounded-full z-20 shadow-lg ${liveSize.presahuje ? 'bg-red-600' : 'bg-slate-900'}`}>
                 {liveSize.w.toFixed(1)} × {liveSize.h.toFixed(1)} cm{liveSize.presahuje ? ' — presahuje zónu!' : ''}
