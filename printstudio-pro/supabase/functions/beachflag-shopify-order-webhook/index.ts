@@ -1,7 +1,8 @@
-// Prijíma Shopify webhook "orders/create". Spracuje len objednávky, ktoré obsahujú položku
-// vytvorenú cez beachflag-create-draft-order (rozpoznané podľa vlastnosti _beachflag_order),
-// a vloží ich do vlajka_objednavky s pôvodným stavom "na_schvalenie" — žiadne automatické
-// vytváranie výrobnej zákazky, to si ERP owner robí ručne po schválení.
+// Prijíma Shopify webhook "orders/create". Spracuje objednávky z DVOCH rôznych konfigurátorov
+// (rozpoznané podľa vlastnosti na položke — _beachflag_order alebo _zastava_order) a vloží ich
+// do zodpovedajúcej tabuľky (vlajka_objednavky / zastava_objednavky) so stavom "na_schvalenie" —
+// žiadne automatické vytváranie výrobnej zákazky, to si ERP owner robí ručne po schválení.
+// Zámerne JEDNA funkcia pre oba produkty, aby nebolo treba v Shopify registrovať druhý webhook.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 
@@ -42,11 +43,48 @@ Deno.serve(async (req) => {
 
   try {
     const order = JSON.parse(rawBody);
+    const zastavaItem = (order.line_items || []).find((li: any) =>
+      najdiVlastnost(li.properties, '_zastava_order') === 'true'
+    );
+    if (zastavaItem) {
+      const props = zastavaItem.properties as { name: string; value: string }[];
+      const bezpecnyJsonParse = (s: string, fallback: unknown) => { try { return JSON.parse(s); } catch { return fallback; } };
+      const riadok = {
+        shopify_order_id: String(order.id),
+        shopify_order_number: order.name || null,
+        design_id: najdiVlastnost(props, '_design_id') || null,
+        sirka_cm: parseFloat((najdiVlastnost(props, '_rozmery').split('x')[0] || '').trim()) || null,
+        vyska_cm: parseFloat((najdiVlastnost(props, '_rozmery').split('x')[1] || '').replace('cm', '').trim()) || null,
+        material_kod: najdiVlastnost(props, '_material') || null,
+        vyhotovenie: najdiVlastnost(props, '_vyhotovenie').includes('Laser') || najdiVlastnost(props, '_vyhotovenie').includes('laser') ? 'laser' : 'obsite',
+        tunely: bezpecnyJsonParse(najdiVlastnost(props, '_tunely'), []),
+        ocka: bezpecnyJsonParse(najdiVlastnost(props, '_ocka'), []),
+        karabinky: bezpecnyJsonParse(najdiVlastnost(props, '_karabinky'), []),
+        popruhy: bezpecnyJsonParse(najdiVlastnost(props, '_popruhy'), {}),
+        statna_vlajka: najdiVlastnost(props, '_statna_vlajka') || null,
+        farba_hex: najdiVlastnost(props, '_farba_hex') || null,
+        farba_poznamka: najdiVlastnost(props, '_farba_poznamka') || null,
+        text_na_vlajke: najdiVlastnost(props, '_text_na_vlajke') || null,
+        pocet_ks: zastavaItem.quantity || 1,
+        expresne: najdiVlastnost(props, '_expresne') === 'áno',
+        cena_kus: parseFloat(zastavaItem.price) || null,
+        cena_spolu: (parseFloat(zastavaItem.price) || 0) * (zastavaItem.quantity || 1),
+        status: 'na_schvalenie',
+        nahlad_url: najdiVlastnost(props, '_nahlad_url') || null,
+        zakaznik_meno: order.customer ? `${order.customer.first_name || ''} ${order.customer.last_name || ''}`.trim() : null,
+        zakaznik_email: order.email || null,
+        raw_shopify_payload: order,
+      };
+      const { error } = await supabase.from('zastava_objednavky').insert(riadok);
+      if (error) throw error;
+      return odpoved(200, { ok: true });
+    }
+
     const beachflagItem = (order.line_items || []).find((li: any) =>
       najdiVlastnost(li.properties, '_beachflag_order') === 'true'
     );
     if (!beachflagItem) {
-      // Bežná (nie-beachflag) objednávka — nič nerobíme, ale odpovieme 200, nech Shopify webhook nezopakuje.
+      // Bežná (nie-beachflag, nie-zastava) objednávka — nič nerobíme, ale odpovieme 200, nech Shopify webhook nezopakuje.
       return odpoved(200, { ignored: true });
     }
 

@@ -6,6 +6,7 @@ import Katalog from './Katalog';
 import Dizajner from './Dizajner';
 import DtfMetraz from './DtfMetraz';
 import BeachflagApp from './beachflag/BeachflagApp';
+import ZastavaApp from './zastava/ZastavaApp';
 import Dres3DApp from './dres3d/Dres3DApp';
 
 export default function App() {
@@ -16,10 +17,11 @@ export default function App() {
   const [aktualnyProduktId, setAktualnyProduktId] = useState(null); // null = katalóg
   const [zobrazDtfMetraz, setZobrazDtfMetraz] = useState(() => new URLSearchParams(window.location.search).has('dtf'));
   const jeVlajka = new URLSearchParams(window.location.search).get('typ') === 'beachflag';
+  const jeZastava = new URLSearchParams(window.location.search).get('typ') === 'zastava';
 
   useEffect(() => {
     if (!supabase) { setLoadError('Supabase klient nie je nakonfigurovaný (chýbajú VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).'); setIsLoading(false); return; }
-    if (jeVlajka) { setIsLoading(false); return; }
+    if (jeVlajka || jeZastava) { setIsLoading(false); return; }
     (async () => {
       const { kategorie: kats, produkty: prods } = await nacitajKategorieAProdukty(supabase);
       setKategorie(kats);
@@ -40,6 +42,9 @@ export default function App() {
   }
   if (jeVlajka) {
     return <div className="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col"><BeachflagApp supabase={supabase} /></div>;
+  }
+  if (jeZastava) {
+    return <div className="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col"><ZastavaApp supabase={supabase} /></div>;
   }
 
   return (

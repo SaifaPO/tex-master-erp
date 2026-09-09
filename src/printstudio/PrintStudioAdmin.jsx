@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Tag, Box, Palette, Type, Image as ImageIcon, Banknote, Camera, ShoppingBag, Scroll, Flag, Shirt, Calculator } from 'lucide-react';
+import { Tag, Box, Palette, Type, Image as ImageIcon, Banknote, Camera, ShoppingBag, Scroll, Flag, Shirt, Calculator, Waves } from 'lucide-react';
 import KategorieTab from './KategorieTab';
 import ProduktyTab from './ProduktyTab';
 import FarbyTab from './FarbyTab';
@@ -11,6 +11,7 @@ import MockupyTab from './MockupyTab';
 import ShopifyTab from './ShopifyTab';
 import DtfMetrazTab from './DtfMetrazTab';
 import VlajkyAdmin from './VlajkyAdmin';
+import ZastavyAdmin from './ZastavyAdmin';
 import DresAdmin from './DresAdmin';
 
 // Vsetky Shopify konfiguratory (dotlac na tricka, DTF metraz, vlajky/beachvlajky, vyroba dresov)
@@ -27,6 +28,7 @@ const SUBTABS = [
   { id: 'shopify', label: 'Shopify prepojenie', icon: ShoppingBag },
   { id: 'dtf-metraz', label: 'DTF metráž', icon: Scroll },
   { id: 'vlajky', label: 'Vlajky', icon: Flag },
+  { id: 'beachvlajky', label: 'Beachvlajky', icon: Waves },
   { id: 'dresy', label: 'Výroba dresov', icon: Shirt },
 ];
 
@@ -66,7 +68,8 @@ export default function PrintStudioAdmin({ supabase }) {
         {subtab === 'cennik' && <CennikTab supabase={supabase} />}
         {subtab === 'shopify' && <ShopifyTab supabase={supabase} />}
         {subtab === 'dtf-metraz' && <DtfMetrazTab supabase={supabase} />}
-        {subtab === 'vlajky' && <VlajkyAdmin supabase={supabase} />}
+        {subtab === 'vlajky' && <ZastavyAdmin supabase={supabase} />}
+        {subtab === 'beachvlajky' && <VlajkyAdmin supabase={supabase} />}
         {subtab === 'dresy' && <DresAdmin supabase={supabase} />}
       </div>
     </div>
