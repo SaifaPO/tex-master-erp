@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Tag, Box, Palette, Type, Image as ImageIcon, Banknote, Camera, ShoppingBag, Scroll, Flag, Shirt } from 'lucide-react';
+import { Tag, Box, Palette, Type, Image as ImageIcon, Banknote, Camera, ShoppingBag, Scroll, Flag, Shirt, Calculator } from 'lucide-react';
 import KategorieTab from './KategorieTab';
 import ProduktyTab from './ProduktyTab';
 import FarbyTab from './FarbyTab';
 import FontyTab from './FontyTab';
 import GrafikyTab from './GrafikyTab';
+import CenotvorbaTab from './CenotvorbaTab';
 import CennikTab from './CennikTab';
 import MockupyTab from './MockupyTab';
 import ShopifyTab from './ShopifyTab';
@@ -21,6 +22,7 @@ const SUBTABS = [
   { id: 'fonty', label: 'Fonty', icon: Type },
   { id: 'grafiky', label: 'Grafiky (Design)', icon: ImageIcon },
   { id: 'mockupy', label: 'Fotky produktov', icon: Camera },
+  { id: 'cenotvorba', label: 'Cenotvorba (marže)', icon: Calculator },
   { id: 'cennik', label: 'Cenník potlače', icon: Banknote },
   { id: 'shopify', label: 'Shopify prepojenie', icon: ShoppingBag },
   { id: 'dtf-metraz', label: 'DTF metráž', icon: Scroll },
@@ -60,6 +62,7 @@ export default function PrintStudioAdmin({ supabase }) {
         {subtab === 'fonty' && <FontyTab supabase={supabase} />}
         {subtab === 'grafiky' && <GrafikyTab supabase={supabase} />}
         {subtab === 'mockupy' && <MockupyTab supabase={supabase} />}
+        {subtab === 'cenotvorba' && <CenotvorbaTab supabase={supabase} />}
         {subtab === 'cennik' && <CennikTab supabase={supabase} />}
         {subtab === 'shopify' && <ShopifyTab supabase={supabase} />}
         {subtab === 'dtf-metraz' && <DtfMetrazTab supabase={supabase} />}

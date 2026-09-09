@@ -5,13 +5,12 @@ import { QRCodeSVG } from 'qrcode.react';
 import { encode as encodeBySquare, CurrencyCode, PaymentOptions } from 'bysquare/pay';
 import { Html5Qrcode } from 'html5-qrcode';
 import CenovePonukyTab from './CenovePonukyTab';
-import CenotvorbaTab from './CenotvorbaTab';
 import PrintStudioAdmin from './printstudio/PrintStudioAdmin';
 import {
   ClipboardList, Package, Cpu, QrCode, Plus, User, Clock, Layers, Search, Check, X, Calendar,
   Palette, Scissors, Printer, Sliders, Sparkles, ZoomIn, ZoomOut, FileText, PlusCircle, Table,
   Shield, Users, Lock, Edit2, Trash2, Tag, Scale, CalendarDays, FileEdit, Gift, Loader2, AlertTriangle,
-  Shirt, Box, Banknote, GripVertical, Download, Upload, ArrowUp, ArrowDown, BarChart3, Camera, Bot, Zap, Star, RefreshCw, BookOpen, Calculator
+  Shirt, Box, Banknote, GripVertical, Download, Upload, ArrowUp, ArrowDown, BarChart3, Camera, Bot, Zap, Star, RefreshCw, BookOpen
 } from 'lucide-react';
 
 // ============================================================
@@ -5507,9 +5506,6 @@ export default function App() {
               {hasPermission('view_finance') && canSeeTab(currentUser.role, 'quotes') && (
                 <button onClick={() => setActiveTab('quotes')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'quotes' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><FileText className="h-3.5 w-3.5" /> Cenové ponuky</button>
               )}
-              {currentUser.role === 'master' && (
-                <button onClick={() => setActiveTab('pricing')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'pricing' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Calculator className="h-3.5 w-3.5" /> Cenotvorba</button>
-              )}
               {canSeeTab(currentUser.role, 'archive') && (
                 <button onClick={() => setActiveTab('archive')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'archive' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Search className="h-3.5 w-3.5" /> História Zákaziek</button>
               )}
@@ -9352,14 +9348,6 @@ export default function App() {
             tierRules={tierRules}
             getCustomerTier={getCustomerTier}
             currentUser={currentUser}
-            triggerNotification={triggerNotification}
-          />
-        )}
-
-        {activeTab === 'pricing' && currentUser.role === 'master' && (
-          <CenotvorbaTab
-            supabase={supabase}
-            products={products}
             triggerNotification={triggerNotification}
           />
         )}

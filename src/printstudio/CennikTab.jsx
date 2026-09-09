@@ -1,24 +1,22 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, Trash2, Banknote, Calculator, TrendingUp } from 'lucide-react';
 import { vypocitajCenuPotlace } from './cenotvorba';
-
-// Najde nasobok (marzu) pre dany pocet kusov v tabulke hladin — pouziva sa naprieč vsetkymi technologiami.
-function najdiNasobok(hladiny, ks) {
-  const h = (hladiny || []).find(h => ks >= h.min_ks && ks <= h.max_ks);
-  return h ? h.nasobok : 1;
-}
+import { priceAt, marginAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 
 const inputCls = 'w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white';
 const labelCls = 'text-xs text-slate-400 font-medium';
 
-// Zhrnutie vysledku nakladovej kalkulacky — spolocne pre vsetky technologie.
-function NakladovyVysledok({ vc, nasobok, predajna, plochaCm2, jednotka, onPouzit, disabled }) {
+// Zhrnutie vysledku nakladovej kalkulacky — spolocne pre vsetky technologie. Marza sa berie
+// z jednotneho maržového modulu (záložka "Cenotvorba" v PrintStudio Pro), nie z vlastneho nastavenia.
+function NakladovyVysledok({ vc, ks, config, plochaCm2, jednotka, onPouzit, disabled }) {
+  const predajna = priceAt(vc, ks, config);
+  const marza = marginAt(vc, ks, config);
   const cenaCm2 = plochaCm2 > 0 ? predajna / plochaCm2 : 0;
   return (
     <div className="bg-slate-950 rounded-xl border border-indigo-900/40 p-4 mt-3 space-y-2">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
         <div><span className="text-slate-500 block">Výrobná cena (VC)</span><span className="text-white font-bold">{vc.toFixed(3)} €/ks</span></div>
-        <div><span className="text-slate-500 block">Násobok (marža)</span><span className="text-white font-bold">×{nasobok.toFixed(2)}</span></div>
+        <div><span className="text-slate-500 block">Marža</span><span className="text-white font-bold">{marza.toFixed(0)} %</span></div>
         <div><span className="text-slate-500 block">Odporúčaná cena</span><span className="text-emerald-400 font-bold">{predajna.toFixed(2)} €/ks</span></div>
         <div><span className="text-slate-500 block">= sadzba</span><span className="text-emerald-400 font-bold">{cenaCm2.toFixed(4)} {jednotka || '€/cm²'}</span></div>
       </div>
@@ -36,7 +34,7 @@ export default function CennikTab({ supabase }) {
   const [folie, setFolie] = useState([]);
 
   // Nakladove tabulky (nove)
-  const [marzaHladiny, setMarzaHladiny] = useState([]);
+  const [pricingConfig, setPricingConfig] = useState(DEFAULT_PRICING_CONFIG);
   const [sublimaciaNaklady, setSublimaciaNaklady] = useState({ cena_papier_bm: 0, sirka_papiera_cm: 160, cena_farba_liter: 0, spotreba_farba_ml_m2: 0, naklady_manipulacia: 0, cas_nazehlovania_min: 0, cena_prace_hod: 0 });
   const [dtfNaklady, setDtfNaklady] = useState(null);
   const [sietotlacVelkosti, setSietotlacVelkosti] = useState([]);
@@ -53,12 +51,12 @@ export default function CennikTab({ supabase }) {
 
   const nacitaj = async () => {
     setIsLoading(true);
-    const [{ data: tech }, { data: sieto }, { data: fol }, { data: rez }, { data: marza }, { data: subNak }, { data: dtfNak }, { data: sietoVel }] = await Promise.all([
+    const [{ data: tech }, { data: sieto }, { data: fol }, { data: rez }, { data: cfg }, { data: subNak }, { data: dtfNak }, { data: sietoVel }] = await Promise.all([
       supabase.from('cennik_technologie').select('*'),
       supabase.from('cennik_sietotlac').select('*').eq('id', 1).maybeSingle(),
       supabase.from('cennik_folie').select('*').order('id'),
       supabase.from('cennik_rezany_transfer').select('*').eq('id', 1).maybeSingle(),
-      supabase.from('cennik_marza_hladiny').select('*').order('poradie'),
+      supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
       supabase.from('cennik_sublimacia_naklady').select('*').eq('id', 1).maybeSingle(),
       supabase.from('dtf_naklady').select('*').eq('id', 1).maybeSingle(),
       supabase.from('cennik_sietotlac_velkosti').select('*').order('poradie'),
@@ -71,7 +69,7 @@ export default function CennikTab({ supabase }) {
     if (rez) setRezany({ min_cena: rez.min_cena, cena_bm: rez.cena_bm || 0, sirka_folie_cm: rez.sirka_folie_cm || 50, sirka_vyuzitelna_cm: rez.sirka_vyuzitelna_cm || 49, naklady_manipulacia: rez.naklady_manipulacia || 0, cas_nazehlovania_min: rez.cas_nazehlovania_min || 0, cena_prace_hod: rez.cena_prace_hod || 0 });
     setFolie(fol || []);
     if ((fol || []).length > 0) { setTestFoliaId(fol[0].id); setRezanyFoliaTarget(fol[0].id); }
-    setMarzaHladiny(marza || []);
+    if (cfg) setPricingConfig(mapConfigFromDb(cfg));
     if (subNak) setSublimaciaNaklady(subNak);
     setDtfNaklady(dtfNak || null);
     setSietotlacVelkosti(sietoVel || []);
@@ -126,21 +124,6 @@ export default function CennikTab({ supabase }) {
     await supabase.from('cennik_folie').delete().eq('id', id);
   };
 
-  // --- Marzovy matrix (spolocny) ---
-  const pridajHladinu = async () => {
-    const { data, error } = await supabase.from('cennik_marza_hladiny').insert({ min_ks: 1, max_ks: 1, nasobok: 2, poradie: marzaHladiny.length }).select().single();
-    if (!error && data) setMarzaHladiny(h => [...h, data]);
-  };
-  const upravHladinu = async (id, patch) => {
-    setMarzaHladiny(h => h.map(x => x.id === id ? { ...x, ...patch } : x));
-    await supabase.from('cennik_marza_hladiny').update(patch).eq('id', id);
-  };
-  const zmazHladinu = async (id) => {
-    if (!window.confirm('Zmazať túto maržovú hladinu?')) return;
-    setMarzaHladiny(h => h.filter(x => x.id !== id));
-    await supabase.from('cennik_marza_hladiny').delete().eq('id', id);
-  };
-
   // --- Sietotlac velkosti ---
   const pridajVelkost = async () => {
     const { data, error } = await supabase.from('cennik_sietotlac_velkosti').insert({ label: 'Nová veľkosť', sirka_cm: 10, vyska_cm: 10, spotreba_g_svetly: 0, spotreba_g_tmavy: 0, poradie: sietotlacVelkosti.length }).select().single();
@@ -159,7 +142,6 @@ export default function CennikTab({ supabase }) {
   const cennikProKalkulacku = { sublimacia, dtf, sietotlac, folie, rezanyMinCena: rezany.min_cena };
   const plocha = Math.round((parseFloat(testW) || 0) * (parseFloat(testH) || 0) * 10) / 10;
   const ks = Math.max(1, parseInt(testKs) || 1);
-  const nasobok = najdiNasobok(marzaHladiny, ks);
   const vysledok = vypocitajCenuPotlace(cennikProKalkulacku, testTech, plocha, parseInt(testFarby) || 1, testTmavyTextil, testFoliaId);
 
   // --- Nakladove vypocty (VC = vyrobna cena na 1ks pri referencnej velkosti/plose) ---
@@ -221,32 +203,7 @@ export default function CennikTab({ supabase }) {
           <div><label className={labelCls}>Výška (cm)</label><input type="number" value={testH} onChange={(e) => setTestH(e.target.value)} className={inputCls} /></div>
           <div><label className={labelCls}>Počet ks</label><input type="number" min="1" value={testKs} onChange={(e) => setTestKs(e.target.value)} className={inputCls} /></div>
         </div>
-        <p className="text-[11px] text-slate-500 mt-2">Plocha: <strong className="text-white">{plocha} cm²</strong> • Marža pri {ks} ks: <strong className="text-white">×{nasobok.toFixed(2)}</strong></p>
-      </div>
-
-      {/* MARZOVY MATRIX */}
-      <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-5">
-        <div className="flex items-center justify-between mb-2">
-          <div>
-            <h3 className="font-bold text-sm text-white">Maržový matrix (spoločný pre všetky technológie)</h3>
-            <p className="text-xs text-slate-400 mt-0.5">Násobok sa aplikuje na výrobnú cenu podľa počtu kusov v objednávke (napr. VC 1 € × 4,0 = 4 € pri 1 ks).</p>
-          </div>
-          <button onClick={pridajHladinu} className="text-xs text-indigo-400 font-semibold hover:text-indigo-300 flex items-center gap-1 shrink-0"><Plus className="w-3.5 h-3.5" /> Pridať hladinu</button>
-        </div>
-        <div className="space-y-1.5">
-          {marzaHladiny.map(h => (
-            <div key={h.id} className="flex items-center gap-2 text-xs">
-              <span className="text-slate-500 w-10">od</span>
-              <input type="number" value={h.min_ks} onChange={(e) => upravHladinu(h.id, { min_ks: parseInt(e.target.value) || 0 })} className="w-20 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded text-white" />
-              <span className="text-slate-500 w-10">do</span>
-              <input type="number" value={h.max_ks} onChange={(e) => upravHladinu(h.id, { max_ks: parseInt(e.target.value) || 0 })} className="w-20 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded text-white" />
-              <span className="text-slate-500">ks → násobok</span>
-              <input type="number" step="0.1" value={h.nasobok} onChange={(e) => upravHladinu(h.id, { nasobok: parseFloat(e.target.value) || 0 })} className="w-20 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded text-white" />
-              <button onClick={() => zmazHladinu(h.id)} className="text-slate-500 hover:text-rose-400 p-1 shrink-0"><Trash2 className="w-3.5 h-3.5" /></button>
-            </div>
-          ))}
-          {marzaHladiny.length === 0 && <p className="text-xs text-slate-500">Zatiaľ žiadne hladiny — kým nejaké pridáš, násobok bude vždy ×1.</p>}
-        </div>
+        <p className="text-[11px] text-slate-500 mt-2">Plocha: <strong className="text-white">{plocha} cm²</strong> • Marža pri {ks} ks závisí od výrobnej ceny každej technológie — nastavuje sa v záložke <strong className="text-white">Cenotvorba</strong> (5 koeficientov, jednotné pre celé PrintStudio Pro).</p>
       </div>
 
       {/* SUBLIMÁCIA */}
@@ -269,7 +226,7 @@ export default function CennikTab({ supabase }) {
             <div><label className={labelCls}>Čas nažehľovania (min/ks)</label><input type="number" step="0.1" value={sublimaciaNaklady.cas_nazehlovania_min} onChange={(e) => ulozSublimaciaNaklady({ cas_nazehlovania_min: parseFloat(e.target.value) || 0 })} className={inputCls} /></div>
             <div><label className={labelCls}>Cena práce (€/hod)</label><input type="number" step="0.5" value={sublimaciaNaklady.cena_prace_hod} onChange={(e) => ulozSublimaciaNaklady({ cena_prace_hod: parseFloat(e.target.value) || 0 })} className={inputCls} /></div>
           </div>
-          <NakladovyVysledok vc={vcSublimacia} nasobok={nasobok} predajna={vcSublimacia * nasobok} plochaCm2={plocha} onPouzit={(cena) => ulozSublimacia({ cena_cm2: Number(cena.toFixed(4)) })} disabled={plocha === 0} />
+          <NakladovyVysledok vc={vcSublimacia} ks={ks} config={pricingConfig} plochaCm2={plocha} onPouzit={(cena) => ulozSublimacia({ cena_cm2: Number(cena.toFixed(4)) })} disabled={plocha === 0} />
         </div>
       </div>
 
@@ -294,7 +251,7 @@ export default function CennikTab({ supabase }) {
                 <div><label className={labelCls}>Čas nažehľovania (min/ks)</label><input type="number" step="0.1" value={dtfNaklady.cas_nazehlovania_min || 0} onChange={(e) => ulozDtfNaklady({ cas_nazehlovania_min: parseFloat(e.target.value) || 0 })} className={inputCls} /></div>
                 <div><label className={labelCls}>Cena práce (€/hod)</label><input type="number" step="0.5" value={dtfNaklady.cena_prace_hod || 0} onChange={(e) => ulozDtfNaklady({ cena_prace_hod: parseFloat(e.target.value) || 0 })} className={inputCls} /></div>
               </div>
-              <NakladovyVysledok vc={vcDtf} nasobok={nasobok} predajna={vcDtf * nasobok} plochaCm2={plocha} onPouzit={(cena) => ulozDtf({ cena_cm2: Number(cena.toFixed(4)) })} disabled={plocha === 0} />
+              <NakladovyVysledok vc={vcDtf} ks={ks} config={pricingConfig} plochaCm2={plocha} onPouzit={(cena) => ulozDtf({ cena_cm2: Number(cena.toFixed(4)) })} disabled={plocha === 0} />
             </>
           )}
         </div>
@@ -352,7 +309,7 @@ export default function CennikTab({ supabase }) {
                   <button onClick={() => setTestTmavyTextil(true)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold border-2 transition ${testTmavyTextil ? 'border-indigo-500 bg-indigo-950/40 text-indigo-300' : 'border-slate-700 text-slate-400'}`}>Tmavý</button>
                 </div>
               </div>
-              <NakladovyVysledok vc={vcSietotlac} nasobok={nasobok} predajna={vcSietotlac * nasobok} plochaCm2={plochaSietotlacCm2} onPouzit={(cena) => ulozSietotlac(testTmavyTextil ? { cena_cm2_tmavy: Number(cena.toFixed(4)) } : { cena_cm2: Number(cena.toFixed(4)) })} disabled={plochaSietotlacCm2 === 0} />
+              <NakladovyVysledok vc={vcSietotlac} ks={ks} config={pricingConfig} plochaCm2={plochaSietotlacCm2} onPouzit={(cena) => ulozSietotlac(testTmavyTextil ? { cena_cm2_tmavy: Number(cena.toFixed(4)) } : { cena_cm2: Number(cena.toFixed(4)) })} disabled={plochaSietotlacCm2 === 0} />
             </>
           )}
         </div>
@@ -402,7 +359,7 @@ export default function CennikTab({ supabase }) {
               </select>
             </div>
           )}
-          <NakladovyVysledok vc={vcRezany.vc} nasobok={nasobok} predajna={vcRezany.vc * nasobok} plochaCm2={plocha} onPouzit={(cena) => rezanyFoliaTarget && upravFoliu(rezanyFoliaTarget, { cena_cm2: Number(cena.toFixed(4)) })} disabled={plocha === 0 || !rezanyFoliaTarget} />
+          <NakladovyVysledok vc={vcRezany.vc} ks={ks} config={pricingConfig} plochaCm2={plocha} onPouzit={(cena) => rezanyFoliaTarget && upravFoliu(rezanyFoliaTarget, { cena_cm2: Number(cena.toFixed(4)) })} disabled={plocha === 0 || !rezanyFoliaTarget} />
         </div>
       </div>
 

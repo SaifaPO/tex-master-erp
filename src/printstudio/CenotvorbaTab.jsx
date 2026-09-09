@@ -1,53 +1,21 @@
 import { useState, useEffect, useMemo, Fragment } from 'react';
 import { Calculator, ArrowUp, ArrowDown, Download, Loader2, AlertTriangle, Save } from 'lucide-react';
+import { priceAt, marginAt, QUANTITY_LEVELS, QTY_PRESETS, mapConfigFromDb, mapConfigToDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 
-// ============================================================
-// Marzovy cenovy modul — dynamicka cenotvorba podla vyrobnej ceny a poctu kusov.
-// Vzorec je presne podla specifikacie (erp-marzovy-modul-specifikacia.md), overene
-// proti kontrolnej tabulke zo specifikacie (napr. VC 1€/1ks -> 4,00€, VC 100€/1ks
-// -> 151,32€, VC 500€ pri lubovolnom odbere -> 650,00€). NEMENIT poradie krokov
-// ani zaokruhlovanie (zaokruhlovat az na konci) — inak sa vysledky rozidu s tabulkou.
-// ============================================================
+// Toto je JEDINÉ miesto v appke, kde sa nastavuje 5 koeficientov marže (pricing_config) —
+// pouziva ich aj Cennik potlace (nakladove kalkulacky sublimacia/DTF/sietotlac/rezany transfer).
+// Tabulka nizsie navyse ukazuje cennik pre cely katalog produktov (products v hlavnom ERP).
 
-function baseMargin(cost, cfg) {
-  const c = Math.max(cost, 0.05);
-  const m = cfg.coefA - cfg.coefB * Math.log(c);
-  return Math.min(Math.max(m, cfg.marginFloor), 450);
-}
-function marginAt(cost, qty, cfg) {
-  const base = baseMargin(cost, cfg);
-  const q = Math.max(qty, 1);
-  const qm = Math.max(cfg.qtyAtFloor, 2);
-  const t = Math.max(0, 1 - Math.log10(q) / Math.log10(qm));
-  const decay = Math.pow(t, cfg.coefP);
-  return cfg.marginFloor + (base - cfg.marginFloor) * decay;
-}
-function priceAt(cost, qty, cfg) {
-  return Math.round(cost * (1 + marginAt(cost, qty, cfg) / 100) * 100) / 100;
-}
-
-// Odberove hladiny zobrazene v cenniku (kazdy produkt x kazda hladina) — samostatne
-// od rychlych tlacidiel prepinaca nizsie, presne podla specifikacie.
-const QUANTITY_LEVELS = [1, 10, 25, 50, 100, 250, 500, 1000];
-const QTY_PRESETS = [1, 5, 10, 25, 50, 100, 250, 500, 1000];
-
-const mapConfigFromDb = (r) => ({
-  coefA: Number(r.coef_a), coefB: Number(r.coef_b), marginFloor: Number(r.margin_floor),
-  coefP: Number(r.coef_p), qtyAtFloor: Number(r.qty_at_floor),
-});
-const mapConfigToDb = (c) => ({
-  coef_a: c.coefA, coef_b: c.coefB, margin_floor: c.marginFloor, coef_p: c.coefP, qty_at_floor: c.qtyAtFloor,
-});
-
-const DEFAULT_CONFIG = { coefA: 300, coefB: 54, marginFloor: 30, coefP: 1.3, qtyAtFloor: 1000 };
+const mapProductFromDb = (r) => ({ id: r.id, name: r.name, productionCost: r.production_cost ?? null, priceGroup: r.price_group || '' });
 
 function csvEscape(v) {
   const s = String(v ?? '');
   return /[",;\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-export default function CenotvorbaTab({ supabase, products, triggerNotification }) {
-  const [config, setConfig] = useState(DEFAULT_CONFIG);
+export default function CenotvorbaTab({ supabase }) {
+  const [config, setConfig] = useState(DEFAULT_PRICING_CONFIG);
+  const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [sortField, setSortField] = useState('name');
@@ -55,13 +23,24 @@ export default function CenotvorbaTab({ supabase, products, triggerNotification 
   const [refQty, setRefQty] = useState(1);
   const [refQtyText, setRefQtyText] = useState('1');
   const [savingRowId, setSavingRowId] = useState(null);
+  const [message, setMessage] = useState(null);
+
+  const notify = (type, text) => {
+    setMessage({ type, text });
+    if (type === 'success') setTimeout(() => setMessage(m => (m && m.text === text ? null : m)), 3000);
+  };
 
   useEffect(() => {
     let active = true;
     (async () => {
-      const { data, error } = await supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle();
-      if (active && !error && data) setConfig(mapConfigFromDb(data));
-      if (active) setLoading(false);
+      const [{ data: cfg }, { data: prod }] = await Promise.all([
+        supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
+        supabase.from('products').select('id, name, production_cost, price_group').order('name'),
+      ]);
+      if (!active) return;
+      if (cfg) setConfig(mapConfigFromDb(cfg));
+      setProducts((prod || []).map(mapProductFromDb));
+      setLoading(false);
     })();
     return () => { active = false; };
   }, [supabase]);
@@ -70,20 +49,14 @@ export default function CenotvorbaTab({ supabase, products, triggerNotification 
     setSaving(true);
     const { error } = await supabase.from('pricing_config').update(mapConfigToDb(config)).eq('id', 1);
     setSaving(false);
-    if (error) triggerNotification('error', error.message);
-    else triggerNotification('success', 'Koeficienty cenotvorby boli uložené.');
+    if (error) notify('error', error.message);
+    else notify('success', 'Koeficienty cenotvorby boli uložené.');
   };
 
   const handleSort = (field) => {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     else { setSortField(field); setSortDir('asc'); }
   };
-
-  // Update do 'products' sa v App.jsx aj spatne premietne cez realtime, ale to moze meskat/vypadnut
-  // (rovnaky problem ako pri ACL zaskrtavatku) - preto zmenu ukazeme v tabulke okamzite lokalne
-  // a vratime sposat len ak zapis do DB zlyha.
-  const [localOverrides, setLocalOverrides] = useState({});
-  const mergedProducts = useMemo(() => products.map(p => localOverrides[p.id] ? { ...p, ...localOverrides[p.id] } : p), [products, localOverrides]);
 
   const handleRowFieldBlur = async (product, field, rawValue) => {
     let patch, localPatch;
@@ -97,13 +70,13 @@ export default function CenotvorbaTab({ supabase, products, triggerNotification 
       patch = { price_group: val };
       localPatch = { priceGroup: val || '' };
     }
-    setLocalOverrides(prev => ({ ...prev, [product.id]: { ...prev[product.id], ...localPatch } }));
+    setProducts(prev => prev.map(p => p.id === product.id ? { ...p, ...localPatch } : p)); // okamzita zmena v UI, nespoliehat sa na neskorsi refetch
     setSavingRowId(product.id);
     const { error } = await supabase.from('products').update(patch).eq('id', product.id);
     setSavingRowId(null);
     if (error) {
-      triggerNotification('error', error.message);
-      setLocalOverrides(prev => { const next = { ...prev }; delete next[product.id]; return next; });
+      notify('error', error.message);
+      setProducts(prev => prev.map(p => p.id === product.id ? { ...p, [field]: field === 'productionCost' ? product.productionCost : product.priceGroup } : p)); // vratit spat ak zapis zlyha
     }
   };
 
@@ -111,12 +84,12 @@ export default function CenotvorbaTab({ supabase, products, triggerNotification 
 
   const groupOptions = useMemo(() => {
     const set = new Set();
-    mergedProducts.forEach(p => { if (p.priceGroup) set.add(p.priceGroup); });
+    products.forEach(p => { if (p.priceGroup) set.add(p.priceGroup); });
     return Array.from(set).sort();
-  }, [mergedProducts]);
+  }, [products]);
 
   const sortedProducts = useMemo(() => {
-    const arr = [...mergedProducts];
+    const arr = [...products];
     const dir = sortDir === 'asc' ? 1 : -1;
     arr.sort((a, b) => {
       if (sortField === 'cost') return ((a.productionCost ?? -1) - (b.productionCost ?? -1)) * dir;
@@ -124,7 +97,7 @@ export default function CenotvorbaTab({ supabase, products, triggerNotification 
       return (a.name || '').localeCompare(b.name || '') * dir;
     });
     return arr;
-  }, [mergedProducts, sortField, sortDir]);
+  }, [products, sortField, sortDir]);
 
   const handleRefQtyPreset = (q) => { setRefQty(q); setRefQtyText(String(q)); };
   const handleRefQtyText = (v) => {
@@ -163,11 +136,15 @@ export default function CenotvorbaTab({ supabase, products, triggerNotification 
         <Calculator className="h-5 w-5 text-indigo-400" />
         <h2 className="text-lg font-bold text-white">Cenotvorba — maržový modul</h2>
       </div>
+      {message && (
+        <div className={`text-xs font-semibold rounded-lg px-3 py-2 -mt-2 ${message.type === 'error' ? 'bg-rose-950/40 text-rose-400 border border-rose-900/40' : 'bg-emerald-950/40 text-emerald-400 border border-emerald-900/40'}`}>{message.text}</div>
+      )}
       <p className="text-xs text-slate-400 -mt-4">
-        Cena sa vždy dopočítava z výrobnej ceny a 5 koeficientov nižšie — nikde sa neukladá natvrdo.
-        Zmena koeficientu okamžite prepočíta ceny všetkých produktov v tabuľke.
-        Pozor: tento modul zatiaľ nie je napojený na tvorbu cenových ponúk/zákaziek — je to samostatný
-        cenník/kalkulačka. Ak sa raz použije priamo pri vystavovaní dokumentu, treba vypočítanú cenu
+        Jediné miesto na nastavenie marže v celom PrintStudio Pro — 5 koeficientov nižšie používa aj
+        záložka "Cenník potlače" (nákladové kalkulačky sublimácia/DTF/sieťotlač/rezaný transfer).
+        Cena sa vždy dopočítava z výrobnej ceny — nikde sa neukladá natvrdo, zmena koeficientu okamžite
+        prepočíta ceny všade. Pozor: tento modul zatiaľ nie je napojený priamo na tvorbu cenových
+        ponúk/zákaziek — ak sa raz použije priamo pri vystavovaní dokumentu, treba vypočítanú cenu
         k danému dokumentu zmraziť (uložiť ako snapshot), aby sa spätne nezmenila pri úprave koeficientov.
       </p>
 
@@ -219,7 +196,7 @@ export default function CenotvorbaTab({ supabase, products, triggerNotification 
         </button>
       </div>
 
-      {/* Tabulka produktov + cennik */}
+      {/* Tabulka produktov + cennik (katalog produktov z hlavneho ERP) */}
       <div className="overflow-x-auto bg-slate-900 border border-slate-800 rounded-lg">
         <table className="w-full text-xs">
           <thead>
