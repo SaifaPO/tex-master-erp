@@ -1,9 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Scroll, UploadCloud, Truck, Eye, ShoppingCart, TriangleAlert, CreditCard } from 'lucide-react';
+import { priceAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 
 const BUCKET = 'print-designs';
 const ROLL_WIDTH_CM = 56;
 const MARGIN_CM = 0.5;
+// Referencne urovne (bm) len pre "Prehlad mnozstevnych zliav" nizsie — samotny vypocet ceny
+// funguje pre lubovolnu (aj neceloriselnu) dlzku, toto je len ilustracna tabulka.
+const BM_PREVIEW_LEVELS = [1, 5, 10, 25, 50, 100];
 
 function vypocitajRozlozenie(widthCm, heightCm, qty) {
   const effectiveWidth = Math.min(widthCm, ROLL_WIDTH_CM);
@@ -17,7 +21,8 @@ function vypocitajRozlozenie(widthCm, heightCm, qty) {
 export default function DtfMetraz({ supabase, onSpat }) {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
-  const [hladiny, setHladiny] = useState([]);
+  const [nakladBm, setNakladBm] = useState(0);
+  const [pricingConfig, setPricingConfig] = useState(DEFAULT_PRICING_CONFIG);
   const [nastavenia, setNastavenia] = useState(null);
 
   const [mode, setMode] = useState('auto'); // 'auto' | 'subor'
@@ -40,18 +45,20 @@ export default function DtfMetraz({ supabase, onSpat }) {
   useEffect(() => {
     if (!supabase) { setLoadError('Supabase klient nie je nakonfigurovaný.'); setIsLoading(false); return; }
     (async () => {
-      const [{ data: h }, { data: n }] = await Promise.all([
-        supabase.from('dtf_cenove_hladiny').select('*').order('poradie'),
+      const [{ data: nak }, { data: cfg }, { data: n }] = await Promise.all([
+        supabase.from('dtf_naklady_verejny').select('naklad_bm').maybeSingle(),
+        supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
         supabase.from('dtf_nastavenia').select('*').eq('id', 1).maybeSingle(),
       ]);
-      setHladiny(h || []);
+      setNakladBm(nak ? Number(nak.naklad_bm) : 0);
+      if (cfg) setPricingConfig(mapConfigFromDb(cfg));
       setNastavenia(n || null);
       setIsLoading(false);
     })();
   }, [supabase]);
 
   // ---- Výpočet ceny a metráže ----
-  let totalLengthBm = 0, totalM2 = 0, totalCm2 = 0, currentTier = null, subtotal = 0, expressFee = 0, shippingFee = 0, grandTotal = 0, capacityIssue = null;
+  let totalLengthBm = 0, totalM2 = 0, totalCm2 = 0, baseRate = 0, subtotal = 0, expressFee = 0, shippingFee = 0, grandTotal = 0, capacityIssue = null;
 
   if (nastavenia) {
     if (mode === 'auto') {
@@ -65,12 +72,9 @@ export default function DtfMetraz({ supabase, onSpat }) {
       totalCm2 = Math.round(totalM2 * 10000);
     }
 
-    currentTier = hladiny[0] || null;
-    for (const t of hladiny) {
-      if (totalLengthBm >= t.min_bm) currentTier = t;
-    }
-
-    const baseRate = currentTier ? Number(currentTier.cena_bm) : 0;
+    // Sadzba (€/bm) sa dopocitava z vyrobnej ceny na meter + jednotneho marzoveho vzorca
+    // (rovnaky ako v celom PrintStudio Pro) — vacsi odber = nizsia marza = nizsia sadzba.
+    baseRate = priceAt(nakladBm, totalLengthBm, pricingConfig);
     subtotal = Math.max(totalLengthBm * baseRate, Number(nastavenia.minimalna_cena_objednavky));
     expressFee = deliverySpeed === 'express' ? subtotal * (Number(nastavenia.priplatok_expres_percent) / 100) : 0;
     shippingFee = Number(nastavenia.cena_doprava);
@@ -192,7 +196,7 @@ export default function DtfMetraz({ supabase, onSpat }) {
         pocet_ks: mode === 'auto' ? qty : null,
         dlzka_bm: Math.round(totalLengthBm * 100) / 100,
         plocha_m2: Math.round(totalM2 * 100) / 100,
-        cena_hladina: currentTier?.label || null,
+        cena_hladina: `${baseRate.toFixed(2)} €/bm`,
         cena_spolu: Math.round(grandTotal * 100) / 100,
         doprava_rychlost: deliverySpeed,
         harmonogram: aktualnyHarmonogram,
@@ -352,7 +356,7 @@ export default function DtfMetraz({ supabase, onSpat }) {
               <span className="text-[10px] font-normal text-indigo-300 bg-indigo-500/10 px-2 py-1 rounded-full">Bez DPH</span>
             </h3>
             <div className="space-y-2 text-xs text-slate-300">
-              <Row label="Cenová hladina" value={currentTier ? `${currentTier.label} (${Number(currentTier.cena_bm).toFixed(2)} €/bm)` : '—'} />
+              <Row label="Sadzba pri tomto odbere" value={`${baseRate.toFixed(2)} €/bm`} />
               <Row label="Potrebná dĺžka rolky" value={`${totalLengthBm.toFixed(2)} bm`} highlight />
               <Row label="Tlačová plocha" value={`${totalM2.toFixed(2)} m²`} />
               <Row label="Príplatok za expres" value={`${expressFee.toFixed(2)} €`} />
@@ -381,19 +385,19 @@ export default function DtfMetraz({ supabase, onSpat }) {
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="border-b border-slate-100 text-slate-400 font-semibold">
-                <th className="p-2.5">Hladina</th><th className="p-2.5">Metráž od</th><th className="p-2.5">Cena €/bm</th><th className="p-2.5">Zľava</th>
+                <th className="p-2.5">Metráž</th><th className="p-2.5">Cena €/bm</th><th className="p-2.5">Zľava</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {hladiny.map(t => {
-                const isCurrent = currentTier && t.id === currentTier.id;
-                const base = Number(hladiny[0]?.cena_bm || t.cena_bm);
-                const discount = Math.round(((base - Number(t.cena_bm)) / base) * 100);
+              {BM_PREVIEW_LEVELS.map(level => {
+                const rate = priceAt(nakladBm, level, pricingConfig);
+                const base = priceAt(nakladBm, BM_PREVIEW_LEVELS[0], pricingConfig);
+                const discount = base > 0 ? Math.round(((base - rate) / base) * 100) : 0;
+                const isCurrent = totalLengthBm >= level && (level === BM_PREVIEW_LEVELS[BM_PREVIEW_LEVELS.length - 1] || totalLengthBm < BM_PREVIEW_LEVELS[BM_PREVIEW_LEVELS.indexOf(level) + 1]);
                 return (
-                  <tr key={t.id} className={isCurrent ? 'bg-indigo-50 font-semibold' : ''}>
-                    <td className="p-2.5 text-slate-700">{t.label} {isCurrent && <span className="ml-1 text-[10px] bg-indigo-600 text-white px-2 py-0.5 rounded-full">Váš odber</span>}</td>
-                    <td className="p-2.5 font-mono text-slate-500">{t.min_bm} bm{Number(t.max_bm) < 1000 ? ` - ${t.max_bm} bm` : '+'}</td>
-                    <td className="p-2.5 font-mono font-bold text-slate-900">{Number(t.cena_bm).toFixed(2)} €</td>
+                  <tr key={level} className={isCurrent ? 'bg-indigo-50 font-semibold' : ''}>
+                    <td className="p-2.5 text-slate-700">od {level} bm {isCurrent && <span className="ml-1 text-[10px] bg-indigo-600 text-white px-2 py-0.5 rounded-full">Váš odber</span>}</td>
+                    <td className="p-2.5 font-mono font-bold text-slate-900">{rate.toFixed(2)} €</td>
                     <td className={`p-2.5 font-mono ${discount > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>{discount > 0 ? `-${discount}%` : 'Základ'}</td>
                   </tr>
                 );

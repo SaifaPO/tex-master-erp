@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Scroll, Plus, Trash2, Download, Settings } from 'lucide-react';
+import { Scroll, Download, Settings } from 'lucide-react';
+import { priceAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 
 const BUCKET = 'print-designs';
+// Referencne urovne (bm) len na nahlad v tabulke nizsie — realny vypocet funguje pre lubovolnu dlzku.
+const BM_PREVIEW_LEVELS = [1, 5, 10, 25, 50, 100];
 
 const NAKLADY_DEFAULT = {
   cena_folie_bm: 1.8, cena_lepidlo_kg: 18, spotreba_lepidlo_m2: 0.02,
@@ -16,21 +19,21 @@ const NASTAVENIA_DEFAULT = {
 export default function DtfMetrazTab({ supabase }) {
   const [naklady, setNaklady] = useState(NAKLADY_DEFAULT);
   const [nastavenia, setNastavenia] = useState(NASTAVENIA_DEFAULT);
-  const [hladiny, setHladiny] = useState([]);
+  const [pricingConfig, setPricingConfig] = useState(DEFAULT_PRICING_CONFIG);
   const [objednavky, setObjednavky] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const nacitaj = async () => {
     setIsLoading(true);
-    const [{ data: n }, { data: s }, { data: h }, { data: o }] = await Promise.all([
+    const [{ data: n }, { data: s }, { data: cfg }, { data: o }] = await Promise.all([
       supabase.from('dtf_naklady').select('*').eq('id', 1).maybeSingle(),
       supabase.from('dtf_nastavenia').select('*').eq('id', 1).maybeSingle(),
-      supabase.from('dtf_cenove_hladiny').select('*').order('poradie'),
+      supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
       supabase.from('dtf_objednavky').select('*').order('created_at', { ascending: false }).limit(50),
     ]);
     if (n) setNaklady(n);
     if (s) setNastavenia(s);
-    setHladiny(h || []);
+    if (cfg) setPricingConfig(mapConfigFromDb(cfg));
     setObjednavky(o || []);
     setIsLoading(false);
   };
@@ -46,20 +49,6 @@ export default function DtfMetrazTab({ supabase }) {
     const next = { ...nastavenia, ...patch };
     setNastavenia(next);
     await supabase.from('dtf_nastavenia').upsert({ id: 1, ...next });
-  };
-
-  const pridajHladinu = async () => {
-    const { data, error } = await supabase.from('dtf_cenove_hladiny').insert({ label: 'Nová hladina', min_bm: 0, max_bm: 9999, cena_bm: 10, poradie: hladiny.length + 1 }).select().single();
-    if (!error && data) setHladiny(h => [...h, data]);
-  };
-  const upravHladinu = async (id, patch) => {
-    setHladiny(h => h.map(x => x.id === id ? { ...x, ...patch } : x));
-    await supabase.from('dtf_cenove_hladiny').update(patch).eq('id', id);
-  };
-  const zmazHladinu = async (id) => {
-    if (!window.confirm('Zmazať túto cenovú hladinu?')) return;
-    setHladiny(h => h.filter(x => x.id !== id));
-    await supabase.from('dtf_cenove_hladiny').delete().eq('id', id);
   };
 
   const stiahniSubor = async (ord) => {
@@ -151,25 +140,23 @@ export default function DtfMetrazTab({ supabase }) {
 
         <div className="lg:col-span-6 bg-slate-900/60 rounded-2xl border border-slate-800 p-5">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="font-bold text-sm text-white">Cenové hladiny (predajná cena)</h3>
+            <h3 className="font-bold text-sm text-white">Predajná cena (podľa jednotného maržového modulu)</h3>
             <span className="text-xs text-slate-400 font-mono">Náklad/1bm: <strong className="text-emerald-400">{nakladBm.toFixed(2)} €</strong></span>
           </div>
-          <div className="space-y-2 mb-3">
-            {hladiny.map(t => {
-              const marginEur = Number(t.cena_bm) - nakladBm;
-              const marginPct = Math.round((marginEur / Number(t.cena_bm)) * 100);
+          <p className="text-xs text-slate-400 mb-3">Marža sa už nenastavuje tu — počíta sa rovnakým vzorcom ako v celom PrintStudio Pro, nastavíš ju v záložke <strong className="text-slate-200">Cenotvorba</strong>. Nižšie je len náhľad výslednej ceny pri rôznej metráži.</p>
+          <div className="space-y-1.5 mb-3">
+            {BM_PREVIEW_LEVELS.map(level => {
+              const rate = priceAt(nakladBm, level, pricingConfig);
+              const marginPct = rate > 0 ? Math.round(((rate - nakladBm) / rate) * 100) : 0;
               return (
-                <div key={t.id} className="p-2.5 bg-slate-950 rounded-xl border border-slate-800 flex flex-wrap items-center gap-2 text-xs">
-                  <input type="text" value={t.label} onChange={(e) => upravHladinu(t.id, { label: e.target.value })} className="flex-1 min-w-[120px] px-2 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white" />
-                  <div className="flex items-center gap-1 text-slate-400">od <input type="number" step="0.5" value={t.min_bm} onChange={(e) => upravHladinu(t.id, { min_bm: parseFloat(e.target.value) || 0 })} className="w-16 px-1.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono" /> bm</div>
-                  <div className="flex items-center gap-1 text-slate-400">cena <input type="number" step="0.1" value={t.cena_bm} onChange={(e) => upravHladinu(t.id, { cena_bm: parseFloat(e.target.value) || 0 })} className="w-16 px-1.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono font-bold" /> €</div>
-                  <span className={`font-mono font-bold ${marginPct > 30 ? 'text-emerald-400' : 'text-amber-400'}`}>{marginPct}%</span>
-                  <button onClick={() => zmazHladinu(t.id)} className="text-slate-400 hover:text-rose-400 p-1"><Trash2 className="w-3.5 h-3.5" /></button>
+                <div key={level} className="p-2.5 bg-slate-950 rounded-xl border border-slate-800 flex flex-wrap items-center gap-3 text-xs">
+                  <span className="text-slate-400 w-20">od {level} bm</span>
+                  <span className="text-white font-mono font-bold">{rate.toFixed(2)} €/bm</span>
+                  <span className={`font-mono font-bold ${marginPct > 30 ? 'text-emerald-400' : 'text-amber-400'}`}>{marginPct}% marža</span>
                 </div>
               );
             })}
           </div>
-          <button onClick={pridajHladinu} className="text-xs text-indigo-400 font-semibold hover:text-indigo-300 flex items-center gap-1"><Plus className="w-3.5 h-3.5" /> Pridať cenovú hladinu</button>
         </div>
       </div>
 
