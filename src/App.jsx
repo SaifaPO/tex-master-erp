@@ -233,8 +233,8 @@ const FALLBACK_ACL = {
 const mapMaterialFromDb = (r) => ({ id: r.id, name: r.name, color: r.color, colorHex: r.color_hex || '', width: r.width, weight: r.weight, pricePerM: r.price_per_m, qty: r.qty, unit: r.unit, minQty: r.min_qty, warehouseId: r.warehouse_id || 'sklad-1', manufacturer: r.manufacturer || '', productType: r.product_type || '', deliveryNoteNumber: r.delivery_note_number || '', deliveryNoteDate: r.delivery_note_date || '', history: r.history || [] });
 const mapMaterialToDb = (m) => ({ id: m.id, name: m.name, color: m.color, color_hex: m.colorHex || null, width: m.width, weight: m.weight, price_per_m: m.pricePerM, qty: m.qty, unit: m.unit, min_qty: m.minQty, warehouse_id: m.warehouseId, manufacturer: m.manufacturer || null, product_type: m.productType || null, delivery_note_number: m.deliveryNoteNumber || null, delivery_note_date: m.deliveryNoteDate || null, history: m.history });
 
-const mapProductFromDb = (r) => ({ id: r.id, customCode: r.custom_code, name: r.name, sports: r.sports || [], layer1: r.layer1, layer2: r.layer2, layer3: r.layer3, threadM: r.thread_m, womenRatioPercent: r.women_ratio_percent ?? 90, childrenRatioPercent: r.children_ratio_percent ?? 65, productionCost: r.production_cost ?? null, priceGroup: r.price_group || '' });
-const mapProductToDb = (p) => ({ id: p.id, custom_code: p.customCode, name: p.name, sports: p.sports, layer1: p.layer1, layer2: p.layer2, layer3: p.layer3, thread_m: p.threadM, women_ratio_percent: p.womenRatioPercent, children_ratio_percent: p.childrenRatioPercent, production_cost: p.productionCost ?? null, price_group: p.priceGroup || null });
+const mapProductFromDb = (r) => ({ id: r.id, customCode: r.custom_code, name: r.name, sports: r.sports || [], layer1: r.layer1, layer2: r.layer2, layer3: r.layer3, threadM: r.thread_m, womenRatioPercent: r.women_ratio_percent ?? 90, childrenRatioPercent: r.children_ratio_percent ?? 65, productionCost: r.production_cost ?? null, priceGroup: r.price_group || '', redukovanyVykon: r.redukovany_vykon ?? null });
+const mapProductToDb = (p) => ({ id: p.id, custom_code: p.customCode, name: p.name, sports: p.sports, layer1: p.layer1, layer2: p.layer2, layer3: p.layer3, thread_m: p.threadM, women_ratio_percent: p.womenRatioPercent, children_ratio_percent: p.childrenRatioPercent, production_cost: p.productionCost ?? null, price_group: p.priceGroup || null, redukovany_vykon: p.redukovanyVykon ?? null });
 
 const mapTierFromDb = (r) => ({ id: r.id, name: r.name, fit: r.fit, ventilation: r.ventilation, desc: r.description });
 const mapTierToDb = (t) => ({ id: t.id, name: t.name, fit: t.fit, ventilation: t.ventilation, description: t.desc });
@@ -1279,6 +1279,7 @@ export default function App() {
   const [newProductTimeLabel, setNewProductTimeLabel] = useState({});
   const [newProductTimeMinutes, setNewProductTimeMinutes] = useState({});
   const [showCapacityBars, setShowCapacityBars] = useState(true);
+  const [showRedukovaneVykony, setShowRedukovaneVykony] = useState(false);
 
   const [catalogSportFilter, setCatalogSportFilter] = useState('vsetko');
 
@@ -1354,6 +1355,8 @@ export default function App() {
   const [newModelLayer3Ge5, setNewModelLayer3Ge5] = useState('');
   const [newModelWomenRatio, setNewModelWomenRatio] = useState(90);
   const [newModelChildrenRatio, setNewModelChildrenRatio] = useState(65);
+  const [newModelProductionCost, setNewModelProductionCost] = useState('');
+  const [newModelRedukovanyVykon, setNewModelRedukovanyVykon] = useState('');
 
   const [newSportInput, setNewSportInput] = useState('');
   const [editingSportIndex, setEditingSportIndex] = useState(null);
@@ -3384,6 +3387,8 @@ export default function App() {
         layer3: newModelTertiary ? { materialId: newModelTertiary, alternativeIds: [], consumption: { lt5: parseFloat(newModelLayer3Lt5) || 0, ge5: parseFloat(newModelLayer3Ge5) || 0 } } : null,
         womenRatioPercent: parseFloat(newModelWomenRatio) || 90,
         childrenRatioPercent: parseFloat(newModelChildrenRatio) || 65,
+        productionCost: newModelProductionCost === '' ? null : parseFloat(newModelProductionCost) || 0,
+        redukovanyVykon: newModelRedukovanyVykon === '' ? null : parseFloat(newModelRedukovanyVykon) || 0,
         threadM: 15
       };
       const { error } = await supabase.from('products').insert(mapProductToDb(created));
@@ -3391,6 +3396,7 @@ export default function App() {
       setNewModelCode(''); setNewModelName('');
       setNewModelLayer1Lt5(''); setNewModelLayer1Ge5(''); setNewModelLayer2Lt5(''); setNewModelLayer2Ge5(''); setNewModelLayer3Lt5(''); setNewModelLayer3Ge5('');
       setNewModelWomenRatio(90); setNewModelChildrenRatio(65);
+      setNewModelProductionCost(''); setNewModelRedukovanyVykon('');
       triggerNotification('success', `Model "${created.name}" pridaný do katalógu.`);
     }
   };
@@ -4343,6 +4349,18 @@ export default function App() {
     const { error } = await supabase.from('orders').update({ items: updatedItems }).eq('id', orderId);
     if (error) { triggerNotification('error', error.message); return; }
     if (selectedOrderDetails?.id === orderId) setSelectedOrderDetails({ ...order, items: updatedItems });
+  };
+
+  // Rucny prepis redukovaneho vykonu / vyrobnej ceny pre konkretnu polozku zakazky — pouzije sa,
+  // ked v katalogu produktov chyba udaj alebo je pre danu zakazku ina (napr. akcia na zakazku).
+  const handleSetItemOverride = async (orderId, itemId, field, rawValue) => {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+    const value = rawValue === '' ? null : parseFloat(rawValue.replace(',', '.'));
+    const updatedItems = order.items.map(item => item.itemId === itemId ? { ...item, [field]: Number.isFinite(value) ? value : null } : item);
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, items: updatedItems } : o)); // okamzita zmena v UI, nespoliehat sa len na spatny realtime prenos
+    const { error } = await supabase.from('orders').update({ items: updatedItems }).eq('id', orderId);
+    if (error) triggerNotification('error', error.message);
   };
 
   const handleReassignDesigner = async (orderId, itemId, newDesignerId) => {
@@ -5576,6 +5594,9 @@ export default function App() {
                       <label className="flex items-center gap-1.5 cursor-pointer select-none">
                         <input type="checkbox" checked={showCapacityBars} onChange={(e) => setShowCapacityBars(e.target.checked)} className="accent-indigo-600" /> Zobraziť vyťaženie
                       </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                        <input type="checkbox" checked={showRedukovaneVykony} onChange={(e) => setShowRedukovaneVykony(e.target.checked)} className="accent-indigo-600" /> Zobraziť redukované výkony
+                      </label>
                       {hasPermission('manage_catalog') && (
                         <button onClick={handleOpenCapacitySettings} className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5"><Sliders className="h-3.5 w-3.5" /> Kapacita výroby</button>
                       )}
@@ -5750,6 +5771,22 @@ export default function App() {
                                                 </div>
                                                 <p className="font-extrabold text-slate-100 text-[10px] truncate">{item.customer}</p>
                                                 <p className="text-[9px] text-slate-400 truncate">{item.productName} • {item.qty} ks</p>
+                                                {showRedukovaneVykony && (() => {
+                                                  const productMatch = products.find(p => p.id === item.productId);
+                                                  const rvKatalog = productMatch?.redukovanyVykon != null ? productMatch.redukovanyVykon * item.qty : null;
+                                                  const vcKatalog = productMatch?.productionCost != null ? productMatch.productionCost * item.qty : null;
+                                                  const rv = item.redukovanyVykonOverride ?? rvKatalog;
+                                                  const vc = item.vyrobnaCenaOverride ?? vcKatalog;
+                                                  const chybaData = rv == null && vc == null;
+                                                  return (
+                                                    <p className="text-[9px] text-slate-500 truncate flex items-center gap-1">
+                                                      RV:{rv != null ? rv.toFixed(1) : '—'} · VC:{vc != null ? vc.toFixed(1) : '—'}€
+                                                      {chybaData && (
+                                                        <button onClick={(e) => { e.stopPropagation(); setActiveTab('catalog'); if (productMatch) setEditingProduct(productMatch); }} title="Chýbajú dáta v katalógu" className="text-amber-500 shrink-0"><AlertTriangle className="h-2.5 w-2.5" /></button>
+                                                      )}
+                                                    </p>
+                                                  );
+                                                })()}
                                                 <select
                                                   value={statusId}
                                                   onClick={(e) => e.stopPropagation()}
@@ -5776,6 +5813,24 @@ export default function App() {
                                                 <p className="font-extrabold text-slate-100 text-[11px] truncate">{item.customer}</p>
                                                 <p className="text-[10px] text-slate-300 truncate">{item.productName} ({item.qualityTier})</p>
                                                 <p className="text-[10px] text-slate-400 font-bold">{item.qty} ks</p>
+                                                {showRedukovaneVykony && (() => {
+                                                  const productMatch = products.find(p => p.id === item.productId);
+                                                  const rvKatalog = productMatch?.redukovanyVykon != null ? productMatch.redukovanyVykon * item.qty : null;
+                                                  const vcKatalog = productMatch?.productionCost != null ? productMatch.productionCost * item.qty : null;
+                                                  const chybaData = rvKatalog == null && vcKatalog == null && item.redukovanyVykonOverride == null && item.vyrobnaCenaOverride == null;
+                                                  return (
+                                                    <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-1 text-[9px] text-slate-400 bg-slate-950/60 rounded px-1.5 py-1">
+                                                      <span className="shrink-0">RV</span>
+                                                      <input type="text" inputMode="decimal" placeholder={rvKatalog != null ? rvKatalog.toFixed(1) : '—'} defaultValue={item.redukovanyVykonOverride ?? ''} onBlur={(e2) => handleSetItemOverride(item.orderId, item.itemId, 'redukovanyVykonOverride', e2.target.value)} className="w-10 bg-slate-900 border border-slate-800 rounded px-1 text-slate-200" />
+                                                      <span className="shrink-0">VC</span>
+                                                      <input type="text" inputMode="decimal" placeholder={vcKatalog != null ? vcKatalog.toFixed(1) : '—'} defaultValue={item.vyrobnaCenaOverride ?? ''} onBlur={(e2) => handleSetItemOverride(item.orderId, item.itemId, 'vyrobnaCenaOverride', e2.target.value)} className="w-11 bg-slate-900 border border-slate-800 rounded px-1 text-slate-200" />
+                                                      <span className="shrink-0">€</span>
+                                                      {chybaData && (
+                                                        <button onClick={() => { setActiveTab('catalog'); if (productMatch) setEditingProduct(productMatch); }} title="Chýbajú dáta v katalógu — kliknutím otvoríš úpravu produktu" className="ml-auto text-amber-500 shrink-0"><AlertTriangle className="h-3 w-3" /></button>
+                                                      )}
+                                                    </div>
+                                                  );
+                                                })()}
                                                 <div className={`text-[9px] px-1.5 py-1 rounded ${isUrgentDate(item.deliveryDate) ? 'bg-rose-950/60 text-rose-300 font-bold' : 'bg-slate-950/60 text-slate-500'}`}>
                                                   Termín: {formatDeliveryDate(item.deliveryDate)}
                                                 </div>
@@ -6527,6 +6582,18 @@ export default function App() {
                         <label className="block text-slate-400 font-semibold mb-1">Detský strih (% z pánskeho)</label>
                         <input type="number" step="1" value={editingProduct ? (editingProduct.childrenRatioPercent ?? 65) : newModelChildrenRatio} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, childrenRatioPercent: parseFloat(e.target.value) || 0 }) : setNewModelChildrenRatio(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" />
                         <p className="text-[10px] text-slate-500 mt-0.5">napr. 65 = detský strih spotrebuje 65% pánskej spotreby</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 bg-slate-950 p-3 rounded-lg border border-slate-800">
+                      <div>
+                        <label className="block text-slate-400 font-semibold mb-1">Výrobná cena (€/ks)</label>
+                        <input type="number" step="0.01" placeholder="nezadané" value={editingProduct ? (editingProduct.productionCost ?? '') : newModelProductionCost} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, productionCost: e.target.value === '' ? null : parseFloat(e.target.value) || 0 }) : setNewModelProductionCost(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" />
+                        <p className="text-[10px] text-slate-500 mt-0.5">Rovnaké pole ako v Cenotvorbe (PrintStudio Pro) — materiál + šitie + režia + potlač na 1ks.</p>
+                      </div>
+                      <div>
+                        <label className="block text-slate-400 font-semibold mb-1">Redukovaný výkon (jednotky/ks)</label>
+                        <input type="number" step="0.01" placeholder="nezadané" value={editingProduct ? (editingProduct.redukovanyVykon ?? '') : newModelRedukovanyVykon} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, redukovanyVykon: e.target.value === '' ? null : parseFloat(e.target.value) || 0 }) : setNewModelRedukovanyVykon(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" />
+                        <p className="text-[10px] text-slate-500 mt-0.5">Koľko redukovaných jednotiek kapacity konfekcie spotrebuje 1 kus (pre Plánovaciu Maticu).</p>
                       </div>
                     </div>
                     <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2.5 rounded-lg uppercase">{editingProduct ? 'Uložiť Zmeny Modelu' : 'Pridať Model do Katalógu'}</button>
