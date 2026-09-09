@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Tag, Box, Palette, Type, Image as ImageIcon, Banknote, Camera, ShoppingBag, Scroll, Flag, Shirt, Calculator, Waves } from 'lucide-react';
+import { Tag, Box, Palette, Type, Image as ImageIcon, Banknote, Camera, ShoppingBag, Scroll, Flag, Shirt, Calculator, Waves, ShoppingCart } from 'lucide-react';
 import KategorieTab from './KategorieTab';
 import ProduktyTab from './ProduktyTab';
 import FarbyTab from './FarbyTab';
@@ -13,6 +13,7 @@ import DtfMetrazTab from './DtfMetrazTab';
 import VlajkyAdmin from './VlajkyAdmin';
 import ZastavyAdmin from './ZastavyAdmin';
 import DresAdmin from './DresAdmin';
+import KalkulackaTlaceTab from './KalkulackaTlaceTab';
 
 // Vsetky Shopify konfiguratory (dotlac na tricka, DTF metraz, vlajky/beachvlajky, vyroba dresov)
 // zoskupene pod jednou kartou "PrintStudio Pro" v hlavnom ERP navigacii — namiesto samostatnych kariet.
@@ -25,6 +26,7 @@ const SUBTABS = [
   { id: 'mockupy', label: 'Fotky produktov', icon: Camera },
   { id: 'cenotvorba', label: 'Cenotvorba (marže)', icon: Calculator },
   { id: 'cennik', label: 'Cenník potlače', icon: Banknote },
+  { id: 'kalkulacka-tlace', label: 'Kalkulačka tlače (Cen. ponuky)', icon: ShoppingCart },
   { id: 'shopify', label: 'Shopify prepojenie', icon: ShoppingBag },
   { id: 'dtf-metraz', label: 'DTF metráž', icon: Scroll },
   { id: 'vlajky', label: 'Vlajky', icon: Flag },
@@ -66,6 +68,7 @@ export default function PrintStudioAdmin({ supabase }) {
         {subtab === 'mockupy' && <MockupyTab supabase={supabase} />}
         {subtab === 'cenotvorba' && <CenotvorbaTab supabase={supabase} />}
         {subtab === 'cennik' && <CennikTab supabase={supabase} />}
+        {subtab === 'kalkulacka-tlace' && <KalkulackaTlaceTab supabase={supabase} />}
         {subtab === 'shopify' && <ShopifyTab supabase={supabase} />}
         {subtab === 'dtf-metraz' && <DtfMetrazTab supabase={supabase} />}
         {subtab === 'vlajky' && <ZastavyAdmin supabase={supabase} />}

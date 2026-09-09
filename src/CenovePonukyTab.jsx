@@ -347,9 +347,6 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
   const [itemsMode, setItemsMode] = useState('vyroba');
   const [calcMethod, setCalcMethod] = useState('flex');
   const [calc, setCalc] = useState({ materialId: '', sizeId: '', farby: 1, ks: 1 });
-  const [calcAdminMethod, setCalcAdminMethod] = useState('flex');
-  const [newMaterialDraft, setNewMaterialDraft] = useState({ nazov: '', jednotka: 'bm', cenaZaJednotku: '' });
-  const [newSizeDraft, setNewSizeDraft] = useState({ label: '', spotreba: '' });
   const [documents, setDocuments] = useState([]);
   const [newDocumentDraft, setNewDocumentDraft] = useState({ category: DOCUMENT_CATEGORIES[0], name: '', description: '', file: null });
   const [isUploadingDocument, setIsUploadingDocument] = useState(false);
@@ -506,60 +503,6 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
     });
   };
 
-  const addPrintMaterial = async () => {
-    if (!supabase || !newMaterialDraft.nazov.trim()) return;
-    const item = { id: `pm-${Date.now()}`, metoda: calcAdminMethod, nazov: newMaterialDraft.nazov.trim(), jednotka: newMaterialDraft.jednotka || 'bm', cenaZaJednotku: parseFloat(newMaterialDraft.cenaZaJednotku) || 0, sortOrder: printMaterials.filter(m => m.metoda === calcAdminMethod).length };
-    const { error } = await supabase.from('quote_print_materials').insert({ id: item.id, metoda: item.metoda, nazov: item.nazov, jednotka: item.jednotka, cena_za_jednotku: item.cenaZaJednotku, sort_order: item.sortOrder });
-    if (error) { triggerNotification('error', error.message); return; }
-    setPrintMaterials(prev => [...prev, item]);
-    setNewMaterialDraft({ nazov: '', jednotka: newMaterialDraft.jednotka || 'bm', cenaZaJednotku: '' });
-    triggerNotification('success', 'Materiál pridaný.');
-  };
-
-  const updatePrintMaterial = async (id, field, value) => {
-    const parsed = field === 'cenaZaJednotku' ? (parseFloat(value) || 0) : value;
-    setPrintMaterials(prev => prev.map(m => m.id === id ? { ...m, [field]: parsed } : m));
-    if (!supabase) return;
-    const dbField = { nazov: 'nazov', jednotka: 'jednotka', cenaZaJednotku: 'cena_za_jednotku' }[field];
-    if (!dbField) return;
-    await supabase.from('quote_print_materials').update({ [dbField]: parsed }).eq('id', id);
-  };
-
-  const deletePrintMaterial = async (id) => {
-    if (!supabase) return;
-    if (!window.confirm('Vymazať tento materiál z kalkulačky?')) return;
-    const { error } = await supabase.from('quote_print_materials').delete().eq('id', id);
-    if (error) { triggerNotification('error', error.message); return; }
-    setPrintMaterials(prev => prev.filter(m => m.id !== id));
-  };
-
-  const addPrintSize = async () => {
-    if (!supabase || !newSizeDraft.label.trim()) return;
-    const item = { id: `ps-${Date.now()}`, metoda: calcAdminMethod, label: newSizeDraft.label.trim(), spotreba: parseFloat(newSizeDraft.spotreba) || 0, sortOrder: printSizes.filter(s => s.metoda === calcAdminMethod).length };
-    const { error } = await supabase.from('quote_print_sizes').insert({ id: item.id, metoda: item.metoda, label: item.label, spotreba: item.spotreba, sort_order: item.sortOrder });
-    if (error) { triggerNotification('error', error.message); return; }
-    setPrintSizes(prev => [...prev, item]);
-    setNewSizeDraft({ label: '', spotreba: '' });
-    triggerNotification('success', 'Veľkosť pridaná.');
-  };
-
-  const updatePrintSize = async (id, field, value) => {
-    const parsed = field === 'spotreba' ? (parseFloat(value) || 0) : value;
-    setPrintSizes(prev => prev.map(s => s.id === id ? { ...s, [field]: parsed } : s));
-    if (!supabase) return;
-    const dbField = { label: 'label', spotreba: 'spotreba' }[field];
-    if (!dbField) return;
-    await supabase.from('quote_print_sizes').update({ [dbField]: parsed }).eq('id', id);
-  };
-
-  const deletePrintSize = async (id) => {
-    if (!supabase) return;
-    if (!window.confirm('Vymazať túto veľkosť z kalkulačky?')) return;
-    const { error } = await supabase.from('quote_print_sizes').delete().eq('id', id);
-    if (error) { triggerNotification('error', error.message); return; }
-    setPrintSizes(prev => prev.filter(s => s.id !== id));
-  };
-
   const handleVisualUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -678,7 +621,6 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
           <button onClick={() => setSubTab('builder')} className={`px-3.5 py-2 rounded-lg flex items-center gap-2 ${subTab === 'builder' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Plus className="h-3.5 w-3.5" /> Nová ponuka</button>
           <button onClick={() => setSubTab('history')} className={`px-3.5 py-2 rounded-lg flex items-center gap-2 ${subTab === 'history' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Clock className="h-3.5 w-3.5" /> História <span className="bg-slate-700 text-slate-200 text-[10px] px-1.5 rounded-full">{quotes.length}</span></button>
           <button onClick={() => setSubTab('pricelist')} className={`px-3.5 py-2 rounded-lg flex items-center gap-2 ${subTab === 'pricelist' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><ListChecks className="h-3.5 w-3.5" /> Cenník</button>
-          <button onClick={() => setSubTab('kalkulacka')} className={`px-3.5 py-2 rounded-lg flex items-center gap-2 ${subTab === 'kalkulacka' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><ShoppingCart className="h-3.5 w-3.5" /> Kalkulačka tlače</button>
           <button onClick={() => setSubTab('firmy')} className={`px-3.5 py-2 rounded-lg flex items-center gap-2 ${subTab === 'firmy' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Award className="h-3.5 w-3.5" /> Firmy</button>
           <button onClick={() => setSubTab('dokumenty')} className={`px-3.5 py-2 rounded-lg flex items-center gap-2 ${subTab === 'dokumenty' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Paperclip className="h-3.5 w-3.5" /> Prílohy</button>
         </div>
@@ -1053,75 +995,6 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
                 )}
               </tbody>
             </table>
-          </div>
-        </div>
-      )}
-
-      {subTab === 'kalkulacka' && (
-        <div className="bg-slate-900/40 rounded-2xl border border-slate-800 p-5 space-y-4">
-          <div>
-            <h3 className="text-sm font-bold text-white flex items-center gap-2"><ShoppingCart className="h-4 w-4 text-indigo-400" /> Kalkulačka na cenu tlače</h3>
-            <p className="text-[11px] text-slate-500 mt-1">Pre každú metódu potlače nastav materiály (cena za jednotku — bm/kg/ks) a veľkosti motívu (priemerná spotreba materiálu na danú veľkosť). Cena riadku v ponuke = cena za jednotku × spotreba × počet farieb (len pri Flexe a Sieťotlači) × počet kusov.</p>
-          </div>
-
-          <div className="grid grid-cols-4 gap-1.5">
-            {PRINT_METHODS.map(m => (
-              <button key={m.id} onClick={() => setCalcAdminMethod(m.id)} className={`px-3 py-2 rounded-lg text-xs font-bold ${calcAdminMethod === m.id ? 'bg-indigo-600 text-white' : 'bg-slate-950 border border-slate-800 text-slate-400 hover:bg-slate-800'}`}>{m.label}</button>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="bg-slate-950 rounded-xl border border-slate-800 p-4 space-y-3">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-300">Materiály</h4>
-              <div className="grid grid-cols-12 gap-1.5">
-                <input type="text" value={newMaterialDraft.nazov} onChange={(e) => setNewMaterialDraft({ ...newMaterialDraft, nazov: e.target.value })} placeholder="Názov materiálu" className="col-span-6 bg-slate-900 border border-slate-800 rounded px-2 py-1.5 text-xs text-white" />
-                <select value={newMaterialDraft.jednotka} onChange={(e) => setNewMaterialDraft({ ...newMaterialDraft, jednotka: e.target.value })} className="col-span-2 bg-slate-900 border border-slate-800 rounded px-1 py-1.5 text-xs text-white">
-                  <option value="bm">bm</option>
-                  <option value="kg">kg</option>
-                  <option value="ks">ks</option>
-                </select>
-                <input type="number" step="0.01" value={newMaterialDraft.cenaZaJednotku} onChange={(e) => setNewMaterialDraft({ ...newMaterialDraft, cenaZaJednotku: e.target.value })} placeholder="Cena €" className="col-span-3 bg-slate-900 border border-slate-800 rounded px-2 py-1.5 text-xs text-white" />
-                <button onClick={addPrintMaterial} className="col-span-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded flex items-center justify-center"><Plus className="h-4 w-4" /></button>
-              </div>
-              <div className="space-y-1.5">
-                {printMaterials.filter(m => m.metoda === calcAdminMethod).map(m => (
-                  <div key={m.id} className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded-lg p-1.5">
-                    <input type="text" defaultValue={m.nazov} onBlur={(e) => updatePrintMaterial(m.id, 'nazov', e.target.value)} className="flex-1 bg-transparent text-xs text-white p-1 rounded hover:bg-slate-800 focus:bg-slate-800" />
-                    <select defaultValue={m.jednotka} onChange={(e) => updatePrintMaterial(m.id, 'jednotka', e.target.value)} className="bg-transparent text-[11px] text-slate-400 p-1 rounded hover:bg-slate-800">
-                      <option value="bm">bm</option>
-                      <option value="kg">kg</option>
-                      <option value="ks">ks</option>
-                    </select>
-                    <input type="number" step="0.01" defaultValue={m.cenaZaJednotku} onBlur={(e) => updatePrintMaterial(m.id, 'cenaZaJednotku', e.target.value)} className="w-20 bg-transparent text-right text-xs text-emerald-400 font-bold p-1 rounded hover:bg-slate-800 focus:bg-slate-800" />
-                    <button onClick={() => deletePrintMaterial(m.id)} className="text-slate-500 hover:text-rose-400 p-1"><Trash2 className="h-3.5 w-3.5" /></button>
-                  </div>
-                ))}
-                {printMaterials.filter(m => m.metoda === calcAdminMethod).length === 0 && (
-                  <p className="text-[11px] text-slate-500 text-center py-3">Žiadne materiály pre túto metódu.</p>
-                )}
-              </div>
-            </div>
-
-            <div className="bg-slate-950 rounded-xl border border-slate-800 p-4 space-y-3">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-300">Veľkosti (priemerná spotreba)</h4>
-              <div className="grid grid-cols-12 gap-1.5">
-                <input type="text" value={newSizeDraft.label} onChange={(e) => setNewSizeDraft({ ...newSizeDraft, label: e.target.value })} placeholder="Označenie veľkosti" className="col-span-7 bg-slate-900 border border-slate-800 rounded px-2 py-1.5 text-xs text-white" />
-                <input type="number" step="0.001" value={newSizeDraft.spotreba} onChange={(e) => setNewSizeDraft({ ...newSizeDraft, spotreba: e.target.value })} placeholder="Spotreba" className="col-span-4 bg-slate-900 border border-slate-800 rounded px-2 py-1.5 text-xs text-white" />
-                <button onClick={addPrintSize} className="col-span-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded flex items-center justify-center"><Plus className="h-4 w-4" /></button>
-              </div>
-              <div className="space-y-1.5">
-                {printSizes.filter(s => s.metoda === calcAdminMethod).map(s => (
-                  <div key={s.id} className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded-lg p-1.5">
-                    <input type="text" defaultValue={s.label} onBlur={(e) => updatePrintSize(s.id, 'label', e.target.value)} className="flex-1 bg-transparent text-xs text-white p-1 rounded hover:bg-slate-800 focus:bg-slate-800" />
-                    <input type="number" step="0.001" defaultValue={s.spotreba} onBlur={(e) => updatePrintSize(s.id, 'spotreba', e.target.value)} className="w-24 bg-transparent text-right text-xs text-emerald-400 font-bold p-1 rounded hover:bg-slate-800 focus:bg-slate-800" />
-                    <button onClick={() => deletePrintSize(s.id)} className="text-slate-500 hover:text-rose-400 p-1"><Trash2 className="h-3.5 w-3.5" /></button>
-                  </div>
-                ))}
-                {printSizes.filter(s => s.metoda === calcAdminMethod).length === 0 && (
-                  <p className="text-[11px] text-slate-500 text-center py-3">Žiadne veľkosti pre túto metódu.</p>
-                )}
-              </div>
-            </div>
           </div>
         </div>
       )}
