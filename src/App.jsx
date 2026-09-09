@@ -233,8 +233,8 @@ const FALLBACK_ACL = {
 const mapMaterialFromDb = (r) => ({ id: r.id, name: r.name, color: r.color, colorHex: r.color_hex || '', width: r.width, weight: r.weight, pricePerM: r.price_per_m, qty: r.qty, unit: r.unit, minQty: r.min_qty, warehouseId: r.warehouse_id || 'sklad-1', manufacturer: r.manufacturer || '', productType: r.product_type || '', deliveryNoteNumber: r.delivery_note_number || '', deliveryNoteDate: r.delivery_note_date || '', history: r.history || [] });
 const mapMaterialToDb = (m) => ({ id: m.id, name: m.name, color: m.color, color_hex: m.colorHex || null, width: m.width, weight: m.weight, price_per_m: m.pricePerM, qty: m.qty, unit: m.unit, min_qty: m.minQty, warehouse_id: m.warehouseId, manufacturer: m.manufacturer || null, product_type: m.productType || null, delivery_note_number: m.deliveryNoteNumber || null, delivery_note_date: m.deliveryNoteDate || null, history: m.history });
 
-const mapProductFromDb = (r) => ({ id: r.id, customCode: r.custom_code, name: r.name, sports: r.sports || [], layer1: r.layer1, layer2: r.layer2, layer3: r.layer3, threadM: r.thread_m, womenRatioPercent: r.women_ratio_percent ?? 90, childrenRatioPercent: r.children_ratio_percent ?? 65, productionCost: r.production_cost ?? null, priceGroup: r.price_group || '', redukovanyVykon: r.redukovany_vykon ?? null });
-const mapProductToDb = (p) => ({ id: p.id, custom_code: p.customCode, name: p.name, sports: p.sports, layer1: p.layer1, layer2: p.layer2, layer3: p.layer3, thread_m: p.threadM, women_ratio_percent: p.womenRatioPercent, children_ratio_percent: p.childrenRatioPercent, production_cost: p.productionCost ?? null, price_group: p.priceGroup || null, redukovany_vykon: p.redukovanyVykon ?? null });
+const mapProductFromDb = (r) => ({ id: r.id, customCode: r.custom_code, name: r.name, sports: r.sports || [], layer1: r.layer1, layer2: r.layer2, layer3: r.layer3, threadM: r.thread_m, womenRatioPercent: r.women_ratio_percent ?? 90, childrenRatioPercent: r.children_ratio_percent ?? 65, productionCost: r.production_cost ?? null, priceGroup: r.price_group || '', redukovanyVykon: r.redukovany_vykon ?? null, attachments: r.attachments || [] });
+const mapProductToDb = (p) => ({ id: p.id, custom_code: p.customCode, name: p.name, sports: p.sports, layer1: p.layer1, layer2: p.layer2, layer3: p.layer3, thread_m: p.threadM, women_ratio_percent: p.womenRatioPercent, children_ratio_percent: p.childrenRatioPercent, production_cost: p.productionCost ?? null, price_group: p.priceGroup || null, redukovany_vykon: p.redukovanyVykon ?? null, attachments: p.attachments || [] });
 
 const mapTierFromDb = (r) => ({ id: r.id, name: r.name, fit: r.fit, ventilation: r.ventilation, desc: r.description });
 const mapTierToDb = (t) => ({ id: t.id, name: t.name, fit: t.fit, ventilation: t.ventilation, description: t.desc });
@@ -719,8 +719,18 @@ function getItemStationDate(item, stationId) {
 // v minulych zakazkach tohto produktu (najpouzivanejsi hore) — aby sa pri produktoch s vela
 // moznymi latkami (5+) dalo rychlo najst to, co sa pre nu bezne pouziva, namiesto prehladavania
 // celeho skladu abecedne. Materialy bez historie ostavaju na konci v povodnom (abecednom) poradi.
-function sortMaterialsByUsage(materialsList, allOrderItems, productId, layerName) {
-  if (!productId) return materialsList;
+// Ak ma dana vrstva nakuratovany zoznam alternativeIds (v Katalogu Modelov), zoznam sa navyse
+// obmedzi len na primarny material + tieto povolene nahrady — inak (legacy/nekuratovane produkty)
+// zostava zobrazeny cely sklad, tak ako doteraz.
+function sortMaterialsByUsage(materialsList, allOrderItems, product, layerKey, layerName) {
+  const layer = product?.[layerKey];
+  const productId = product?.id;
+  let list = materialsList;
+  if (layer?.alternativeIds?.length) {
+    const allowed = new Set([layer.materialId, ...layer.alternativeIds]);
+    list = materialsList.filter(m => allowed.has(m.id));
+  }
+  if (!productId) return list;
   const counts = new Map();
   allOrderItems.forEach(it => {
     if (it.productId !== productId) return;
@@ -728,8 +738,8 @@ function sortMaterialsByUsage(materialsList, allOrderItems, productId, layerName
       if (n.layerName === layerName && n.materialId) counts.set(n.materialId, (counts.get(n.materialId) || 0) + 1);
     });
   });
-  if (counts.size === 0) return materialsList;
-  return [...materialsList].sort((a, b) => (counts.get(b.id) || 0) - (counts.get(a.id) || 0));
+  if (counts.size === 0) return list;
+  return [...list].sort((a, b) => (counts.get(b.id) || 0) - (counts.get(a.id) || 0));
 }
 
 // Razítko "Oprava" / "Expres oprava" (na priloženie k súborom pre tlač) — vykreslené ako SVG (skryté,
@@ -1347,6 +1357,9 @@ export default function App() {
   const [newModelPrimary, setNewModelPrimary] = useState('');
   const [newModelSecondary, setNewModelSecondary] = useState('');
   const [newModelTertiary, setNewModelTertiary] = useState('');
+  const [newModelLayer1Alt, setNewModelLayer1Alt] = useState([]);
+  const [newModelLayer2Alt, setNewModelLayer2Alt] = useState([]);
+  const [newModelLayer3Alt, setNewModelLayer3Alt] = useState([]);
   const [newModelLayer1Lt5, setNewModelLayer1Lt5] = useState('');
   const [newModelLayer1Ge5, setNewModelLayer1Ge5] = useState('');
   const [newModelLayer2Lt5, setNewModelLayer2Lt5] = useState('');
@@ -3382,13 +3395,14 @@ export default function App() {
       if (!newModelName || !newModelCode) { alert('Zadajte kód a názov modelu.'); return; }
       const created = {
         id: `prod-${Date.now()}`, customCode: newModelCode, name: newModelName, sports: newModelSports,
-        layer1: newModelPrimary ? { materialId: newModelPrimary, alternativeIds: [], consumption: { lt5: parseFloat(newModelLayer1Lt5) || 0, ge5: parseFloat(newModelLayer1Ge5) || 0 } } : null,
-        layer2: newModelSecondary ? { materialId: newModelSecondary, alternativeIds: [], consumption: { lt5: parseFloat(newModelLayer2Lt5) || 0, ge5: parseFloat(newModelLayer2Ge5) || 0 } } : null,
-        layer3: newModelTertiary ? { materialId: newModelTertiary, alternativeIds: [], consumption: { lt5: parseFloat(newModelLayer3Lt5) || 0, ge5: parseFloat(newModelLayer3Ge5) || 0 } } : null,
+        layer1: newModelPrimary ? { materialId: newModelPrimary, alternativeIds: newModelLayer1Alt, consumption: { lt5: parseFloat(newModelLayer1Lt5) || 0, ge5: parseFloat(newModelLayer1Ge5) || 0 } } : null,
+        layer2: newModelSecondary ? { materialId: newModelSecondary, alternativeIds: newModelLayer2Alt, consumption: { lt5: parseFloat(newModelLayer2Lt5) || 0, ge5: parseFloat(newModelLayer2Ge5) || 0 } } : null,
+        layer3: newModelTertiary ? { materialId: newModelTertiary, alternativeIds: newModelLayer3Alt, consumption: { lt5: parseFloat(newModelLayer3Lt5) || 0, ge5: parseFloat(newModelLayer3Ge5) || 0 } } : null,
         womenRatioPercent: parseFloat(newModelWomenRatio) || 90,
         childrenRatioPercent: parseFloat(newModelChildrenRatio) || 65,
         productionCost: newModelProductionCost === '' ? null : parseFloat(newModelProductionCost) || 0,
         redukovanyVykon: newModelRedukovanyVykon === '' ? null : parseFloat(newModelRedukovanyVykon) || 0,
+        attachments: [],
         threadM: 15
       };
       const { error } = await supabase.from('products').insert(mapProductToDb(created));
@@ -3397,6 +3411,7 @@ export default function App() {
       setNewModelLayer1Lt5(''); setNewModelLayer1Ge5(''); setNewModelLayer2Lt5(''); setNewModelLayer2Ge5(''); setNewModelLayer3Lt5(''); setNewModelLayer3Ge5('');
       setNewModelWomenRatio(90); setNewModelChildrenRatio(65);
       setNewModelProductionCost(''); setNewModelRedukovanyVykon('');
+      setNewModelLayer1Alt([]); setNewModelLayer2Alt([]); setNewModelLayer3Alt([]);
       triggerNotification('success', `Model "${created.name}" pridaný do katalógu.`);
     }
   };
@@ -3406,6 +3421,33 @@ export default function App() {
     if (!window.confirm('Naozaj vymazať tento model z katalógu?')) return;
     const { error } = await supabase.from('products').delete().eq('id', id);
     if (error) triggerNotification('error', error.message);
+  };
+
+  // Prílohy k modelu (napr. rozmerové tabuľky vo formáte PDF) — rovnaký úložný bucket ako
+  // pri rozpisoch položiek (item-attachments), len vlastný prefix ciest kvôli prehľadnosti.
+  const handleAddProductAttachment = async (file) => {
+    if (!editingProduct || !file) return;
+    if (!hasPermission('manage_catalog')) { triggerNotification('error', 'Nemáte prístup do správy katalógu.'); return; }
+    const path = `product-docs/${editingProduct.id}/${Date.now()}-${file.name}`;
+    const { error: upErr } = await supabase.storage.from('item-attachments').upload(path, file);
+    if (upErr) { triggerNotification('error', upErr.message); return; }
+    const { data: pub } = supabase.storage.from('item-attachments').getPublicUrl(path);
+    const attachment = { id: `att-${Date.now()}`, url: pub.publicUrl, fileName: file.name, mimeType: file.type || '', uploadedAt: new Date().toISOString() };
+    const updatedAttachments = [...(editingProduct.attachments || []), attachment];
+    const { error } = await supabase.from('products').update({ attachments: updatedAttachments }).eq('id', editingProduct.id);
+    if (error) { triggerNotification('error', error.message); return; }
+    setEditingProduct({ ...editingProduct, attachments: updatedAttachments });
+    triggerNotification('success', 'Príloha bola pridaná.');
+  };
+
+  const handleDeleteProductAttachment = async (attachmentId) => {
+    if (!editingProduct) return;
+    if (!hasPermission('manage_catalog')) return;
+    if (!window.confirm('Naozaj odstrániť túto prílohu?')) return;
+    const updatedAttachments = (editingProduct.attachments || []).filter(a => a.id !== attachmentId);
+    const { error } = await supabase.from('products').update({ attachments: updatedAttachments }).eq('id', editingProduct.id);
+    if (error) { triggerNotification('error', error.message); return; }
+    setEditingProduct({ ...editingProduct, attachments: updatedAttachments });
   };
 
   const handleAddSport = async () => {
@@ -6398,11 +6440,18 @@ export default function App() {
                     <div className="space-y-4 bg-slate-900/60 p-4 rounded-xl border border-slate-800 flex flex-col justify-between">
                       <div className="space-y-4">
                         <h3 className="font-bold text-sm text-slate-200 flex items-center gap-1.5 border-b border-slate-800 pb-2"><Package className="h-4 w-4 text-indigo-400" /> Materiálové Vrstvy</h3>
+                        {(selectedProduct?.attachments || []).length > 0 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {selectedProduct.attachments.map(a => (
+                              <a key={a.id} href={a.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[10px] text-indigo-400 hover:text-indigo-300 bg-slate-950 border border-slate-800 rounded-full px-2 py-1"><FileText className="h-3 w-3" /> {a.fileName}</a>
+                            ))}
+                          </div>
+                        )}
                         {selectedProduct?.layer1 && (
                           <div>
                             <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Primárna látka: {calculateLayerConsumption(selectedProduct, selectedGender, 'layer1', itemQty)} m</label>
                             <select value={selectedLayer1Mat} onChange={(e) => setSelectedLayer1Mat(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-1 text-xs">
-                              {sortMaterialsByUsage(materials, allItems, selectedProduct.id, 'Primárna látka').map(m => <option key={m.id} value={m.id}>{m.name} ({m.color})</option>)}
+                              {sortMaterialsByUsage(materials, allItems, selectedProduct, 'layer1', 'Primárna látka').map(m => <option key={m.id} value={m.id}>{m.name} ({m.color})</option>)}
                             </select>
                           </div>
                         )}
@@ -6411,7 +6460,7 @@ export default function App() {
                             <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Sekundárna látka: {selectedLayer2Mat ? `${calculateLayerConsumption(selectedProduct, selectedGender, 'layer2', itemQty)} m` : 'nepoužije sa'}</label>
                             <select value={selectedLayer2Mat} onChange={(e) => setSelectedLayer2Mat(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-1 text-xs">
                               <option value="">-- Nepoužiť túto vrstvu --</option>
-                              {sortMaterialsByUsage(materials, allItems, selectedProduct.id, 'Sekundárna látka').map(m => <option key={m.id} value={m.id}>{m.name} ({m.color})</option>)}
+                              {sortMaterialsByUsage(materials, allItems, selectedProduct, 'layer2', 'Sekundárna látka').map(m => <option key={m.id} value={m.id}>{m.name} ({m.color})</option>)}
                             </select>
                           </div>
                         )}
@@ -6420,7 +6469,7 @@ export default function App() {
                             <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Terciárna látka: {selectedLayer3Mat ? `${calculateLayerConsumption(selectedProduct, selectedGender, 'layer3', itemQty)} m` : 'nepoužije sa'}</label>
                             <select value={selectedLayer3Mat} onChange={(e) => setSelectedLayer3Mat(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-1 text-xs">
                               <option value="">-- Nepoužiť túto vrstvu --</option>
-                              {sortMaterialsByUsage(materials, allItems, selectedProduct.id, 'Terciárna látka').map(m => <option key={m.id} value={m.id}>{m.name} ({m.color})</option>)}
+                              {sortMaterialsByUsage(materials, allItems, selectedProduct, 'layer3', 'Terciárna látka').map(m => <option key={m.id} value={m.id}>{m.name} ({m.color})</option>)}
                             </select>
                           </div>
                         )}
@@ -6568,6 +6617,28 @@ export default function App() {
                             </div>
                           </div>
                         )}
+                        {(editingProduct ? editingProduct.layer1?.materialId : newModelPrimary) && (
+                          <div>
+                            <label className="block text-[10px] text-slate-500 mb-0.5">Alternatívne / náhradné látky (voliteľné)</label>
+                            <div className="max-h-28 overflow-y-auto bg-slate-950 border border-slate-800 rounded p-1.5 space-y-0.5">
+                              {materials.filter(m => m.id !== (editingProduct ? editingProduct.layer1?.materialId : newModelPrimary)).map(m => {
+                                const currentAlt = editingProduct ? (editingProduct.layer1?.alternativeIds || []) : newModelLayer1Alt;
+                                const checked = currentAlt.includes(m.id);
+                                return (
+                                  <label key={m.id} className="flex items-center gap-1.5 text-[10px] text-slate-300 cursor-pointer hover:text-white">
+                                    <input type="checkbox" checked={checked} onChange={() => {
+                                        const next = checked ? currentAlt.filter(id => id !== m.id) : [...currentAlt, m.id];
+                                        if (editingProduct) setEditingProduct({ ...editingProduct, layer1: { ...editingProduct.layer1, alternativeIds: next } });
+                                        else setNewModelLayer1Alt(next);
+                                      }} className="rounded border-slate-800 bg-slate-900 text-indigo-600 focus:ring-0" />
+                                    {m.name}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                            <p className="text-[9px] text-slate-600 mt-0.5">Ak zaškrtneš aspoň jednu, pri tvorbe zákazky pôjde na výber len primárna + tieto (nie celý sklad).</p>
+                          </div>
+                        )}
                       </div>
                       <div className="space-y-2">
                         <label className="block text-slate-400 font-semibold mb-1">Látka 2 (Sekundárna)</label>
@@ -6590,6 +6661,28 @@ export default function App() {
                             </div>
                           </div>
                         )}
+                        {(editingProduct ? editingProduct.layer2?.materialId : newModelSecondary) && (
+                          <div>
+                            <label className="block text-[10px] text-slate-500 mb-0.5">Alternatívne / náhradné látky (voliteľné)</label>
+                            <div className="max-h-28 overflow-y-auto bg-slate-950 border border-slate-800 rounded p-1.5 space-y-0.5">
+                              {materials.filter(m => m.id !== (editingProduct ? editingProduct.layer2?.materialId : newModelSecondary)).map(m => {
+                                const currentAlt = editingProduct ? (editingProduct.layer2?.alternativeIds || []) : newModelLayer2Alt;
+                                const checked = currentAlt.includes(m.id);
+                                return (
+                                  <label key={m.id} className="flex items-center gap-1.5 text-[10px] text-slate-300 cursor-pointer hover:text-white">
+                                    <input type="checkbox" checked={checked} onChange={() => {
+                                        const next = checked ? currentAlt.filter(id => id !== m.id) : [...currentAlt, m.id];
+                                        if (editingProduct) setEditingProduct({ ...editingProduct, layer2: { ...editingProduct.layer2, alternativeIds: next } });
+                                        else setNewModelLayer2Alt(next);
+                                      }} className="rounded border-slate-800 bg-slate-900 text-indigo-600 focus:ring-0" />
+                                    {m.name}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                            <p className="text-[9px] text-slate-600 mt-0.5">Ak zaškrtneš aspoň jednu, pri tvorbe zákazky pôjde na výber len primárna + tieto (nie celý sklad).</p>
+                          </div>
+                        )}
                       </div>
                       <div className="space-y-2">
                         <label className="block text-slate-400 font-semibold mb-1">Látka 3 (Terciárna)</label>
@@ -6610,6 +6703,28 @@ export default function App() {
                               <label className="block text-[10px] text-slate-500 mb-0.5">Spotreba 5+ ks (m)</label>
                               <input type="number" step="0.01" value={editingProduct ? (editingProduct.layer3?.consumption?.ge5 ?? '') : newModelLayer3Ge5} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, layer3: { ...editingProduct.layer3, consumption: { ...editingProduct.layer3.consumption, ge5: parseFloat(e.target.value) || 0 } } }) : setNewModelLayer3Ge5(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-white" />
                             </div>
+                          </div>
+                        )}
+                        {(editingProduct ? editingProduct.layer3?.materialId : newModelTertiary) && (
+                          <div>
+                            <label className="block text-[10px] text-slate-500 mb-0.5">Alternatívne / náhradné látky (voliteľné)</label>
+                            <div className="max-h-28 overflow-y-auto bg-slate-950 border border-slate-800 rounded p-1.5 space-y-0.5">
+                              {materials.filter(m => m.id !== (editingProduct ? editingProduct.layer3?.materialId : newModelTertiary)).map(m => {
+                                const currentAlt = editingProduct ? (editingProduct.layer3?.alternativeIds || []) : newModelLayer3Alt;
+                                const checked = currentAlt.includes(m.id);
+                                return (
+                                  <label key={m.id} className="flex items-center gap-1.5 text-[10px] text-slate-300 cursor-pointer hover:text-white">
+                                    <input type="checkbox" checked={checked} onChange={() => {
+                                        const next = checked ? currentAlt.filter(id => id !== m.id) : [...currentAlt, m.id];
+                                        if (editingProduct) setEditingProduct({ ...editingProduct, layer3: { ...editingProduct.layer3, alternativeIds: next } });
+                                        else setNewModelLayer3Alt(next);
+                                      }} className="rounded border-slate-800 bg-slate-900 text-indigo-600 focus:ring-0" />
+                                    {m.name}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                            <p className="text-[9px] text-slate-600 mt-0.5">Ak zaškrtneš aspoň jednu, pri tvorbe zákazky pôjde na výber len primárna + tieto (nie celý sklad).</p>
                           </div>
                         )}
                       </div>
@@ -6638,6 +6753,29 @@ export default function App() {
                         <p className="text-[10px] text-slate-500 mt-0.5">Koľko redukovaných jednotiek kapacity konfekcie spotrebuje 1 kus (pre Plánovaciu Maticu).</p>
                       </div>
                     </div>
+                    {editingProduct && (
+                      <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 space-y-2">
+                        <label className="block text-slate-400 font-semibold mb-1 flex items-center gap-1.5"><FileText className="h-3.5 w-3.5 text-indigo-400" /> Prílohy (rozmerové tabuľky a pod.)</label>
+                        {(editingProduct.attachments || []).length === 0 && (
+                          <p className="text-[10px] text-slate-500 italic">Zatiaľ žiadne prílohy.</p>
+                        )}
+                        <div className="space-y-1">
+                          {(editingProduct.attachments || []).map(a => (
+                            <div key={a.id} className="flex items-center justify-between gap-2 bg-slate-900 border border-slate-800 rounded px-2 py-1.5">
+                              <a href={a.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-[11px] text-indigo-400 hover:text-indigo-300 truncate">
+                                <Download className="h-3 w-3 shrink-0" /> <span className="truncate">{a.fileName}</span>
+                              </a>
+                              <button type="button" onClick={() => handleDeleteProductAttachment(a.id)} className="text-slate-500 hover:text-rose-400 p-0.5 shrink-0"><Trash2 className="h-3.5 w-3.5" /></button>
+                            </div>
+                          ))}
+                        </div>
+                        <label className="flex items-center justify-center gap-2 border border-dashed border-slate-700 rounded-lg p-2.5 cursor-pointer hover:border-indigo-500 hover:bg-slate-900/60 transition">
+                          <Upload className="h-4 w-4 text-slate-500" />
+                          <span className="text-[10px] text-slate-500">Klikni a pridaj prílohu (PDF, obrázok, Excel...)</span>
+                          <input type="file" accept="image/*,.pdf,.xlsx,.xls,.csv,.doc,.docx" className="hidden" onChange={(e) => { const file = e.target.files[0]; if (file) { handleAddProductAttachment(file); e.target.value = ''; } }} />
+                        </label>
+                      </div>
+                    )}
                     <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2.5 rounded-lg uppercase">{editingProduct ? 'Uložiť Zmeny Modelu' : 'Pridať Model do Katalógu'}</button>
                     {editingProduct && <button type="button" onClick={() => setEditingProduct(null)} className="ml-2 bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2.5 rounded-lg">Zrušiť</button>}
                   </form>
@@ -10453,12 +10591,20 @@ export default function App() {
                         const prod = products.find(p => p.id === addItemProductId);
                         if (!prod) return null;
                         return (
+                          <div className="space-y-2">
+                          {(prod.attachments || []).length > 0 && (
+                            <div className="flex flex-wrap gap-1.5">
+                              {prod.attachments.map(a => (
+                                <a key={a.id} href={a.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[10px] text-indigo-400 hover:text-indigo-300 bg-slate-950 border border-slate-800 rounded-full px-2 py-1"><FileText className="h-3 w-3" /> {a.fileName}</a>
+                              ))}
+                            </div>
+                          )}
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                             {prod.layer1 && (
                               <div>
                                 <label className="block text-[10px] text-slate-500 mb-0.5">Primárna látka</label>
                                 <select value={addItemLayer1Mat} onChange={(e) => setAddItemLayer1Mat(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-xs text-white">
-                                  {sortMaterialsByUsage(materials, allItems, prod.id, 'Primárna látka').map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                  {sortMaterialsByUsage(materials, allItems, prod, 'layer1', 'Primárna látka').map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                                 </select>
                               </div>
                             )}
@@ -10467,7 +10613,7 @@ export default function App() {
                                 <label className="block text-[10px] text-slate-500 mb-0.5">Sekundárna látka</label>
                                 <select value={addItemLayer2Mat} onChange={(e) => setAddItemLayer2Mat(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-xs text-white">
                                   <option value="">-- Nepoužiť --</option>
-                                  {sortMaterialsByUsage(materials, allItems, prod.id, 'Sekundárna látka').map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                  {sortMaterialsByUsage(materials, allItems, prod, 'layer2', 'Sekundárna látka').map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                                 </select>
                               </div>
                             )}
@@ -10476,10 +10622,11 @@ export default function App() {
                                 <label className="block text-[10px] text-slate-500 mb-0.5">Terciárna látka</label>
                                 <select value={addItemLayer3Mat} onChange={(e) => setAddItemLayer3Mat(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-xs text-white">
                                   <option value="">-- Nepoužiť --</option>
-                                  {sortMaterialsByUsage(materials, allItems, prod.id, 'Terciárna látka').map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                  {sortMaterialsByUsage(materials, allItems, prod, 'layer3', 'Terciárna látka').map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                                 </select>
                               </div>
                             )}
+                          </div>
                           </div>
                         );
                       })()}
