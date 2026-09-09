@@ -51,6 +51,7 @@ export default function ZastavaApp({ supabase }) {
   const [cenaNacitava, setCenaNacitava] = useState(false);
 
   const [canvasReady, setCanvasReady] = useState(false);
+  const [debugObjCount, setDebugObjCount] = useState(0);
   const canvasElRef = useRef(null);
   const fabricRef = useRef(null);
   const stateFlagImgRef = useRef(null);
@@ -72,23 +73,32 @@ export default function ZastavaApp({ supabase }) {
     return () => { zrusene = true; };
   }, [supabase]);
 
-  // Fabric plátno — jednoduchý obdĺžnik (rozmer podľa cm), s vodiacou "bezpečnou zónou".
+  // Fabric plátno — vytvorí sa RAZ, hneď so správnym rozmerom napečeným priamo do konštruktora
+  // (nie dodatočným setDimensions() po vytvorení — to sa v niektorých prehliadačoch/pri vyššom
+  // devicePixelRatio nespoľahlivo prekresľuje a plátno ostane vizuálne "zamrznuté").
   useEffect(() => {
     if (isLoading || !canvasElRef.current || fabricRef.current) return;
-    const canvas = new fabric.Canvas(canvasElRef.current, { backgroundColor: bgColor });
+    const ratio = sirkaCm / vyskaCm;
+    const w = ratio >= 1 ? PREVIEW_MAX_PX : PREVIEW_MAX_PX * ratio;
+    const h = ratio >= 1 ? PREVIEW_MAX_PX / ratio : PREVIEW_MAX_PX;
+    const canvas = new fabric.Canvas(canvasElRef.current, { backgroundColor: bgColor, width: w, height: h });
     fabricRef.current = canvas;
     setCanvasReady(true);
     return () => { canvas.dispose(); fabricRef.current = null; setCanvasReady(false); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading]);
 
+  // Zmena rozmerov PO vytvorení plátna (užívateľ upraví cm v kroku 1) — tu setDimensions()
+  // nevyhnutne treba, iniciálny rozmer už rieši konštruktor vyššie.
   useEffect(() => {
     const canvas = fabricRef.current;
-    if (!canvas) return;
+    if (!canvas || !canvasReady) return;
     const ratio = sirkaCm / vyskaCm;
     const w = ratio >= 1 ? PREVIEW_MAX_PX : PREVIEW_MAX_PX * ratio;
     const h = ratio >= 1 ? PREVIEW_MAX_PX / ratio : PREVIEW_MAX_PX;
-    canvas.setDimensions({ width: w, height: h });
+    if (canvas.getWidth() !== w || canvas.getHeight() !== h) {
+      canvas.setDimensions({ width: w, height: h });
+    }
 
     canvas.getObjects().filter(o => o.isSafeGuide).forEach(o => canvas.remove(o));
     const inset = Math.min(w, h) * 0.05;
@@ -98,12 +108,15 @@ export default function ZastavaApp({ supabase }) {
       selectable: false, evented: false, isSafeGuide: true,
     });
     canvas.add(guide);
-    canvas.renderAll();
+    canvas.requestRenderAll();
   }, [sirkaCm, vyskaCm, canvasReady]);
 
   useEffect(() => {
-    fabricRef.current?.setBackgroundColor(bgColor, () => fabricRef.current?.renderAll());
-  }, [bgColor]);
+    const canvas = fabricRef.current;
+    if (!canvas) return;
+    canvas.backgroundColor = bgColor;
+    canvas.requestRenderAll();
+  }, [bgColor, canvasReady]);
 
   // Vykreslenie modularneho hardveru (tunely/ocka/karabinky/popruh) na zivy nahlad —
   // vizualna reprezentacia, presne poradie vrstiev/velkosti su len ilustracne.
@@ -171,7 +184,8 @@ export default function ZastavaApp({ supabase }) {
     });
 
     canvas.getObjects().filter(o => o.isSafeGuide).forEach(o => canvas.bringToFront(o));
-    canvas.renderAll();
+    canvas.requestRenderAll();
+    setDebugObjCount(canvas.getObjects().length);
   }, [tunely, ocka, karabinky, popruhy, sirkaCm, vyskaCm, canvasReady]);
 
   const pridajText = () => {
@@ -376,7 +390,7 @@ export default function ZastavaApp({ supabase }) {
             <canvas ref={canvasElRef} className="shadow-md rounded bg-white" />
           </div>
           <p className="mt-3 text-[11px] text-slate-500">Zelená čiara je odporúčaná bezpečná zóna pre text/logo.</p>
-          <p className="mt-1 text-[10px] text-slate-300 font-mono">build v4 — {tunely.length} tunel(y), {ocka.length} skup. očiek, {karabinky.length} skup. karabín, popruh: {Object.entries(popruhy).filter(([, v]) => v).map(([k]) => k).join(',') || '—'}</p>
+          <p className="mt-1 text-[10px] text-slate-300 font-mono">build v5 — canvasReady:{String(canvasReady)}, objektov na plátne:{debugObjCount}, {tunely.length} tunel(y), {ocka.length} skup. očiek, {karabinky.length} skup. karabín, popruh: {Object.entries(popruhy).filter(([, v]) => v).map(([k]) => k).join(',') || '—'}</p>
         </div>
       </div>
     </div>
