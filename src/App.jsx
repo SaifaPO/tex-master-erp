@@ -5,12 +5,13 @@ import { QRCodeSVG } from 'qrcode.react';
 import { encode as encodeBySquare, CurrencyCode, PaymentOptions } from 'bysquare/pay';
 import { Html5Qrcode } from 'html5-qrcode';
 import CenovePonukyTab from './CenovePonukyTab';
+import CenotvorbaTab from './CenotvorbaTab';
 import PrintStudioAdmin from './printstudio/PrintStudioAdmin';
 import {
   ClipboardList, Package, Cpu, QrCode, Plus, User, Clock, Layers, Search, Check, X, Calendar,
   Palette, Scissors, Printer, Sliders, Sparkles, ZoomIn, ZoomOut, FileText, PlusCircle, Table,
   Shield, Users, Lock, Edit2, Trash2, Tag, Scale, CalendarDays, FileEdit, Gift, Loader2, AlertTriangle,
-  Shirt, Box, Banknote, GripVertical, Download, Upload, ArrowUp, ArrowDown, BarChart3, Camera, Bot, Zap, Star, RefreshCw, BookOpen
+  Shirt, Box, Banknote, GripVertical, Download, Upload, ArrowUp, ArrowDown, BarChart3, Camera, Bot, Zap, Star, RefreshCw, BookOpen, Calculator
 } from 'lucide-react';
 
 // ============================================================
@@ -233,8 +234,8 @@ const FALLBACK_ACL = {
 const mapMaterialFromDb = (r) => ({ id: r.id, name: r.name, color: r.color, colorHex: r.color_hex || '', width: r.width, weight: r.weight, pricePerM: r.price_per_m, qty: r.qty, unit: r.unit, minQty: r.min_qty, warehouseId: r.warehouse_id || 'sklad-1', manufacturer: r.manufacturer || '', productType: r.product_type || '', deliveryNoteNumber: r.delivery_note_number || '', deliveryNoteDate: r.delivery_note_date || '', history: r.history || [] });
 const mapMaterialToDb = (m) => ({ id: m.id, name: m.name, color: m.color, color_hex: m.colorHex || null, width: m.width, weight: m.weight, price_per_m: m.pricePerM, qty: m.qty, unit: m.unit, min_qty: m.minQty, warehouse_id: m.warehouseId, manufacturer: m.manufacturer || null, product_type: m.productType || null, delivery_note_number: m.deliveryNoteNumber || null, delivery_note_date: m.deliveryNoteDate || null, history: m.history });
 
-const mapProductFromDb = (r) => ({ id: r.id, customCode: r.custom_code, name: r.name, sports: r.sports || [], layer1: r.layer1, layer2: r.layer2, layer3: r.layer3, threadM: r.thread_m, womenRatioPercent: r.women_ratio_percent ?? 90, childrenRatioPercent: r.children_ratio_percent ?? 65 });
-const mapProductToDb = (p) => ({ id: p.id, custom_code: p.customCode, name: p.name, sports: p.sports, layer1: p.layer1, layer2: p.layer2, layer3: p.layer3, thread_m: p.threadM, women_ratio_percent: p.womenRatioPercent, children_ratio_percent: p.childrenRatioPercent });
+const mapProductFromDb = (r) => ({ id: r.id, customCode: r.custom_code, name: r.name, sports: r.sports || [], layer1: r.layer1, layer2: r.layer2, layer3: r.layer3, threadM: r.thread_m, womenRatioPercent: r.women_ratio_percent ?? 90, childrenRatioPercent: r.children_ratio_percent ?? 65, productionCost: r.production_cost ?? null, priceGroup: r.price_group || '' });
+const mapProductToDb = (p) => ({ id: p.id, custom_code: p.customCode, name: p.name, sports: p.sports, layer1: p.layer1, layer2: p.layer2, layer3: p.layer3, thread_m: p.threadM, women_ratio_percent: p.womenRatioPercent, children_ratio_percent: p.childrenRatioPercent, production_cost: p.productionCost ?? null, price_group: p.priceGroup || null });
 
 const mapTierFromDb = (r) => ({ id: r.id, name: r.name, fit: r.fit, ventilation: r.ventilation, desc: r.description });
 const mapTierToDb = (t) => ({ id: t.id, name: t.name, fit: t.fit, ventilation: t.ventilation, description: t.desc });
@@ -5506,6 +5507,9 @@ export default function App() {
               {hasPermission('view_finance') && canSeeTab(currentUser.role, 'quotes') && (
                 <button onClick={() => setActiveTab('quotes')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'quotes' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><FileText className="h-3.5 w-3.5" /> Cenové ponuky</button>
               )}
+              {currentUser.role === 'master' && (
+                <button onClick={() => setActiveTab('pricing')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'pricing' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Calculator className="h-3.5 w-3.5" /> Cenotvorba</button>
+              )}
               {canSeeTab(currentUser.role, 'archive') && (
                 <button onClick={() => setActiveTab('archive')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'archive' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Search className="h-3.5 w-3.5" /> História Zákaziek</button>
               )}
@@ -9348,6 +9352,14 @@ export default function App() {
             tierRules={tierRules}
             getCustomerTier={getCustomerTier}
             currentUser={currentUser}
+            triggerNotification={triggerNotification}
+          />
+        )}
+
+        {activeTab === 'pricing' && currentUser.role === 'master' && (
+          <CenotvorbaTab
+            supabase={supabase}
+            products={products}
             triggerNotification={triggerNotification}
           />
         )}
