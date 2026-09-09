@@ -5611,9 +5611,14 @@ export default function App() {
                           {STATION_ORDER.map(stationId => {
                             const config = STATION_CONFIGS[stationId];
                             return (
-                              <th key={stationId} className="p-3 text-xs font-bold text-slate-300 uppercase tracking-wider text-center border-r border-slate-850 min-w-[260px]">
-                                <div className="flex items-center justify-center gap-1.5"><config.icon className="h-4 w-4 text-indigo-400 shrink-0" /><span>{config.name}</span></div>
-                              </th>
+                              <React.Fragment key={stationId}>
+                                <th className="p-3 text-xs font-bold text-slate-300 uppercase tracking-wider text-center border-r border-slate-850 min-w-[260px]">
+                                  <div className="flex items-center justify-center gap-1.5"><config.icon className="h-4 w-4 text-indigo-400 shrink-0" /><span>{config.name}</span></div>
+                                </th>
+                                {stationId === 'sitie' && showRedukovaneVykony && (
+                                  <th className="p-3 text-[10px] font-bold text-slate-300 uppercase tracking-wider text-center border-r border-slate-850 w-[76px] min-w-[76px]" title="Súčet redukovaných výkonov a výrobných cien položiek na šití pre tento deň">RV/VC</th>
+                                )}
+                              </React.Fragment>
                             );
                           })}
                         </tr>
@@ -5639,9 +5644,15 @@ export default function App() {
                               const dayItems = allItems.filter(it => getItemStationDate(it, stationId) === date && it.stationStatuses[stationId] && it.stationStatuses[stationId] !== 'neaktivne').sort((a, b) => a.priority - b.priority);
                               const load = showCapacityBars ? computeStationLoad(date, stationId, allItems, capacityByStation, productTimesByStation) : null;
                               const isHoveringThisCell = dragOverMatrixCell?.date === date && dragOverMatrixCell?.stationId === stationId;
+                              const rvVcSummary = (stationId === 'sitie' && showRedukovaneVykony) ? dayItems.reduce((acc, it) => {
+                                const productMatch = products.find(p => p.id === it.productId);
+                                const rv = it.redukovanyVykonOverride ?? (productMatch?.redukovanyVykon != null ? productMatch.redukovanyVykon * it.qty : null);
+                                const vc = it.vyrobnaCenaOverride ?? (productMatch?.productionCost != null ? productMatch.productionCost * it.qty : null);
+                                return { rv: acc.rv + (rv || 0), vc: acc.vc + (vc || 0), missing: acc.missing || (rv == null && vc == null) };
+                              }, { rv: 0, vc: 0, missing: false }) : null;
                               return (
+                                <React.Fragment key={stationId}>
                                 <td
-                                  key={stationId}
                                   onDragEnter={(e) => { if (hasPermission('edit_priority') && draggedMatrixCard?.stationId === stationId) e.preventDefault(); }}
                                   onDragOver={(e) => {
                                     if (!hasPermission('edit_priority') || draggedMatrixCard?.stationId !== stationId) return;
@@ -5866,6 +5877,16 @@ export default function App() {
                                     })}
                                   </div>
                                 </td>
+                                {rvVcSummary && (
+                                  <td className="p-1 border-r border-slate-850 align-top bg-slate-950/50 w-[76px] min-w-[76px] text-center">
+                                    <div className="flex flex-col items-center justify-center h-full py-2 gap-0.5">
+                                      <span className="font-bold text-indigo-300 text-[11px]">{rvVcSummary.rv.toFixed(1)}</span>
+                                      <span className="text-emerald-400 text-[10px]">{rvVcSummary.vc.toFixed(0)}€</span>
+                                      {rvVcSummary.missing && <AlertTriangle className="h-3 w-3 text-amber-500" title="Niektorej položke na šití tento deň chýbajú dáta v katalógu" />}
+                                    </div>
+                                  </td>
+                                )}
+                                </React.Fragment>
                               );
                             })}
                           </tr>
