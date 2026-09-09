@@ -1,7 +1,14 @@
 import React from 'react';
 import { Ruler, Layers, Scissors, Sparkles } from 'lucide-react';
 
-const STD_ROZMERY = [[150, 100], [200, 100], [300, 100]];
+// Proporcne rozmery podla pomeru bezneho 150x100 (3:2) — 150x100 je oznaceny ako "Štandard",
+// ostatne su vacsie/mensie varianty v rovnakom pomere (nie neproporcne bannerove tvary).
+const STD_ROZMERY = [
+  { w: 100, h: 67, label: '100×67' },
+  { w: 150, h: 100, label: '150×100', standard: true },
+  { w: 200, h: 133, label: '200×133' },
+  { w: 300, h: 200, label: '300×200' },
+];
 
 const SABLONY = [
   { id: 'stoziar', nazov: 'Stožiarová vlajka', popis: 'Tunel hore + karabínky vľavo' },
@@ -23,8 +30,15 @@ export default function RozmeryTab({
         <div className="flex items-center justify-between mb-2">
           <label className="text-sm font-bold text-slate-900 flex items-center gap-2"><Ruler className="w-4 h-4 text-indigo-600" /> Rozmery vlajky (cm)</label>
           <div className="flex gap-1">
-            {STD_ROZMERY.map(([w, h]) => (
-              <button key={`${w}x${h}`} onClick={() => onRozmery(w, h)} className="text-[11px] bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded text-slate-700">{w}×{h}</button>
+            {STD_ROZMERY.map((r) => (
+              <button
+                key={r.label}
+                onClick={() => onRozmery(r.w, r.h)}
+                title={r.standard ? 'Štandardný pomer 3:2' : undefined}
+                className={`text-[11px] px-2 py-1 rounded ${r.standard ? 'bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-bold ring-1 ring-indigo-300' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}`}
+              >
+                {r.label}
+              </button>
             ))}
           </div>
         </div>

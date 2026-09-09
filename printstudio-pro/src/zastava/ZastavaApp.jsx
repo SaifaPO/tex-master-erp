@@ -108,6 +108,14 @@ export default function ZastavaApp({ supabase }) {
       selectable: false, evented: false, isSafeGuide: true,
     });
     canvas.add(guide);
+
+    // Statna vlajka (ak je vybrata) sa musi znova roztiahnut na novy rozmer platna — inak by
+    // ostala v starej mierke z chvile, kedy bola vybrata.
+    canvas.getObjects().filter(o => o.isStateFlag).forEach((o) => {
+      o.set({ left: 0, top: 0, scaleX: w / o.width, scaleY: h / o.height });
+      o.setCoords();
+    });
+
     canvas.requestRenderAll();
   }, [sirkaCm, vyskaCm, canvasReady]);
 
@@ -240,25 +248,37 @@ export default function ZastavaApp({ supabase }) {
     }
   };
 
-  const vyberStatnuVlajku = (nazov, url) => {
+  const vyberStatnuVlajku = async (nazov, url) => {
     const canvas = fabricRef.current;
     if (!canvas) return;
-    // Jedno nacitanie cez Fabric (nie dve nezavisle nacitania toho isteho obrazka) — Fabric zavola
-    // spatne volanie az po plnom nacitani a dekodovani obrazka, takze fimg.width/height su uz spolahlive.
-    fabric.Image.fromURL(url, (fimg) => {
-      canvas.getObjects().filter(o => o.isStateFlag).forEach(o => canvas.remove(o));
-      const w = canvas.getWidth();
-      const h = canvas.getHeight();
-      fimg.set({
-        left: 0, top: 0,
-        scaleX: w / fimg.width, scaleY: h / fimg.height,
-        selectable: false, evented: false, isStateFlag: true,
-      });
-      canvas.add(fimg);
-      canvas.sendToBack(fimg);
-      canvas.getObjects().filter(o => o.isSafeGuide).forEach(o => canvas.bringToFront(o));
-      canvas.requestRenderAll();
-    }, { crossOrigin: 'anonymous' });
+    // Explicitne pockat na UPLNE dekodovanie obrazka (image.decode()), nie len na 'load' event —
+    // niektore prehliadace (typicky Safari pri velkych obrazkoch) vedia zacat maluvat obrazok este
+    // pred dokoncenim dekodovania, co sposobi orezany/nedokresleny obrazok pri prvom vykresleni.
+    const imgEl = new Image();
+    imgEl.crossOrigin = 'anonymous';
+    imgEl.src = url;
+    try {
+      await imgEl.decode();
+    } catch {
+      // ak decode() zlyha (napr. stary prehliadac bez podpory), skusime pokracovat aj tak cez 'load'
+      await new Promise((resolve, reject) => { imgEl.onload = resolve; imgEl.onerror = reject; });
+    }
+    if (fabricRef.current !== canvas) return; // medzitym doslo k unmountu/zmene platna
+
+    canvas.getObjects().filter(o => o.isStateFlag).forEach(o => canvas.remove(o));
+    const fimg = new fabric.Image(imgEl);
+    const w = canvas.getWidth();
+    const h = canvas.getHeight();
+    fimg.set({
+      left: 0, top: 0,
+      scaleX: w / fimg.width, scaleY: h / fimg.height,
+      selectable: false, evented: false, isStateFlag: true,
+    });
+    canvas.add(fimg);
+    canvas.sendToBack(fimg);
+    canvas.getObjects().filter(o => o.isSafeGuide).forEach(o => canvas.bringToFront(o));
+    canvas.requestRenderAll();
+
     stateFlagImgRef.current = url;
     setStatnaVlajka({ nazov, url });
   };
