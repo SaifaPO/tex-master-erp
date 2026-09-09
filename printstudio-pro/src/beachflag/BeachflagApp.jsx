@@ -250,7 +250,7 @@ export default function BeachflagApp({ supabase }) {
             <span className="text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono flex items-center gap-1"><Flag className="w-3 h-3" /> {tvarKod} · {velkostKod}</span>
           </div>
           <div className="relative bg-slate-100 rounded-xl border border-slate-300 p-2 flex items-center justify-center min-h-[380px] sm:min-h-[440px] overflow-hidden" onContextMenu={(e) => e.preventDefault()}>
-            <canvas ref={canvasElRef} className="shadow-md rounded bg-white" />
+            <canvas ref={canvasElRef} className="shadow-md rounded" />
           </div>
           <p className="mt-3 text-[11px] text-slate-500">Červená čiara je orez, zelená je bezpečná zóna.</p>
           {techPanel && (

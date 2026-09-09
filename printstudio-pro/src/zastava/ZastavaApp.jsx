@@ -387,7 +387,7 @@ export default function ZastavaApp({ supabase }) {
             <span className="text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono flex items-center gap-1"><Flag className="w-3 h-3" /> {sirkaCm}×{vyskaCm} cm</span>
           </div>
           <div className="relative bg-slate-100 rounded-xl border border-slate-300 p-2 flex items-center justify-center min-h-[380px] sm:min-h-[440px] overflow-hidden" onContextMenu={(e) => e.preventDefault()}>
-            <canvas ref={canvasElRef} className="shadow-md rounded bg-white" />
+            <canvas ref={canvasElRef} className="shadow-md rounded" />
           </div>
           <p className="mt-3 text-[11px] text-slate-500">Zelená čiara je odporúčaná bezpečná zóna pre text/logo.</p>
           <p className="mt-1 text-[10px] text-slate-300 font-mono">build v5 — canvasReady:{String(canvasReady)}, objektov na plátne:{debugObjCount}, {tunely.length} tunel(y), {ocka.length} skup. očiek, {karabinky.length} skup. karabín, popruh: {Object.entries(popruhy).filter(([, v]) => v).map(([k]) => k).join(',') || '—'}</p>
