@@ -1,5 +1,6 @@
 // Načítanie katalógu pre 3D konfigurátor dresov zo Supabase. Samostatný súbor —
 // nezasahuje do produktData.js (2D konfigurátor), aby sa predišlo kolízii s rozrobenou prácou.
+import { nacitajGoogleFonty } from '../loadGoogleFonts';
 
 export async function nacitajDresKatalog(supabase, produktId) {
   const [
@@ -23,6 +24,8 @@ export async function nacitajDresKatalog(supabase, produktId) {
   ]);
 
   if (!produkt) throw new Error('Produkt sa nenašiel.');
+
+  nacitajGoogleFonty((fonty || []).map((f) => f.nazov));
 
   return {
     produkt,

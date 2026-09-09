@@ -3,6 +3,19 @@ import { Plus, Edit2, Trash2, Type } from 'lucide-react';
 
 const POUZITIE_LABEL = { vsetko: 'Meno, číslo, text', meno: 'Len meno', cislo: 'Len číslo', text: 'Len voľný text' };
 
+// Doteraz sa font-family len priradil na text, nikde sa realne nenacital ako webfont — ani tu
+// v admin nahlade. Bez <link> na Google Fonts prehliadac ticho spadne na systemovy font a admin
+// by nevidel, ako font naozaj vyzera (ani ci vobec obsahuje slovensku diakritiku).
+const nacitaneRodiny = new Set();
+function nacitajGoogleFont(nazov) {
+  if (!nazov || nacitaneRodiny.has(nazov)) return;
+  nacitaneRodiny.add(nazov);
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(nazov).replace(/%20/g, '+')}:wght@400;700&display=swap`;
+  document.head.appendChild(link);
+}
+
 export default function FontyTab({ supabase }) {
   const [fonty, setFonty] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -15,6 +28,7 @@ export default function FontyTab({ supabase }) {
     setIsLoading(true);
     const { data } = await supabase.from('fonty').select('*').order('id');
     setFonty(data || []);
+    (data || []).forEach((f) => nacitajGoogleFont(f.nazov));
     setIsLoading(false);
   };
 
@@ -49,7 +63,12 @@ export default function FontyTab({ supabase }) {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-white flex items-center gap-2"><Type className="text-indigo-400 h-5 w-5" /> Fonty</h2>
-          <p className="text-xs text-slate-400 mt-1">Fonty dostupné v textovom nástroji konfigurátora.</p>
+          <p className="text-xs text-slate-400 mt-1">
+            Fonty dostupné v textovom nástroji konfigurátora (Dizajner aj 3D Dres). Názov musí presne
+            zodpovedať Google Fonts rodine (napr. "Oswald", "Bebas Neue") — appka ju automaticky
+            načíta. Náhľad nižšie obsahuje slovenskú diakritiku (čžšňľĺťáôä), takže hneď vidíš, ak by
+            zvolený font diakritiku nezobrazil správne.
+          </p>
         </div>
         <button onClick={otvorNovu} className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-xl text-sm font-semibold transition">
           <Plus className="w-4 h-4" /> Pridať font
@@ -94,7 +113,7 @@ export default function FontyTab({ supabase }) {
               <tr><td colSpan={4} className="text-center text-slate-500 py-8 text-sm">Zatiaľ žiadne fonty.</td></tr>
             ) : fonty.map(f => (
               <tr key={f.id} className="border-t border-slate-800">
-                <td className="px-4 py-3 text-xl text-white" style={{ fontFamily: `'${f.nazov}', sans-serif` }}>Aa 123</td>
+                <td className="px-4 py-3 text-xl text-white" style={{ fontFamily: `'${f.nazov}', sans-serif` }}>Čaruje Ôsmy 123</td>
                 <td className="px-4 py-3 font-medium text-white">{f.nazov}</td>
                 <td className="px-4 py-3 text-xs text-slate-400">{POUZITIE_LABEL[f.pouzitie] || f.pouzitie}</td>
                 <td className="px-4 py-3 text-right">

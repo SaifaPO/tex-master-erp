@@ -4,6 +4,7 @@ import { Trash2, Download, ShoppingBag, Type, Image as ImageIcon, Sparkles, Shir
 import { nacitajDetailProduktu, nacitajPersonalizacieVarianty, najblizsiPersonalizacnyVariant } from './produktData';
 import { nacitajCennik, vypocitajCenuPotlace } from './cenotvorba';
 import { getSessionId } from './supabaseClient';
+import { nacitajGoogleFonty } from './loadGoogleFonts';
 
 const ZONE_KEYS = ['predok', 'chrbat', 'lavy_rukav', 'pravy_rukav', 'stitok_golier'];
 const NAZVY_ZON = { predok: 'Predná strana', chrbat: 'Chrbát', lavy_rukav: 'Ľavý rukáv', pravy_rukav: 'Pravý rukáv', stitok_golier: 'Štítok (golier)' };
@@ -144,6 +145,7 @@ export default function Dizajner({ supabase, produktId }) {
       setProdukt(detail);
       setCennik(cen);
       setFonty(fontyData || []);
+      nacitajGoogleFonty((fontyData || []).map((f) => f.nazov));
       setGrafiky(grafikyData || []);
       setPersonalizacieVarianty(personalizacie);
       setCurrentColor(detail.colors[0]?.hex || '#ffffff');
