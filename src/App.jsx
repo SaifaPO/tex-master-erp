@@ -5927,6 +5927,7 @@ export default function App() {
                           <th className="px-4 py-3">Odberateľ</th>
                           <th className="px-4 py-3">Produkt (Vyhotovenie)</th>
                           <th className="px-4 py-3 text-center">Ks</th>
+                          {showRedukovaneVykony && <th className="px-4 py-3 text-center">RV/VC</th>}
                           <th className="px-4 py-3 text-center">Termín (deadline)</th>
                           <th className="px-4 py-3 text-center">Deň výroby (všetky st.)</th>
                           <th className="px-4 py-3 text-center">Aktuálne štádium</th>
@@ -5970,6 +5971,26 @@ export default function App() {
                               <td className="px-4 py-3 font-bold text-white flex items-center gap-1.5"><CashBadge paymentType={item.paymentType} size="small" /> {item.customer}</td>
                               <td className="px-4 py-3 text-slate-300">{item.productName} (<span className="text-indigo-400">{item.qualityTier}</span>)</td>
                               <td className="px-4 py-3 text-center font-bold text-white">{item.qty}</td>
+                              {showRedukovaneVykony && (() => {
+                                const productMatch = products.find(p => p.id === item.productId);
+                                const rvKatalog = productMatch?.redukovanyVykon != null ? productMatch.redukovanyVykon * item.qty : null;
+                                const vcKatalog = productMatch?.productionCost != null ? productMatch.productionCost * item.qty : null;
+                                const rv = item.redukovanyVykonOverride ?? rvKatalog;
+                                const vc = item.vyrobnaCenaOverride ?? vcKatalog;
+                                const chybaData = rv == null && vc == null;
+                                return (
+                                  <td className="px-4 py-3 text-center text-[11px]">
+                                    <div className="flex items-center justify-center gap-1">
+                                      <span className="text-indigo-300 font-bold">{rv != null ? rv.toFixed(1) : '—'}</span>
+                                      <span className="text-slate-500">·</span>
+                                      <span className="text-emerald-400 font-bold">{vc != null ? `${vc.toFixed(0)}€` : '—'}</span>
+                                      {chybaData && (
+                                        <button onClick={(e) => { e.stopPropagation(); setActiveTab('catalog'); if (productMatch) setEditingProduct(productMatch); }} title="Chýbajú dáta v katalógu — kliknutím otvoríš úpravu produktu" className="text-amber-500 shrink-0"><AlertTriangle className="h-3 w-3" /></button>
+                                      )}
+                                    </div>
+                                  </td>
+                                );
+                              })()}
                               <td className="px-4 py-3 text-center"><span className={`px-2 py-0.5 rounded font-bold ${isUrgentDate(item.deliveryDate) ? 'bg-rose-600 text-white animate-pulse' : 'bg-slate-800'}`}>{formatDeliveryDate(item.deliveryDate)}</span></td>
                               <td className="px-4 py-3 text-center">
                                 {hasPermission('edit_priority') ? (
@@ -10258,7 +10279,7 @@ export default function App() {
         })()}
 
         {selectedOrderDetails && (
-          <div className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-7xl max-h-[85vh] overflow-y-auto bg-slate-950 p-6 rounded-t-2xl border border-slate-800 border-b-0 shadow-2xl space-y-6 print:static print:inset-auto print:z-auto print:mx-0 print:w-auto print:max-w-none print:max-h-none print:overflow-visible print:bg-white print:text-black print:border-none print:shadow-none print:rounded-none print:p-0 animate-in slide-in-from-bottom-8 fade-in duration-200">
+          <div className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-7xl max-h-[85vh] overflow-y-auto overflow-x-hidden bg-slate-950 p-6 rounded-t-2xl border border-slate-800 border-b-0 shadow-2xl space-y-6 print:static print:inset-auto print:z-auto print:mx-0 print:w-auto print:max-w-none print:max-h-none print:overflow-visible print:bg-white print:text-black print:border-none print:shadow-none print:rounded-none print:p-0 animate-in slide-in-from-bottom-8 fade-in duration-200">
             <div className="sticky -top-6 -mx-6 px-6 pt-6 -mt-6 bg-slate-950 flex flex-wrap justify-between items-center gap-3 border-b border-slate-800 pb-4 print:hidden print:static print:m-0 print:p-0 print:border-0 z-10">
               <div className="flex items-center gap-2"><FileText className="text-indigo-400 h-5 w-5" /><h3 className="text-lg font-bold">Sprievodka pre: <span className="font-mono text-indigo-400">{selectedOrderDetails.id}</span></h3></div>
               <div className="flex flex-wrap gap-2">
