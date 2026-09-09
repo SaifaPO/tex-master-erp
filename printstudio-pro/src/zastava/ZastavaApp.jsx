@@ -149,7 +149,7 @@ export default function ZastavaApp({ supabase }) {
     });
 
     // Kovove priechodky (ocka) — vacsie kruhy pozdlz strany/strán
-    const ockoR = Math.max(10, Math.min(w, h) * 0.02);
+    const ockoR = Math.max(8, Math.min(w, h) * 0.016);
     const kruh = (x, y) => pridaj(new fabric.Circle({ left: x - ockoR, top: y - ockoR, radius: ockoR, fill: '#334155', stroke: '#e2e8f0', strokeWidth: 3 }));
     ocka.forEach((g) => {
       const cnt = Math.max(1, g.count || 1);
@@ -243,21 +243,24 @@ export default function ZastavaApp({ supabase }) {
   const vyberStatnuVlajku = (nazov, url) => {
     const canvas = fabricRef.current;
     if (!canvas) return;
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      fabric.Image.fromURL(url, (fimg) => {
-        canvas.getObjects().filter(o => o.isStateFlag).forEach(o => canvas.remove(o));
-        fimg.set({ left: 0, top: 0, scaleX: canvas.getWidth() / fimg.width, scaleY: canvas.getHeight() / fimg.height, selectable: false, evented: false, isStateFlag: true, crossOrigin: 'anonymous' });
-        canvas.add(fimg);
-        canvas.sendToBack(fimg);
-        canvas.getObjects().filter(o => o.isSafeGuide).forEach(o => canvas.bringToFront(o));
-        canvas.renderAll();
-      }, { crossOrigin: 'anonymous' });
-      stateFlagImgRef.current = url;
-      setStatnaVlajka({ nazov, url });
-    };
-    img.src = url;
+    // Jedno nacitanie cez Fabric (nie dve nezavisle nacitania toho isteho obrazka) — Fabric zavola
+    // spatne volanie az po plnom nacitani a dekodovani obrazka, takze fimg.width/height su uz spolahlive.
+    fabric.Image.fromURL(url, (fimg) => {
+      canvas.getObjects().filter(o => o.isStateFlag).forEach(o => canvas.remove(o));
+      const w = canvas.getWidth();
+      const h = canvas.getHeight();
+      fimg.set({
+        left: 0, top: 0,
+        scaleX: w / fimg.width, scaleY: h / fimg.height,
+        selectable: false, evented: false, isStateFlag: true,
+      });
+      canvas.add(fimg);
+      canvas.sendToBack(fimg);
+      canvas.getObjects().filter(o => o.isSafeGuide).forEach(o => canvas.bringToFront(o));
+      canvas.requestRenderAll();
+    }, { crossOrigin: 'anonymous' });
+    stateFlagImgRef.current = url;
+    setStatnaVlajka({ nazov, url });
   };
   const odstranitStatnuVlajku = () => {
     const canvas = fabricRef.current;
