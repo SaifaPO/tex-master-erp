@@ -376,6 +376,7 @@ export default function ZastavaApp({ supabase }) {
             <canvas ref={canvasElRef} className="shadow-md rounded bg-white" />
           </div>
           <p className="mt-3 text-[11px] text-slate-500">Zelená čiara je odporúčaná bezpečná zóna pre text/logo.</p>
+          <p className="mt-1 text-[10px] text-slate-300 font-mono">build v4 — {tunely.length} tunel(y), {ocka.length} skup. očiek, {karabinky.length} skup. karabín, popruh: {Object.entries(popruhy).filter(([, v]) => v).map(([k]) => k).join(',') || '—'}</p>
         </div>
       </div>
     </div>
