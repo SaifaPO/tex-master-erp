@@ -69,6 +69,11 @@ export default function CenotvorbaTab({ supabase }) {
       const val = Number.isFinite(num) ? num : null;
       patch = { production_cost: val };
       localPatch = { productionCost: val };
+    } else if (field === 'redukovanyVykon') {
+      const num = rawValue.trim() === '' ? null : parseFloat(rawValue.replace(',', '.'));
+      const val = Number.isFinite(num) ? num : null;
+      patch = { redukovany_vykon: val };
+      localPatch = { redukovanyVykon: val };
     } else {
       const val = rawValue.trim() === '' ? null : rawValue.trim();
       patch = { price_group: val };
@@ -80,7 +85,7 @@ export default function CenotvorbaTab({ supabase }) {
     setSavingRowId(null);
     if (error) {
       notify('error', error.message);
-      setProducts(prev => prev.map(p => p.id === product.id ? { ...p, [field]: field === 'productionCost' ? product.productionCost : product.priceGroup } : p)); // vratit spat ak zapis zlyha
+      setProducts(prev => prev.map(p => p.id === product.id ? { ...p, [field]: product[field] } : p)); // vratit spat ak zapis zlyha
     }
   };
 
@@ -194,9 +199,14 @@ export default function CenotvorbaTab({ supabase }) {
         <p className="text-[11px] text-slate-400 mb-3">
           Súčasný vzorec reaguje len na výrobnú cenu a počet kusov — nevie, koľko kapacity (šitie, tlač)
           daný kus reálne zožerie. Nastav tu, koľko € marže chceš dostať za 1 jednotku "Redukovaného výkonu"
-          (pole v Katalógu Modelov) — tabuľka nižšie potom ukáže, ako by vyzerala cena, keby sa marža
-          zdvihla vždy, keď súčasný vzorec dáva menej než tento cieľ. Zatiaľ len náhľad — kým toto
-          nezapneš nikde inde, skutočné ceny v Cenníku potlače/DTF metráži sa nemenia.
+          — tabuľka nižšie potom ukáže, ako by vyzerala cena, keby sa marža zdvihla vždy, keď súčasný
+          vzorec dáva menej než tento cieľ. Zatiaľ len náhľad — kým toto nezapneš nikde inde, skutočné
+          ceny v Cenníku potlače/DTF metráži sa nemenia.
+        </p>
+        <p className="text-[11px] font-semibold text-amber-400/90 mb-3">
+          ⚠️ Najprv treba mať vyplnený "Red. výkon" pri produktoch — bez neho diagnostika nemá čo počítať
+          a stĺpce nižšie ostanú prázdne. Dá sa vyplniť rovno v stĺpci "Red. výkon" v tabuľke nižšie
+          (rovnaké pole ako "Redukovaný výkon" v Katalógu Modelov — zmena sa prejaví na oboch miestach).
         </p>
         <div className="flex items-end gap-3">
           <div>
@@ -270,7 +280,9 @@ export default function CenotvorbaTab({ supabase }) {
                       </div>
                       {!hasCost && <div className="flex items-center gap-1 text-amber-500 text-[10px] mt-0.5"><AlertTriangle className="h-3 w-3 shrink-0" /> chýba výrobná cena</div>}
                     </td>
-                    <td className="p-2 text-slate-400 whitespace-nowrap">{hasRv ? rv : '—'}</td>
+                    <td className="p-1.5">
+                      <input type="text" inputMode="decimal" key={`rv-${p.id}-${rv ?? ''}`} defaultValue={rv != null ? String(rv) : ''} onBlur={e => handleRowFieldBlur(p, 'redukovanyVykon', e.target.value)} onKeyDown={handleFieldKeyDown} placeholder="—" className="w-16 bg-slate-950 border border-slate-800 rounded p-1 text-white" />
+                    </td>
                     <td className="p-2 text-amber-300 bg-amber-950/10 whitespace-nowrap">{capEurPerUnit != null ? `${capEurPerUnit.toFixed(2)} €` : '—'}</td>
                     <td className="p-2 font-bold text-indigo-300 bg-indigo-950/20 whitespace-nowrap">
                       {hasCost ? `${priceAt(cost, refQty, config).toFixed(2)} € (${currentMargin.toFixed(0)}%)` : '⚠️ chýba výrobná cena'}
