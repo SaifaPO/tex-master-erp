@@ -6,32 +6,52 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 // Subor je zamerne SAMOSTATNY (ziadne importy z ../_shared/) — Supabase Dashboard (rucne
 // vlepenie kodu bez CLI) nevie zbalit viacsuborove funkcie a hlasi "Module not found".
-// vypocitajCenuVlajky je duplikat z ../_shared/vlajkaCena.ts — pri zmene vzorca uprav oba subory
-// (aj src/printstudio/vlajkaCenotvorba.js a printstudio-pro/src/beachflag/vlajkaCenotvorba.js).
+// Marzovy vzorec + cena z materialu je duplikat beachflag-price-preview/index.ts — pri zmene
+// uprav aj tam (a src/printstudio/pricingEngine.js, printstudio-pro/src/pricingEngine.js).
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+interface PricingConfig { coefA: number; coefB: number; marginFloor: number; coefP: number; qtyAtFloor: number; }
+
+function baseMargin(cost: number, cfg: PricingConfig) {
+  const c = Math.max(cost, 0.05);
+  const m = cfg.coefA - cfg.coefB * Math.log(c);
+  return Math.min(Math.max(m, cfg.marginFloor), 450);
+}
+function marginAt(cost: number, qty: number, cfg: PricingConfig) {
+  const base = baseMargin(cost, cfg);
+  const q = Math.max(qty, 1);
+  const qm = Math.max(cfg.qtyAtFloor, 2);
+  const t = Math.max(0, 1 - Math.log10(q) / Math.log10(qm));
+  const decay = Math.pow(t, cfg.coefP);
+  return cfg.marginFloor + (base - cfg.marginFloor) * decay;
+}
+function priceAt(cost: number, qty: number, cfg: PricingConfig) {
+  return Math.round(cost * (1 + marginAt(cost, qty, cfg) / 100) * 100) / 100;
+}
+
 interface VlajkaCenaVstup {
-  velkost: { cena: number } | null;
+  nakladMaterial: number;
   dokoncenie: { cena: number } | null;
   stoziar: { cena: number } | null;
   doplnky: { cena: number; mnozstvo: number }[];
   expresne: boolean;
   pocetKs: number;
   nastavenia: { dph_percent: number; expresny_priplatok_percent: number };
+  pricingConfig: PricingConfig;
 }
 
-function vypocitajCenuVlajky({ velkost, dokoncenie, stoziar, doplnky, expresne, pocetKs, nastavenia }: VlajkaCenaVstup) {
-  const cenaVelkosti = Number(velkost?.cena) || 0;
+function vypocitajCenuVlajky({ nakladMaterial, dokoncenie, stoziar, doplnky, expresne, pocetKs, nastavenia, pricingConfig }: VlajkaCenaVstup) {
+  const ks = Math.max(1, Number(pocetKs) || 1);
+  const cenaMaterialKus = priceAt(Number(nakladMaterial) || 0, ks, pricingConfig);
   const cenaDokoncenia = Number(dokoncenie?.cena) || 0;
   const cenaStoziara = Number(stoziar?.cena) || 0;
-  const zaklad = cenaVelkosti + cenaDokoncenia + cenaStoziara;
+  const zaklad = cenaMaterialKus + cenaDokoncenia + cenaStoziara;
 
   const doplnkySpolu = (doplnky || []).reduce((sum, d) => sum + (Number(d.cena) || 0) * (Number(d.mnozstvo) || 0), 0);
 
-  const ks = Math.max(1, Number(pocetKs) || 1);
   const subtotal = (zaklad + doplnkySpolu) * ks;
 
   const expresnyPercent = Number(nastavenia?.expresny_priplatok_percent) || 0;
@@ -62,33 +82,47 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json();
     const {
-      designId, tvarKod, velkostKod, dokoncenieKod, stoziarKod,
+      designId, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod,
       doplnky = [], farbaHex, farbaPoznamka, textNaVlajke,
       expresne = false, pocetKs = 1, nahladUrl,
     } = body;
 
     if (!tvarKod || !velkostKod) throw new Error('Chýba tvar alebo veľkosť vlajky.');
+    if (!materialKod) throw new Error('Chýba materiál.');
 
-    const [{ data: tvar }, { data: velkost }, { data: dokoncenie }, { data: stoziar }, { data: doplnkyDb }, { data: nastavenia }] = await Promise.all([
+    const [{ data: tvar }, { data: velkost }, { data: material }, { data: dokoncenie }, { data: stoziar }, { data: doplnkyDb }, { data: nastavenia }, { data: cfg }] = await Promise.all([
       supabase.from('vlajka_tvary').select('*').eq('kod', tvarKod).maybeSingle(),
       supabase.from('vlajka_velkosti').select('*').eq('kod', velkostKod).maybeSingle(),
+      supabase.from('vlajka_materialy').select('*').eq('kod', materialKod).eq('aktivny', true).maybeSingle(),
       dokoncenieKod ? supabase.from('vlajka_dokoncenie').select('*').eq('kod', dokoncenieKod).maybeSingle() : Promise.resolve({ data: null }),
       stoziarKod ? supabase.from('vlajka_stoziare').select('*').eq('kod', stoziarKod).maybeSingle() : Promise.resolve({ data: null }),
       supabase.from('vlajka_doplnky').select('*'),
       supabase.from('vlajka_nastavenia').select('*').eq('id', 1).maybeSingle(),
+      supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
     ]);
 
     if (!tvar) throw new Error(`Tvar "${tvarKod}" sa v katalógu nenašiel.`);
     if (!velkost) throw new Error(`Veľkosť "${velkostKod}" sa v katalógu nenašla.`);
+    if (!material) throw new Error(`Materiál "${materialKod}" sa v katalógu nenašiel.`);
+
+    const { data: rozmer } = await supabase.from('vlajka_tvar_rozmery').select('spotreba_m2').eq('tvar_id', tvar.id).eq('velkost', velkostKod).maybeSingle();
+    if (!rozmer || rozmer.spotreba_m2 == null) throw new Error(`Spotreba materiálu pre tvar "${tvarKod}" a veľkosť "${velkostKod}" nie je nastavená.`);
+
+    const pricingConfig: PricingConfig = cfg
+      ? { coefA: Number(cfg.coef_a), coefB: Number(cfg.coef_b), marginFloor: Number(cfg.margin_floor), coefP: Number(cfg.coef_p), qtyAtFloor: Number(cfg.qty_at_floor) }
+      : { coefA: 300, coefB: 54, marginFloor: 30, coefP: 1.3, qtyAtFloor: 1000 };
 
     const doplnkyVypocet = (doplnky as { kod: string; mnozstvo: number }[]).map((d) => {
       const dbRow = (doplnkyDb || []).find((x: any) => x.kod === d.kod);
       return { cena: dbRow ? Number(dbRow.cena) : 0, mnozstvo: Number(d.mnozstvo) || 0, nazov: dbRow?.nazov || d.kod };
     });
 
+    const nakladMaterial = Number(rozmer.spotreba_m2) * Number(material.naklad_m2);
+
     const cena = vypocitajCenuVlajky({
-      velkost, dokoncenie, stoziar,
+      nakladMaterial, dokoncenie, stoziar,
       doplnky: doplnkyVypocet,
+      pricingConfig,
       expresne: !!expresne,
       pocetKs: Number(pocetKs) || 1,
       nastavenia: nastavenia || { dph_percent: 23, expresny_priplatok_percent: 10 },
@@ -104,6 +138,7 @@ Deno.serve(async (req) => {
       _design_id: designId || '',
       _tvar: tvar.nazov,
       _velkost: velkost.kod,
+      _material: material.nazov,
       _opracovanie: dokoncenie?.nazov || '',
       _stoziar: stoziar?.nazov || '',
       _doplnky: doplnkyVypocet.map((d) => `${d.mnozstvo}× ${d.nazov}`).join(', '),

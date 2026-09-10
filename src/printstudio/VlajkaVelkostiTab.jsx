@@ -1,25 +1,35 @@
 import React, { useEffect, useState } from 'react';
 import { Ruler, Calculator } from 'lucide-react';
 import { vypocitajCenuVlajky } from './vlajkaCenotvorba';
+import { mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 
 export default function VlajkaVelkostiTab({ supabase }) {
   const [velkosti, setVelkosti] = useState([]);
+  const [materialy, setMaterialy] = useState([]);
+  const [pricingConfig, setPricingConfig] = useState(DEFAULT_PRICING_CONFIG);
   const [nastavenia, setNastavenia] = useState({ dph_percent: 23, expresny_priplatok_percent: 10 });
   const [isLoading, setIsLoading] = useState(true);
 
   const [testVelkostId, setTestVelkostId] = useState(null);
+  const [testMaterialId, setTestMaterialId] = useState(null);
+  const [testSpotreba, setTestSpotreba] = useState('0.35');
   const [testExpres, setTestExpres] = useState(false);
   const [testKs, setTestKs] = useState(1);
 
   const nacitaj = async () => {
     setIsLoading(true);
-    const [{ data: v }, { data: n }] = await Promise.all([
+    const [{ data: v }, { data: m }, { data: n }, { data: cfg }] = await Promise.all([
       supabase.from('vlajka_velkosti').select('*').order('poradie').order('id'),
+      supabase.from('vlajka_materialy').select('*').order('poradie').order('id'),
       supabase.from('vlajka_nastavenia').select('*').eq('id', 1).maybeSingle(),
+      supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
     ]);
     setVelkosti(v || []);
+    setMaterialy(m || []);
     if (n) setNastavenia(n);
+    if (cfg) setPricingConfig(mapConfigFromDb(cfg));
     if ((v || []).length > 0) setTestVelkostId(v[0].id);
+    if ((m || []).length > 0) setTestMaterialId(m[0].id);
     setIsLoading(false);
   };
 
@@ -36,9 +46,11 @@ export default function VlajkaVelkostiTab({ supabase }) {
     await supabase.from('vlajka_nastavenia').upsert({ id: 1, ...next });
   };
 
-  const testVelkost = velkosti.find(v => v.id === testVelkostId);
+  const testMaterial = materialy.find(m => m.id === testMaterialId);
+  const nakladMaterial = (parseFloat(testSpotreba) || 0) * (Number(testMaterial?.naklad_m2) || 0);
   const vysledok = vypocitajCenuVlajky({
-    velkost: testVelkost || { cena: 0 },
+    nakladMaterial,
+    pricingConfig,
     dokoncenie: null,
     stoziar: null,
     doplnky: [],
@@ -53,7 +65,7 @@ export default function VlajkaVelkostiTab({ supabase }) {
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-bold text-white flex items-center gap-2"><Ruler className="text-indigo-400 h-5 w-5" /> Veľkosti, DPH a expres</h2>
-        <p className="text-xs text-slate-400 mt-1">Každá veľkosť má plochú základnú cenu (nie podľa plochy potlače) — k nej sa v konfigurátore pripočíta opracovanie, prút a doplnky.</p>
+        <p className="text-xs text-slate-400 mt-1">Cena veľkosti sa už nezadáva ručne — počíta sa z materiálu (spotreba m² × náklad materiálu, záložka "Materiály" a "Tvary") cez jednotný maržový vzorec. Tu nastavuješ len fyzické rozmery a k tomu sa v konfigurátore pripočíta materiál, opracovanie, prút a doplnky.</p>
       </div>
 
       <div className="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-hidden">
@@ -63,7 +75,6 @@ export default function VlajkaVelkostiTab({ supabase }) {
               <th className="text-left px-4 py-2.5">Kód</th>
               <th className="text-left px-4 py-2.5">Výška od zeme (cm)</th>
               <th className="text-left px-4 py-2.5">Rozmer plachty</th>
-              <th className="text-left px-4 py-2.5">Základná cena (€)</th>
             </tr>
           </thead>
           <tbody>
@@ -75,9 +86,6 @@ export default function VlajkaVelkostiTab({ supabase }) {
                 </td>
                 <td className="px-4 py-2">
                   <input type="text" value={v.rozmer_popis} onChange={(e) => upravVelkost(v.id, { rozmer_popis: e.target.value })} className="w-36 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" />
-                </td>
-                <td className="px-4 py-2">
-                  <input type="number" step="0.5" value={v.cena} onChange={(e) => upravVelkost(v.id, { cena: parseFloat(e.target.value) || 0 })} className="w-24 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" />
                 </td>
               </tr>
             ))}
@@ -99,13 +107,23 @@ export default function VlajkaVelkostiTab({ supabase }) {
       {/* TESTOVACIA KALKULAČKA */}
       <div className="bg-slate-950 rounded-2xl p-5 border border-indigo-900/40">
         <h3 className="font-bold text-sm text-white mb-1 flex items-center gap-1.5"><Calculator className="w-4 h-4 text-indigo-400" /> Testovacia kalkulačka</h3>
-        <p className="text-xs text-slate-400 mb-4">Rýchla kontrola ceny len podľa veľkosti (bez opracovania/prútu/doplnkov — tie sa pripočítajú rovnako v konfigurátore).</p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4 max-w-xl">
+        <p className="text-xs text-slate-400 mb-4">Rýchla kontrola ceny podľa materiálu a spotreby (bez opracovania/prútu/doplnkov — tie sa pripočítajú rovnako v konfigurátore). Reálnu spotrebu pre konkrétny tvar+veľkosť nájdeš v záložke "Tvary".</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4 max-w-2xl">
           <div>
             <label className="text-xs text-slate-400">Veľkosť</label>
             <select value={testVelkostId || ''} onChange={(e) => setTestVelkostId(parseInt(e.target.value))} className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white">
-              {velkosti.map(v => <option key={v.id} value={v.id}>{v.kod} ({Number(v.cena).toFixed(2)} €)</option>)}
+              {velkosti.map(v => <option key={v.id} value={v.id}>{v.kod}</option>)}
             </select>
+          </div>
+          <div>
+            <label className="text-xs text-slate-400">Materiál</label>
+            <select value={testMaterialId || ''} onChange={(e) => setTestMaterialId(parseInt(e.target.value))} className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white">
+              {materialy.map(m => <option key={m.id} value={m.id}>{m.nazov} ({Number(m.naklad_m2).toFixed(2)} €/m²)</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-slate-400">Spotreba (m²)</label>
+            <input type="number" step="0.01" min="0" value={testSpotreba} onChange={(e) => setTestSpotreba(e.target.value)} className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white" />
           </div>
           <div>
             <label className="text-xs text-slate-400">Počet kusov</label>

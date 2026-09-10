@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { Flag, Ruler, Package, ClipboardList } from 'lucide-react';
+import { Flag, Ruler, Package, ClipboardList, Layers } from 'lucide-react';
 import VlajkaTvaryTab from './VlajkaTvaryTab';
+import VlajkaMaterialyTab from './VlajkaMaterialyTab';
 import VlajkaVelkostiTab from './VlajkaVelkostiTab';
 import VlajkaDoplnkyTab from './VlajkaDoplnkyTab';
 import VlajkaObjednavkyTab from './VlajkaObjednavkyTab';
 
 const SUBTABS = [
   { id: 'tvary', label: 'Tvary', icon: Flag },
+  { id: 'materialy', label: 'Materiály', icon: Layers },
   { id: 'velkosti', label: 'Veľkosti a DPH', icon: Ruler },
   { id: 'doplnky', label: 'Doplnky', icon: Package },
   { id: 'objednavky', label: 'Objednávky', icon: ClipboardList },
@@ -38,6 +40,7 @@ export default function VlajkyAdmin({ supabase }) {
 
       <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 shadow-xl">
         {subtab === 'tvary' && <VlajkaTvaryTab supabase={supabase} />}
+        {subtab === 'materialy' && <VlajkaMaterialyTab supabase={supabase} />}
         {subtab === 'velkosti' && <VlajkaVelkostiTab supabase={supabase} />}
         {subtab === 'doplnky' && <VlajkaDoplnkyTab supabase={supabase} />}
         {subtab === 'objednavky' && <VlajkaObjednavkyTab supabase={supabase} />}

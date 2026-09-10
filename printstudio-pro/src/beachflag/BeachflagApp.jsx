@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { fabric } from 'fabric';
 import { Flag, Eye } from 'lucide-react';
 import { nacitajVlajkaKatalog } from './vlajkaData';
-import { vypocitajCenuVlajky } from './vlajkaCenotvorba';
 import { getSessionId } from '../supabaseClient';
 import ParametreTab from './ParametreTab';
 import GrafikaTab from './GrafikaTab';
@@ -25,6 +24,7 @@ export default function BeachflagApp({ supabase }) {
   const [krok, setKrok] = useState('parametre'); // parametre | grafika | doplnky
   const [tvarKod, setTvarKod] = useState('');
   const [velkostKod, setVelkostKod] = useState('');
+  const [materialKod, setMaterialKod] = useState('');
   const [dokoncenieKod, setDokoncenieKod] = useState('');
   const [stoziarKod, setStoziarKod] = useState('');
   const [doplnkyMnozstva, setDoplnkyMnozstva] = useState({});
@@ -33,6 +33,9 @@ export default function BeachflagApp({ supabase }) {
   const [customText, setCustomText] = useState('');
   const [expresne, setExpresne] = useState(false);
   const [pocetKs, setPocetKs] = useState(1);
+  const [cena, setCena] = useState(null);
+  const [cenaNacitava, setCenaNacitava] = useState(false);
+  const [cenaChyba, setCenaChyba] = useState('');
 
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiError, setAiError] = useState('');
@@ -56,6 +59,7 @@ export default function BeachflagApp({ supabase }) {
         setKatalog(data);
         setTvarKod(data.tvary[0]?.kod || '');
         setVelkostKod(data.velkosti[0]?.kod || '');
+        setMaterialKod(data.materialy[0]?.kod || '');
         setDokoncenieKod(data.dokoncenie[0]?.kod || '');
         setStoziarKod(data.stoziare[0]?.kod || '');
       } catch (e) {
@@ -97,6 +101,25 @@ export default function BeachflagApp({ supabase }) {
   useEffect(() => {
     fabricRef.current?.setBackgroundColor(bgColor, () => fabricRef.current?.renderAll());
   }, [bgColor]);
+
+  // Ziva cena — debounced volanie Edge Function pri kazdej zmene konfiguracie (rovnaky vzor ako
+  // Zastava). Naklad materialu (naklad_m2 x spotreba_m2) sa nikdy nepocita na klientovi.
+  useEffect(() => {
+    if (!katalog || !tvarKod || !velkostKod || !materialKod) return;
+    const doplnky = Object.entries(doplnkyMnozstva).map(([kod, mnozstvo]) => ({ kod, mnozstvo }));
+    setCenaNacitava(true);
+    setCenaChyba('');
+    const t = setTimeout(async () => {
+      const { data, error } = await supabase.functions.invoke('beachflag-price-preview', {
+        body: { tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, doplnky, pocetKs, expresne },
+      });
+      setCenaNacitava(false);
+      if (error) { setCenaChyba(error.message); return; }
+      if (data?.error) { setCenaChyba(data.error); return; }
+      setCena(data.cena);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [supabase, katalog, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, doplnkyMnozstva, pocetKs, expresne]);
 
   const pridajText = () => {
     const canvas = fabricRef.current;
@@ -162,20 +185,16 @@ export default function BeachflagApp({ supabase }) {
   if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500 text-sm">Načítavam…</div>;
   if (loadError) return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-rose-600 text-sm px-4 text-center">{loadError}</div>;
   if (!katalog || katalog.tvary.length === 0) return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500 text-sm px-4 text-center">Katalóg beachvlajok je zatiaľ prázdny — doplň tvary a veľkosti v admin paneli.</div>;
+  if (katalog.materialy.length === 0) return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500 text-sm px-4 text-center">Zatiaľ nie je nastavený žiadny materiál — doplň ho v admin paneli (PrintStudio Pro → Beachvlajky → Materiály).</div>;
 
-  const velkost = katalog.velkosti.find(v => v.kod === velkostKod);
-  const dokoncenie = katalog.dokoncenie.find(d => d.kod === dokoncenieKod);
-  const stoziar = katalog.stoziare.find(s => s.kod === stoziarKod);
   const doplnkyVybrane = Object.entries(doplnkyMnozstva).map(([kod, mnozstvo]) => {
     const d = katalog.doplnky.find(x => x.kod === kod);
     return d ? { kod, nazov: d.nazov, cena: d.cena, mnozstvo } : null;
   }).filter(Boolean);
 
-  const cena = vypocitajCenuVlajky({ velkost, dokoncenie, stoziar, doplnky: doplnkyVybrane, expresne, pocetKs, nastavenia: katalog.nastavenia });
-
   const objednat = async () => {
     const canvas = fabricRef.current;
-    if (!canvas) return;
+    if (!canvas || !cena) return;
     setSubmitError('');
     setIsSubmitting(true);
     try {
@@ -188,7 +207,7 @@ export default function BeachflagApp({ supabase }) {
 
       const payload = {
         designId,
-        tvarKod, velkostKod, dokoncenieKod, stoziarKod,
+        tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod,
         doplnky: doplnkyVybrane,
         farbaHex: bgColor,
         farbaPoznamka: pantoneNote,
@@ -225,8 +244,8 @@ export default function BeachflagApp({ supabase }) {
         </div>
 
         {krok === 'parametre' && (
-          <ParametreTab katalog={katalog} tvarKod={tvarKod} velkostKod={velkostKod} dokoncenieKod={dokoncenieKod} stoziarKod={stoziarKod}
-            onTvar={setTvarKod} onVelkost={setVelkostKod} onDokoncenie={setDokoncenieKod} onStoziar={setStoziarKod}
+          <ParametreTab katalog={katalog} tvarKod={tvarKod} velkostKod={velkostKod} materialKod={materialKod} dokoncenieKod={dokoncenieKod} stoziarKod={stoziarKod}
+            onTvar={setTvarKod} onVelkost={setVelkostKod} onMaterial={setMaterialKod} onDokoncenie={setDokoncenieKod} onStoziar={setStoziarKod}
             onDalej={() => setKrok('grafika')} />
         )}
         {krok === 'grafika' && (
@@ -238,7 +257,7 @@ export default function BeachflagApp({ supabase }) {
         {krok === 'doplnky' && (
           <DoplnkyTab katalog={katalog} doplnkyMnozstva={doplnkyMnozstva} onZmenMnozstvo={zmenMnozstvoDoplnku}
             expresne={expresne} onExpresne={setExpresne} pocetKs={pocetKs} onPocetKs={setPocetKs}
-            cena={cena} isSubmitting={isSubmitting} submitError={submitError} onObjednat={objednat}
+            cena={cena} cenaNacitava={cenaNacitava} cenaChyba={cenaChyba} isSubmitting={isSubmitting} submitError={submitError} onObjednat={objednat}
             onSpat={() => setKrok('grafika')} />
         )}
       </div>

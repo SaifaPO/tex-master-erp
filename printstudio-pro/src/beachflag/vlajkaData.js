@@ -2,6 +2,7 @@
 export async function nacitajVlajkaKatalog(supabase) {
   const [
     { data: tvary },
+    { data: materialy },
     { data: velkosti },
     { data: dokoncenie },
     { data: stoziare },
@@ -10,6 +11,8 @@ export async function nacitajVlajkaKatalog(supabase) {
     { data: nastaveniaRow },
   ] = await Promise.all([
     supabase.from('vlajka_tvary').select('*, vlajka_tvar_rozmery(*)').eq('aktivny', true).order('poradie').order('id'),
+    // Verejný pohľad (bez naklad_m2) — surová cena materiálu ide len cez beachflag-price-preview.
+    supabase.from('vlajka_materialy_verejny').select('*'),
     supabase.from('vlajka_velkosti').select('*').eq('aktivny', true).order('poradie').order('id'),
     supabase.from('vlajka_dokoncenie').select('*').eq('aktivny', true).order('poradie').order('id'),
     supabase.from('vlajka_stoziare').select('*').eq('aktivny', true).order('poradie').order('id'),
@@ -23,6 +26,7 @@ export async function nacitajVlajkaKatalog(supabase) {
       ...t,
       rozmery: Object.fromEntries((t.vlajka_tvar_rozmery || []).map(r => [r.velkost, r])),
     })),
+    materialy: materialy || [],
     velkosti: velkosti || [],
     dokoncenie: dokoncenie || [],
     stoziare: stoziare || [],

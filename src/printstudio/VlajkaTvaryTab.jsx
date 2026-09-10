@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Plus, Edit2, Trash2, Flag, ChevronDown, ChevronUp } from 'lucide-react';
 
 const VELKOSTI = ['S', 'M', 'L', 'XL'];
-const PRAZDNY_ROZMER = { viewbox: '0 0 210 430', cut_path: '', safe_path: '' };
+const PRAZDNY_ROZMER = { viewbox: '0 0 210 430', cut_path: '', safe_path: '', spotreba_m2: '' };
 
 export default function VlajkaTvaryTab({ supabase }) {
   const [tvary, setTvary] = useState([]);
@@ -59,7 +59,7 @@ export default function VlajkaTvaryTab({ supabase }) {
     const map = {};
     VELKOSTI.forEach(v => {
       const row = (data || []).find(r => r.velkost === v);
-      map[v] = row ? { viewbox: row.viewbox, cut_path: row.cut_path, safe_path: row.safe_path } : { ...PRAZDNY_ROZMER };
+      map[v] = row ? { viewbox: row.viewbox, cut_path: row.cut_path, safe_path: row.safe_path, spotreba_m2: row.spotreba_m2 ?? '' } : { ...PRAZDNY_ROZMER };
     });
     setRozmery(map);
   };
@@ -72,7 +72,7 @@ export default function VlajkaTvaryTab({ supabase }) {
     setUkladamRozmery(true);
     const riadky = VELKOSTI
       .filter(v => rozmery[v]?.cut_path?.trim() && rozmery[v]?.safe_path?.trim())
-      .map(v => ({ tvar_id: tvarId, velkost: v, viewbox: rozmery[v].viewbox || '0 0 210 430', cut_path: rozmery[v].cut_path.trim(), safe_path: rozmery[v].safe_path.trim() }));
+      .map(v => ({ tvar_id: tvarId, velkost: v, viewbox: rozmery[v].viewbox || '0 0 210 430', cut_path: rozmery[v].cut_path.trim(), safe_path: rozmery[v].safe_path.trim(), spotreba_m2: rozmery[v].spotreba_m2 === '' ? null : parseFloat(rozmery[v].spotreba_m2) || 0 }));
     await supabase.from('vlajka_tvar_rozmery').upsert(riadky, { onConflict: 'tvar_id,velkost' });
     setUkladamRozmery(false);
   };
@@ -82,7 +82,7 @@ export default function VlajkaTvaryTab({ supabase }) {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-white flex items-center gap-2"><Flag className="text-indigo-400 h-5 w-5" /> Tvary vlajok</h2>
-          <p className="text-xs text-slate-400 mt-1">Pre každý tvar nastav orezovú (červená) a bezpečnú (zelená) krivku ako SVG "d" cestu — zvlášť pre S/M/L/XL. Živý náhľad ti ukáže, či cesta dáva zmysel.</p>
+          <p className="text-xs text-slate-400 mt-1">Pre každý tvar nastav orezovú (červená) a bezpečnú (zelená) krivku ako SVG "d" cestu — zvlášť pre S/M/L/XL. Živý náhľad ti ukáže, či cesta dáva zmysel. "Spotreba materiálu" (m²) je nutná na dopočítanie ceny z vybraného materiálu (Vlajky → Materiály) — bez nej sa cena tejto veľkosti nedá vypočítať.</p>
         </div>
         <button onClick={otvorNovy} className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-xl text-sm font-semibold transition">
           <Plus className="w-4 h-4" /> Pridať tvar
@@ -161,6 +161,10 @@ export default function VlajkaTvaryTab({ supabase }) {
                         <div>
                           <label className="text-[10px] text-slate-500">bezpečná (zelená) cesta</label>
                           <textarea value={r.safe_path} onChange={(e) => zmenRozmer(v, 'safe_path', e.target.value)} rows={2} className="w-full px-2 py-1 bg-slate-950 border border-slate-800 rounded text-[10px] text-white font-mono" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-500">spotreba materiálu (m²) — vrátane odpadu pri reze</label>
+                          <input type="number" step="0.01" min="0" value={r.spotreba_m2} onChange={(e) => zmenRozmer(v, 'spotreba_m2', e.target.value)} placeholder="napr. 0.35" className="w-full px-2 py-1 bg-slate-950 border border-slate-800 rounded text-[10px] text-white" />
                         </div>
                       </div>
                     );

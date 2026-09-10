@@ -1,10 +1,10 @@
 import React from 'react';
-import { Boxes, Zap, ShoppingBag, Loader2 } from 'lucide-react';
+import { Boxes, Zap, ShoppingBag, Loader2, AlertTriangle } from 'lucide-react';
 
 export default function DoplnkyTab({
   katalog, doplnkyMnozstva, onZmenMnozstvo,
   expresne, onExpresne, pocetKs, onPocetKs,
-  cena, isSubmitting, submitError, onObjednat, onSpat,
+  cena, cenaNacitava, cenaChyba, isSubmitting, submitError, onObjednat, onSpat,
 }) {
   return (
     <div className="p-4 sm:p-6 space-y-6">
@@ -56,23 +56,26 @@ export default function DoplnkyTab({
             </div>
           </div>
 
-          <button onClick={onObjednat} disabled={isSubmitting} className="w-full sm:w-auto flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-extrabold text-sm py-3.5 px-6 rounded-xl shadow-lg flex items-center justify-center gap-2">
-            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShoppingBag className="w-4 h-4" />} Objednať ({cena.cenaSpolu.toFixed(2)} €)
+          <button onClick={onObjednat} disabled={isSubmitting || cenaNacitava || !cena} className="w-full sm:w-auto flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-extrabold text-sm py-3.5 px-6 rounded-xl shadow-lg flex items-center justify-center gap-2">
+            {isSubmitting || cenaNacitava ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShoppingBag className="w-4 h-4" />} Objednať {cena ? `(${cena.cenaSpolu.toFixed(2)} €)` : '…'}
           </button>
         </div>
       </div>
 
       {submitError && <p className="text-xs text-rose-600 bg-rose-50 border border-rose-200 p-3 rounded-lg">{submitError}</p>}
+      {cenaChyba && <p className="text-xs text-rose-600 bg-rose-50 border border-rose-200 p-3 rounded-lg flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5 shrink-0" /> {cenaChyba}</p>}
 
-      <div className="pt-2 border-t border-slate-100 space-y-1 text-xs text-slate-600">
-        <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-1">Rozpis ceny</h4>
-        <div className="flex justify-between"><span>Základ (veľkosť + opracovanie + prút)</span><span className="font-semibold">{cena.zaklad.toFixed(2)} €</span></div>
-        <div className="flex justify-between"><span>Doplnky</span><span className="font-semibold">{cena.doplnkySpolu.toFixed(2)} €</span></div>
-        {cena.expresnyPriplatok > 0 && <div className="flex justify-between text-amber-700 font-semibold"><span>Expresný príplatok</span><span>{cena.expresnyPriplatok.toFixed(2)} €</span></div>}
-        <div className="flex justify-between pt-1 border-t border-slate-200"><span>Spolu bez DPH</span><span className="font-semibold">{cena.cenaBezDph.toFixed(2)} €</span></div>
-        <div className="flex justify-between"><span>DPH</span><span className="font-semibold">{cena.dphSuma.toFixed(2)} €</span></div>
-        <div className="flex justify-between text-sm font-black text-slate-900 pt-1"><span>Celkom s DPH</span><span>{cena.cenaSpolu.toFixed(2)} €</span></div>
-      </div>
+      {cena && (
+        <div className="pt-2 border-t border-slate-100 space-y-1 text-xs text-slate-600">
+          <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-1">Rozpis ceny</h4>
+          <div className="flex justify-between"><span>Základ (materiál + opracovanie + prút)</span><span className="font-semibold">{cena.zaklad.toFixed(2)} €</span></div>
+          <div className="flex justify-between"><span>Doplnky</span><span className="font-semibold">{cena.doplnkySpolu.toFixed(2)} €</span></div>
+          {cena.expresnyPriplatok > 0 && <div className="flex justify-between text-amber-700 font-semibold"><span>Expresný príplatok</span><span>{cena.expresnyPriplatok.toFixed(2)} €</span></div>}
+          <div className="flex justify-between pt-1 border-t border-slate-200"><span>Spolu bez DPH</span><span className="font-semibold">{cena.cenaBezDph.toFixed(2)} €</span></div>
+          <div className="flex justify-between"><span>DPH</span><span className="font-semibold">{cena.dphSuma.toFixed(2)} €</span></div>
+          <div className="flex justify-between text-sm font-black text-slate-900 pt-1"><span>Celkom s DPH</span><span>{cena.cenaSpolu.toFixed(2)} €</span></div>
+        </div>
+      )}
 
       <div className="pt-2 flex justify-start">
         <button onClick={onSpat} className="text-slate-600 hover:text-slate-900 px-4 py-2 text-xs font-bold">← Späť na Grafiku</button>

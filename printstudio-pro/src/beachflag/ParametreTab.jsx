@@ -1,7 +1,7 @@
 import React from 'react';
-import { Shapes, Ruler, Scissors, GripVertical } from 'lucide-react';
+import { Shapes, Ruler, Scissors, GripVertical, Layers } from 'lucide-react';
 
-export default function ParametreTab({ katalog, tvarKod, velkostKod, dokoncenieKod, stoziarKod, onTvar, onVelkost, onDokoncenie, onStoziar, onDalej }) {
+export default function ParametreTab({ katalog, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, onTvar, onVelkost, onMaterial, onDokoncenie, onStoziar, onDalej }) {
   return (
     <div className="p-4 sm:p-6 space-y-6">
       <div>
@@ -25,9 +25,8 @@ export default function ParametreTab({ katalog, tvarKod, velkostKod, dokoncenieK
             const active = v.kod === velkostKod;
             return (
               <button key={v.kod} type="button" onClick={() => onVelkost(v.kod)} className={`p-3 rounded-xl border text-left transition-all ${active ? 'border-indigo-600 bg-indigo-50/80 ring-2 ring-indigo-500 text-indigo-900 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'}`}>
-                <div className="flex justify-between items-center mb-1">
+                <div className="mb-1">
                   <span className="font-black text-sm">{v.kod}</span>
-                  <span className="font-bold text-xs text-indigo-600">{Number(v.cena).toFixed(2)} €</span>
                 </div>
                 <div className="text-[11px] font-semibold text-slate-700">{v.vyska_cm} cm od zeme</div>
                 <div className="text-[10px] text-slate-500 mt-0.5">{v.rozmer_popis}</div>
@@ -38,7 +37,24 @@ export default function ParametreTab({ katalog, tvarKod, velkostKod, dokoncenieK
       </div>
 
       <div>
-        <label className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-3"><Scissors className="w-4 h-4 text-indigo-600" /> 3. Opracovanie okrajov</label>
+        <label className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-3"><Layers className="w-4 h-4 text-indigo-600" /> 3. Materiál</label>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {katalog.materialy.map(m => {
+            const active = m.kod === materialKod;
+            return (
+              <div key={m.kod} onClick={() => onMaterial(m.kod)} className={`p-3 rounded-xl border cursor-pointer transition-all ${active ? 'border-indigo-600 bg-indigo-50/80 ring-2 ring-indigo-500 text-indigo-900 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'}`}>
+                <span className="font-bold text-xs block">{m.nazov}</span>
+                {m.popis && <p className="text-[11px] text-slate-500 mt-0.5">{m.popis}</p>}
+                {m.pouzitie && <p className="text-[10px] text-slate-400 mt-0.5">{m.pouzitie}</p>}
+              </div>
+            );
+          })}
+          {katalog.materialy.length === 0 && <p className="text-xs text-rose-500 sm:col-span-2">Zatiaľ nie je nastavený žiadny materiál — doplň ho v admin paneli (PrintStudio Pro → Beachvlajky → Materiály).</p>}
+        </div>
+      </div>
+
+      <div>
+        <label className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-3"><Scissors className="w-4 h-4 text-indigo-600" /> 4. Opracovanie okrajov</label>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {katalog.dokoncenie.map(d => {
             const active = d.kod === dokoncenieKod;
@@ -58,7 +74,7 @@ export default function ParametreTab({ katalog, tvarKod, velkostKod, dokoncenieK
       </div>
 
       <div>
-        <label className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-3"><GripVertical className="w-4 h-4 text-indigo-600" /> 4. Konštrukcia / prút</label>
+        <label className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-3"><GripVertical className="w-4 h-4 text-indigo-600" /> 5. Konštrukcia / prút</label>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {katalog.stoziare.map(s => {
             const active = s.kod === stoziarKod;
