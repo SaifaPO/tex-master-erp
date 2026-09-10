@@ -5,6 +5,7 @@ import { nacitajKategorieAProdukty } from './produktData';
 import Katalog from './Katalog';
 import Dizajner from './Dizajner';
 import DtfMetraz from './DtfMetraz';
+import TextilMetraz from './TextilMetraz';
 import BeachflagApp from './beachflag/BeachflagApp';
 import ZastavaApp from './zastava/ZastavaApp';
 import Dres3DApp from './dres3d/Dres3DApp';
@@ -16,6 +17,7 @@ export default function App() {
   const [produkty, setProdukty] = useState([]);
   const [aktualnyProduktId, setAktualnyProduktId] = useState(null); // null = katalóg
   const [zobrazDtfMetraz, setZobrazDtfMetraz] = useState(() => new URLSearchParams(window.location.search).has('dtf'));
+  const [zobrazTextilMetraz, setZobrazTextilMetraz] = useState(() => new URLSearchParams(window.location.search).has('textil'));
   const jeVlajka = new URLSearchParams(window.location.search).get('typ') === 'beachflag';
   const jeZastava = new URLSearchParams(window.location.search).get('typ') === 'zastava';
 
@@ -64,9 +66,14 @@ export default function App() {
             </button>
           )}
           {aktualnyProduktId == null && (
-            <button onClick={() => setZobrazDtfMetraz(v => !v)} className={`px-3 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5 ${zobrazDtfMetraz ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:text-indigo-600 hover:bg-slate-100'}`}>
-              <Scroll className="w-4 h-4" /> <span className="hidden sm:inline">DTF transfery na meter</span>
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button onClick={() => { setZobrazDtfMetraz(v => !v); setZobrazTextilMetraz(false); }} className={`px-3 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5 ${zobrazDtfMetraz ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:text-indigo-600 hover:bg-slate-100'}`}>
+                <Scroll className="w-4 h-4" /> <span className="hidden sm:inline">DTF transfery na meter</span>
+              </button>
+              <button onClick={() => { setZobrazTextilMetraz(v => !v); setZobrazDtfMetraz(false); }} className={`px-3 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5 ${zobrazTextilMetraz ? 'text-teal-600 bg-teal-50' : 'text-slate-600 hover:text-teal-600 hover:bg-slate-100'}`}>
+                <Shirt className="w-4 h-4" /> <span className="hidden sm:inline">Textilná metráž</span>
+              </button>
+            </div>
           )}
         </div>
       </header>
@@ -79,6 +86,8 @@ export default function App() {
         )
       ) : zobrazDtfMetraz ? (
         <DtfMetraz supabase={supabase} onSpat={() => setZobrazDtfMetraz(false)} />
+      ) : zobrazTextilMetraz ? (
+        <TextilMetraz supabase={supabase} onSpat={() => setZobrazTextilMetraz(false)} />
       ) : (
         <Katalog kategorie={kategorie} produkty={produkty} onVyberProduktu={setAktualnyProduktId} />
       )}
