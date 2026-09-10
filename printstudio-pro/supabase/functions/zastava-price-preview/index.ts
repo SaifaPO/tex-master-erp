@@ -17,6 +17,16 @@ function odpoved(body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 }
 
+// Ak je material prepojeny na skutocny sklad (materials.id), naklad/m2 sa VZDY pocita naживo
+// z aktualnej ceny za bezny meter + sirky rolky v Sklade — nie zo starej ulozenej snimky.
+// Bez prepojenia (alebo ak sklad. polozka nema vyplnenu sirku) sa pouzije rucne zadany naklad_m2.
+async function resolveNakladM2(supabase: ReturnType<typeof createClient>, material: { naklad_m2: number; sklad_material_id: string | null }) {
+  if (!material.sklad_material_id) return Number(material.naklad_m2) || 0;
+  const { data: sklad } = await supabase.from('materials').select('price_per_m, width').eq('id', material.sklad_material_id).maybeSingle();
+  if (!sklad || !sklad.width || Number(sklad.width) <= 0) return Number(material.naklad_m2) || 0;
+  return (Number(sklad.price_per_m) || 0) / (Number(sklad.width) / 100);
+}
+
 interface PricingConfig { coefA: number; coefB: number; marginFloor: number; coefP: number; qtyAtFloor: number; }
 
 function baseMargin(cost: number, cfg: PricingConfig) {
@@ -73,7 +83,7 @@ Deno.serve(async (req) => {
     if (vyhotovenie !== 'obsite' && vyhotovenie !== 'laser') throw new Error('Neplatné vyhotovenie okrajov.');
 
     const [{ data: material }, { data: naklady }, { data: cfg }] = await Promise.all([
-      supabase.from('zastava_materialy').select('naklad_m2').eq('kod', materialKod).eq('aktivny', true).maybeSingle(),
+      supabase.from('zastava_materialy').select('naklad_m2, sklad_material_id').eq('kod', materialKod).eq('aktivny', true).maybeSingle(),
       supabase.from('zastava_nastavenia').select('*').eq('id', 1).maybeSingle(),
       supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
     ]);
@@ -85,10 +95,12 @@ Deno.serve(async (req) => {
       ? { coefA: Number(cfg.coef_a), coefB: Number(cfg.coef_b), marginFloor: Number(cfg.margin_floor), coefP: Number(cfg.coef_p), qtyAtFloor: Number(cfg.qty_at_floor) }
       : { coefA: 300, coefB: 54, marginFloor: 30, coefP: 1.3, qtyAtFloor: 1000 };
 
+    const nakladM2Material = await resolveNakladM2(supabase, material);
+
     const { tunelyBm, ockaPocet, karabinkyPocet, popruhBm } = vypocitajHardwareRozmery(Number(sirkaCm), Number(vyskaCm), tunely, ocka, karabinky, popruhy);
 
     const m2 = (Number(sirkaCm) * Number(vyskaCm)) / 10000;
-    const nakladMaterial = m2 * Number(material.naklad_m2);
+    const nakladMaterial = m2 * nakladM2Material;
     const nakladVyhotovenie = vyhotovenie === 'laser'
       ? m2 * Number(naklady.naklad_laser_m2)
       : m2 * Number(naklady.min_sitia_na_m2) * Number(naklady.naklad_sitia_min);

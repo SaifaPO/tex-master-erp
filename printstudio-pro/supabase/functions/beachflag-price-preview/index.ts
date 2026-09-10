@@ -17,6 +17,16 @@ function odpoved(body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 }
 
+// Ak je material prepojeny na skutocny sklad (materials.id), naklad/m2 sa VZDY pocita naживo
+// z aktualnej ceny za bezny meter + sirky rolky v Sklade — nie zo starej ulozenej snimky.
+// Bez prepojenia (alebo ak sklad. polozka nema vyplnenu sirku) sa pouzije rucne zadany naklad_m2.
+async function resolveNakladM2(supabase: ReturnType<typeof createClient>, material: { naklad_m2: number; sklad_material_id: string | null }) {
+  if (!material.sklad_material_id) return Number(material.naklad_m2) || 0;
+  const { data: sklad } = await supabase.from('materials').select('price_per_m, width').eq('id', material.sklad_material_id).maybeSingle();
+  if (!sklad || !sklad.width || Number(sklad.width) <= 0) return Number(material.naklad_m2) || 0;
+  return (Number(sklad.price_per_m) || 0) / (Number(sklad.width) / 100);
+}
+
 interface PricingConfig { coefA: number; coefB: number; marginFloor: number; coefP: number; qtyAtFloor: number; }
 
 function baseMargin(cost: number, cfg: PricingConfig) {
@@ -56,7 +66,7 @@ Deno.serve(async (req) => {
 
     const [{ data: tvar }, { data: material }, { data: dokoncenie }, { data: stoziar }, { data: doplnkyDb }, { data: nastavenia }, { data: cfg }] = await Promise.all([
       supabase.from('vlajka_tvary').select('id').eq('kod', tvarKod).maybeSingle(),
-      supabase.from('vlajka_materialy').select('naklad_m2').eq('kod', materialKod).eq('aktivny', true).maybeSingle(),
+      supabase.from('vlajka_materialy').select('naklad_m2, sklad_material_id').eq('kod', materialKod).eq('aktivny', true).maybeSingle(),
       dokoncenieKod ? supabase.from('vlajka_dokoncenie').select('cena').eq('kod', dokoncenieKod).maybeSingle() : Promise.resolve({ data: null }),
       stoziarKod ? supabase.from('vlajka_stoziare').select('cena').eq('kod', stoziarKod).maybeSingle() : Promise.resolve({ data: null }),
       supabase.from('vlajka_doplnky').select('*'),
@@ -79,8 +89,9 @@ Deno.serve(async (req) => {
       return { cena: dbRow ? Number(dbRow.cena) : 0, mnozstvo: Number(d.mnozstvo) || 0 };
     });
 
+    const nakladM2Material = await resolveNakladM2(supabase, material);
     const ks = Math.max(1, Math.round(Number(pocetKs)) || 1);
-    const nakladMaterial = Number(rozmer.spotreba_m2) * Number(material.naklad_m2);
+    const nakladMaterial = Number(rozmer.spotreba_m2) * nakladM2Material;
     const cenaMaterialKus = priceAt(nakladMaterial, ks, pricingConfig);
     const marzaPercent = Math.round(marginAt(nakladMaterial, ks, pricingConfig));
 

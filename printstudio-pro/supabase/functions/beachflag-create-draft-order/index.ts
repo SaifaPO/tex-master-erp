@@ -71,6 +71,16 @@ function odpoved(body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 }
 
+// Ak je material prepojeny na skutocny sklad (materials.id), naklad/m2 sa VZDY pocita naживo
+// z aktualnej ceny za bezny meter + sirky rolky v Sklade — nie zo starej ulozenej snimky.
+// Bez prepojenia (alebo ak sklad. polozka nema vyplnenu sirku) sa pouzije rucne zadany naklad_m2.
+async function resolveNakladM2(supabase: ReturnType<typeof createClient>, material: { naklad_m2: number; sklad_material_id: string | null }) {
+  if (!material.sklad_material_id) return Number(material.naklad_m2) || 0;
+  const { data: sklad } = await supabase.from('materials').select('price_per_m, width').eq('id', material.sklad_material_id).maybeSingle();
+  if (!sklad || !sklad.width || Number(sklad.width) <= 0) return Number(material.naklad_m2) || 0;
+  return (Number(sklad.price_per_m) || 0) / (Number(sklad.width) / 100);
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -117,7 +127,8 @@ Deno.serve(async (req) => {
       return { cena: dbRow ? Number(dbRow.cena) : 0, mnozstvo: Number(d.mnozstvo) || 0, nazov: dbRow?.nazov || d.kod };
     });
 
-    const nakladMaterial = Number(rozmer.spotreba_m2) * Number(material.naklad_m2);
+    const nakladM2Material = await resolveNakladM2(supabase, material);
+    const nakladMaterial = Number(rozmer.spotreba_m2) * nakladM2Material;
 
     const cena = vypocitajCenuVlajky({
       nakladMaterial, dokoncenie, stoziar,
