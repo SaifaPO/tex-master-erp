@@ -51,6 +51,16 @@ export function marginEurPerCapUnit(cost, margin, redukovanyVykon) {
   return (cost * margin / 100) / redukovanyVykon;
 }
 
+// VOC/MOC nahlad — velkoobchodna cena (pre reklamky) sa pocita ako zlava z bezne pocitanej
+// (maloobchodnej) ceny, NIE ako samostatna paralelna krivka — dnesny vzorec uz zodpoveda
+// realnej cene, ktoru vidi koncovy zakaznik na zivom Shopify konfiguratore (Dizajner/Zastava/
+// DTF metraz), takze tu ostava ukotvena ako "strop" a velkoobchod je z nej zlava smerom dole.
+// Cisto diagnosticke — ceny v Cenniku potlace/DTF metrazi/konfiguratoroch sa tymto nemenia.
+export function wholesalePriceOf(retailPrice, cfg) {
+  const d = cfg.wholesaleDiscountPercent || 0;
+  return Math.round(retailPrice * (1 - d / 100) * 100) / 100;
+}
+
 // Odberove hladiny zobrazene v cenniku (kazdy produkt/kalkulacka x kazda hladina).
 export const QUANTITY_LEVELS = [1, 10, 25, 50, 100, 250, 500, 1000];
 // Rychle tlacidla prepinaca referencneho poctu kusov (samostatny zoznam zo specifikacie).
@@ -59,10 +69,11 @@ export const QTY_PRESETS = [1, 5, 10, 25, 50, 100, 250, 500, 1000];
 export const mapConfigFromDb = (r) => ({
   coefA: Number(r.coef_a), coefB: Number(r.coef_b), marginFloor: Number(r.margin_floor),
   coefP: Number(r.coef_p), qtyAtFloor: Number(r.qty_at_floor), capMarginTarget: Number(r.cap_margin_target ?? 0),
+  wholesaleDiscountPercent: Number(r.wholesale_discount_percent ?? 15),
 });
 export const mapConfigToDb = (c) => ({
   coef_a: c.coefA, coef_b: c.coefB, margin_floor: c.marginFloor, coef_p: c.coefP, qty_at_floor: c.qtyAtFloor,
-  cap_margin_target: c.capMarginTarget ?? 0,
+  cap_margin_target: c.capMarginTarget ?? 0, wholesale_discount_percent: c.wholesaleDiscountPercent ?? 15,
 });
 
-export const DEFAULT_PRICING_CONFIG = { coefA: 300, coefB: 54, marginFloor: 30, coefP: 1.3, qtyAtFloor: 1000, capMarginTarget: 0 };
+export const DEFAULT_PRICING_CONFIG = { coefA: 300, coefB: 54, marginFloor: 30, coefP: 1.3, qtyAtFloor: 1000, capMarginTarget: 0, wholesaleDiscountPercent: 15 };

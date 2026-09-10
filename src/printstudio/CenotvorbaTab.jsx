@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, Fragment } from 'react';
 import { Calculator, ArrowUp, ArrowDown, Download, Loader2, AlertTriangle, Save } from 'lucide-react';
-import { priceAt, marginAt, priceWithCapacity, marginEurPerCapUnit, QUANTITY_LEVELS, QTY_PRESETS, mapConfigFromDb, mapConfigToDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
+import { priceAt, marginAt, priceWithCapacity, marginEurPerCapUnit, wholesalePriceOf, QUANTITY_LEVELS, QTY_PRESETS, mapConfigFromDb, mapConfigToDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 
 // Toto je JEDINÉ miesto v appke, kde sa nastavuje 5 koeficientov marže (pricing_config) —
 // pouziva ich aj Cennik potlace (nakladove kalkulacky sublimacia/DTF/sietotlac/rezany transfer).
@@ -28,6 +28,9 @@ export default function CenotvorbaTab({ supabase }) {
   const [refQtyText, setRefQtyText] = useState('1');
   const [savingRowId, setSavingRowId] = useState(null);
   const [message, setMessage] = useState(null);
+  const [priceView, setPriceView] = useState('moc'); // 'moc' (koncoví zákazníci) | 'voc' (reklamky/veľkoobchod) — len náhľad v tejto tabuľke
+
+  const dispPrice = (retailPrice) => priceView === 'voc' ? wholesalePriceOf(retailPrice, config) : retailPrice;
 
   const notify = (type, text) => {
     setMessage({ type, text });
@@ -122,18 +125,19 @@ export default function CenotvorbaTab({ supabase }) {
   };
 
   const handleExportCsv = () => {
-    const header = ['Názov', 'Skupina', 'Výrobná cena', ...QUANTITY_LEVELS.map(q => `Cena @ ${q}ks`)];
+    const modeLabel = priceView === 'voc' ? 'VOC' : 'MOC';
+    const header = ['Názov', 'Skupina', 'Výrobná cena', ...QUANTITY_LEVELS.map(q => `Cena (${modeLabel}) @ ${q}ks`)];
     const lines = [header.map(csvEscape).join(';')];
     sortedProducts.forEach(p => {
       const cost = p.productionCost;
       const row = [p.name, p.priceGroup || '', cost != null ? cost.toFixed(2) : ''];
-      QUANTITY_LEVELS.forEach(q => row.push(cost > 0 ? priceAt(cost, q, config).toFixed(2) : ''));
+      QUANTITY_LEVELS.forEach(q => row.push(cost > 0 ? dispPrice(priceAt(cost, q, config)).toFixed(2) : ''));
       lines.push(row.map(csvEscape).join(';'));
     });
     const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = 'cennik-marze.csv';
+    a.href = url; a.download = `cennik-marze-${modeLabel.toLowerCase()}.csv`;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
@@ -217,6 +221,30 @@ export default function CenotvorbaTab({ supabase }) {
         </div>
       </div>
 
+      {/* VOC/MOC prepinac — velkoobchod (reklamky) vs maloobchod (koncoví zákazníci), len nahlad */}
+      <div className="bg-cyan-950/20 border border-cyan-900/40 rounded-lg p-4">
+        <h3 className="font-bold text-sm text-cyan-300 mb-1">🏭 VOC / MOC — veľkoobchod vs. maloobchod</h3>
+        <p className="text-[11px] text-slate-400 mb-3">
+          Ceny nižšie sú vždy odvodené z bežného vzorca (MOC = to, čo dnes vidí koncový zákazník na
+          Shopify konfigurátoroch). VOC (pre reklamky) sa počíta ako zľava z tejto ceny, nie ako
+          samostatný vzorec. Prepínač nižšie mení len náhľad v tejto tabuľke — Cenník potlače, DTF
+          metráž ani zákaznícke konfigurátory sa tým nemenia.
+        </p>
+        <div className="flex items-end gap-3">
+          <div>
+            <label className="block text-[11px] text-slate-400 mb-1">Veľkoobchodná zľava (%)</label>
+            <input type="number" step="0.5" min="0" max="100" value={config.wholesaleDiscountPercent} onChange={e => setConfig({ ...config, wholesaleDiscountPercent: parseFloat(e.target.value) || 0 })} className="w-40 bg-slate-950 border border-cyan-900/40 rounded p-2 text-white text-sm" />
+          </div>
+          <div>
+            <label className="block text-[11px] text-slate-400 mb-1">Zobraziť ceny ako</label>
+            <div className="flex gap-1.5">
+              <button onClick={() => setPriceView('moc')} className={`px-3 py-2 rounded-lg text-xs font-bold ${priceView === 'moc' ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>MOC (koncoví)</button>
+              <button onClick={() => setPriceView('voc')} className={`px-3 py-2 rounded-lg text-xs font-bold ${priceView === 'voc' ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>VOC (reklamky)</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Rychla kalkulacka / prepinac referencneho poctu kusov */}
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-4">
         <h3 className="font-bold text-sm text-slate-200 mb-3">Referenčný počet kusov (len na náhľad, neukladá sa)</h3>
@@ -245,8 +273,8 @@ export default function CenotvorbaTab({ supabase }) {
               <th className="text-left p-2 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('cost')}>Výrobná cena<SortIcon field="cost" /></th>
               <th className="text-left p-2 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('redukovanyVykon')}>Red. výkon<SortIcon field="redukovanyVykon" /></th>
               <th className="text-left p-2 cursor-pointer select-none whitespace-nowrap bg-amber-950/20" onClick={() => handleSort('capMargin')}>🧪 €/jedn. RV<SortIcon field="capMargin" /></th>
-              <th className="text-left p-2 whitespace-nowrap bg-indigo-950/40">Cena @ {refQty}ks</th>
-              <th className="text-left p-2 whitespace-nowrap bg-amber-950/20">🧪 Cena so 6. koef.</th>
+              <th className="text-left p-2 whitespace-nowrap bg-indigo-950/40">Cena @ {refQty}ks {priceView === 'voc' ? '🏭 VOC' : '(MOC)'}</th>
+              <th className="text-left p-2 whitespace-nowrap bg-amber-950/20">🧪 Cena so 6. koef. {priceView === 'voc' ? '(VOC)' : ''}</th>
               {QUANTITY_LEVELS.map(q => <th key={q} className="text-left p-2 whitespace-nowrap">{q}ks</th>)}
             </tr>
           </thead>
@@ -258,7 +286,11 @@ export default function CenotvorbaTab({ supabase }) {
               const hasRv = rv != null && rv > 0;
               const currentMargin = hasCost ? marginAt(cost, refQty, config) : null;
               const capEurPerUnit = hasCost && hasRv ? marginEurPerCapUnit(cost, currentMargin, rv) : null;
-              const capPrice = hasCost ? priceWithCapacity(cost, refQty, rv, config) : null;
+              const retailPrice = hasCost ? priceAt(cost, refQty, config) : null;
+              const capPriceRetail = hasCost ? priceWithCapacity(cost, refQty, rv, config) : null;
+              const dispMain = hasCost ? dispPrice(retailPrice) : null;
+              const dispCap = hasCost ? dispPrice(capPriceRetail) : null;
+              const dispMainMargin = hasCost ? ((dispMain - cost) / cost) * 100 : null;
               const showGroupHeader = sortField === 'group' && (p.priceGroup || '') !== lastGroupSeen;
               if (showGroupHeader) lastGroupSeen = p.priceGroup || '';
               return (
@@ -285,20 +317,20 @@ export default function CenotvorbaTab({ supabase }) {
                     </td>
                     <td className="p-2 text-amber-300 bg-amber-950/10 whitespace-nowrap">{capEurPerUnit != null ? `${capEurPerUnit.toFixed(2)} €` : '—'}</td>
                     <td className="p-2 font-bold text-indigo-300 bg-indigo-950/20 whitespace-nowrap">
-                      {hasCost ? `${priceAt(cost, refQty, config).toFixed(2)} € (${currentMargin.toFixed(0)}%)` : '⚠️ chýba výrobná cena'}
+                      {hasCost ? `${dispMain.toFixed(2)} € (${dispMainMargin.toFixed(0)}%)` : '⚠️ chýba výrobná cena'}
                     </td>
                     <td className="p-2 text-amber-300 bg-amber-950/10 whitespace-nowrap">
                       {hasCost ? (
                         <>
-                          {capPrice.toFixed(2)} €
-                          {config.capMarginTarget > 0 && hasRv && capPrice > priceAt(cost, refQty, config) && (
-                            <span className="text-amber-500 ml-1">(+{(capPrice - priceAt(cost, refQty, config)).toFixed(2)} €)</span>
+                          {dispCap.toFixed(2)} €
+                          {config.capMarginTarget > 0 && hasRv && capPriceRetail > retailPrice && (
+                            <span className="text-amber-500 ml-1">(+{(dispCap - dispMain).toFixed(2)} €)</span>
                           )}
                         </>
                       ) : '—'}
                     </td>
                     {QUANTITY_LEVELS.map(q => (
-                      <td key={q} className="p-2 text-slate-300 whitespace-nowrap">{hasCost ? `${priceAt(cost, q, config).toFixed(2)} €` : '—'}</td>
+                      <td key={q} className="p-2 text-slate-300 whitespace-nowrap">{hasCost ? `${dispPrice(priceAt(cost, q, config)).toFixed(2)} €` : '—'}</td>
                     ))}
                   </tr>
                 </Fragment>
