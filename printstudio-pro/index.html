@@ -1,6 +1,20 @@
 <!doctype html>
 <html lang="sk">
   <head>
+    <script>
+      // Appka bezi na viacerych adresach naraz (priamo na Verceli aj cez Shopify App Proxy
+      // na shop.pbtprint.sk/apps/dtf-metraz — Shopify sluzi tuto cestu BEZ lomitka na konci,
+      // cim by sa "./assets/..." vyhodnotilo o uroven vyssie). Tento <base> sa musi vlozit
+      // este PRED akymkolvek <script src>/<link href>, aby ovplyvnil ich relativne cesty —
+      // preto je uplne prvy v <head>, pred vsetkym ostatnym.
+      (function () {
+        var path = window.location.pathname;
+        if (!path.endsWith('/')) path = path.substring(0, path.lastIndexOf('/') + 1);
+        var base = document.createElement('base');
+        base.href = path || '/';
+        document.head.appendChild(base);
+      })();
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PrintStudio Pro — Konfigurátor potlače</title>
