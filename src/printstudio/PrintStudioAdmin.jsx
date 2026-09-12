@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
-import { Tag, Box, Palette, Type, Image as ImageIcon, Banknote, Camera, ShoppingBag, Scroll, Flag, Shirt, Calculator, Waves, ShoppingCart, ExternalLink, Layers, Printer } from 'lucide-react';
+import { Tag, Box, Palette, Type, Image as ImageIcon, Banknote, Camera, ShoppingBag, Flag, Shirt, Calculator, Waves, ShoppingCart, ExternalLink, Layers3, Ruler, Printer } from 'lucide-react';
 import KategorieTab from './KategorieTab';
 import ProduktyTab from './ProduktyTab';
 import FarbyTab from './FarbyTab';
 import FontyTab from './FontyTab';
 import GrafikyTab from './GrafikyTab';
 import CenotvorbaTab from './CenotvorbaTab';
-import CennikTab from './CennikTab';
+import KostraCienTab from './KostraCienTab';
+import MetrazeTab from './MetrazeTab';
+import PotlaceTab from './PotlaceTab';
 import MockupyTab from './MockupyTab';
 import ShopifyTab from './ShopifyTab';
-import DtfMetrazTab from './DtfMetrazTab';
-import TextilMetrazTab from './TextilMetrazTab';
 import VlajkyAdmin from './VlajkyAdmin';
 import ZastavyAdmin from './ZastavyAdmin';
 import DresAdmin from './DresAdmin';
@@ -32,12 +32,12 @@ const SUBTABS = [
   { id: 'grafiky', label: 'Grafiky (Design)', icon: ImageIcon },
   { id: 'mockupy', label: 'Fotky produktov', icon: Camera },
   { id: 'cenotvorba', label: 'Cenotvorba (marže)', icon: Calculator },
-  { id: 'cennik', label: 'Cenník potlače', icon: Banknote },
+  { id: 'kostra-cien', label: 'Kostra cien', icon: Layers3 },
+  { id: 'metraze', label: 'Metráže', icon: Ruler },
+  { id: 'potlace', label: 'Potlače', icon: Banknote },
   { id: 'kalkulacka-tlace', label: 'Kalkulačka tlače (Cen. ponuky)', icon: ShoppingCart },
   { id: 'predajny-cennik', label: 'Predajný cenník (tlač A4)', icon: Printer },
   { id: 'shopify', label: 'Shopify prepojenie', icon: ShoppingBag },
-  { id: 'dtf-metraz', label: 'DTF metráž', icon: Scroll, appUrl: `${PRINTSTUDIO_BASE_URL}/?dtf=1` },
-  { id: 'textil-metraz', label: 'Textilná metráž', icon: Layers, appUrl: `${PRINTSTUDIO_BASE_URL}/?textil=1` },
   { id: 'vlajky', label: 'Vlajky', icon: Flag, appUrl: `${PRINTSTUDIO_BASE_URL}/?typ=zastava` },
   { id: 'beachvlajky', label: 'Beachvlajky', icon: Waves, appUrl: `${PRINTSTUDIO_BASE_URL}/?typ=beachflag` },
   { id: 'dresy', label: 'Výroba dresov', icon: Shirt, appUrl: PRINTSTUDIO_BASE_URL },
@@ -89,12 +89,12 @@ export default function PrintStudioAdmin({ supabase }) {
         {subtab === 'grafiky' && <GrafikyTab supabase={supabase} />}
         {subtab === 'mockupy' && <MockupyTab supabase={supabase} />}
         {subtab === 'cenotvorba' && <CenotvorbaTab supabase={supabase} />}
-        {subtab === 'cennik' && <CennikTab supabase={supabase} />}
+        {subtab === 'kostra-cien' && <KostraCienTab supabase={supabase} />}
+        {subtab === 'metraze' && <MetrazeTab supabase={supabase} />}
+        {subtab === 'potlace' && <PotlaceTab supabase={supabase} />}
         {subtab === 'kalkulacka-tlace' && <KalkulackaTlaceTab supabase={supabase} />}
         {subtab === 'predajny-cennik' && <PredajnyCennikTab supabase={supabase} />}
         {subtab === 'shopify' && <ShopifyTab supabase={supabase} />}
-        {subtab === 'dtf-metraz' && <DtfMetrazTab supabase={supabase} />}
-        {subtab === 'textil-metraz' && <TextilMetrazTab supabase={supabase} />}
         {subtab === 'vlajky' && <ZastavyAdmin supabase={supabase} />}
         {subtab === 'beachvlajky' && <VlajkyAdmin supabase={supabase} />}
         {subtab === 'dresy' && <DresAdmin supabase={supabase} />}

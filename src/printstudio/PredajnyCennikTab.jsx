@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Printer, Plus, Trash2, X, Tag, Wand2 } from 'lucide-react';
+import { priceAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 
 // Rovnaky vzor ako printWithFilename v hlavnom ERP (src/App.jsx) — dočasne premenuje kartu
 // prehliadača, aby "Uložiť ako PDF" navrhlo rozumný názov súboru, potom ho vráti späť.
@@ -15,14 +16,22 @@ function printWithFilename(suggestedName) {
 }
 
 const NASTAVENIA_DEFAULT = {
-  nazov_cennika: 'Cenník dotlače na textil', marza_percent: 40, dph_percent: 23,
+  nazov_cennika: 'Cenník dotlače na textil', marza_percent: 40, dph_percent: 23, referencny_pocet_ks: 1,
   standard_dni: 5, expres2_priplatok_percent: 20, expres2_min_eur: 10,
   expresny_den_priplatok_percent: 50, expresny_den_min_eur: 10, expresny_den_cutoff_hodina: 12,
   kontakt_riadok: '', poznamka: 'Presné cenové ponuky Vám vypracujeme na predajni. Termíny závisia od aktuálnej vyťaženosti výroby.',
 };
 
-function retailPrice(vyrobnaCena, nastavenia) {
-  return vyrobnaCena * (1 + nastavenia.marza_percent / 100) * (1 + nastavenia.dph_percent / 100);
+// Predtym: VC × marza predajne × DPH — uplne obchadzalo standardnu marzovu krivku (priceAt), takze
+// lacne male polozky (napr. male cislo) vysli smiesne nizko. Teraz 3 vrstvy: (1) VC, (2) standardna
+// marza podla krivky pri referencnom pocte kusov (rovnaky vzorec ako v celom zvysku PrintStudio Pro),
+// (3) az na to marza predajne + DPH.
+function zakladnaCenaPoMarzi(vyrobnaCena, nastavenia, pricingConfig) {
+  return priceAt(vyrobnaCena, nastavenia.referencny_pocet_ks || 1, pricingConfig);
+}
+function retailPrice(vyrobnaCena, nastavenia, pricingConfig) {
+  const poMarziKrivky = zakladnaCenaPoMarzi(vyrobnaCena, nastavenia, pricingConfig);
+  return poMarziKrivky * (1 + nastavenia.marza_percent / 100) * (1 + nastavenia.dph_percent / 100);
 }
 
 // Orientačná výrobná cena z reálnych výrobných nákladov DTF (materiál CMYK/biela/lepidlo
@@ -61,21 +70,24 @@ export default function PredajnyCennikTab({ supabase }) {
   const [nastavenia, setNastavenia] = useState(NASTAVENIA_DEFAULT);
   const [companySettings, setCompanySettings] = useState(null);
   const [dtfNaklady, setDtfNaklady] = useState(null);
+  const [pricingConfig, setPricingConfig] = useState(DEFAULT_PRICING_CONFIG);
   const [isLoading, setIsLoading] = useState(true);
   const [showPrint, setShowPrint] = useState(false);
 
   const nacitaj = async () => {
     setIsLoading(true);
-    const [{ data: p }, { data: n }, { data: c }, { data: dtfNak }] = await Promise.all([
+    const [{ data: p }, { data: n }, { data: c }, { data: dtfNak }, { data: cfg }] = await Promise.all([
       supabase.from('predajny_cennik_polozky').select('*').order('poradie').order('id'),
       supabase.from('predajny_cennik_nastavenia').select('*').eq('id', 1).maybeSingle(),
       supabase.from('company_settings').select('*').eq('id', 1).maybeSingle(),
       supabase.from('dtf_naklady').select('*').eq('id', 1).maybeSingle(),
+      supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
     ]);
     setPolozky(p || []);
-    if (n) setNastavenia(n);
+    if (n) setNastavenia({ ...NASTAVENIA_DEFAULT, ...n });
     setCompanySettings(c || null);
     setDtfNaklady(dtfNak || null);
+    if (cfg) setPricingConfig(mapConfigFromDb(cfg));
     setIsLoading(false);
   };
   useEffect(() => { nacitaj(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -129,11 +141,13 @@ export default function PredajnyCennikTab({ supabase }) {
           </div>
           <Field label="Obchodná marža (%)" value={nastavenia.marza_percent} step="1" onChange={(v) => ulozNastavenia({ marza_percent: v })} />
           <Field label="DPH (%)" value={nastavenia.dph_percent} step="0.5" onChange={(v) => ulozNastavenia({ dph_percent: v })} />
-          <div>
+          <Field label="Referenčný počet ks (pre maržovú krivku)" value={nastavenia.referencny_pocet_ks} step="1" onChange={(v) => ulozNastavenia({ referencny_pocet_ks: Math.max(1, Math.round(v)) })} />
+          <div className="sm:col-span-3">
             <label className="text-xs text-slate-400 font-medium">Kontaktný riadok (telefón/email, voliteľné)</label>
             <input type="text" value={nastavenia.kontakt_riadok || ''} onChange={(e) => ulozNastavenia({ kontakt_riadok: e.target.value })} placeholder="napr. 0900 123 456 • info@firma.sk" className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" />
           </div>
         </div>
+        <p className="text-[11px] text-slate-500">Cena položky = VC → štandardná marža podľa krivky (Cenotvorba) pri referenčnom počte kusov → + obchodná marža predajne → + DPH. Predajňa zvyčajne predáva po 1 kuse, preto je referenčný počet ks predvolene 1 — čím vyšší, tým nižšia marža z krivky (rovnaký princíp ako v celom PrintStudio Pro).</p>
 
         <div className="pt-3 border-t border-slate-800">
           <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wide mb-2">Doba dodania a príplatky</h4>
@@ -162,13 +176,15 @@ export default function PredajnyCennikTab({ supabase }) {
           <button onClick={pridajPolozku} className="flex items-center gap-1.5 text-xs text-indigo-400 font-semibold hover:text-indigo-300"><Plus className="w-3.5 h-3.5" /> Pridať položku</button>
         </div>
         {dtfNaklady ? (
-          <p className="text-[11px] text-slate-500">Orientačná výrobná cena sa vie dopočítať zo skutočných výrobných nákladov DTF (materiál CMYK/biela/lepidlo podľa plochy + práca a manipulácia za úkon, záložka Cenník potlače → DTF) podľa rozmeru položky — vyplň šírku a výšku a klikni na prepočet. Je to len orientačný odhad, cenu si vieš kedykoľvek prepísať ručne.</p>
+          <p className="text-[11px] text-slate-500">Orientačná výrobná cena sa vie dopočítať zo skutočných výrobných nákladov DTF (materiál CMYK/biela/lepidlo podľa plochy + práca a manipulácia za úkon, záložka Kostra cien → DTF) podľa rozmeru položky — vyplň šírku a výšku a klikni na prepočet. Je to len orientačný odhad, cenu si vieš kedykoľvek prepísať ručne.</p>
         ) : (
-          <p className="text-[11px] text-amber-400">Výrobné náklady DTF nie sú vyplnené (záložka Cenník potlače → DTF → Nákladová kalkulačka) — prepočet z rozmeru nebude fungovať, výrobné ceny nastav ručne.</p>
+          <p className="text-[11px] text-amber-400">Výrobné náklady DTF nie sú vyplnené (záložka Kostra cien → DTF) — prepočet z rozmeru nebude fungovať, výrobné ceny nastav ručne.</p>
         )}
         <div className="space-y-2">
           {polozky.map(p => {
-            const cena = retailPrice(Number(p.vyrobna_cena) || 0, nastavenia);
+            const vc = Number(p.vyrobna_cena) || 0;
+            const poMarziKrivky = zakladnaCenaPoMarzi(vc, nastavenia, pricingConfig);
+            const cena = retailPrice(vc, nastavenia, pricingConfig);
             const navrh = cenaZDtf(p.sirka_cm, p.vyska_cm, dtfNaklady);
             return (
               <div key={p.id} className={`p-3 rounded-xl border ${p.aktivny ? 'bg-slate-950 border-slate-800' : 'bg-slate-950/40 border-slate-800/50 opacity-60'} space-y-2`}>
@@ -181,6 +197,9 @@ export default function PredajnyCennikTab({ supabase }) {
                   </label>
                   <button onClick={() => zmazPolozku(p.id)} className="text-slate-400 hover:text-rose-400 p-1.5 shrink-0"><Trash2 className="w-4 h-4" /></button>
                 </div>
+                <p className="text-[11px] text-slate-500 font-mono">
+                  VC {vc.toFixed(2)}€ → po marži krivky ({nastavenia.referencny_pocet_ks || 1}ks) {poMarziKrivky.toFixed(2)}€ → +marža predajne {nastavenia.marza_percent}% {(poMarziKrivky * (1 + nastavenia.marza_percent / 100)).toFixed(2)}€ → +DPH {nastavenia.dph_percent}% = <span className="text-emerald-400 font-bold">{cena.toFixed(2)}€</span>
+                </p>
                 <div className="flex flex-wrap items-center gap-2">
                   <select
                     value=""
@@ -251,7 +270,7 @@ export default function PredajnyCennikTab({ supabase }) {
                               </span>
                               {p.popis && <span className="text-[11px] text-slate-500">{p.popis}</span>}
                             </div>
-                            <span className="font-extrabold text-base whitespace-nowrap">{retailPrice(Number(p.vyrobna_cena) || 0, nastavenia).toFixed(2)} €</span>
+                            <span className="font-extrabold text-base whitespace-nowrap">{retailPrice(Number(p.vyrobna_cena) || 0, nastavenia, pricingConfig).toFixed(2)} €</span>
                           </div>
                         ))}
                       </div>

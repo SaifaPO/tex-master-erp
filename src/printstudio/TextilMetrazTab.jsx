@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Shirt, Download, Settings } from 'lucide-react';
+import { Shirt, Download, Settings, ExternalLink } from 'lucide-react';
 import { priceAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 
+const PRINTSTUDIO_BASE_URL = 'https://printstudio-pro.vercel.app';
 const BUCKET = 'print-designs';
 const ROLL_WIDTH_M = 1.60; // 160 cm
 // Referencne urovne (bm) len na nahlad v tabulkach nizsie — realny vypocet funguje pre lubovolnu dlzku.
@@ -90,9 +91,14 @@ export default function TextilMetrazTab({ supabase }) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-bold text-white flex items-center gap-2"><Shirt className="text-indigo-400 h-5 w-5" /> Textilná metráž — sublimácia & digitálna bavlna</h2>
-        <p className="text-xs text-slate-400 mt-1">Samostatný predaj potlačenej textilnej metráže na rolke (160 cm) — dve nezávislé technológie, nezávislé od konfigurátora potlače oblečenia.</p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="text-xl font-bold text-white flex items-center gap-2"><Shirt className="text-indigo-400 h-5 w-5" /> Textilná metráž — sublimácia & digitálna bavlna</h2>
+          <p className="text-xs text-slate-400 mt-1">Samostatný predaj potlačenej textilnej metráže na rolke (160 cm) — dve nezávislé technológie, nezávislé od konfigurátora potlače oblečenia.</p>
+        </div>
+        <a href={`${PRINTSTUDIO_BASE_URL}/?textil=1`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors shrink-0">
+          <ExternalLink className="h-3.5 w-3.5" /> Otvoriť appku v novej karte
+        </a>
       </div>
 
       {/* SHOPIFY PREPOJENIE */}
@@ -145,18 +151,15 @@ export default function TextilMetrazTab({ supabase }) {
             <h3 className="font-bold text-sm text-white">1. Sublimácia — vstupné náklady</h3>
             <span className="text-xs font-mono text-teal-400">Náklad: <strong>{nakladBmSub.toFixed(2)} €/bm</strong></span>
           </div>
-          <div className="space-y-3 text-xs">
-            <div className="grid grid-cols-2 gap-3 p-3 bg-slate-950 rounded-xl border border-slate-800">
-              <Field label="Sublimačný papier (€/1bm)" value={naklady.sublimacia.cena_papier_bm} step="0.05" onChange={(v) => ulozNaklady('sublimacia', { cena_papier_bm: v })} />
-              <Field label="Ochranný kalandr. papier (€/bm)" value={naklady.sublimacia.cena_ochranny_papier_bm} step="0.05" onChange={(v) => ulozNaklady('sublimacia', { cena_ochranny_papier_bm: v })} />
-            </div>
-            <div className="grid grid-cols-2 gap-3 p-3 bg-slate-950 rounded-xl border border-slate-800">
-              <Field label="Sublimačný atrament CMYK (€/l)" value={naklady.sublimacia.cena_atrament_l} step="1" onChange={(v) => ulozNaklady('sublimacia', { cena_atrament_l: v })} />
-              <Field label="Spotreba atramentu (ml/m²)" value={naklady.sublimacia.spotreba_atrament_ml_m2} step="1" onChange={(v) => ulozNaklady('sublimacia', { spotreba_atrament_ml_m2: v })} />
-            </div>
-            <div className="grid grid-cols-2 gap-3 p-3 bg-slate-950 rounded-xl border border-slate-800">
-              <Field label="Operátor + kalander (€/hod)" value={naklady.sublimacia.cena_prace_hod} step="1" onChange={(v) => ulozNaklady('sublimacia', { cena_prace_hod: v })} />
-              <Field label="Rýchlosť tlače+fixácie (bm/hod)" value={naklady.sublimacia.rychlost_m_hod} step="1" onChange={(v) => ulozNaklady('sublimacia', { rychlost_m_hod: v })} />
+          <p className="text-[11px] text-amber-400/90 bg-amber-950/20 border border-amber-900/30 rounded-lg p-2 mb-3">Vstupné náklady sa teraz zadávajú v karte <strong>Kostra cien → Sublimácia</strong> (spoločné so sublimáciou na tričká, aby sa nezadávali dvakrát). Tu je len prehľad aktuálnych hodnôt.</p>
+          <div className="space-y-1.5 text-xs text-slate-400">
+            <div className="flex justify-between p-2 bg-slate-950 rounded-lg border border-slate-800"><span>Sublimačný papier</span><span className="text-white font-mono">{Number(naklady.sublimacia.cena_papier_bm).toFixed(2)} €/bm</span></div>
+            <div className="flex justify-between p-2 bg-slate-950 rounded-lg border border-slate-800"><span>Ochranný kalandr. papier</span><span className="text-white font-mono">{Number(naklady.sublimacia.cena_ochranny_papier_bm).toFixed(2)} €/bm</span></div>
+            <div className="flex justify-between p-2 bg-slate-950 rounded-lg border border-slate-800"><span>Sublimačný atrament CMYK</span><span className="text-white font-mono">{Number(naklady.sublimacia.cena_atrament_l).toFixed(2)} €/l • {Number(naklady.sublimacia.spotreba_atrament_ml_m2).toFixed(1)} ml/m²</span></div>
+            <div className="flex justify-between p-2 bg-slate-950 rounded-lg border border-slate-800"><span>Operátor + kalander</span><span className="text-white font-mono">{Number(naklady.sublimacia.cena_prace_hod).toFixed(2)} €/hod</span></div>
+            <div className="flex justify-between p-2 bg-slate-950 rounded-lg border border-teal-900/40">
+              <span>Rýchlosť tlače+fixácie (len metráž)</span>
+              <span className="text-white font-mono">{Number(naklady.sublimacia.rychlost_m_hod).toFixed(1)} bm/hod</span>
             </div>
           </div>
           <div className="pt-3 mt-3 border-t border-slate-800 space-y-1.5">
