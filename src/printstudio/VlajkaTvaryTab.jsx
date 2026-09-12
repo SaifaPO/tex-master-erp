@@ -4,6 +4,18 @@ import { Plus, Edit2, Trash2, Flag, ChevronDown, ChevronUp } from 'lucide-react'
 const VELKOSTI = ['S', 'M', 'L', 'XL'];
 const PRAZDNY_ROZMER = { viewbox: '0 0 210 430', cut_path: '', safe_path: '', spotreba_m2: '' };
 
+// viewBox uz obsahuje presny rozmer plachty (sirka×vyska v cm, format "minX minY sirka vyska"),
+// takze spotrebu materialu vieme dopocitat priamo z neho namiesto rucneho zadavania — plocha
+// celeho obdlznika (nie len vystrihnuteho tvaru) presne zodpoveda "vratane odpadu pri reze",
+// lebo z rolky materialu sa realne spotrebuje cely obdlznik bez ohladu na to, co sa z neho vystrihne.
+function spotrebaZViewboxu(viewbox) {
+  const cisla = (viewbox || '').trim().split(/\s+/).map(Number);
+  if (cisla.length !== 4 || cisla.some(Number.isNaN)) return null;
+  const [, , sirka, vyska] = cisla;
+  if (sirka <= 0 || vyska <= 0) return null;
+  return Math.round((sirka * vyska / 10000) * 100) / 100;
+}
+
 export default function VlajkaTvaryTab({ supabase }) {
   const [tvary, setTvary] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -59,7 +71,10 @@ export default function VlajkaTvaryTab({ supabase }) {
     const map = {};
     VELKOSTI.forEach(v => {
       const row = (data || []).find(r => r.velkost === v);
-      map[v] = row ? { viewbox: row.viewbox, cut_path: row.cut_path, safe_path: row.safe_path, spotreba_m2: row.spotreba_m2 ?? '' } : { ...PRAZDNY_ROZMER };
+      const viewbox = row ? row.viewbox : PRAZDNY_ROZMER.viewbox;
+      // Ak spotreba chyba, rovno ju predvyplnime z viewBoxu — Martin ju uz nemusi zadavat rucne.
+      const spotreba = row?.spotreba_m2 ?? spotrebaZViewboxu(viewbox) ?? '';
+      map[v] = row ? { viewbox: row.viewbox, cut_path: row.cut_path, safe_path: row.safe_path, spotreba_m2: spotreba } : { ...PRAZDNY_ROZMER, spotreba_m2: spotreba };
     });
     setRozmery(map);
   };
@@ -164,7 +179,19 @@ export default function VlajkaTvaryTab({ supabase }) {
                         </div>
                         <div>
                           <label className="text-[10px] text-slate-500">spotreba materiálu (m²) — vrátane odpadu pri reze</label>
-                          <input type="number" step="0.01" min="0" value={r.spotreba_m2} onChange={(e) => zmenRozmer(v, 'spotreba_m2', e.target.value)} placeholder="napr. 0.35" className="w-full px-2 py-1 bg-slate-950 border border-slate-800 rounded text-[10px] text-white" />
+                          <div className="flex items-center gap-1">
+                            <input type="number" step="0.01" min="0" value={r.spotreba_m2} onChange={(e) => zmenRozmer(v, 'spotreba_m2', e.target.value)} placeholder="napr. 0.35" className="w-full px-2 py-1 bg-slate-950 border border-slate-800 rounded text-[10px] text-white" />
+                            {(() => {
+                              const navrh = spotrebaZViewboxu(r.viewbox);
+                              if (navrh == null || Number(r.spotreba_m2) === navrh) return null;
+                              return (
+                                <button type="button" onClick={() => zmenRozmer(v, 'spotreba_m2', navrh)} title={`Dopočítať z viewBoxu (${r.viewbox}): ${navrh} m²`} className="shrink-0 text-[9px] bg-indigo-950/40 border border-indigo-800/40 text-indigo-300 hover:text-indigo-200 px-1.5 py-1 rounded">
+                                  {navrh}m²
+                                </button>
+                              );
+                            })()}
+                          </div>
+                          <p className="text-[9px] text-slate-600 mt-0.5">Automaticky dopočítané zo šírky×výšky viewBoxu — kľudne prepíš ručne, ak sa reálna spotreba líši.</p>
                         </div>
                       </div>
                     );
