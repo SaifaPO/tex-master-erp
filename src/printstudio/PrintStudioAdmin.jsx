@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Tag, Box, Palette, Type, Image as ImageIcon, Banknote, Camera, ShoppingBag, Scroll, Flag, Shirt, Calculator, Waves, ShoppingCart, ExternalLink, Layers } from 'lucide-react';
+import { Tag, Box, Palette, Type, Image as ImageIcon, Banknote, Camera, ShoppingBag, Scroll, Flag, Shirt, Calculator, Waves, ShoppingCart, ExternalLink, Layers, Printer } from 'lucide-react';
 import KategorieTab from './KategorieTab';
 import ProduktyTab from './ProduktyTab';
 import FarbyTab from './FarbyTab';
@@ -15,6 +15,7 @@ import VlajkyAdmin from './VlajkyAdmin';
 import ZastavyAdmin from './ZastavyAdmin';
 import DresAdmin from './DresAdmin';
 import KalkulackaTlaceTab from './KalkulackaTlaceTab';
+import PredajnyCennikTab from './PredajnyCennikTab';
 
 // Vsetky Shopify konfiguratory (dotlac na tricka, DTF metraz, vlajky/beachvlajky, vyroba dresov)
 // zoskupene pod jednou kartou "PrintStudio Pro" v hlavnom ERP navigacii — namiesto samostatnych kariet.
@@ -33,6 +34,7 @@ const SUBTABS = [
   { id: 'cenotvorba', label: 'Cenotvorba (marže)', icon: Calculator },
   { id: 'cennik', label: 'Cenník potlače', icon: Banknote },
   { id: 'kalkulacka-tlace', label: 'Kalkulačka tlače (Cen. ponuky)', icon: ShoppingCart },
+  { id: 'predajny-cennik', label: 'Predajný cenník (tlač A4)', icon: Printer },
   { id: 'shopify', label: 'Shopify prepojenie', icon: ShoppingBag },
   { id: 'dtf-metraz', label: 'DTF metráž', icon: Scroll, appUrl: `${PRINTSTUDIO_BASE_URL}/?dtf=1` },
   { id: 'textil-metraz', label: 'Textilná metráž', icon: Layers, appUrl: `${PRINTSTUDIO_BASE_URL}/?textil=1` },
@@ -89,6 +91,7 @@ export default function PrintStudioAdmin({ supabase }) {
         {subtab === 'cenotvorba' && <CenotvorbaTab supabase={supabase} />}
         {subtab === 'cennik' && <CennikTab supabase={supabase} />}
         {subtab === 'kalkulacka-tlace' && <KalkulackaTlaceTab supabase={supabase} />}
+        {subtab === 'predajny-cennik' && <PredajnyCennikTab supabase={supabase} />}
         {subtab === 'shopify' && <ShopifyTab supabase={supabase} />}
         {subtab === 'dtf-metraz' && <DtfMetrazTab supabase={supabase} />}
         {subtab === 'textil-metraz' && <TextilMetrazTab supabase={supabase} />}
