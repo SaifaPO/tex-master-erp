@@ -13,11 +13,12 @@ function Field({ label, value, step, onChange }) {
   );
 }
 
-function VysledokVC({ label, value, unit }) {
+function VysledokVC({ label, value, unit, decimals }) {
+  const d = decimals ?? (unit === '€/cm²' ? 6 : 4);
   return (
     <div className="mt-3 pt-3 border-t border-slate-800 flex items-center justify-between">
       <span className="text-xs font-semibold text-slate-300">{label}</span>
-      <span className="text-sm font-mono font-bold text-emerald-400">{value.toFixed(4)} {unit}</span>
+      <span className="text-sm font-mono font-bold text-emerald-400">{value.toFixed(d)} {unit}</span>
     </div>
   );
 }
@@ -208,8 +209,11 @@ export default function KostraCienTab({ supabase }) {
                 <Field label="Čas nažehlenia (min/ks)" value={sublimaciaGarment.cas_nazehlovania_min} step="0.1" onChange={(v) => ulozSublimaciaGarment({ cas_nazehlovania_min: v })} />
                 <Field label="Koeficient rizika (%, pokazené kusy)" value={sublimaciaGarment.koeficient_rizika_percent} step="1" onChange={(v) => ulozSublimaciaGarment({ koeficient_rizika_percent: v })} />
               </div>
-              <VysledokVC label={`VC pri malom logu (${REF_PLOCHA_CM2}cm²)`} value={vcSublimaciaGarment} unit="€/ks" />
-              <VysledokVC label="VC pri max. formáte (38×48cm)" value={vcSublimaciaGarmentMax} unit="€/ks" />
+              <VysledokVC label="Materiál (papier+atrament)" value={subCenaPapierCm2 + subCenaAtramentCm2} unit="€/cm²" />
+              <VysledokVC label="Fixné náklady na kus (manipulácia+papier+nažehlenie)" value={subGarmentFlat} unit="€/ks" />
+              <p className="text-[11px] text-slate-500 mt-2 mb-1">↓ Materiál×plocha + fixné náklady, × (1+riziko) — preto cena nerastie lineárne s plochou, kým fixné náklady dominujú:</p>
+              <VysledokVC label={`VC pri malom logu (${REF_PLOCHA_CM2}cm² = 10×10cm)`} value={vcSublimaciaGarment} unit="€/ks" />
+              <VysledokVC label="VC pri max. formáte (38×48cm = 1824cm²)" value={vcSublimaciaGarmentMax} unit="€/ks" />
             </div>
           </div>
         </div>
