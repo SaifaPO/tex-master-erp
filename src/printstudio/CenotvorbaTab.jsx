@@ -100,6 +100,29 @@ export default function CenotvorbaTab({ supabase }) {
     return Array.from(set).sort();
   }, [products]);
 
+  // Krivka marže (podľa výrobnej ceny, pri aktuálnom refQty) — cisto vizualizacia, prekresli sa
+  // automaticky pri kazdej zmene koeficientov/refQty, kedze je odvodena priamo z config/products.
+  const curveData = useMemo(() => {
+    const costs = products.filter(p => p.productionCost > 0).map(p => p.productionCost);
+    const minCost = Math.max(0.05, Math.min(1, ...(costs.length ? costs : [1])));
+    const maxCost = Math.max(600, ...(costs.length ? costs.map(c => c * 1.2) : [600]));
+    const STEPS = 60;
+    const points = [];
+    for (let i = 0; i <= STEPS; i++) {
+      const t = i / STEPS;
+      const logCost = Math.log10(minCost) + t * (Math.log10(maxCost) - Math.log10(minCost));
+      const cost = Math.pow(10, logCost);
+      points.push({ cost, margin: marginAt(cost, refQty, config) });
+    }
+    const productPoints = products
+      .filter(p => p.productionCost > 0)
+      .map(p => ({ name: p.name, cost: p.productionCost, margin: marginAt(p.productionCost, refQty, config) }));
+    const allMargins = [...points.map(p => p.margin), ...productPoints.map(p => p.margin), config.marginFloor];
+    const yMin = Math.max(0, Math.floor(Math.min(...allMargins) - 5));
+    const yMax = Math.ceil(Math.max(...allMargins) + 10);
+    return { points, productPoints, minCost, maxCost, yMin, yMax };
+  }, [products, refQty, config]);
+
   const sortedProducts = useMemo(() => {
     const capMarginFor = (p) => {
       if (p.productionCost == null || p.productionCost <= 0 || !p.redukovanyVykon) return null;
@@ -196,6 +219,9 @@ export default function CenotvorbaTab({ supabase }) {
           {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Uložiť koeficienty
         </button>
       </div>
+
+      {/* Graf krivky marže — zivy nahlad, prekresli sa hned pri zmene koeficientov/refQty */}
+      <MargeCurveChart curveData={curveData} config={config} refQty={refQty} />
 
       {/* 6. koeficient — SIMULACIA, nema vplyv na skutocne ceny nikde inde v appke */}
       <div className="bg-amber-950/20 border border-amber-900/40 rounded-lg p-4">
@@ -345,6 +371,58 @@ export default function CenotvorbaTab({ supabase }) {
           {groupOptions.map(g => <option key={g} value={g} />)}
         </datalist>
       </div>
+    </div>
+  );
+}
+
+const X_TICK_CANDIDATES = [0.5, 1, 2, 5, 10, 25, 50, 100, 250, 500, 1000, 2000, 5000];
+
+function MargeCurveChart({ curveData, config, refQty }) {
+  const { points, productPoints, minCost, maxCost, yMin, yMax } = curveData;
+  const chartW = 640, chartH = 260, padL = 44, padR = 16, padT = 12, padB = 28;
+  const plotW = chartW - padL - padR, plotH = chartH - padT - padB;
+  const logMin = Math.log10(minCost), logMax = Math.log10(maxCost);
+  const xScale = (cost) => padL + ((Math.log10(cost) - logMin) / (logMax - logMin || 1)) * plotW;
+  const yScale = (m) => padT + plotH - ((m - yMin) / (yMax - yMin || 1)) * plotH;
+
+  const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${xScale(p.cost).toFixed(1)} ${yScale(p.margin).toFixed(1)}`).join(' ');
+  const yTicks = Array.from({ length: 5 }, (_, i) => Math.round(yMin + i * (yMax - yMin) / 4));
+  const xTicks = X_TICK_CANDIDATES.filter(c => c >= minCost && c <= maxCost);
+  const floorY = yScale(config.marginFloor);
+
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-lg p-4">
+      <h3 className="font-bold text-sm text-slate-200 mb-1">📈 Krivka marže podľa výrobnej ceny (pri {refQty} ks)</h3>
+      <p className="text-[11px] text-slate-500 mb-3">Ako sa mení % marža podľa výrobnej ceny pri súčasných koeficientoch — zelené bodky sú tvoje reálne produkty z katalógu. Krivka sa prekreslí hneď pri zmene koeficientov alebo referenčného počtu kusov.</p>
+      {productPoints.length === 0 && points.length === 0 ? (
+        <p className="text-xs text-slate-500 text-center py-8">Žiadne dáta na vykreslenie.</p>
+      ) : (
+        <>
+          <svg viewBox={`0 0 ${chartW} ${chartH}`} className="w-full h-auto">
+            {yTicks.map(m => (
+              <g key={`y-${m}`}>
+                <line x1={padL} x2={chartW - padR} y1={yScale(m)} y2={yScale(m)} stroke="#1e293b" strokeWidth="1" />
+                <text x={padL - 6} y={yScale(m) + 3} textAnchor="end" fontSize="9" fill="#64748b">{m}%</text>
+              </g>
+            ))}
+            {xTicks.map(c => (
+              <g key={`x-${c}`}>
+                <line x1={xScale(c)} x2={xScale(c)} y1={padT} y2={chartH - padB} stroke="#1e293b" strokeWidth="1" />
+                <text x={xScale(c)} y={chartH - padB + 14} textAnchor="middle" fontSize="9" fill="#64748b">{c}€</text>
+              </g>
+            ))}
+            <line x1={padL} x2={chartW - padR} y1={floorY} y2={floorY} stroke="#f59e0b" strokeWidth="1" strokeDasharray="4 3" />
+            <text x={chartW - padR} y={floorY - 4} textAnchor="end" fontSize="9" fill="#f59e0b">podlaha {config.marginFloor}%</text>
+            <path d={pathD} fill="none" stroke="#6366f1" strokeWidth="2" />
+            {productPoints.map(p => (
+              <circle key={p.name} cx={xScale(p.cost)} cy={yScale(p.margin)} r="4" fill="#34d399" stroke="#0f172a" strokeWidth="1">
+                <title>{p.name}: {p.margin.toFixed(0)}% marža @ {p.cost.toFixed(2)}€ VC</title>
+              </circle>
+            ))}
+          </svg>
+          <p className="text-[10px] text-slate-600 mt-1">Prejdi myšou nad zelenou bodkou pre názov produktu.</p>
+        </>
+      )}
     </div>
   );
 }
