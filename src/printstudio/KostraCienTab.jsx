@@ -4,13 +4,29 @@ import { Layers3, Plus, Trash2 } from 'lucide-react';
 const inputCls = 'w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white';
 const labelCls = 'text-xs text-slate-400 font-medium';
 
-function Field({ label, value, step, onChange }) {
+function Field({ label, value, step, onChange, hint }) {
   return (
     <div>
       <label className={labelCls}>{label}</label>
       <input type="number" step={step} value={value ?? ''} onChange={(e) => onChange(parseFloat(e.target.value) || 0)} className={inputCls} />
+      {hint && <p className="text-[10px] text-slate-500 mt-1">{hint}</p>}
     </div>
   );
+}
+
+// Pomocny prepocet min/cm² -> sekundy/cm² + kolko to spolu vyjde na referencnej ploche (10x10cm) —
+// min/cm² je zradna jednotka na priamy odhad (lahko sa splete rad velkosti), takze ukazeme aj
+// konkretne sekundy pri realnej velkosti, nech sa da hned vizualne overit ci cislo dava zmysel.
+function casNaCm2Hint(minPerCm2, refPlochaCm2) {
+  const v = parseFloat(minPerCm2) || 0;
+  const sekPerCm2 = v * 60;
+  const spoluSek = v * refPlochaCm2 * 60;
+  const spoluMin = spoluSek / 60;
+  return `= ${sekPerCm2.toFixed(2)} sek/cm² → pri 10×10cm (${refPlochaCm2}cm²): ${spoluSek.toFixed(0)} sek (${spoluMin.toFixed(1)} min)`;
+}
+function casFlatHint(minPerKs) {
+  const v = parseFloat(minPerKs) || 0;
+  return `= ${(v * 60).toFixed(0)} sek/ks`;
 }
 
 function VysledokVC({ label, value, unit, decimals }) {
@@ -206,7 +222,7 @@ export default function KostraCienTab({ supabase }) {
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Manipulácia strihania (€/ks)" value={sublimaciaGarment.naklady_manipulacia} step="0.01" onChange={(v) => ulozSublimaciaGarment({ naklady_manipulacia: v })} />
                 <Field label="Ochranný papier pri lise (€/ks)" value={sublimaciaGarment.naklady_ochranny_papier} step="0.01" onChange={(v) => ulozSublimaciaGarment({ naklady_ochranny_papier: v })} />
-                <Field label="Čas nažehlenia (min/ks)" value={sublimaciaGarment.cas_nazehlovania_min} step="0.1" onChange={(v) => ulozSublimaciaGarment({ cas_nazehlovania_min: v })} />
+                <Field label="Čas nažehlenia (min/ks)" value={sublimaciaGarment.cas_nazehlovania_min} step="0.1" onChange={(v) => ulozSublimaciaGarment({ cas_nazehlovania_min: v })} hint={casFlatHint(sublimaciaGarment.cas_nazehlovania_min)} />
                 <Field label="Koeficient rizika (%, pokazené kusy)" value={sublimaciaGarment.koeficient_rizika_percent} step="1" onChange={(v) => ulozSublimaciaGarment({ koeficient_rizika_percent: v })} />
               </div>
               <VysledokVC label="Materiál (papier+atrament)" value={subCenaPapierCm2 + subCenaAtramentCm2} unit="€/cm²" />
@@ -227,9 +243,9 @@ export default function KostraCienTab({ supabase }) {
         <p className="text-[11px] text-slate-500 mb-2">Čas rezania a vyľupovania závisí od zložitosti grafiky, preto sa zadáva orientačne na 1cm² plochy motívu (nie fixne na kus) — napr. 0,01 min/cm² znamená 1 minútu pri 100cm² (10×10cm). Nažehlovanie a manipulácia sú fixné na kus.</p>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 p-3 bg-slate-950 rounded-xl border border-slate-800 mb-3">
           <Field label="Cena práce (€/hod)" value={rezany.cena_prace_hod} step="0.5" onChange={(v) => ulozRezany({ cena_prace_hod: v })} />
-          <Field label="Čas rezania (min/cm²)" value={rezany.cas_rezania_min} step="0.01" onChange={(v) => ulozRezany({ cas_rezania_min: v })} />
-          <Field label="Čas vyľupovania (min/cm²)" value={rezany.cas_vylupovania_min} step="0.01" onChange={(v) => ulozRezany({ cas_vylupovania_min: v })} />
-          <Field label="Čas nažehlovania (min/ks)" value={rezany.cas_nazehlovania_min} step="0.1" onChange={(v) => ulozRezany({ cas_nazehlovania_min: v })} />
+          <Field label="Čas rezania (min/cm²)" value={rezany.cas_rezania_min} step="0.01" onChange={(v) => ulozRezany({ cas_rezania_min: v })} hint={casNaCm2Hint(rezany.cas_rezania_min, REF_PLOCHA_CM2)} />
+          <Field label="Čas vyľupovania (min/cm²)" value={rezany.cas_vylupovania_min} step="0.01" onChange={(v) => ulozRezany({ cas_vylupovania_min: v })} hint={casNaCm2Hint(rezany.cas_vylupovania_min, REF_PLOCHA_CM2)} />
+          <Field label="Čas nažehlovania (min/ks)" value={rezany.cas_nazehlovania_min} step="0.1" onChange={(v) => ulozRezany({ cas_nazehlovania_min: v })} hint={casFlatHint(rezany.cas_nazehlovania_min)} />
           <Field label="Manipulácia (€/ks)" value={rezany.naklady_manipulacia} step="0.01" onChange={(v) => ulozRezany({ naklady_manipulacia: v })} />
         </div>
         <VysledokVC label={`Práca + manipulácia pri ${REF_PLOCHA_CM2}cm² (10×10cm)`} value={rezanyPraca} unit="€/ks" />
@@ -286,7 +302,7 @@ export default function KostraCienTab({ supabase }) {
             <span className="text-xs font-bold text-amber-400 block mb-2">Variant: Potlač textilu</span>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Manipulácia strihania (€/ks)" value={dtf.naklady_manipulacia} step="0.01" onChange={(v) => ulozDtf({ naklady_manipulacia: v })} />
-              <Field label="Čas nažehlovania (min/ks)" value={dtf.cas_nazehlovania_min} step="0.1" onChange={(v) => ulozDtf({ cas_nazehlovania_min: v })} />
+              <Field label="Čas nažehlovania (min/ks)" value={dtf.cas_nazehlovania_min} step="0.1" onChange={(v) => ulozDtf({ cas_nazehlovania_min: v })} hint={casFlatHint(dtf.cas_nazehlovania_min)} />
             </div>
             <VysledokVC label={`VC pri ${REF_PLOCHA_CM2}cm² (10×10cm)`} value={vcDtfGarment} unit="€/ks" />
             <p className="text-[11px] text-slate-500 -mt-2">≈ {(vcDtfGarment / REF_PLOCHA_CM2).toFixed(4)} €/cm² priemerne pri tejto ploche</p>
