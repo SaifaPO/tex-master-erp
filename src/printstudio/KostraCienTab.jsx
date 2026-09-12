@@ -71,7 +71,7 @@ export default function KostraCienTab({ supabase }) {
     setRezany(rez || { id: 1, cena_prace_hod: 0, cas_rezania_min: 0, cas_vylupovania_min: 0, cas_nazehlovania_min: 0, naklady_manipulacia: 0, sirka_folie_cm: 50, sirka_vyuzitelna_cm: 49 });
     setFolie(fol || []);
     setDtf(dtfN || { id: 1, cena_cmyk_kg: 0, spotreba_cmyk_m2: 0, cena_biela_kg: 0, spotreba_biela_m2: 0, cena_lepidlo_kg: 0, spotreba_lepidlo_m2: 0, cena_prace_hod: 0, cena_folie_bm: 0, rychlost_tlace_m_hod: 1, naklady_manipulacia: 0, cas_nazehlovania_min: 0 });
-    setSietotlac(siet || { id: 1, cena_farba_kg: 0, naklady_manipulacia: 0, naklad_sito_zakazka: 0, naklad_cistenie_zakazka: 0 });
+    setSietotlac(siet || { id: 1, cena_farba_kg: 0, naklady_manipulacia: 0, naklad_sito_zakazka: 0, naklad_cistenie_zakazka: 0, odporucany_min_ks: 30 });
     setSietotlacVelkosti(sietVel || []);
     setVysivka(vys || { id: 1, cena_digitalizacia: 0, cena_vysivky_cm2: 0 });
     setIsLoading(false);
@@ -313,14 +313,16 @@ export default function KostraCienTab({ supabase }) {
       {/* SIETOTLAC */}
       <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-5">
         <h3 className="font-bold text-sm text-white mb-3">4. Sieťotlač</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 bg-slate-950 rounded-xl border border-slate-800 mb-4">
+        <p className="text-[11px] text-slate-500 mb-2">Každá ďalšia farba = ďalšie sito (nasvietenie) + farba, ale so znižujúcou sa spotrebou (skúsenostne cca -20% na každú ďalšiu farbu oproti predchádzajúcej — nastavuje sa v Potlače pri testovacej kalkulačke, kde vidíš aj rozpad po farbách).</p>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 p-3 bg-slate-950 rounded-xl border border-slate-800 mb-4">
           <Field label="Cena farby (€/kg)" value={sietotlac.cena_farba_kg} step="0.5" onChange={(v) => ulozSietotlac({ cena_farba_kg: v })} />
           <Field label="Manipulácia (€/ks)" value={sietotlac.naklady_manipulacia} step="0.01" onChange={(v) => ulozSietotlac({ naklady_manipulacia: v })} />
-          <Field label="Sito — náklad na zákazku (€)" value={sietotlac.naklad_sito_zakazka} step="0.5" onChange={(v) => ulozSietotlac({ naklad_sito_zakazka: v })} />
+          <Field label="Sito — náklad na 1 farbu/sito (€)" value={sietotlac.naklad_sito_zakazka} step="0.5" onChange={(v) => ulozSietotlac({ naklad_sito_zakazka: v })} hint="Pri 3 farbách sa počíta 3× (3 sitá)." />
           <Field label="Čistiace prípravky (€/zákazku)" value={sietotlac.naklad_cistenie_zakazka} step="0.1" onChange={(v) => ulozSietotlac({ naklad_cistenie_zakazka: v })} />
+          <Field label="Odporúčaný min. počet ks" value={sietotlac.odporucany_min_ks} step="1" onChange={(v) => ulozSietotlac({ odporucany_min_ks: v })} hint="Informačne — menšie zákazky sú možné, len drahšie na kus." />
         </div>
         <div className="flex items-center justify-between mb-2">
-          <label className={labelCls}>Formáty a spotreba farby (svetlý / tmavý textil = 1 vrstva / 2 vrstvy)</label>
+          <label className={labelCls}>Formáty a spotreba farby pre 1. farbu (svetlý / tmavý textil = 1 vrstva / 2 vrstvy)</label>
           <button onClick={pridajVelkost} className="text-xs text-indigo-400 font-semibold hover:text-indigo-300 flex items-center gap-1"><Plus className="w-3.5 h-3.5" /> Pridať formát</button>
         </div>
         <div className="space-y-1.5">

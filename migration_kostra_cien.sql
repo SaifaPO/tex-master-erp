@@ -16,10 +16,15 @@ alter table cennik_rezany_transfer add column if not exists cas_vylupovania_min 
 -- už existuje, len sa znovu zapája). cena_cm2 ostáva predajná sadzba, nezmenené.
 alter table cennik_folie add column if not exists naklad_bm numeric(10,2) not null default 0;
 
--- Sieťotlač — sito a čistiace prípravky ako fixná prirážka na zákazku (dohodnuté s Martinom,
--- nie amortizácia na počet kusov zo sita — jednoduchšie a presnejšie podľa jeho skúsenosti).
+-- Sieťotlač — sito a čistiace prípravky ako fixná prirážka (dohodnuté s Martinom, nie amortizácia
+-- na počet kusov zo sita — jednoduchšie a presnejšie podľa jeho skúsenosti). naklad_sito_zakazka sa
+-- pôvodne počítalo raz na zákazku — teraz sa násobí počtom farieb (každá farba = ďalšie sito),
+-- názov stĺpca ostáva kvôli kompatibilite, len sa zmenil význam/výpočet v JS.
 alter table cennik_sietotlac add column if not exists naklad_sito_zakazka numeric(10,2) not null default 0;
 alter table cennik_sietotlac add column if not exists naklad_cistenie_zakazka numeric(10,2) not null default 0;
+-- Odporúčaný minimálny počet kusov pre sieťotlač (informačne — sito/nastavenie stroja sa oplatí
+-- až od väčšieho odberu, ale menšie zákazky sú možné za vyššiu cenu na kus).
+alter table cennik_sietotlac add column if not exists odporucany_min_ks int not null default 30;
 
 -- Výšivka — úplne nová technológia (predtým existovala len ako plochá položka v cenových ponukách).
 create table if not exists kostra_vysivka (

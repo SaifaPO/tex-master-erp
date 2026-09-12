@@ -31,7 +31,7 @@ export default function PotlaceTab({ supabase }) {
   const [sublimacia, setSublimacia] = useState({ cena_cm2: 0, min_cena: 0 });
   const [dtf, setDtf] = useState({ cena_cm2: 0, min_cena: 0 });
   const [vysivka, setVysivka] = useState({ cena_cm2: 0, min_cena: 0 });
-  const [sietotlac, setSietotlac] = useState({ cena_cm2: 0, cena_cm2_tmavy: 0, min_cena: 0, priplatok_farba: 0, cena_farba_kg: 0, naklady_manipulacia: 0, naklad_sito_zakazka: 0, naklad_cistenie_zakazka: 0 });
+  const [sietotlac, setSietotlac] = useState({ cena_cm2: 0, cena_cm2_tmavy: 0, min_cena: 0, priplatok_farba: 0, cena_farba_kg: 0, naklady_manipulacia: 0, naklad_sito_zakazka: 0, naklad_cistenie_zakazka: 0, odporucany_min_ks: 30 });
   const [rezany, setRezany] = useState({ min_cena: 0, cena_prace_hod: 0, cas_rezania_min: 0, cas_vylupovania_min: 0, cas_nazehlovania_min: 0, naklady_manipulacia: 0, sirka_vyuzitelna_cm: 49 });
   const [folie, setFolie] = useState([]);
 
@@ -71,7 +71,7 @@ export default function PotlaceTab({ supabase }) {
     if (subRow) setSublimacia({ cena_cm2: subRow.cena_cm2, min_cena: subRow.min_cena });
     if (dtfRow) setDtf({ cena_cm2: dtfRow.cena_cm2, min_cena: dtfRow.min_cena });
     if (vysRow) setVysivka({ cena_cm2: vysRow.cena_cm2, min_cena: vysRow.min_cena });
-    if (sieto) setSietotlac({ cena_cm2: sieto.cena_cm2, cena_cm2_tmavy: sieto.cena_cm2_tmavy, min_cena: sieto.min_cena, priplatok_farba: sieto.priplatok_farba, cena_farba_kg: sieto.cena_farba_kg || 0, naklady_manipulacia: sieto.naklady_manipulacia || 0, naklad_sito_zakazka: sieto.naklad_sito_zakazka || 0, naklad_cistenie_zakazka: sieto.naklad_cistenie_zakazka || 0 });
+    if (sieto) setSietotlac({ cena_cm2: sieto.cena_cm2, cena_cm2_tmavy: sieto.cena_cm2_tmavy, min_cena: sieto.min_cena, priplatok_farba: sieto.priplatok_farba, cena_farba_kg: sieto.cena_farba_kg || 0, naklady_manipulacia: sieto.naklady_manipulacia || 0, naklad_sito_zakazka: sieto.naklad_sito_zakazka || 0, naklad_cistenie_zakazka: sieto.naklad_cistenie_zakazka || 0, odporucany_min_ks: sieto.odporucany_min_ks || 30 });
     if (rez) setRezany({ min_cena: rez.min_cena, cena_prace_hod: rez.cena_prace_hod || 0, cas_rezania_min: rez.cas_rezania_min || 0, cas_vylupovania_min: rez.cas_vylupovania_min || 0, cas_nazehlovania_min: rez.cas_nazehlovania_min || 0, naklady_manipulacia: rez.naklady_manipulacia || 0, sirka_vyuzitelna_cm: rez.sirka_vyuzitelna_cm || 49 });
     setFolie(fol || []);
     if ((fol || []).length > 0) setTestFoliaId(fol[0].id);
@@ -150,11 +150,21 @@ export default function PotlaceTab({ supabase }) {
   ) : 0;
 
   const vybranaVelkost = sietotlacVelkosti.find(v => v.id === testVelkostId);
-  const vcSietotlac = vybranaVelkost ? (() => {
-    const gramaz = testTmavyTextil ? vybranaVelkost.spotreba_g_tmavy : vybranaVelkost.spotreba_g_svetly;
-    const material = ((parseFloat(sietotlac.cena_farba_kg) || 0) / 1000) * (parseFloat(gramaz) || 0);
-    return material + (parseFloat(sietotlac.naklady_manipulacia) || 0) + (parseFloat(sietotlac.naklad_sito_zakazka) || 0) + (parseFloat(sietotlac.naklad_cistenie_zakazka) || 0);
-  })() : 0;
+  const pocetFariebSiet = Math.max(1, parseInt(testFarby) || 1);
+  const baseGramazSiet = vybranaVelkost ? (parseFloat(testTmavyTextil ? vybranaVelkost.spotreba_g_tmavy : vybranaVelkost.spotreba_g_svetly) || 0) : 0;
+  // Kazda dalsia farba = dalsie sito (nasvietenie) + farba, so spotrebou znizujucou sa o 20% oproti
+  // predchadzajucej farbe (skusenostny odhad, over/priprav v testovacej kalkulacke nizsie).
+  const nakladFarbySiet = (n) => {
+    const gramazN = baseGramazSiet * Math.pow(0.8, n - 1);
+    const farbaCena = ((parseFloat(sietotlac.cena_farba_kg) || 0) / 1000) * gramazN;
+    const sitoCena = parseFloat(sietotlac.naklad_sito_zakazka) || 0;
+    return { n, gramaz: gramazN, farbaCena, sitoCena, spolu: farbaCena + sitoCena };
+  };
+  const sietotlacFarbyRozpad = vybranaVelkost ? Array.from({ length: pocetFariebSiet }, (_, i) => nakladFarbySiet(i + 1)) : [];
+  // VC pre zakladnu predajnu sadzbu (cena_cm2) je vzdy len za 1. farbu — dalsie farby sa predavaju
+  // cez samostatny "priplatok za farbu" nizsie, nie namiesane do zakladnej sadzby.
+  const vcSietotlac = vybranaVelkost ? nakladFarbySiet(1).spolu + (parseFloat(sietotlac.naklady_manipulacia) || 0) + (parseFloat(sietotlac.naklad_cistenie_zakazka) || 0) : 0;
+  const navrhPriplatokFarbaVC = vybranaVelkost ? nakladFarbySiet(2).spolu : 0;
   const plochaSietotlacCm2 = vybranaVelkost ? (parseFloat(vybranaVelkost.sirka_cm) || 0) * (parseFloat(vybranaVelkost.vyska_cm) || 0) : 0;
 
   const vybranaFolia = folie.find(f => f.id === testFoliaId);
@@ -227,6 +237,7 @@ export default function PotlaceTab({ supabase }) {
           <div><label className={labelCls}>Minimálna cena úkonu (€)</label><input type="number" step="0.1" value={sietotlac.min_cena} onChange={(e) => ulozSietotlac({ min_cena: parseFloat(e.target.value) || 0 })} className={inputCls} /></div>
           <div><label className={labelCls}>Príplatok za ďalšiu farbu (€)</label><input type="number" step="0.1" value={sietotlac.priplatok_farba} onChange={(e) => ulozSietotlac({ priplatok_farba: parseFloat(e.target.value) || 0 })} className={inputCls} /></div>
         </div>
+        <p className="text-[11px] text-slate-500 mb-2">💡 Odporúčaná minimálna zákazka: <strong className="text-slate-300">{sietotlac.odporucany_min_ks} ks</strong> (menšie objednávky sú možné, len drahšie na kus kvôli sitám — nastavuje sa v Kostra cien).</p>
         <p className={kostraNoteCls}>Cena farby, manipulácia, sito a formáty sa nastavujú v <strong>Kostra cien → Sieťotlač</strong>.</p>
         {sietotlacVelkosti.length > 0 && (
           <>
@@ -241,8 +252,26 @@ export default function PotlaceTab({ supabase }) {
                 <button onClick={() => setTestTmavyTextil(false)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold border-2 transition ${!testTmavyTextil ? 'border-indigo-500 bg-indigo-950/40 text-indigo-300' : 'border-slate-700 text-slate-400'}`}>Svetlý</button>
                 <button onClick={() => setTestTmavyTextil(true)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold border-2 transition ${testTmavyTextil ? 'border-indigo-500 bg-indigo-950/40 text-indigo-300' : 'border-slate-700 text-slate-400'}`}>Tmavý</button>
               </div>
+              <div>
+                <label className={labelCls}>Počet farieb</label>
+                <input type="number" min="1" value={testFarby} onChange={(e) => setTestFarby(e.target.value)} className={`${inputCls} w-24`} />
+              </div>
             </div>
             <NakladovyVysledok vc={vcSietotlac} ks={ks} config={pricingConfig} plochaCm2={plochaSietotlacCm2} onPouzit={(cena) => ulozSietotlac(testTmavyTextil ? { cena_cm2_tmavy: Number(cena.toFixed(4)) } : { cena_cm2: Number(cena.toFixed(4)) })} disabled={plochaSietotlacCm2 === 0} />
+            <p className="text-[11px] text-slate-500 mt-2">VC vyššie je len za <strong>1. farbu</strong> (základná predajná sadzba). Rozpad nižšie pri {pocetFariebSiet} {pocetFariebSiet === 1 ? 'farbe' : 'farbách'} (nastav "Počet farieb" v referenčnej objednávke hore) ukazuje, koľko stojí každá ďalšia farba — spotreba farby klesá o 20% na farbu, sito sa počíta za každú znova:</p>
+            <div className="bg-slate-950 rounded-xl border border-indigo-900/40 p-3 mt-1 space-y-1 text-xs">
+              {sietotlacFarbyRozpad.map(r => (
+                <div key={r.n} className="flex items-center justify-between text-slate-400">
+                  <span>{r.n}. farba ({r.gramaz.toFixed(2)}g)</span>
+                  <span className="text-white font-mono">{r.sitoCena.toFixed(2)}€ sito + {r.farbaCena.toFixed(3)}€ farba = {r.spolu.toFixed(3)}€</span>
+                </div>
+              ))}
+              <div className="flex items-center justify-between pt-1.5 border-t border-slate-800">
+                <span className="text-slate-300 font-semibold">Návrh predajnej ceny za 2. farbu (s maržou)</span>
+                <span className="text-emerald-400 font-bold">{priceAt(navrhPriplatokFarbaVC, ks, pricingConfig).toFixed(2)} €</span>
+              </div>
+              <button onClick={() => ulozSietotlac({ priplatok_farba: Number(priceAt(navrhPriplatokFarbaVC, ks, pricingConfig).toFixed(2)) })} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs py-1.5 rounded-lg mt-1">Použiť ako príplatok za farbu</button>
+            </div>
           </>
         )}
       </div>
