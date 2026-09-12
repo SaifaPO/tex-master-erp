@@ -6,7 +6,7 @@ const BUCKET = 'print-designs';
 const ROLL_WIDTH_CM = 160;
 // Referencne urovne (bm) len pre "Prehlad mnozstevnych zliav" nizsie — samotny vypocet ceny
 // funguje pre lubovolnu (aj neceloriselnu) dlzku, toto je len ilustracna tabulka.
-const BM_PREVIEW_LEVELS = [1, 5, 10, 25, 50, 100];
+const BM_PREVIEW_LEVELS = [1, 5, 10, 25, 50, 100, 200, 500, 1000];
 
 const REPEAT_OPTIONS = [
   { id: 'grid', label: 'Rovnobežný (Grid)', icon: Grid3x3 },

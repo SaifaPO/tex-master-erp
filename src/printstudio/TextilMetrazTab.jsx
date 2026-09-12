@@ -5,7 +5,7 @@ import { priceAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngin
 const BUCKET = 'print-designs';
 const ROLL_WIDTH_M = 1.60; // 160 cm
 // Referencne urovne (bm) len na nahlad v tabulkach nizsie — realny vypocet funguje pre lubovolnu dlzku.
-const BM_PREVIEW_LEVELS = [1, 5, 10, 25, 50, 100];
+const BM_PREVIEW_LEVELS = [1, 5, 10, 25, 50, 100, 200, 500, 1000];
 
 const NAKLADY_DEFAULT = {
   sublimacia: { cena_papier_bm: 0.95, cena_ochranny_papier_bm: 0.30, cena_atrament_l: 38, spotreba_atrament_ml_m2: 12, cena_prace_hod: 18, rychlost_m_hod: 15 },
