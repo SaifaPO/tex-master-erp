@@ -25,12 +25,22 @@ function retailPrice(vyrobnaCena, nastavenia) {
   return vyrobnaCena * (1 + nastavenia.marza_percent / 100) * (1 + nastavenia.dph_percent / 100);
 }
 
-// Orientačná výrobná cena z aktuálnej DTF sadzby (Cenník potlače) podľa plochy položky —
-// len návrh na doplnenie, admin ho môže kedykoľvek prepísať ručne.
-function cenaZDtf(sirkaCm, vyskaCm, dtfRate) {
-  if (!dtfRate || !sirkaCm || !vyskaCm) return null;
-  const plocha = Number(sirkaCm) * Number(vyskaCm);
-  return Math.max(dtfRate.min_cena || 0, plocha * (dtfRate.cena_cm2 || 0));
+// Orientačná výrobná cena z reálnych výrobných nákladov DTF (materiál CMYK/biela/lepidlo
+// podľa plochy + fixná práca/manipulácia za úkon) — rovnaký vzorec ako nákladová kalkulačka
+// v Cenníku potlače (CennikTab.jsx → vcDtf). Zámerne NEpoužívame predajnú sadzbu DTF
+// (cennik_technologie.dtf) — tá už má v sebe maržu aj minimálnu cenu úkonu pre bežnú zákazku,
+// čo pri malej položke (napr. 4×10cm číslo) dá výrazne nadhodnotenú "výrobnú" cenu.
+function cenaZDtf(sirkaCm, vyskaCm, dtfNaklady) {
+  if (!dtfNaklady || !sirkaCm || !vyskaCm) return null;
+  const n = dtfNaklady;
+  const plochaM2 = (Number(sirkaCm) * Number(vyskaCm)) / 10000;
+  const material = plochaM2 * (
+    (parseFloat(n.cena_cmyk_kg) || 0) * (parseFloat(n.spotreba_cmyk_m2) || 0) +
+    (parseFloat(n.cena_biela_kg) || 0) * (parseFloat(n.spotreba_biela_m2) || 0) +
+    (parseFloat(n.cena_lepidlo_kg) || 0) * (parseFloat(n.spotreba_lepidlo_m2) || 0)
+  );
+  const praca = ((parseFloat(n.cas_nazehlovania_min) || 0) / 60) * (parseFloat(n.cena_prace_hod) || 0);
+  return material + (parseFloat(n.naklady_manipulacia) || 0) + praca;
 }
 
 function fmtCm(n) {
@@ -50,23 +60,22 @@ export default function PredajnyCennikTab({ supabase }) {
   const [polozky, setPolozky] = useState([]);
   const [nastavenia, setNastavenia] = useState(NASTAVENIA_DEFAULT);
   const [companySettings, setCompanySettings] = useState(null);
-  const [dtfRate, setDtfRate] = useState(null);
+  const [dtfNaklady, setDtfNaklady] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showPrint, setShowPrint] = useState(false);
 
   const nacitaj = async () => {
     setIsLoading(true);
-    const [{ data: p }, { data: n }, { data: c }, { data: tech }] = await Promise.all([
+    const [{ data: p }, { data: n }, { data: c }, { data: dtfNak }] = await Promise.all([
       supabase.from('predajny_cennik_polozky').select('*').order('poradie').order('id'),
       supabase.from('predajny_cennik_nastavenia').select('*').eq('id', 1).maybeSingle(),
       supabase.from('company_settings').select('*').eq('id', 1).maybeSingle(),
-      supabase.from('cennik_technologie').select('*'),
+      supabase.from('dtf_naklady').select('*').eq('id', 1).maybeSingle(),
     ]);
     setPolozky(p || []);
     if (n) setNastavenia(n);
     setCompanySettings(c || null);
-    const dtfRow = (tech || []).find(t => t.technologia === 'dtf');
-    if (dtfRow) setDtfRate({ cena_cm2: dtfRow.cena_cm2, min_cena: dtfRow.min_cena });
+    setDtfNaklady(dtfNak || null);
     setIsLoading(false);
   };
   useEffect(() => { nacitaj(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -152,15 +161,15 @@ export default function PredajnyCennikTab({ supabase }) {
           <h3 className="font-bold text-sm text-white">Položky cenníka</h3>
           <button onClick={pridajPolozku} className="flex items-center gap-1.5 text-xs text-indigo-400 font-semibold hover:text-indigo-300"><Plus className="w-3.5 h-3.5" /> Pridať položku</button>
         </div>
-        {dtfRate ? (
-          <p className="text-[11px] text-slate-500">Orientačná výrobná cena sa vie dopočítať z aktuálnej DTF sadzby ({Number(dtfRate.cena_cm2).toFixed(3)} €/cm², min. {Number(dtfRate.min_cena).toFixed(2)} €) podľa rozmeru položky — vyplň šírku a výšku a klikni na prepočet. Je to len orientačný odhad, cenu si vieš kedykoľvek prepísať ručne.</p>
+        {dtfNaklady ? (
+          <p className="text-[11px] text-slate-500">Orientačná výrobná cena sa vie dopočítať zo skutočných výrobných nákladov DTF (materiál CMYK/biela/lepidlo podľa plochy + práca a manipulácia za úkon, záložka Cenník potlače → DTF) podľa rozmeru položky — vyplň šírku a výšku a klikni na prepočet. Je to len orientačný odhad, cenu si vieš kedykoľvek prepísať ručne.</p>
         ) : (
-          <p className="text-[11px] text-amber-400">DTF sadzba nie je nastavená (záložka Cenník potlače) — prepočet z rozmeru nebude fungovať, výrobné ceny nastav ručne.</p>
+          <p className="text-[11px] text-amber-400">Výrobné náklady DTF nie sú vyplnené (záložka Cenník potlače → DTF → Nákladová kalkulačka) — prepočet z rozmeru nebude fungovať, výrobné ceny nastav ručne.</p>
         )}
         <div className="space-y-2">
           {polozky.map(p => {
             const cena = retailPrice(Number(p.vyrobna_cena) || 0, nastavenia);
-            const navrh = cenaZDtf(p.sirka_cm, p.vyska_cm, dtfRate);
+            const navrh = cenaZDtf(p.sirka_cm, p.vyska_cm, dtfNaklady);
             return (
               <div key={p.id} className={`p-3 rounded-xl border ${p.aktivny ? 'bg-slate-950 border-slate-800' : 'bg-slate-950/40 border-slate-800/50 opacity-60'} space-y-2`}>
                 <div className="flex flex-wrap items-center gap-2">
