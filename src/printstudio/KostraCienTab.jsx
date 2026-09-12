@@ -267,7 +267,7 @@ export default function KostraCienTab({ supabase }) {
                 <div className="flex items-center gap-1 text-xs text-slate-400 shrink-0">
                   <input type="number" step="0.05" value={f.naklad_bm || 0} onChange={(e) => upravFoliu(f.id, { naklad_bm: parseFloat(e.target.value) || 0 })} className="w-20 px-2 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /> €/bm
                 </div>
-                <span className="text-[11px] text-slate-500 shrink-0 w-24">= {nakladCm2.toFixed(6)} €/cm²</span>
+                <span className="text-[11px] text-slate-500 shrink-0">= {nakladCm2.toFixed(6)} €/cm² • {(nakladCm2 * 100).toFixed(4)} € pri 10×10cm</span>
                 <button onClick={() => zmazFoliu(f.id)} className="text-slate-400 hover:text-rose-400 p-1.5 shrink-0"><Trash2 className="w-4 h-4" /></button>
               </div>
             );

@@ -243,8 +243,8 @@ const mapTierToDb = (t) => ({ id: t.id, name: t.name, fit: t.fit, ventilation: t
 // bežný select, ani cez Realtime — pozri migration_bezpecnost_pin_a_hesla.sql). Namiesto surovej hodnoty
 // appka pracuje len s booleovskými príznakmi has_password/has_pin/has_signup_token z pohľadu employees_public.
 // PIN sa odteraz overuje a nastavuje výlučne cez Edge Functions (verify-station-pin, employee-pin).
-const mapEmployeeFromDb = (r) => ({ id: r.id, firstName: r.first_name, lastName: r.last_name, birthday: r.birthday, nameday: r.nameday, entryDate: r.entry_date, role: r.role, position: r.position, hasPassword: !!r.has_password, phone: r.phone || '', email: r.email || '', avatar: r.avatar || '', hasPin: !!r.has_pin, authUserId: r.auth_user_id || '', hasSignupToken: !!r.has_signup_token, signupTokenExpires: r.signup_token_expires || null });
-const mapEmployeeToDb = (e) => ({ id: e.id, first_name: e.firstName, last_name: e.lastName, birthday: e.birthday, nameday: e.nameday, entry_date: e.entryDate, role: e.role, position: e.position, phone: e.phone || null, email: e.email || null, avatar: e.avatar || null, auth_user_id: e.authUserId || null });
+const mapEmployeeFromDb = (r) => ({ id: r.id, firstName: r.first_name, lastName: r.last_name, birthday: r.birthday, nameday: r.nameday, entryDate: r.entry_date, role: r.role, position: r.position, hasPassword: !!r.has_password, phone: r.phone || '', email: r.email || '', avatar: r.avatar || '', hasPin: !!r.has_pin, authUserId: r.auth_user_id || '', hasSignupToken: !!r.has_signup_token, signupTokenExpires: r.signup_token_expires || null, company: r.company || '', mzdaHruba: r.mzda_hruba ?? null, socialnePoistenie: r.socialne_poistenie ?? null, zdravotnePoistenie: r.zdravotne_poistenie ?? null });
+const mapEmployeeToDb = (e) => ({ id: e.id, first_name: e.firstName, last_name: e.lastName, birthday: e.birthday, nameday: e.nameday, entry_date: e.entryDate, role: e.role, position: e.position, phone: e.phone || null, email: e.email || null, avatar: e.avatar || null, auth_user_id: e.authUserId || null, company: e.company || null, mzda_hruba: e.mzdaHruba === '' || e.mzdaHruba == null ? null : parseFloat(e.mzdaHruba), socialne_poistenie: e.socialnePoistenie === '' || e.socialnePoistenie == null ? null : parseFloat(e.socialnePoistenie), zdravotne_poistenie: e.zdravotnePoistenie === '' || e.zdravotnePoistenie == null ? null : parseFloat(e.zdravotnePoistenie) });
 
 const mapOrderFromDb = (r) => ({ id: r.id, customer: r.customer, createdAt: r.created_at, deliveryDate: r.scheduled_day, driveLink: r.drive_link, notes: r.notes, paymentType: r.payment_type || 'faktura', items: r.items || [], orderLog: r.order_log || [], legacyOrderNumber: r.legacy_order_number || '', companyBrand: r.company_brand || 'ATAK', orderNumber: r.order_number || '', accountingStatus: r.accounting_status || null, lastModifiedAt: r.last_modified_at || null, lastModifiedNote: r.last_modified_note || '', variableSymbol: r.variable_symbol || '', expectedAmount: r.expected_amount ?? null, variableSymbolConfirmed: !!r.variable_symbol_confirmed });
 const mapOrderToDb = (o) => ({ id: o.id, customer: o.customer, created_at: o.createdAt, scheduled_day: o.deliveryDate, drive_link: o.driveLink, notes: o.notes, payment_type: o.paymentType, items: o.items, order_log: o.orderLog || [], legacy_order_number: o.legacyOrderNumber || null, company_brand: o.companyBrand || 'ATAK', order_number: o.orderNumber || null, accounting_status: o.accountingStatus || null, last_modified_at: o.lastModifiedAt || null, last_modified_note: o.lastModifiedNote || null, variable_symbol: o.variableSymbol || null, expected_amount: o.expectedAmount ?? null, variable_symbol_confirmed: o.variableSymbolConfirmed ?? false });
@@ -640,8 +640,8 @@ const mapTierRuleFromDb = (r) => ({ tier: r.tier, sortOrder: r.sort_order, minOr
 const TIER_LABELS = { standard: 'Standard', bronze: 'Bronze', silver: 'Silver', gold: 'Gold' };
 const TIER_COLORS = { standard: 'bg-slate-700 text-slate-200', bronze: 'bg-amber-800 text-amber-100', silver: 'bg-slate-400 text-slate-900', gold: 'bg-yellow-500 text-yellow-950' };
 
-const mapCostMetricFromDb = (r) => ({ id: r.id, name: r.name, value: r.value || 0, unit: r.unit || '', description: r.description || '', category: r.category || 'vseobecne', powerKw: r.power_kw, hoursPerMonth: r.hours_per_month, costType: r.cost_type || 'fixny' });
-const mapCostMetricToDb = (m) => ({ id: m.id, name: m.name, value: m.value, unit: m.unit || null, description: m.description || null, category: m.category || 'vseobecne', power_kw: m.powerKw ?? null, hours_per_month: m.hoursPerMonth ?? null, cost_type: m.costType || 'fixny' });
+const mapCostMetricFromDb = (r) => ({ id: r.id, name: r.name, value: r.value || 0, unit: r.unit || '', description: r.description || '', category: r.category || 'vseobecne', powerKw: r.power_kw, hoursPerMonth: r.hours_per_month, costType: r.cost_type || 'fixny', company: r.company || '' });
+const mapCostMetricToDb = (m) => ({ id: m.id, name: m.name, value: m.value, unit: m.unit || null, description: m.description || null, category: m.category || 'vseobecne', power_kw: m.powerKw ?? null, hours_per_month: m.hoursPerMonth ?? null, cost_type: m.costType || 'fixny', company: m.company || null });
 
 // Mesačný náklad zariadenia = výkon (kW) × hodiny prevádzky za mesiac × cena elektriny/plynu (podľa kategórie).
 function calculateDeviceMonthlyCost(metric, allMetrics) {
@@ -1068,6 +1068,7 @@ export default function App() {
   const [aiPrompt, setAiPrompt] = useState('');
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [financeSubTab, setFinanceSubTab] = useState('overview');
+  const [overheadCompany, setOverheadCompany] = useState('ATAK');
   const [taxDeadlines, setTaxDeadlines] = useState([]);
   const [newDeadlineTitle, setNewDeadlineTitle] = useState('');
   const [newDeadlineDate, setNewDeadlineDate] = useState('');
@@ -1091,6 +1092,11 @@ export default function App() {
   const [newMetricCostType, setNewMetricCostType] = useState('fixny');
   const [newMetricPowerKw, setNewMetricPowerKw] = useState('');
   const [newMetricHoursPerMonth, setNewMetricHoursPerMonth] = useState('');
+  const [newMetricCompany, setNewMetricCompany] = useState('');
+  const [najomName, setNajomName] = useState(''); const [najomValue, setNajomValue] = useState('');
+  const [splatkyName, setSplatkyName] = useState(''); const [splatkyValue, setSplatkyValue] = useState('');
+  const [uverName, setUverName] = useState(''); const [uverValue, setUverValue] = useState('');
+  const [materialName, setMaterialName] = useState(''); const [materialValue, setMaterialValue] = useState('');
   const [tierRules, setTierRules] = useState([]);
   const [travelOrders, setTravelOrders] = useState([]);
   const [showAddTravelOrderForm, setShowAddTravelOrderForm] = useState(false);
@@ -2737,11 +2743,12 @@ export default function App() {
     const created = {
       id: `metric-${Date.now()}`, name: newMetricName.trim(), value: parseFloat(newMetricValue) || 0, unit: newMetricUnit.trim(), description: newMetricDescription.trim(),
       category: newMetricCategory, costType: newMetricCostType,
-      powerKw: newMetricPowerKw.trim() ? parseFloat(newMetricPowerKw) : null, hoursPerMonth: newMetricHoursPerMonth.trim() ? parseFloat(newMetricHoursPerMonth) : null
+      powerKw: newMetricPowerKw.trim() ? parseFloat(newMetricPowerKw) : null, hoursPerMonth: newMetricHoursPerMonth.trim() ? parseFloat(newMetricHoursPerMonth) : null,
+      company: newMetricCompany || null
     };
     const { error } = await supabase.from('cost_metrics').insert(mapCostMetricToDb(created));
     if (error) { triggerNotification('error', error.message); return; }
-    setNewMetricName(''); setNewMetricValue(''); setNewMetricUnit(''); setNewMetricDescription(''); setNewMetricCategory('vseobecne'); setNewMetricCostType('fixny'); setNewMetricPowerKw(''); setNewMetricHoursPerMonth('');
+    setNewMetricName(''); setNewMetricValue(''); setNewMetricUnit(''); setNewMetricDescription(''); setNewMetricCategory('vseobecne'); setNewMetricCostType('fixny'); setNewMetricPowerKw(''); setNewMetricHoursPerMonth(''); setNewMetricCompany('');
     triggerNotification('success', `Metrika "${created.name}" bola pridaná.`);
   };
 
@@ -2750,6 +2757,7 @@ export default function App() {
     let parsedValue = value;
     if (field === 'value') parsedValue = parseFloat(value) || 0;
     else if (field === 'power_kw' || field === 'hours_per_month') parsedValue = value.trim() === '' ? null : (parseFloat(value) || 0);
+    else if (field === 'company') parsedValue = value === '' ? null : value;
     const { error } = await supabase.from('cost_metrics').update({ [field]: parsedValue }).eq('id', id);
     if (error) triggerNotification('error', error.message);
   };
@@ -2759,6 +2767,18 @@ export default function App() {
     if (!confirm(`Zmazať metriku "${metric.name}"?`)) return;
     const { error } = await supabase.from('cost_metrics').delete().eq('id', metric.id);
     if (error) triggerNotification('error', error.message);
+  };
+
+  // Rychle pridanie jednoduchej mesacnej polozky (najom/splatky/uver/material) v karte Rezia firiem —
+  // rovnaka cost_metrics tabulka, len bez kW/hodin, priamo naviazane na aktualne vybranu firmu.
+  const handleQuickAddOverheadCost = async (nazov, hodnota, kategoria, resetFn) => {
+    if (!hasPermission('create_order')) { triggerNotification('error', 'Nemáte prístup do správy nákladov.'); return; }
+    if (!nazov.trim()) { alert('Zadajte názov.'); return; }
+    const created = { id: `metric-${Date.now()}`, name: nazov.trim(), value: parseFloat(hodnota) || 0, unit: '€/mesiac', description: '', category: kategoria, costType: 'fixny', powerKw: null, hoursPerMonth: null, company: overheadCompany };
+    const { error } = await supabase.from('cost_metrics').insert(mapCostMetricToDb(created));
+    if (error) { triggerNotification('error', error.message); return; }
+    resetFn();
+    triggerNotification('success', `"${created.name}" bola pridaná.`);
   };
 
   // --- ZÁKAZNÍCKY REBRÍČEK (Standard/Bronze/Silver/Gold) ---
@@ -8162,6 +8182,34 @@ export default function App() {
                       </div>
                     </div>
                     <div><label className="text-slate-400 block mb-0.5">Dátum nástupu</label><input type="date" value={editingEmployee ? editingEmployee.entryDate : newEmpEntryDate} onChange={(e) => editingEmployee ? setEditingEmployee({ ...editingEmployee, entryDate: e.target.value }) : setNewEmpEntryDate(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" /></div>
+                    {editingEmployee && (
+                      <div className="border-t border-slate-850 pt-2 mt-1">
+                        <p className="text-[10px] text-slate-500 mb-1.5">Pre prehľad réžie firmy (Financie → Réžia firiem) — voliteľné, vidí len Master.</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-slate-400 block mb-0.5">Firma</label>
+                            <select value={editingEmployee.company || ''} onChange={(e) => setEditingEmployee({ ...editingEmployee, company: e.target.value })} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white">
+                              <option value="">—</option>
+                              <option value="ATAK">ATAK</option>
+                              <option value="PBT">PBT</option>
+                              <option value="ADY">ADY</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-slate-400 block mb-0.5">Mzda hrubá (€/mes.)</label>
+                            <input type="number" step="0.01" value={editingEmployee.mzdaHruba ?? ''} onChange={(e) => setEditingEmployee({ ...editingEmployee, mzdaHruba: e.target.value })} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" />
+                          </div>
+                          <div>
+                            <label className="text-slate-400 block mb-0.5">Sociálne poistenie (€/mes.)</label>
+                            <input type="number" step="0.01" value={editingEmployee.socialnePoistenie ?? ''} onChange={(e) => setEditingEmployee({ ...editingEmployee, socialnePoistenie: e.target.value })} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" />
+                          </div>
+                          <div>
+                            <label className="text-slate-400 block mb-0.5">Zdravotné poistenie (€/mes.)</label>
+                            <input type="number" step="0.01" value={editingEmployee.zdravotnePoistenie ?? ''} onChange={(e) => setEditingEmployee({ ...editingEmployee, zdravotnePoistenie: e.target.value })} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" />
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <label className="text-slate-400 block mb-0.5">Dátum narodenia</label>
@@ -8548,24 +8596,36 @@ export default function App() {
                 <table className="w-full text-left text-xs text-slate-300">
                   <thead className="bg-slate-900 text-slate-400 uppercase tracking-wider">
                     <tr>
-                      <th className="px-3 py-3">Názov</th><th className="px-3 py-3 text-center">Kategória</th><th className="px-3 py-3 text-center">Typ</th>
+                      <th className="px-3 py-3">Názov</th><th className="px-3 py-3 text-center">Firma</th><th className="px-3 py-3 text-center">Kategória</th><th className="px-3 py-3 text-center">Typ</th>
                       <th className="px-3 py-3 text-center">Hodnota</th><th className="px-3 py-3 text-center">Jednotka</th>
                       <th className="px-3 py-3 text-center">Výkon (kW)</th><th className="px-3 py-3 text-center">Hod./mesiac</th>
                       <th className="px-3 py-3 text-center">Mesačný náklad</th><th className="px-3 py-3">Popis / vzorec / zdroj</th><th className="px-3 py-3"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800">
-                    {costMetrics.length === 0 && (<tr><td colSpan={10} className="px-4 py-6 text-center text-slate-500 italic">Zatiaľ žiadne metriky.</td></tr>)}
+                    {costMetrics.length === 0 && (<tr><td colSpan={11} className="px-4 py-6 text-center text-slate-500 italic">Zatiaľ žiadne metriky.</td></tr>)}
                     {costMetrics.map(m => {
                       const monthlyCost = calculateDeviceMonthlyCost(m, costMetrics);
                       return (
                         <tr key={m.id} className="hover:bg-slate-800/40">
                           <td className="px-3 py-3"><input type="text" defaultValue={m.name} onBlur={(e) => handleUpdateCostMetric(m.id, 'name', e.target.value)} className="w-32 bg-slate-950 border border-slate-800 rounded p-1 font-bold text-white" /></td>
                           <td className="px-3 py-3 text-center">
+                            <select defaultValue={m.company || ''} onChange={(e) => handleUpdateCostMetric(m.id, 'company', e.target.value)} className="bg-slate-950 border border-slate-800 rounded p-1 text-white">
+                              <option value="">Spoločné</option>
+                              <option value="ATAK">ATAK</option>
+                              <option value="PBT">PBT</option>
+                              <option value="ADY">ADY</option>
+                            </select>
+                          </td>
+                          <td className="px-3 py-3 text-center">
                             <select defaultValue={m.category} onChange={(e) => handleUpdateCostMetric(m.id, 'category', e.target.value)} className="bg-slate-950 border border-slate-800 rounded p-1 text-white">
                               <option value="vseobecne">Všeobecné</option>
                               <option value="zariadenie">Zariadenie</option>
                               <option value="kurenie">Kúrenie (plyn)</option>
+                              <option value="najom">Nájom</option>
+                              <option value="splatky_strojov">Splátky strojov</option>
+                              <option value="uver">Úver</option>
+                              <option value="material">Materiál</option>
                             </select>
                           </td>
                           <td className="px-3 py-3 text-center">
@@ -8588,7 +8648,7 @@ export default function App() {
                   {costMetrics.some(m => calculateDeviceMonthlyCost(m, costMetrics) !== null) && (
                     <tfoot>
                       <tr className="border-t border-slate-700 bg-slate-900/60">
-                        <td colSpan={7} className="px-3 py-2 text-right font-bold text-slate-400 uppercase text-[10px]">Spolu energie / mesiac (orientačne)</td>
+                        <td colSpan={8} className="px-3 py-2 text-right font-bold text-slate-400 uppercase text-[10px]">Spolu energie / mesiac (orientačne)</td>
                         <td className="px-3 py-2 text-center font-extrabold text-emerald-400">{costMetrics.reduce((s, m) => s + (calculateDeviceMonthlyCost(m, costMetrics) || 0), 0).toFixed(2)} €</td>
                         <td colSpan={2}></td>
                       </tr>
@@ -8598,10 +8658,20 @@ export default function App() {
               </div>
               <form onSubmit={handleAddCostMetric} className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
                 <input type="text" required value={newMetricName} onChange={(e) => setNewMetricName(e.target.value)} placeholder="Názov" className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white col-span-2" />
+                <select value={newMetricCompany} onChange={(e) => setNewMetricCompany(e.target.value)} className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-2 text-xs text-white">
+                  <option value="">Spoločné</option>
+                  <option value="ATAK">ATAK</option>
+                  <option value="PBT">PBT</option>
+                  <option value="ADY">ADY</option>
+                </select>
                 <select value={newMetricCategory} onChange={(e) => setNewMetricCategory(e.target.value)} className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-2 text-xs text-white">
                   <option value="vseobecne">Všeobecné</option>
                   <option value="zariadenie">Zariadenie</option>
                   <option value="kurenie">Kúrenie (plyn)</option>
+                  <option value="najom">Nájom</option>
+                  <option value="splatky_strojov">Splátky strojov</option>
+                  <option value="uver">Úver</option>
+                  <option value="material">Materiál</option>
                 </select>
                 <select value={newMetricCostType} onChange={(e) => setNewMetricCostType(e.target.value)} className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-2 text-xs text-white">
                   <option value="fixny">Fixný</option>
@@ -9003,6 +9073,9 @@ export default function App() {
                 <button onClick={() => setFinanceSubTab('customers')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'customers' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Zákazníci</button>
                 {currentUser.role === 'master' && (
                   <button onClick={() => setFinanceSubTab('intercompany')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'intercompany' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Medzifiremné (ATAK↔PBT)</button>
+                )}
+                {currentUser.role === 'master' && (
+                  <button onClick={() => setFinanceSubTab('overhead')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'overhead' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Réžia firiem</button>
                 )}
                 <button onClick={() => setFinanceSubTab('ai')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap flex items-center gap-1 ${financeSubTab === 'ai' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}><Bot className="h-3.5 w-3.5" /> AI Asistent</button>
               </div>
@@ -9554,6 +9627,169 @@ export default function App() {
                         </table>
                       </div>
                     </div>
+                  </div>
+                );
+              })()}
+
+              {financeSubTab === 'overhead' && currentUser.role === 'master' && (() => {
+                const COMPANIES = ['ATAK', 'PBT', 'ADY'];
+                const patriFirme = (m) => (m.company || '') === overheadCompany || !m.company;
+                const zariadenia = costMetrics.filter(m => m.category === 'zariadenie' && patriFirme(m));
+                const kurenie = costMetrics.filter(m => m.category === 'kurenie' && patriFirme(m));
+                const najom = costMetrics.filter(m => m.category === 'najom' && patriFirme(m));
+                const splatky = costMetrics.filter(m => m.category === 'splatky_strojov' && patriFirme(m));
+                const uvery = costMetrics.filter(m => m.category === 'uver' && patriFirme(m));
+                const material = costMetrics.filter(m => m.category === 'material' && patriFirme(m));
+                const zamestnanciFirmy = employees.filter(e => (e.company || '') === overheadCompany);
+
+                const sucetZariadenia = zariadenia.reduce((s, m) => s + (calculateDeviceMonthlyCost(m, costMetrics) || 0), 0);
+                const sucetKurenie = kurenie.reduce((s, m) => s + (calculateDeviceMonthlyCost(m, costMetrics) || 0), 0);
+                const sucet = (list) => list.reduce((s, m) => s + (m.value || 0), 0);
+                const sucetNajom = sucet(najom), sucetSplatky = sucet(splatky), sucetUvery = sucet(uvery), sucetMaterial = sucet(material);
+                const sucetMzdy = zamestnanciFirmy.reduce((s, e) => s + (e.mzdaHruba || 0) + (e.socialnePoistenie || 0) + (e.zdravotnePoistenie || 0), 0);
+                const celkovaRezia = sucetZariadenia + sucetKurenie + sucetNajom + sucetSplatky + sucetUvery + sucetMaterial + sucetMzdy;
+
+                const reziaFirmy = (firma) => {
+                  const fc = (m) => (m.company || '') === firma || !m.company;
+                  const z = costMetrics.filter(m => m.category === 'zariadenie' && fc(m)).reduce((s, m) => s + (calculateDeviceMonthlyCost(m, costMetrics) || 0), 0);
+                  const k = costMetrics.filter(m => m.category === 'kurenie' && fc(m)).reduce((s, m) => s + (calculateDeviceMonthlyCost(m, costMetrics) || 0), 0);
+                  const rest = costMetrics.filter(m => ['najom', 'splatky_strojov', 'uver', 'material'].includes(m.category) && fc(m)).reduce((s, m) => s + (m.value || 0), 0);
+                  const mzdy = employees.filter(e => (e.company || '') === firma).reduce((s, e) => s + (e.mzdaHruba || 0) + (e.socialnePoistenie || 0) + (e.zdravotnePoistenie || 0), 0);
+                  return z + k + rest + mzdy;
+                };
+
+                const JednoduchaKategoria = ({ titul, zoznam, nazovState, setNazov, hodnotaState, setHodnota, kategoria }) => (
+                  <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-bold text-sm text-white">{titul}</h3>
+                      <span className="text-xs font-mono font-bold text-emerald-400">{sucet(zoznam).toFixed(2)} €/mes.</span>
+                    </div>
+                    <div className="space-y-1.5 mb-3">
+                      {zoznam.length === 0 && <p className="text-xs text-slate-500 italic">Zatiaľ žiadne položky.</p>}
+                      {zoznam.map(m => (
+                        <div key={m.id} className="flex items-center gap-2 text-xs bg-slate-900 border border-slate-800 rounded-lg p-2">
+                          <input type="text" defaultValue={m.name} onBlur={(e) => handleUpdateCostMetric(m.id, 'name', e.target.value)} className="flex-1 bg-slate-950 border border-slate-800 rounded p-1.5 text-white" />
+                          <input type="number" step="0.01" defaultValue={m.value} onBlur={(e) => handleUpdateCostMetric(m.id, 'value', e.target.value)} className="w-24 bg-slate-950 border border-slate-800 rounded p-1.5 text-center text-white" />
+                          <span className="text-slate-500 w-16">€/mes.</span>
+                          {!m.company && <span className="text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded shrink-0">spoločné</span>}
+                          <button onClick={() => handleDeleteCostMetric(m)} className="text-rose-400 hover:text-rose-300 shrink-0"><Trash2 className="h-3.5 w-3.5" /></button>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex gap-2">
+                      <input type="text" value={nazovState} onChange={(e) => setNazov(e.target.value)} placeholder="Názov položky" className="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white" />
+                      <input type="number" step="0.01" value={hodnotaState} onChange={(e) => setHodnota(e.target.value)} placeholder="€/mes." className="w-24 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white" />
+                      <button onClick={() => handleQuickAddOverheadCost(nazovState, hodnotaState, kategoria, () => { setNazov(''); setHodnota(''); })} className="bg-indigo-600 hover:bg-indigo-700 text-white p-1.5 rounded-lg shrink-0"><Plus className="h-3.5 w-3.5" /></button>
+                    </div>
+                  </div>
+                );
+
+                return (
+                  <div className="space-y-6">
+                    <div className="flex items-center gap-2 bg-slate-900 p-1.5 rounded-xl border border-slate-800 w-fit">
+                      {COMPANIES.map(c => (
+                        <button key={c} onClick={() => setOverheadCompany(c)} className={`px-4 py-1.5 rounded-lg text-xs font-bold ${overheadCompany === c ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>{c}</button>
+                      ))}
+                    </div>
+
+                    <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800">
+                      <div className="flex items-center justify-between mb-1">
+                        <h3 className="font-bold text-sm text-white flex items-center gap-2"><Users className="text-indigo-400 h-4 w-4" /> Zamestnanci — mzdy ({overheadCompany})</h3>
+                        <span className="text-xs font-mono font-bold text-emerald-400">{sucetMzdy.toFixed(2)} €/mes.</span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 mb-3">Priradenie firmy a súm sa upravuje pri zamestnancovi v karte Zamestnanci & Práva.</p>
+                      {zamestnanciFirmy.length === 0 ? (
+                        <p className="text-xs text-slate-500 italic">Žiadny zamestnanec zatiaľ nemá priradenú firmu "{overheadCompany}".</p>
+                      ) : (
+                        <div className="overflow-x-auto rounded-xl border border-slate-800">
+                          <table className="w-full text-left text-xs text-slate-300">
+                            <thead className="bg-slate-900 text-slate-400 uppercase tracking-wider">
+                              <tr><th className="px-3 py-2">Meno</th><th className="px-3 py-2 text-center">Mzda hrubá</th><th className="px-3 py-2 text-center">Sociálka</th><th className="px-3 py-2 text-center">Zdravotka</th><th className="px-3 py-2 text-center">Spolu</th></tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-800">
+                              {zamestnanciFirmy.map(e => {
+                                const spolu = (e.mzdaHruba || 0) + (e.socialnePoistenie || 0) + (e.zdravotnePoistenie || 0);
+                                return (
+                                  <tr key={e.id}>
+                                    <td className="px-3 py-2 font-bold text-white">{e.firstName} {e.lastName}</td>
+                                    <td className="px-3 py-2 text-center">{(e.mzdaHruba || 0).toFixed(2)} €</td>
+                                    <td className="px-3 py-2 text-center">{(e.socialnePoistenie || 0).toFixed(2)} €</td>
+                                    <td className="px-3 py-2 text-center">{(e.zdravotnePoistenie || 0).toFixed(2)} €</td>
+                                    <td className="px-3 py-2 text-center font-bold text-emerald-400">{spolu.toFixed(2)} €</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800">
+                      <div className="flex items-center justify-between mb-1">
+                        <h3 className="font-bold text-sm text-white">Elektrina — zariadenia ({overheadCompany})</h3>
+                        <span className="text-xs font-mono font-bold text-emerald-400">{sucetZariadenia.toFixed(2)} €/mes.</span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 mb-3">Pridávanie/úprava zariadení a ceny elektriny je v Prehľady → Všeobecná tabuľka nákladov. Tu len priradíš firmu ku každému riadku a vidíš % podiel.</p>
+                      {zariadenia.length === 0 ? (
+                        <p className="text-xs text-slate-500 italic">Žiadne zariadenie zatiaľ nemá priradenú túto firmu (ani "spoločné").</p>
+                      ) : (
+                        <div className="overflow-x-auto rounded-xl border border-slate-800">
+                          <table className="w-full text-left text-xs text-slate-300">
+                            <thead className="bg-slate-900 text-slate-400 uppercase tracking-wider">
+                              <tr><th className="px-3 py-2">Zariadenie</th><th className="px-3 py-2 text-center">kW</th><th className="px-3 py-2 text-center">Hod./mes.</th><th className="px-3 py-2 text-center">Náklad/mes.</th><th className="px-3 py-2 text-center">% z celku</th></tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-800">
+                              {zariadenia.map(m => {
+                                const naklad = calculateDeviceMonthlyCost(m, costMetrics) || 0;
+                                const percent = sucetZariadenia > 0 ? (naklad / sucetZariadenia) * 100 : 0;
+                                return (
+                                  <tr key={m.id}>
+                                    <td className="px-3 py-2 font-bold text-white">{m.name}{!m.company && <span className="ml-1.5 text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded">spoločné</span>}</td>
+                                    <td className="px-3 py-2 text-center">{m.powerKw ?? '—'}</td>
+                                    <td className="px-3 py-2 text-center">{m.hoursPerMonth ?? '—'}</td>
+                                    <td className="px-3 py-2 text-center font-bold text-emerald-400">{naklad.toFixed(2)} €</td>
+                                    <td className="px-3 py-2 text-center">{percent.toFixed(0)}%</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+
+                    {kurenie.length > 0 && (
+                      <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800">
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="font-bold text-sm text-white">Kúrenie (plyn) — {overheadCompany}</h3>
+                          <span className="text-xs font-mono font-bold text-emerald-400">{sucetKurenie.toFixed(2)} €/mes.</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500">Aktívne len v chladných mesiacoch — mimo sezóny nastav v Prehľady "Hod./mesiac" na 0.</p>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      <JednoduchaKategoria titul="Nájom" zoznam={najom} nazovState={najomName} setNazov={setNajomName} hodnotaState={najomValue} setHodnota={setNajomValue} kategoria="najom" />
+                      <JednoduchaKategoria titul="Splátky strojov" zoznam={splatky} nazovState={splatkyName} setNazov={setSplatkyName} hodnotaState={splatkyValue} setHodnota={setSplatkyValue} kategoria="splatky_strojov" />
+                      <JednoduchaKategoria titul="Úvery" zoznam={uvery} nazovState={uverName} setNazov={setUverName} hodnotaState={uverValue} setHodnota={setUverValue} kategoria="uver" />
+                      <JednoduchaKategoria titul="Materiál (farby, papiere, fólie...)" zoznam={material} nazovState={materialName} setNazov={setMaterialName} hodnotaState={materialValue} setHodnota={setMaterialValue} kategoria="material" />
+                    </div>
+
+                    <div className="bg-slate-950 p-5 rounded-2xl border border-indigo-900/40">
+                      <h3 className="font-bold text-sm text-white mb-3">Celková réžia / mesiac</h3>
+                      <div className="grid grid-cols-3 gap-3">
+                        {COMPANIES.map(c => (
+                          <div key={c} className={`p-3 rounded-xl border ${c === overheadCompany ? 'bg-indigo-950/30 border-indigo-800/40' : 'bg-slate-900 border-slate-800'}`}>
+                            <span className="text-xs font-bold text-slate-400 block mb-1">{c}</span>
+                            <span className="text-lg font-black text-emerald-400">{reziaFirmy(c).toFixed(2)} €</span>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-3">Vybraná firma ({overheadCompany}) rozpísaná vyššie: mzdy {sucetMzdy.toFixed(2)}€ + elektrina {sucetZariadenia.toFixed(2)}€ + kúrenie {sucetKurenie.toFixed(2)}€ + nájom {sucetNajom.toFixed(2)}€ + splátky {sucetSplatky.toFixed(2)}€ + úvery {sucetUvery.toFixed(2)}€ + materiál {sucetMaterial.toFixed(2)}€ = <strong className="text-emerald-400">{celkovaRezia.toFixed(2)}€</strong></p>
+                    </div>
+
+                    <p className="text-[11px] text-slate-500 italic">Plánované ako ďalší krok: prepojenie výkonu jednotlivých strojov na reálnu produkciu/tržby — zatiaľ táto karta sleduje len náklady.</p>
                   </div>
                 );
               })()}
