@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Banknote, Calculator, TrendingUp } from 'lucide-react';
 import { vypocitajCenuPotlace } from './cenotvorba';
 import { priceAt, marginAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
+import { vcSublimaciaGarment as vcSublimaciaGarmentZo, vcDtfGarment as vcDtfGarmentZo, vcVysivka as vcVysivkaZo, nakladFarbySietotlac, vcSietotlacZaklad, plochaFormatuSietotlac, vcRezanyTransfer as vcRezanyTransferZo } from './vyrobneNaklady';
 
 const inputCls = 'w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white';
 const labelCls = 'text-xs text-slate-400 font-medium';
@@ -122,62 +123,24 @@ export default function PotlaceTab({ supabase }) {
   const ks = Math.max(1, parseInt(testKs) || 1);
   const vysledok = vypocitajCenuPotlace(cennikProKalkulacku, testTech, plocha, parseInt(testFarby) || 1, testTmavyTextil, testFoliaId);
 
-  // --- Vyrobne ceny (VC) — vsetky vzorce cita ZIVO z Kostra cien, nic sa tu nezaduva duplicitne ---
-  const plochaM2 = plocha / 10000;
+  // --- Vyrobne ceny (VC) — vzorce zdielane s Cenovymi ponukami cez vyrobneNaklady.js, nic sa tu
+  // uz nezaduva duplicitne (viackrat sposobilo nezhodu cien medzi appkami).
+  const kostraLive = { textilSub, sublimaciaGarment, dtf: dtfNaklady, sietotlac, sietotlacVelkosti, rezany, folie, vysivkaNaklady };
 
-  const vcSublimacia = textilSub && sublimaciaGarment ? (() => {
-    // Papier sa reze z tej istej 160cm rolky podla plochy motivu (nie samostatna "sirka pre tricka")
-    const cenaPapierCm2 = ((parseFloat(textilSub.cena_papier_bm) || 0) / 160) / 100;
-    const cenaAtramentCm2 = (((parseFloat(textilSub.cena_atrament_l) || 0) / 1000) * (parseFloat(textilSub.spotreba_atrament_ml_m2) || 0)) / 10000;
-    const praca = ((parseFloat(sublimaciaGarment.cas_nazehlovania_min) || 0) / 60) * (parseFloat(textilSub.cena_prace_hod) || 0);
-    const zaklad = plocha * (cenaPapierCm2 + cenaAtramentCm2) + (parseFloat(sublimaciaGarment.naklady_manipulacia) || 0) + (parseFloat(sublimaciaGarment.naklady_ochranny_papier) || 0) + praca;
-    return zaklad * (1 + (parseFloat(sublimaciaGarment.koeficient_rizika_percent) || 0) / 100);
-  })() : 0;
-
-  const vcDtf = dtfNaklady ? (() => {
-    const n = dtfNaklady;
-    const material = plochaM2 * (
-      (parseFloat(n.cena_cmyk_kg) || 0) * (parseFloat(n.spotreba_cmyk_m2) || 0) +
-      (parseFloat(n.cena_biela_kg) || 0) * (parseFloat(n.spotreba_biela_m2) || 0) +
-      (parseFloat(n.cena_lepidlo_kg) || 0) * (parseFloat(n.spotreba_lepidlo_m2) || 0)
-    );
-    const praca = ((parseFloat(n.cas_nazehlovania_min) || 0) / 60) * (parseFloat(n.cena_prace_hod) || 0);
-    return material + (parseFloat(n.naklady_manipulacia) || 0) + praca;
-  })() : 0;
-
-  const vcVysivka = vysivkaNaklady ? (
-    (parseFloat(vysivkaNaklady.cena_digitalizacia) || 0) / ks + (parseFloat(vysivkaNaklady.cena_vysivky_cm2) || 0) * plocha
-  ) : 0;
+  const vcSublimacia = vcSublimaciaGarmentZo(kostraLive, plocha);
+  const vcDtf = vcDtfGarmentZo(kostraLive, plocha);
+  const vcVysivka = vcVysivkaZo(kostraLive, plocha, ks);
 
   const vybranaVelkost = sietotlacVelkosti.find(v => v.id === testVelkostId);
   const pocetFariebSiet = Math.max(1, parseInt(testFarby) || 1);
-  const baseGramazSiet = vybranaVelkost ? (parseFloat(testTmavyTextil ? vybranaVelkost.spotreba_g_tmavy : vybranaVelkost.spotreba_g_svetly) || 0) : 0;
-  // Kazda dalsia farba = dalsie sito (nasvietenie) + farba, so spotrebou znizujucou sa o 20% oproti
-  // predchadzajucej farbe (skusenostny odhad, over/priprav v testovacej kalkulacke nizsie).
-  const nakladFarbySiet = (n) => {
-    const gramazN = baseGramazSiet * Math.pow(0.8, n - 1);
-    const farbaCena = ((parseFloat(sietotlac.cena_farba_kg) || 0) / 1000) * gramazN;
-    const sitoCena = parseFloat(sietotlac.naklad_sito_zakazka) || 0;
-    return { n, gramaz: gramazN, farbaCena, sitoCena, spolu: farbaCena + sitoCena };
-  };
-  const sietotlacFarbyRozpad = vybranaVelkost ? Array.from({ length: pocetFariebSiet }, (_, i) => nakladFarbySiet(i + 1)) : [];
+  const sietotlacFarbyRozpad = vybranaVelkost ? Array.from({ length: pocetFariebSiet }, (_, i) => nakladFarbySietotlac(kostraLive, testVelkostId, testTmavyTextil, i + 1)) : [];
   // VC pre zakladnu predajnu sadzbu (cena_cm2) je vzdy len za 1. farbu — dalsie farby sa predavaju
   // cez samostatny "priplatok za farbu" nizsie, nie namiesane do zakladnej sadzby.
-  const vcSietotlac = vybranaVelkost ? nakladFarbySiet(1).spolu + (parseFloat(sietotlac.naklady_manipulacia) || 0) + (parseFloat(sietotlac.naklad_cistenie_zakazka) || 0) : 0;
-  const navrhPriplatokFarbaVC = vybranaVelkost ? nakladFarbySiet(2).spolu : 0;
-  const plochaSietotlacCm2 = vybranaVelkost ? (parseFloat(vybranaVelkost.sirka_cm) || 0) * (parseFloat(vybranaVelkost.vyska_cm) || 0) : 0;
+  const vcSietotlac = vybranaVelkost ? vcSietotlacZaklad(kostraLive, testVelkostId, testTmavyTextil) : 0;
+  const navrhPriplatokFarbaVC = vybranaVelkost ? nakladFarbySietotlac(kostraLive, testVelkostId, testTmavyTextil, 2).spolu : 0;
+  const plochaSietotlacCm2 = plochaFormatuSietotlac(kostraLive, testVelkostId);
 
-  const vybranaFolia = folie.find(f => f.id === testFoliaId);
-  const vcRezany = (() => {
-    const sirkaVyuz = parseFloat(rezany.sirka_vyuzitelna_cm) || 49;
-    const naklad_cm2 = vybranaFolia ? (((parseFloat(vybranaFolia.naklad_bm) || 0) / sirkaVyuz) / 100) : 0;
-    const material = plocha * naklad_cm2;
-    // Rezanie a vylupovanie zavisi od zlozitosti grafiky — zadava sa na 1cm², preto sa nasobi plochou.
-    // Nazehlovanie a manipulacia su fixne na kus.
-    const pracaCm2 = ((parseFloat(rezany.cas_rezania_min) || 0) + (parseFloat(rezany.cas_vylupovania_min) || 0)) / 60 * (parseFloat(rezany.cena_prace_hod) || 0) * plocha;
-    const pracaFlat = ((parseFloat(rezany.cas_nazehlovania_min) || 0) / 60) * (parseFloat(rezany.cena_prace_hod) || 0);
-    return material + (parseFloat(rezany.naklady_manipulacia) || 0) + pracaFlat + pracaCm2;
-  })();
+  const vcRezany = vcRezanyTransferZo(kostraLive, testFoliaId, plocha);
 
   if (isLoading) return <p className="text-sm text-slate-500">Načítavam…</p>;
 

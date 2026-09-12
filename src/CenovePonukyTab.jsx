@@ -3,6 +3,8 @@ import {
   FileText, Plus, Trash2, Copy, Eye, Code, Save, Search, FolderOpen,
   Image as ImageIcon, Upload, Award, ListChecks, Clock, ShoppingCart, Loader2, Paperclip, Download
 } from 'lucide-react';
+import { priceAt, marginAt } from './printstudio/pricingEngine';
+import { nacitajKostru, vcSublimaciaGarment, vcDtfGarment, vcVysivka, vcSietotlacCelkom, plochaFormatuSietotlac, vcRezanyTransfer } from './printstudio/vyrobneNaklady';
 
 // --- Lokálne konštanty (duplicitne s App.jsx, aby tento súbor zostal samostatný) ---
 const TIER_LABELS = { standard: 'Standard', bronze: 'Bronze', silver: 'Silver', gold: 'Gold' };
@@ -15,13 +17,17 @@ const TIER_COLORS = { standard: 'bg-slate-700 text-slate-200', bronze: 'bg-amber
 // a zalozka "Kalkulačka tlače") — v tomto vseobecnom cenniku pre "Vyrobu" preto uz nema byt.
 const PRICE_CATEGORIES = ['Vlajky', 'Beachvlajky', 'Ostatné'];
 
-// Metódy potlače pre kalkulačku - Flex a Sieťotlač majú voliteľný počet farieb (viac vrstiev = viac materiálu),
-// DTF a Výšivka majú cenu závislú len od veľkosti motívu.
+// Kalkulacka tlace pre cenove ponuky — cita VC ZIVO z tych istych Kostra cien tabuliek ako
+// zakaznicky konfigurator (viz src/printstudio/vyrobneNaklady.js), takze cena tu a cena na
+// eshope su vzdy pocitane rovnakym vzorcom, len s marzou naviazanou na REALNY pocet kusov
+// tejto konkretnej ponuky (nie zamrznuta eshop sadzba). Rezany transfer a Sietotlac maju
+// volitelny pocet farieb, ostatne maju cenu zavislu len od rozmeru motivu.
 const PRINT_METHODS = [
-  { id: 'flex', label: 'Flex fólia', colors: true },
-  { id: 'dtf', label: 'DTF', colors: false },
-  { id: 'sietotlac', label: 'Sieťotlač', colors: true },
-  { id: 'vysivka', label: 'Výšivka', colors: false },
+  { id: 'sublimacia', label: 'Sublimácia', colors: false, needsRozmer: true },
+  { id: 'dtf', label: 'DTF', colors: false, needsRozmer: true },
+  { id: 'sietotlac', label: 'Sieťotlač', colors: true, needsFormat: true },
+  { id: 'rezany', label: 'Rezaný transfer', colors: true, needsRozmer: true, needsFolia: true },
+  { id: 'vysivka', label: 'Výšivka', colors: false, needsRozmer: true },
 ];
 
 const mapPriceItemFromDb = (r) => ({ id: r.id, name: r.name, description: r.description || '', price: r.price || 0, sortOrder: r.sort_order || 0, category: r.category || 'Ostatné' });
@@ -51,8 +57,6 @@ const mapQuoteFromDb = (r) => ({ id: r.id, offerNumber: r.offer_number, quoteDat
 
 const mapCompanyFromDb = (r) => ({ id: r.id, name: r.name || '', address: r.address || '', ico: r.ico || '', dic: r.dic || '', icDph: r.ic_dph || '', email: r.email || '', phone: r.phone || '', logoUrl: r.logo_url || '', logoScale: r.logo_scale ?? 100, headingFont: r.heading_font || 'default', signatureName: r.signature_name || '', signatureRole: r.signature_role || '', sortOrder: r.sort_order || 0 });
 
-const mapPrintMaterialFromDb = (r) => ({ id: r.id, metoda: r.metoda, nazov: r.nazov, jednotka: r.jednotka || 'bm', cenaZaJednotku: r.cena_za_jednotku || 0, sortOrder: r.sort_order || 0 });
-const mapPrintSizeFromDb = (r) => ({ id: r.id, metoda: r.metoda, label: r.label, spotreba: r.spotreba || 0, sortOrder: r.sort_order || 0 });
 
 function escapeHtml(str) {
   if (str === null || str === undefined) return '';
@@ -342,11 +346,10 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
   const [newPriceItem, setNewPriceItem] = useState({ name: '', description: '', price: '', category: PRICE_CATEGORIES[0] });
   const [pricelistCategoryFilter, setPricelistCategoryFilter] = useState('ALL');
   const [companies, setCompanies] = useState([]);
-  const [printMaterials, setPrintMaterials] = useState([]);
-  const [printSizes, setPrintSizes] = useState([]);
+  const [kostra, setKostra] = useState(null);
   const [itemsMode, setItemsMode] = useState('vyroba');
-  const [calcMethod, setCalcMethod] = useState('flex');
-  const [calc, setCalc] = useState({ materialId: '', sizeId: '', farby: 1, ks: 1 });
+  const [calcMethod, setCalcMethod] = useState('sublimacia');
+  const [calc, setCalc] = useState({ sirka: 10, vyska: 10, ks: 1, farby: 1, tmavy: false, velkostId: '', foliaId: '' });
   const [documents, setDocuments] = useState([]);
   const [newDocumentDraft, setNewDocumentDraft] = useState({ category: DOCUMENT_CATEGORIES[0], name: '', description: '', file: null });
   const [isUploadingDocument, setIsUploadingDocument] = useState(false);
@@ -365,20 +368,18 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
   useEffect(() => {
     if (!supabase) { setLoading(false); return; }
     (async () => {
-      const [priceRes, quoteRes, companyRes, materialRes, sizeRes, documentRes] = await Promise.all([
+      const [priceRes, quoteRes, companyRes, documentRes, kostraData] = await Promise.all([
         supabase.from('quote_price_list').select('*').order('sort_order'),
         supabase.from('price_quotes').select('*').order('created_at', { ascending: false }),
         supabase.from('quote_companies').select('*').order('sort_order'),
-        supabase.from('quote_print_materials').select('*').order('sort_order'),
-        supabase.from('quote_print_sizes').select('*').order('sort_order'),
         supabase.from('quote_documents').select('*').order('sort_order'),
+        nacitajKostru(supabase),
       ]);
       setPriceList(priceRes.error ? [] : (priceRes.data || []).map(mapPriceItemFromDb));
       setQuotes(quoteRes.error ? [] : (quoteRes.data || []).map(mapQuoteFromDb));
       setCompanies(companyRes.error ? [] : (companyRes.data || []).map(mapCompanyFromDb));
-      setPrintMaterials(materialRes.error ? [] : (materialRes.data || []).map(mapPrintMaterialFromDb));
-      setPrintSizes(sizeRes.error ? [] : (sizeRes.data || []).map(mapPrintSizeFromDb));
       setDocuments(documentRes.error ? [] : (documentRes.data || []).map(mapDocumentFromDb));
+      setKostra(kostraData);
       setLoading(false);
     })();
   }, [supabase]);
@@ -390,27 +391,38 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
     }
   }, [companies]);
 
-  // Pri zmene metody v kalkulacke tlace vynulovat vyber materialu/velkosti na prvu dostupnu polozku danej metody.
+  // Pri zmene metody na Sietotlac/Rezany transfer predvybrat prvy dostupny format/typ folie z Kostry.
   useEffect(() => {
-    const mats = printMaterials.filter(m => m.metoda === calcMethod);
-    const sizes = printSizes.filter(s => s.metoda === calcMethod);
+    if (!kostra) return;
     setCalc(prev => ({
       ...prev,
-      materialId: mats.some(m => m.id === prev.materialId) ? prev.materialId : (mats[0]?.id || ''),
-      sizeId: sizes.some(s => s.id === prev.sizeId) ? prev.sizeId : (sizes[0]?.id || ''),
+      velkostId: kostra.sietotlacVelkosti.some(v => v.id === prev.velkostId) ? prev.velkostId : (kostra.sietotlacVelkosti[0]?.id || ''),
+      foliaId: kostra.folie.some(f => f.id === prev.foliaId) ? prev.foliaId : (kostra.folie[0]?.id || ''),
     }));
-  }, [calcMethod, printMaterials, printSizes]);
+  }, [calcMethod, kostra]);
 
   const totals = computeTotals(form);
   const selectedCompany = companies.find(c => c.id === form.companyId) || companies[0] || companySettings || {};
   const calcMethodDef = PRINT_METHODS.find(m => m.id === calcMethod);
-  const calcMaterialsForMethod = printMaterials.filter(m => m.metoda === calcMethod);
-  const calcSizesForMethod = printSizes.filter(s => s.metoda === calcMethod);
-  const calcMaterial = calcMaterialsForMethod.find(m => m.id === calc.materialId);
-  const calcSize = calcSizesForMethod.find(s => s.id === calc.sizeId);
+  const calcPlocha = Math.round((parseFloat(calc.sirka) || 0) * (parseFloat(calc.vyska) || 0) * 10) / 10;
   const calcFarby = calcMethodDef?.colors ? Math.max(1, Number(calc.farby) || 1) : 1;
   const calcKs = Math.max(1, Number(calc.ks) || 1);
-  const calcUnitPrice = (calcMaterial && calcSize) ? calcMaterial.cenaZaJednotku * calcSize.spotreba * calcFarby : 0;
+  // VC podla technologie — rovnake vzorce ako Kostra cien -> Potlace (src/printstudio/vyrobneNaklady.js),
+  // aby cena v ponuke a cena na eshope vzdy sedeli. Sietotlac pouziva format z Kostry namiesto volneho
+  // rozmeru (spotreba farby je viazana na format), Rezany transfer nasobi cely naklad poctom farieb
+  // (kazda farba = samostatna vrstva folie, rovnaky princip ako doterajsi zivy vzorec pre zakaznikov).
+  let calcVc = 0, calcPlochaPouzita = calcPlocha;
+  if (kostra) {
+    if (calcMethod === 'sublimacia') calcVc = vcSublimaciaGarment(kostra, calcPlocha);
+    else if (calcMethod === 'dtf') calcVc = vcDtfGarment(kostra, calcPlocha);
+    else if (calcMethod === 'vysivka') calcVc = vcVysivka(kostra, calcPlocha, calcKs);
+    else if (calcMethod === 'sietotlac') { calcVc = vcSietotlacCelkom(kostra, calc.velkostId, calc.tmavy, calcFarby); calcPlochaPouzita = plochaFormatuSietotlac(kostra, calc.velkostId); }
+    else if (calcMethod === 'rezany') calcVc = vcRezanyTransfer(kostra, calc.foliaId, calcPlocha) * calcFarby;
+  }
+  const calcUnitPrice = kostra ? priceAt(calcVc, calcKs, kostra.pricingConfig) : 0;
+  const calcMarza = kostra ? marginAt(calcVc, calcKs, kostra.pricingConfig) : 0;
+  const vybranyFormatSietotlac = kostra?.sietotlacVelkosti.find(v => v.id === calc.velkostId);
+  const vybranaFoliaRezany = kostra?.folie.find(f => f.id === calc.foliaId);
 
   const updateForm = (patch) => setForm(prev => ({ ...prev, ...patch }));
   const updateItem = (key, field, value) => setForm(prev => ({ ...prev, items: prev.items.map(it => it.key === key ? { ...it, [field]: value } : it) }));
@@ -436,10 +448,15 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
   };
 
   const addCalcItemToForm = () => {
-    if (!calcMaterial || !calcSize) return;
+    if (!kostra) return;
+    if (calcMethod === 'sietotlac' && !vybranyFormatSietotlac) return;
+    if (calcMethod === 'rezany' && !vybranaFoliaRezany) return;
+    const rozmerLabel = calcMethod === 'sietotlac' ? vybranyFormatSietotlac?.label : `${calc.sirka}×${calc.vyska}cm`;
     const farbyLabel = calcMethodDef?.colors ? ` — ${calcFarby}F` : '';
-    const title = `${calcMethodDef?.label || calcMethod} — ${calcSize.label} — ${calcMaterial.nazov}${farbyLabel}`;
-    const desc = `${calcMaterial.cenaZaJednotku.toFixed(2)} €/${calcMaterial.jednotka} × spotreba ${calcSize.spotreba}${calcMethodDef?.colors ? ` × ${calcFarby} farby` : ''} = ${calcUnitPrice.toFixed(2)} €/ks`;
+    const tmavyLabel = calcMethod === 'sietotlac' ? (calc.tmavy ? ' — tmavý textil' : ' — svetlý textil') : '';
+    const foliaLabel = calcMethod === 'rezany' ? ` — ${vybranaFoliaRezany?.nazov}` : '';
+    const title = `${calcMethodDef?.label || calcMethod} — ${rozmerLabel}${foliaLabel}${farbyLabel}${tmavyLabel}`;
+    const desc = `VC ${calcVc.toFixed(3)}€/ks × marža ${calcMarza.toFixed(0)}% (pri ${calcKs}ks) = ${calcUnitPrice.toFixed(2)} €/ks`;
     setForm(prev => ({ ...prev, items: [...prev.items, { key: `it-${Date.now()}`, title, desc, badge: '', price: Number(calcUnitPrice.toFixed(2)), qty: calcKs }] }));
     triggerNotification('success', 'Položka z kalkulačky tlače pridaná do ponuky.');
   };
@@ -708,43 +725,69 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
 
               {itemsMode === 'potlac' && (
                 <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 space-y-2.5">
-                  <div className="grid grid-cols-4 gap-1.5">
-                    {PRINT_METHODS.map(m => (
-                      <button key={m.id} onClick={() => setCalcMethod(m.id)} className={`px-2 py-1.5 rounded-md text-[11px] font-bold ${calcMethod === m.id ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-slate-400 hover:bg-slate-800'}`}>{m.label}</button>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className={labelCls}>Materiál</label>
-                      <select value={calc.materialId} onChange={(e) => setCalc(prev => ({ ...prev, materialId: e.target.value }))} className={inputCls}>
-                        {calcMaterialsForMethod.length === 0 && <option value="">-- žiadny materiál --</option>}
-                        {calcMaterialsForMethod.map(m => <option key={m.id} value={m.id}>{m.nazov} ({m.cenaZaJednotku.toFixed(2)} €/{m.jednotka})</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className={labelCls}>Veľkosť motívu</label>
-                      <select value={calc.sizeId} onChange={(e) => setCalc(prev => ({ ...prev, sizeId: e.target.value }))} className={inputCls}>
-                        {calcSizesForMethod.length === 0 && <option value="">-- žiadna veľkosť --</option>}
-                        {calcSizesForMethod.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {calcMethodDef?.colors && (
-                      <div>
-                        <label className={labelCls}>Počet farieb</label>
-                        <input type="number" min="1" value={calc.farby} onChange={(e) => setCalc(prev => ({ ...prev, farby: e.target.value }))} className={inputCls} placeholder="napr. 1 = 1F, 2 = 2F" />
+                  {!kostra ? (
+                    <p className="text-[11px] text-amber-400">Načítavam výrobné náklady z Kostra cien…</p>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-5 gap-1.5">
+                        {PRINT_METHODS.map(m => (
+                          <button key={m.id} onClick={() => setCalcMethod(m.id)} className={`px-2 py-1.5 rounded-md text-[11px] font-bold ${calcMethod === m.id ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-slate-400 hover:bg-slate-800'}`}>{m.label}</button>
+                        ))}
                       </div>
-                    )}
-                    <div>
-                      <label className={labelCls}>Počet kusov</label>
-                      <input type="number" min="1" value={calc.ks} onChange={(e) => setCalc(prev => ({ ...prev, ks: e.target.value }))} className={inputCls} />
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between bg-slate-900 border border-slate-800 rounded-lg px-3 py-2">
-                    <span className="text-[11px] text-slate-400">Cena za kus: <strong className="text-emerald-400">{fmtMoney(calcUnitPrice)}</strong> &nbsp;•&nbsp; Spolu ({calcKs} ks): <strong className="text-emerald-400">{fmtMoney(calcUnitPrice * calcKs)}</strong></span>
-                    <button onClick={addCalcItemToForm} disabled={!calcMaterial || !calcSize} className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center gap-1"><Plus className="h-3 w-3" /> Pridať do ponuky</button>
-                  </div>
+
+                      {calcMethodDef?.needsRozmer && (
+                        <div className="grid grid-cols-2 gap-2">
+                          <div><label className={labelCls}>Šírka (cm)</label><input type="number" value={calc.sirka} onChange={(e) => setCalc(prev => ({ ...prev, sirka: e.target.value }))} className={inputCls} /></div>
+                          <div><label className={labelCls}>Výška (cm)</label><input type="number" value={calc.vyska} onChange={(e) => setCalc(prev => ({ ...prev, vyska: e.target.value }))} className={inputCls} /></div>
+                        </div>
+                      )}
+
+                      {calcMethodDef?.needsFormat && (
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className={labelCls}>Formát</label>
+                            <select value={calc.velkostId} onChange={(e) => setCalc(prev => ({ ...prev, velkostId: e.target.value }))} className={inputCls}>
+                              {kostra.sietotlacVelkosti.length === 0 && <option value="">-- žiadny formát (pridaj v Kostra cien) --</option>}
+                              {kostra.sietotlacVelkosti.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
+                            </select>
+                          </div>
+                          <div className="flex items-end gap-1.5">
+                            <button onClick={() => setCalc(prev => ({ ...prev, tmavy: false }))} className={`flex-1 px-2 py-2 rounded-lg text-xs font-semibold border-2 ${!calc.tmavy ? 'border-indigo-500 bg-indigo-950/40 text-indigo-300' : 'border-slate-700 text-slate-400'}`}>Svetlý</button>
+                            <button onClick={() => setCalc(prev => ({ ...prev, tmavy: true }))} className={`flex-1 px-2 py-2 rounded-lg text-xs font-semibold border-2 ${calc.tmavy ? 'border-indigo-500 bg-indigo-950/40 text-indigo-300' : 'border-slate-700 text-slate-400'}`}>Tmavý</button>
+                          </div>
+                        </div>
+                      )}
+
+                      {calcMethodDef?.needsFolia && (
+                        <div>
+                          <label className={labelCls}>Typ fólie</label>
+                          <select value={calc.foliaId} onChange={(e) => setCalc(prev => ({ ...prev, foliaId: e.target.value }))} className={inputCls}>
+                            {kostra.folie.length === 0 && <option value="">-- žiadna fólia (pridaj v Kostra cien) --</option>}
+                            {kostra.folie.map(f => <option key={f.id} value={f.id}>{f.nazov}</option>)}
+                          </select>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-2 gap-2">
+                        {calcMethodDef?.colors && (
+                          <div>
+                            <label className={labelCls}>Počet farieb</label>
+                            <input type="number" min="1" value={calc.farby} onChange={(e) => setCalc(prev => ({ ...prev, farby: e.target.value }))} className={inputCls} />
+                          </div>
+                        )}
+                        <div>
+                          <label className={labelCls}>Počet kusov</label>
+                          <input type="number" min="1" value={calc.ks} onChange={(e) => setCalc(prev => ({ ...prev, ks: e.target.value }))} className={inputCls} />
+                        </div>
+                      </div>
+
+                      <p className="text-[10px] text-slate-500">VC {calcVc.toFixed(3)}€/ks • marža {calcMarza.toFixed(0)}% pri {calcKs}ks (podľa krivky v Cenotvorbe — čím viac kusov, tým nižšia marža)</p>
+                      <div className="flex items-center justify-between bg-slate-900 border border-slate-800 rounded-lg px-3 py-2">
+                        <span className="text-[11px] text-slate-400">Cena za kus: <strong className="text-emerald-400">{fmtMoney(calcUnitPrice)}</strong> &nbsp;•&nbsp; Spolu ({calcKs} ks): <strong className="text-emerald-400">{fmtMoney(calcUnitPrice * calcKs)}</strong></span>
+                        <button onClick={addCalcItemToForm} disabled={(calcMethod === 'sietotlac' && !vybranyFormatSietotlac) || (calcMethod === 'rezany' && !vybranaFoliaRezany)} className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center gap-1"><Plus className="h-3 w-3" /> Pridať do ponuky</button>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 
