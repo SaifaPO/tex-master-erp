@@ -32,7 +32,7 @@ export default function PotlaceTab({ supabase }) {
   const [dtf, setDtf] = useState({ cena_cm2: 0, min_cena: 0 });
   const [vysivka, setVysivka] = useState({ cena_cm2: 0, min_cena: 0 });
   const [sietotlac, setSietotlac] = useState({ cena_cm2: 0, cena_cm2_tmavy: 0, min_cena: 0, priplatok_farba: 0, cena_farba_kg: 0, naklady_manipulacia: 0, naklad_sito_zakazka: 0, naklad_cistenie_zakazka: 0 });
-  const [rezany, setRezany] = useState({ min_cena: 0, cena_prace_hod: 0, cas_rezania_min: 0, cas_vylupovania_min: 0, cas_nazehlovania_min: 0, naklady_manipulacia: 0 });
+  const [rezany, setRezany] = useState({ min_cena: 0, cena_prace_hod: 0, cas_rezania_min: 0, cas_vylupovania_min: 0, cas_nazehlovania_min: 0, naklady_manipulacia: 0, sirka_vyuzitelna_cm: 49 });
   const [folie, setFolie] = useState([]);
 
   const [pricingConfig, setPricingConfig] = useState(DEFAULT_PRICING_CONFIG);
@@ -72,7 +72,7 @@ export default function PotlaceTab({ supabase }) {
     if (dtfRow) setDtf({ cena_cm2: dtfRow.cena_cm2, min_cena: dtfRow.min_cena });
     if (vysRow) setVysivka({ cena_cm2: vysRow.cena_cm2, min_cena: vysRow.min_cena });
     if (sieto) setSietotlac({ cena_cm2: sieto.cena_cm2, cena_cm2_tmavy: sieto.cena_cm2_tmavy, min_cena: sieto.min_cena, priplatok_farba: sieto.priplatok_farba, cena_farba_kg: sieto.cena_farba_kg || 0, naklady_manipulacia: sieto.naklady_manipulacia || 0, naklad_sito_zakazka: sieto.naklad_sito_zakazka || 0, naklad_cistenie_zakazka: sieto.naklad_cistenie_zakazka || 0 });
-    if (rez) setRezany({ min_cena: rez.min_cena, cena_prace_hod: rez.cena_prace_hod || 0, cas_rezania_min: rez.cas_rezania_min || 0, cas_vylupovania_min: rez.cas_vylupovania_min || 0, cas_nazehlovania_min: rez.cas_nazehlovania_min || 0, naklady_manipulacia: rez.naklady_manipulacia || 0 });
+    if (rez) setRezany({ min_cena: rez.min_cena, cena_prace_hod: rez.cena_prace_hod || 0, cas_rezania_min: rez.cas_rezania_min || 0, cas_vylupovania_min: rez.cas_vylupovania_min || 0, cas_nazehlovania_min: rez.cas_nazehlovania_min || 0, naklady_manipulacia: rez.naklady_manipulacia || 0, sirka_vyuzitelna_cm: rez.sirka_vyuzitelna_cm || 49 });
     setFolie(fol || []);
     if ((fol || []).length > 0) setTestFoliaId(fol[0].id);
     if (cfg) setPricingConfig(mapConfigFromDb(cfg));
@@ -159,7 +159,8 @@ export default function PotlaceTab({ supabase }) {
 
   const vybranaFolia = folie.find(f => f.id === testFoliaId);
   const vcRezany = (() => {
-    const naklad_cm2 = vybranaFolia ? (parseFloat(vybranaFolia.naklad_cm2) || 0) : 0;
+    const sirkaVyuz = parseFloat(rezany.sirka_vyuzitelna_cm) || 49;
+    const naklad_cm2 = vybranaFolia ? (((parseFloat(vybranaFolia.naklad_bm) || 0) / sirkaVyuz) / 100) : 0;
     const material = plocha * naklad_cm2;
     // Rezanie a vylupovanie zavisi od zlozitosti grafiky — zadava sa na 1cm², preto sa nasobi plochou.
     // Nazehlovanie a manipulacia su fixne na kus.

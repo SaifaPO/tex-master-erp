@@ -52,7 +52,7 @@ export default function KostraCienTab({ supabase }) {
     ]);
     setTextilSub(tn || { technologia: 'sublimacia', cena_papier_bm: 0, cena_ochranny_papier_bm: 0, cena_atrament_l: 0, spotreba_atrament_ml_m2: 0, cena_prace_hod: 0, rychlost_m_hod: 1 });
     setSublimaciaGarment(sg || { id: 1, sirka_papiera_cm: 160, naklady_manipulacia: 0, naklady_ochranny_papier: 0, cas_nazehlovania_min: 0, koeficient_rizika_percent: 0 });
-    setRezany(rez || { id: 1, cena_prace_hod: 0, cas_rezania_min: 0, cas_vylupovania_min: 0, cas_nazehlovania_min: 0, naklady_manipulacia: 0 });
+    setRezany(rez || { id: 1, cena_prace_hod: 0, cas_rezania_min: 0, cas_vylupovania_min: 0, cas_nazehlovania_min: 0, naklady_manipulacia: 0, sirka_folie_cm: 50, sirka_vyuzitelna_cm: 49 });
     setFolie(fol || []);
     setDtf(dtfN || { id: 1, cena_cmyk_kg: 0, spotreba_cmyk_m2: 0, cena_biela_kg: 0, spotreba_biela_m2: 0, cena_lepidlo_kg: 0, spotreba_lepidlo_m2: 0, cena_prace_hod: 0, cena_folie_bm: 0, rychlost_tlace_m_hod: 1, naklady_manipulacia: 0, cas_nazehlovania_min: 0 });
     setSietotlac(siet || { id: 1, cena_farba_kg: 0, naklady_manipulacia: 0, naklad_sito_zakazka: 0, naklad_cistenie_zakazka: 0 });
@@ -95,7 +95,7 @@ export default function KostraCienTab({ supabase }) {
   };
 
   const pridajFoliu = async () => {
-    const { data, error } = await supabase.from('cennik_folie').insert({ nazov: 'Nová fólia', cena_cm2: 0.15, naklad_cm2: 0 }).select().single();
+    const { data, error } = await supabase.from('cennik_folie').insert({ nazov: 'Nová fólia', cena_cm2: 0.15, naklad_bm: 0 }).select().single();
     if (!error && data) setFolie(f => [...f, data]);
   };
   const upravFoliu = async (id, patch) => {
@@ -213,7 +213,9 @@ export default function KostraCienTab({ supabase }) {
               <VysledokVC label="Fixné náklady na kus (manipulácia+papier+nažehlenie)" value={subGarmentFlat} unit="€/ks" />
               <p className="text-[11px] text-slate-500 mt-2 mb-1">↓ Materiál×plocha + fixné náklady, × (1+riziko) — preto cena nerastie lineárne s plochou, kým fixné náklady dominujú:</p>
               <VysledokVC label={`VC pri malom logu (${REF_PLOCHA_CM2}cm² = 10×10cm)`} value={vcSublimaciaGarment} unit="€/ks" />
+              <p className="text-[11px] text-slate-500 -mt-2">≈ {(vcSublimaciaGarment / REF_PLOCHA_CM2).toFixed(4)} €/cm² priemerne pri tejto ploche</p>
               <VysledokVC label="VC pri max. formáte (38×48cm = 1824cm²)" value={vcSublimaciaGarmentMax} unit="€/ks" />
+              <p className="text-[11px] text-slate-500 -mt-2">≈ {(vcSublimaciaGarmentMax / MAX_FORMAT_CM2).toFixed(4)} €/cm² priemerne pri tejto ploche</p>
             </div>
           </div>
         </div>
@@ -222,7 +224,7 @@ export default function KostraCienTab({ supabase }) {
       {/* REZANY TRANSFER */}
       <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-5">
         <h3 className="font-bold text-sm text-white mb-3">2. Rezaný transfer (fóliový vinyl)</h3>
-        <p className="text-[11px] text-slate-500 mb-2">Čas rezania a vyľupovania závisí od zložitosti grafiky, preto sa zadáva orientačne na 1cm² plochy motívu (nie fixne na kus). Nažehlovanie a manipulácia sú fixné na kus.</p>
+        <p className="text-[11px] text-slate-500 mb-2">Čas rezania a vyľupovania závisí od zložitosti grafiky, preto sa zadáva orientačne na 1cm² plochy motívu (nie fixne na kus) — napr. 0,01 min/cm² znamená 1 minútu pri 100cm² (10×10cm). Nažehlovanie a manipulácia sú fixné na kus.</p>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 p-3 bg-slate-950 rounded-xl border border-slate-800 mb-3">
           <Field label="Cena práce (€/hod)" value={rezany.cena_prace_hod} step="0.5" onChange={(v) => ulozRezany({ cena_prace_hod: v })} />
           <Field label="Čas rezania (min/cm²)" value={rezany.cas_rezania_min} step="0.01" onChange={(v) => ulozRezany({ cas_rezania_min: v })} />
@@ -230,21 +232,30 @@ export default function KostraCienTab({ supabase }) {
           <Field label="Čas nažehlovania (min/ks)" value={rezany.cas_nazehlovania_min} step="0.1" onChange={(v) => ulozRezany({ cas_nazehlovania_min: v })} />
           <Field label="Manipulácia (€/ks)" value={rezany.naklady_manipulacia} step="0.01" onChange={(v) => ulozRezany({ naklady_manipulacia: v })} />
         </div>
-        <VysledokVC label={`Práca + manipulácia pri ${REF_PLOCHA_CM2}cm²`} value={rezanyPraca} unit="€/ks" />
-        <div className="flex items-center justify-between mt-4 mb-2">
-          <label className={labelCls}>Typy fólie — surový náklad materiálu (predajná sadzba sa nastavuje v karte Potlače)</label>
+        <VysledokVC label={`Práca + manipulácia pri ${REF_PLOCHA_CM2}cm² (10×10cm)`} value={rezanyPraca} unit="€/ks" />
+        <p className="text-[11px] text-slate-500 -mt-2">≈ {(rezanyPraca / REF_PLOCHA_CM2).toFixed(4)} €/cm² priemerne pri tejto ploche</p>
+        <div className="grid grid-cols-2 gap-3 p-3 bg-slate-950 rounded-xl border border-slate-800 mt-4 mb-3 max-w-md">
+          <Field label="Nominálna šírka fólie (cm)" value={rezany.sirka_folie_cm} step="1" onChange={(v) => ulozRezany({ sirka_folie_cm: v })} />
+          <Field label="Efektívne využiteľná šírka (cm)" value={rezany.sirka_vyuzitelna_cm} step="1" onChange={(v) => ulozRezany({ sirka_vyuzitelna_cm: v })} />
+        </div>
+        <div className="flex items-center justify-between mb-2">
+          <label className={labelCls}>Typy fólie — náklad na bežný meter (predajná sadzba sa nastavuje v karte Potlače)</label>
           <button onClick={pridajFoliu} className="text-xs text-indigo-400 font-semibold hover:text-indigo-300 flex items-center gap-1"><Plus className="w-3.5 h-3.5" /> Pridať typ fólie</button>
         </div>
         <div className="space-y-2">
-          {folie.map(f => (
-            <div key={f.id} className="flex items-center gap-2">
-              <input type="text" value={f.nazov} onChange={(e) => upravFoliu(f.id, { nazov: e.target.value })} className="flex-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" />
-              <div className="flex items-center gap-1 text-xs text-slate-400 shrink-0">
-                <input type="number" step="0.0001" value={f.naklad_cm2 || 0} onChange={(e) => upravFoliu(f.id, { naklad_cm2: parseFloat(e.target.value) || 0 })} className="w-20 px-2 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /> €/cm² náklad
+          {folie.map(f => {
+            const nakladCm2 = (rezany.sirka_vyuzitelna_cm || 0) > 0 ? ((parseFloat(f.naklad_bm) || 0) / rezany.sirka_vyuzitelna_cm) / 100 : 0;
+            return (
+              <div key={f.id} className="flex items-center gap-2">
+                <input type="text" value={f.nazov} onChange={(e) => upravFoliu(f.id, { nazov: e.target.value })} className="flex-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" />
+                <div className="flex items-center gap-1 text-xs text-slate-400 shrink-0">
+                  <input type="number" step="0.05" value={f.naklad_bm || 0} onChange={(e) => upravFoliu(f.id, { naklad_bm: parseFloat(e.target.value) || 0 })} className="w-20 px-2 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /> €/bm
+                </div>
+                <span className="text-[11px] text-slate-500 shrink-0 w-24">= {nakladCm2.toFixed(6)} €/cm²</span>
+                <button onClick={() => zmazFoliu(f.id)} className="text-slate-400 hover:text-rose-400 p-1.5 shrink-0"><Trash2 className="w-4 h-4" /></button>
               </div>
-              <button onClick={() => zmazFoliu(f.id)} className="text-slate-400 hover:text-rose-400 p-1.5 shrink-0"><Trash2 className="w-4 h-4" /></button>
-            </div>
-          ))}
+            );
+          })}
           {folie.length === 0 && <p className="text-xs text-slate-500">Zatiaľ žiadne typy fólie.</p>}
         </div>
       </div>
@@ -277,7 +288,8 @@ export default function KostraCienTab({ supabase }) {
               <Field label="Manipulácia strihania (€/ks)" value={dtf.naklady_manipulacia} step="0.01" onChange={(v) => ulozDtf({ naklady_manipulacia: v })} />
               <Field label="Čas nažehlovania (min/ks)" value={dtf.cas_nazehlovania_min} step="0.1" onChange={(v) => ulozDtf({ cas_nazehlovania_min: v })} />
             </div>
-            <VysledokVC label={`VC pri ${REF_PLOCHA_CM2}cm²`} value={vcDtfGarment} unit="€/ks" />
+            <VysledokVC label={`VC pri ${REF_PLOCHA_CM2}cm² (10×10cm)`} value={vcDtfGarment} unit="€/ks" />
+            <p className="text-[11px] text-slate-500 -mt-2">≈ {(vcDtfGarment / REF_PLOCHA_CM2).toFixed(4)} €/cm² priemerne pri tejto ploche</p>
           </div>
         </div>
       </div>
@@ -321,8 +333,9 @@ export default function KostraCienTab({ supabase }) {
           <Field label="Cena digitalizácie motívu (€, jednorazovo)" value={vysivka.cena_digitalizacia} step="1" onChange={(v) => ulozVysivka({ cena_digitalizacia: v })} />
           <Field label="Cena od vyšívača (€/cm²)" value={vysivka.cena_vysivky_cm2} step="0.001" onChange={(v) => ulozVysivka({ cena_vysivky_cm2: v })} />
         </div>
-        <p className="text-[11px] text-slate-500 mt-2">Náhľad pri {REF_PLOCHA_CM2}cm² motíve a zákazke {vysivkaRefKs}ks (digitalizácia sa rozpočíta na počet kusov):</p>
+        <p className="text-[11px] text-slate-500 mt-2">Náhľad pri {REF_PLOCHA_CM2}cm² motíve (10×10cm) a zákazke {vysivkaRefKs}ks (digitalizácia sa rozpočíta na počet kusov):</p>
         <VysledokVC label={`VC pri ${vysivkaRefKs}ks`} value={vcVysivka} unit="€/ks" />
+        <p className="text-[11px] text-slate-500 -mt-2">≈ {(vcVysivka / REF_PLOCHA_CM2).toFixed(4)} €/cm² priemerne pri tejto ploche</p>
       </div>
     </div>
   );

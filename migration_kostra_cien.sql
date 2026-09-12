@@ -11,8 +11,10 @@ alter table cennik_sublimacia_naklady add column if not exists koeficient_rizika
 alter table cennik_rezany_transfer add column if not exists cas_rezania_min numeric(10,2) not null default 0;
 alter table cennik_rezany_transfer add column if not exists cas_vylupovania_min numeric(10,2) not null default 0;
 
--- Fólie — pridaný surový náklad materiálu na typ (cena_cm2 ostáva predajná sadzba, nezmenené).
-alter table cennik_folie add column if not exists naklad_cm2 numeric(10,4) not null default 0;
+-- Fólie — pridaný surový náklad materiálu na typ, zadávaný ako €/bežný meter (Martinovi pohodlnejšie
+-- ako €/cm²) — prepočet na €/cm² sa robí cez efektívnu šírku fólie (cennik_rezany_transfer.sirka_vyuzitelna_cm,
+-- už existuje, len sa znovu zapája). cena_cm2 ostáva predajná sadzba, nezmenené.
+alter table cennik_folie add column if not exists naklad_bm numeric(10,2) not null default 0;
 
 -- Sieťotlač — sito a čistiace prípravky ako fixná prirážka na zákazku (dohodnuté s Martinom,
 -- nie amortizácia na počet kusov zo sita — jednoduchšie a presnejšie podľa jeho skúsenosti).
