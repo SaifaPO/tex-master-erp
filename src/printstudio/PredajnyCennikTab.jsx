@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Printer, Plus, Trash2, X, Tag } from 'lucide-react';
+import { Printer, Plus, Trash2, X, Tag, Wand2 } from 'lucide-react';
 
 // Rovnaky vzor ako printWithFilename v hlavnom ERP (src/App.jsx) — dočasne premenuje kartu
 // prehliadača, aby "Uložiť ako PDF" navrhlo rozumný názov súboru, potom ho vráti späť.
@@ -25,23 +25,48 @@ function retailPrice(vyrobnaCena, nastavenia) {
   return vyrobnaCena * (1 + nastavenia.marza_percent / 100) * (1 + nastavenia.dph_percent / 100);
 }
 
+// Orientačná výrobná cena z aktuálnej DTF sadzby (Cenník potlače) podľa plochy položky —
+// len návrh na doplnenie, admin ho môže kedykoľvek prepísať ručne.
+function cenaZDtf(sirkaCm, vyskaCm, dtfRate) {
+  if (!dtfRate || !sirkaCm || !vyskaCm) return null;
+  const plocha = Number(sirkaCm) * Number(vyskaCm);
+  return Math.max(dtfRate.min_cena || 0, plocha * (dtfRate.cena_cm2 || 0));
+}
+
+function fmtCm(n) {
+  const v = Number(n);
+  if (!v) return '';
+  return Number(v.toFixed(1)).toString();
+}
+
+const FORMATY = [
+  { label: 'Formát…', w: '', h: '' },
+  { label: 'A5 (14,8×21)', w: 14.8, h: 21 },
+  { label: 'A4 (21×29,7)', w: 21, h: 29.7 },
+  { label: 'A3 (29,7×42)', w: 29.7, h: 42 },
+];
+
 export default function PredajnyCennikTab({ supabase }) {
   const [polozky, setPolozky] = useState([]);
   const [nastavenia, setNastavenia] = useState(NASTAVENIA_DEFAULT);
   const [companySettings, setCompanySettings] = useState(null);
+  const [dtfRate, setDtfRate] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showPrint, setShowPrint] = useState(false);
 
   const nacitaj = async () => {
     setIsLoading(true);
-    const [{ data: p }, { data: n }, { data: c }] = await Promise.all([
+    const [{ data: p }, { data: n }, { data: c }, { data: tech }] = await Promise.all([
       supabase.from('predajny_cennik_polozky').select('*').order('poradie').order('id'),
       supabase.from('predajny_cennik_nastavenia').select('*').eq('id', 1).maybeSingle(),
       supabase.from('company_settings').select('*').eq('id', 1).maybeSingle(),
+      supabase.from('cennik_technologie').select('*'),
     ]);
     setPolozky(p || []);
     if (n) setNastavenia(n);
     setCompanySettings(c || null);
+    const dtfRow = (tech || []).find(t => t.technologia === 'dtf');
+    if (dtfRow) setDtfRate({ cena_cm2: dtfRow.cena_cm2, min_cena: dtfRow.min_cena });
     setIsLoading(false);
   };
   useEffect(() => { nacitaj(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -127,22 +152,51 @@ export default function PredajnyCennikTab({ supabase }) {
           <h3 className="font-bold text-sm text-white">Položky cenníka</h3>
           <button onClick={pridajPolozku} className="flex items-center gap-1.5 text-xs text-indigo-400 font-semibold hover:text-indigo-300"><Plus className="w-3.5 h-3.5" /> Pridať položku</button>
         </div>
+        {dtfRate ? (
+          <p className="text-[11px] text-slate-500">Orientačná výrobná cena sa vie dopočítať z aktuálnej DTF sadzby ({Number(dtfRate.cena_cm2).toFixed(3)} €/cm², min. {Number(dtfRate.min_cena).toFixed(2)} €) podľa rozmeru položky — vyplň šírku a výšku a klikni na prepočet. Je to len orientačný odhad, cenu si vieš kedykoľvek prepísať ručne.</p>
+        ) : (
+          <p className="text-[11px] text-amber-400">DTF sadzba nie je nastavená (záložka Cenník potlače) — prepočet z rozmeru nebude fungovať, výrobné ceny nastav ručne.</p>
+        )}
         <div className="space-y-2">
           {polozky.map(p => {
             const cena = retailPrice(Number(p.vyrobna_cena) || 0, nastavenia);
+            const navrh = cenaZDtf(p.sirka_cm, p.vyska_cm, dtfRate);
             return (
               <div key={p.id} className={`p-3 rounded-xl border ${p.aktivny ? 'bg-slate-950 border-slate-800' : 'bg-slate-950/40 border-slate-800/50 opacity-60'} space-y-2`}>
                 <div className="flex flex-wrap items-center gap-2">
                   <input type="text" value={p.nazov} onChange={(e) => upravPolozku(p.id, { nazov: e.target.value })} placeholder="Názov" className="flex-1 min-w-[160px] px-2 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-sm text-white" />
                   <input type="text" list="predajny-cennik-kategorie" value={p.kategoria} onChange={(e) => upravPolozku(p.id, { kategoria: e.target.value })} placeholder="Kategória" className="w-40 px-2 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white" />
-                  <div className="flex items-center gap-1 text-xs text-slate-400 shrink-0">
-                    <input type="number" step="0.1" value={p.vyrobna_cena} onChange={(e) => upravPolozku(p.id, { vyrobna_cena: parseFloat(e.target.value) || 0 })} className="w-20 px-2 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-sm text-white" /> € výrobná
-                  </div>
                   <div className="text-xs font-bold text-emerald-400 bg-emerald-950/30 border border-emerald-900/40 px-2.5 py-1.5 rounded-lg whitespace-nowrap">{cena.toFixed(2)} € s DPH</div>
                   <label className="flex items-center gap-1.5 text-xs text-slate-400 shrink-0">
                     <input type="checkbox" checked={p.aktivny} onChange={(e) => upravPolozku(p.id, { aktivny: e.target.checked })} /> aktívna
                   </label>
                   <button onClick={() => zmazPolozku(p.id)} className="text-slate-400 hover:text-rose-400 p-1.5 shrink-0"><Trash2 className="w-4 h-4" /></button>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      const f = FORMATY.find(x => x.label === e.target.value);
+                      if (f && f.w) upravPolozku(p.id, { sirka_cm: f.w, vyska_cm: f.h });
+                    }}
+                    className="px-2 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-xs text-slate-300"
+                  >
+                    {FORMATY.map(f => <option key={f.label} value={f.label}>{f.label}</option>)}
+                  </select>
+                  <div className="flex items-center gap-1 text-xs text-slate-400">
+                    <input type="number" step="0.1" value={p.sirka_cm || ''} onChange={(e) => upravPolozku(p.id, { sirka_cm: e.target.value ? parseFloat(e.target.value) : null })} placeholder="šírka" className="w-16 px-2 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-sm text-white" />
+                    <span>×</span>
+                    <input type="number" step="0.1" value={p.vyska_cm || ''} onChange={(e) => upravPolozku(p.id, { vyska_cm: e.target.value ? parseFloat(e.target.value) : null })} placeholder="výška" className="w-16 px-2 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-sm text-white" />
+                    <span>cm</span>
+                  </div>
+                  <div className="flex items-center gap-1 text-xs text-slate-400 shrink-0">
+                    <input type="number" step="0.1" value={p.vyrobna_cena} onChange={(e) => upravPolozku(p.id, { vyrobna_cena: parseFloat(e.target.value) || 0 })} className="w-20 px-2 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-sm text-white" /> € výrobná
+                  </div>
+                  {navrh !== null && (
+                    <button onClick={() => upravPolozku(p.id, { vyrobna_cena: Number(navrh.toFixed(2)) })} title="Prepočítať výrobnú cenu z DTF sadzby podľa rozmeru" className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 font-semibold bg-indigo-950/30 border border-indigo-900/40 px-2 py-1.5 rounded-lg whitespace-nowrap">
+                      <Wand2 className="w-3.5 h-3.5" /> z DTF: {navrh.toFixed(2)} €
+                    </button>
+                  )}
                 </div>
                 <input type="text" value={p.popis || ''} onChange={(e) => upravPolozku(p.id, { popis: e.target.value })} placeholder="Popis (zobrazí sa na cenníku, voliteľné)" className="w-full px-2 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-xs text-slate-300" />
               </div>
@@ -182,7 +236,10 @@ export default function PredajnyCennikTab({ supabase }) {
                         {aktivnePolozky.filter(p => (p.kategoria || 'Ostatné') === kat).map(p => (
                           <div key={p.id} className="flex items-start justify-between gap-3 border-b border-dotted border-slate-300 pb-1.5">
                             <div>
-                              <span className="font-bold text-sm block">{p.nazov}</span>
+                              <span className="font-bold text-sm block">
+                                {p.nazov}
+                                {p.sirka_cm && p.vyska_cm ? <span className="font-normal text-slate-500"> ({fmtCm(p.sirka_cm)}×{fmtCm(p.vyska_cm)} cm)</span> : ''}
+                              </span>
                               {p.popis && <span className="text-[11px] text-slate-500">{p.popis}</span>}
                             </div>
                             <span className="font-extrabold text-base whitespace-nowrap">{retailPrice(Number(p.vyrobna_cena) || 0, nastavenia).toFixed(2)} €</span>
