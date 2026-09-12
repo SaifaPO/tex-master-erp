@@ -105,18 +105,7 @@ export default function TextilMetrazTab({ supabase }) {
       {/* SHOPIFY PREPOJENIE */}
       <div className="bg-slate-900/60 rounded-2xl border border-indigo-900/40 p-5">
         <h3 className="font-bold text-sm text-white mb-1 flex items-center gap-1.5"><Settings className="w-4 h-4 text-indigo-400" /> Prepojenie na Shopify</h3>
-        <p className="text-xs text-slate-400 mb-3">Rovnaký princíp ako pri DTF metráži — vytvor v Shopify Admin produkt <strong className="text-slate-200">"Textilná metráž — jednotka"</strong> s <strong className="text-slate-200">jedným</strong> variantom, ktorého cena zodpovedá poľu "Cena za jednotku" nižšie. Do košíka sa pridá taký počet kusov tohto variantu, aby súčet dal presnú vypočítanú cenu objednávky.</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl">
-          <div>
-            <label className="text-xs text-slate-400 font-medium">Shopify Variant ID</label>
-            <input type="text" value={nastavenia.shopify_variant_id || ''} onChange={(e) => ulozNastavenia({ shopify_variant_id: e.target.value })} placeholder="44123456789" className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white font-mono" />
-          </div>
-          <div>
-            <label className="text-xs text-slate-400 font-medium">Cena za jednotku (€)</label>
-            <input type="number" step="0.01" min="0.01" value={nastavenia.jednotka_cena_eur} onChange={(e) => ulozNastavenia({ jednotka_cena_eur: parseFloat(e.target.value) || 0.05 })} className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" />
-          </div>
-        </div>
-        {!nastavenia.shopify_variant_id && <p className="text-xs text-amber-400 mt-2">⚠ Variant ID zatiaľ nie je nastavené — zákaznícky konfigurátor nebude vedieť pridať objednávku do košíka.</p>}
+        <p className="text-xs text-slate-400">Platba beží cez <strong className="text-slate-200">Shopify Draft Order</strong> (Edge Function <code className="text-[11px] bg-slate-950 px-1 rounded">textil-metraz-create-draft-order</code>) — appka vytvorí objednávku s presnou cenou a zákazníka rovno presmeruje na platbu, žiadny trik s počtom kusov. Nič sa tu nenastavuje — len over, že Supabase secrets <code className="text-[11px] bg-slate-950 px-1 rounded">SHOPIFY_STORE_DOMAIN</code> a <code className="text-[11px] bg-slate-950 px-1 rounded">SHOPIFY_ADMIN_TOKEN</code> sú nastavené (rovnaké ako pre Beachvlajky).</p>
       </div>
 
       {/* DOPRAVA A KAPACITA */}

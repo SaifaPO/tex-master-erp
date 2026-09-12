@@ -37,7 +37,6 @@ export default function TextilMetraz({ supabase, onSpat }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmation, setConfirmation] = useState('');
   const [submitError, setSubmitError] = useState('');
-  const [pridaneDoKosika, setPridaneDoKosika] = useState(false);
 
   const canvasRef = useRef(null);
 
@@ -174,83 +173,35 @@ export default function TextilMetraz({ supabase, onSpat }) {
 
   const odoslatObjednavku = async () => {
     if (!nastavenia) return;
-    if (!nastavenia.shopify_variant_id) {
-      setSubmitError('Modul ešte nie je pripojený na Shopify — chýba nastavený Variant ID v admin karte "Textilná metráž".');
-      return;
-    }
     setIsSubmitting(true);
     setSubmitError('');
     setConfirmation('');
-    setPridaneDoKosika(false);
 
     try {
-      const objednavkaId = crypto.randomUUID();
+      const objednavkaIdPredbezne = crypto.randomUUID();
       let suborCesta = null;
       if (rawFile) {
-        const cesta = `textil/${objednavkaId}/${rawFile.name}`;
+        const cesta = `textil/${objednavkaIdPredbezne}/${rawFile.name}`;
         const { error: uploadErr } = await supabase.storage.from(BUCKET).upload(cesta, rawFile, { contentType: rawFile.type });
         if (!uploadErr) suborCesta = cesta;
       }
 
-      const { error: insertErr } = await supabase.from('textil_objednavky').insert({
-        id: objednavkaId,
-        technologia,
-        rezim: mode,
-        raster_typ: mode === 'auto' ? patternRepeat : null,
-        sirka_cm: mode === 'auto' ? widthCm : null,
-        vyska_cm: mode === 'auto' ? heightCm : null,
-        dlzka_bm: Math.round(totalLengthBm * 100) / 100,
-        plocha_m2: Math.round(totalM2 * 100) / 100,
-        cena_hladina: `${baseRate.toFixed(2)} €/bm`,
-        cena_spolu: Math.round(grandTotal * 100) / 100,
-        doprava_rychlost: deliverySpeed,
-        harmonogram: aktualnyHarmonogram,
-        subor_nazov: rawFile?.name || null,
-        subor_cesta: suborCesta,
+      // Cena sa NEPOSIELA — Edge Function ju prepocita sama zo zivych DB tabuliek a vytvori
+      // Shopify Draft Order s 1 riadkom / 1 kusom / presnou cenou (namiesto triku s velkym
+      // poctom kusov cez /cart/add.js), zakaznika presmerujeme rovno na platbu tejto objednavky.
+      const { data, error } = await supabase.functions.invoke('textil-metraz-create-draft-order', {
+        body: {
+          technologia, mode, lengthBm, directLengthBm, widthCm, heightCm, patternRepeat,
+          deliverySpeed, harmonogram: aktualnyHarmonogram,
+          suborNazov: rawFile?.name || null, suborCesta,
+        },
       });
-      if (insertErr) throw insertErr;
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      if (!data?.checkoutUrl) throw new Error('Server nevrátil odkaz na platbu.');
 
-      const jednotkovaCena = Number(nastavenia.jednotka_cena_eur) || 0.05;
-      const quantity = Math.max(1, Math.round(grandTotal / jednotkovaCena));
-      const technikaLabel = technologia === 'sublimacia' ? 'Sublimačná potlač' : 'Digitálna potlač bavlny';
-
-      const shopifyPayload = {
-        items: [{
-          id: nastavenia.shopify_variant_id,
-          quantity,
-          properties: {
-            _objednavka_id: objednavkaId,
-            _technologia: technikaLabel,
-            _rezim: mode === 'auto' ? `Vzor s opakovaním (${widthCm}×${heightCm}cm, ${patternRepeat})` : 'Hotová rolka v metráži',
-            _dlzka_bm: totalLengthBm.toFixed(2),
-            _harmonogram: aktualnyHarmonogram,
-            _cena: grandTotal.toFixed(2) + ' €',
-          },
-        }],
-      };
-
-      // Sietova chyba (fetch samotny zlyha, napr. mimo realneho Shopify obchodu) sa lisi od toho,
-      // ze Shopify odpoved PRIJAL ale vratil chybu (napr. zle Variant ID) — druhy pripad je
-      // skutocny problem, ktory sa nesmie tichoschovat pod "to je normalne mimo obchodu".
-      let res;
-      try {
-        res = await fetch('/cart/add.js', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-          body: JSON.stringify(shopifyPayload),
-        });
-      } catch (networkErr) {
-        setConfirmation(`Objednávka ${objednavkaId} bola uložená (mimo Shopify obchodu /cart/add.js zlyhalo — v reálnom obchode pridá do košíka automaticky).`);
-        return;
-      }
-      if (!res.ok) {
-        let chybaText = '';
-        try { const j = await res.json(); chybaText = j.description || j.message || JSON.stringify(j); } catch { chybaText = await res.text().catch(() => String(res.status)); }
-        setSubmitError(`Objednávka ${objednavkaId} bola uložená, ale pridanie do košíka zlyhalo (Shopify: ${chybaText}). Skontroluj Variant ID v nastaveniach "Textilná metráž".`);
-        return;
-      }
-      setConfirmation(`Objednávka bola vložená do košíka — ${totalLengthBm.toFixed(2)} bm, ${grandTotal.toFixed(2)} € (${aktualnyHarmonogram}).`);
-      setPridaneDoKosika(true);
+      setConfirmation(`Objednávka bola vytvorená — ${totalLengthBm.toFixed(2)} bm, ${Number(data.cenaSpolu).toFixed(2)} €. Presmerúvam na platbu…`);
+      window.location.href = data.checkoutUrl;
     } catch (e) {
       setSubmitError('Objednávku sa nepodarilo odoslať: ' + e.message);
     } finally {
@@ -421,15 +372,9 @@ export default function TextilMetraz({ supabase, onSpat }) {
             <div className="p-2.5 rounded-lg bg-indigo-950/40 border border-indigo-500/20 flex items-center gap-2 text-[11px] text-indigo-300">
               <CreditCard className="w-4 h-4" /> Platba vopred kartou (Shopify Pay)
             </div>
-            {pridaneDoKosika ? (
-              <a href="/cart" className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm flex items-center justify-center gap-2 transition">
-                <ShoppingCart className="w-4 h-4" /> Zobraziť košík a dokončiť objednávku
-              </a>
-            ) : (
-              <button onClick={odoslatObjednavku} disabled={isSubmitting} className="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white font-bold text-sm flex items-center justify-center gap-2 transition">
-                <ShoppingCart className="w-4 h-4" /> {isSubmitting ? 'Odosielam…' : 'Vložiť do košíka a zaplatiť'}
-              </button>
-            )}
+            <button onClick={odoslatObjednavku} disabled={isSubmitting} className="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white font-bold text-sm flex items-center justify-center gap-2 transition">
+              <ShoppingCart className="w-4 h-4" /> {isSubmitting ? 'Vytváram objednávku…' : 'Objednať a zaplatiť'}
+            </button>
             {confirmation && <p className="text-xs text-emerald-400">{confirmation}</p>}
             {submitError && <p className="text-xs text-rose-400">{submitError}</p>}
           </div>
