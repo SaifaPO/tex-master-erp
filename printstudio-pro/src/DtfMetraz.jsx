@@ -39,6 +39,7 @@ export default function DtfMetraz({ supabase, onSpat }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmation, setConfirmation] = useState('');
   const [submitError, setSubmitError] = useState('');
+  const [pridaneDoKosika, setPridaneDoKosika] = useState(false);
 
   const canvasRef = useRef(null);
 
@@ -182,6 +183,7 @@ export default function DtfMetraz({ supabase, onSpat }) {
     setIsSubmitting(true);
     setSubmitError('');
     setConfirmation('');
+    setPridaneDoKosika(false);
 
     try {
       const objednavkaId = crypto.randomUUID();
@@ -226,18 +228,28 @@ export default function DtfMetraz({ supabase, onSpat }) {
         }],
       };
 
+      // Sietova chyba (fetch samotny zlyha, napr. mimo realneho Shopify obchodu — lokalny vyvoj)
+      // sa lisi od toho, ze Shopify odpoved PRIJAL ale vratil chybu (napr. zle Variant ID) —
+      // druhy pripad je skutocny problem, ktory sa nesmie tichoschovat pod "to je normalne mimo obchodu".
+      let res;
       try {
-        const res = await fetch('/cart/add.js', {
+        res = await fetch('/cart/add.js', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
           body: JSON.stringify(shopifyPayload),
         });
-        if (!res.ok) throw new Error('Shopify odpovedal chybou ' + res.status);
-        setConfirmation(`Objednávka bola vložená do košíka — ${totalLengthBm.toFixed(2)} bm, ${grandTotal.toFixed(2)} € (${aktualnyHarmonogram}).`);
-      } catch (e) {
-        // Mimo skutočného Shopify obchodu (napr. lokálny vývoj) /cart/add.js neexistuje — očakávané.
+      } catch (networkErr) {
         setConfirmation(`Objednávka ${objednavkaId} bola uložená (mimo Shopify obchodu /cart/add.js zlyhalo — v reálnom obchode pridá do košíka automaticky).`);
+        return;
       }
+      if (!res.ok) {
+        let chybaText = '';
+        try { const j = await res.json(); chybaText = j.description || j.message || JSON.stringify(j); } catch { chybaText = await res.text().catch(() => String(res.status)); }
+        setSubmitError(`Objednávka ${objednavkaId} bola uložená, ale pridanie do košíka zlyhalo (Shopify: ${chybaText}). Skontroluj Variant ID v nastaveniach "DTF metráž".`);
+        return;
+      }
+      setConfirmation(`Objednávka bola vložená do košíka — ${totalLengthBm.toFixed(2)} bm, ${grandTotal.toFixed(2)} € (${aktualnyHarmonogram}).`);
+      setPridaneDoKosika(true);
     } catch (e) {
       setSubmitError('Objednávku sa nepodarilo odoslať: ' + e.message);
     } finally {
@@ -376,9 +388,15 @@ export default function DtfMetraz({ supabase, onSpat }) {
             <div className="p-2.5 rounded-lg bg-indigo-950/40 border border-indigo-500/20 flex items-center gap-2 text-[11px] text-indigo-300">
               <CreditCard className="w-4 h-4" /> Platba vopred kartou (Shopify Pay)
             </div>
-            <button onClick={odoslatObjednavku} disabled={isSubmitting} className="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white font-bold text-sm flex items-center justify-center gap-2 transition">
-              <ShoppingCart className="w-4 h-4" /> {isSubmitting ? 'Odosielam…' : 'Vložiť do košíka a zaplatiť'}
-            </button>
+            {pridaneDoKosika ? (
+              <a href="/cart" className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm flex items-center justify-center gap-2 transition">
+                <ShoppingCart className="w-4 h-4" /> Zobraziť košík a dokončiť objednávku
+              </a>
+            ) : (
+              <button onClick={odoslatObjednavku} disabled={isSubmitting} className="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white font-bold text-sm flex items-center justify-center gap-2 transition">
+                <ShoppingCart className="w-4 h-4" /> {isSubmitting ? 'Odosielam…' : 'Vložiť do košíka a zaplatiť'}
+              </button>
+            )}
             {confirmation && <p className="text-xs text-emerald-400">{confirmation}</p>}
             {submitError && <p className="text-xs text-rose-400">{submitError}</p>}
           </div>
