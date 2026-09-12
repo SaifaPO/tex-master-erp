@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Scroll, Download, Settings, ExternalLink } from 'lucide-react';
-import { priceAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
+import { priceAt, marginAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 
 const PRINTSTUDIO_BASE_URL = 'https://printstudio-pro.vercel.app';
 const BUCKET = 'print-designs';
 // Referencne urovne (bm) len na nahlad v tabulke nizsie — realny vypocet funguje pre lubovolnu dlzku.
-const BM_PREVIEW_LEVELS = [1, 5, 10, 25, 50, 100];
+const BM_PREVIEW_LEVELS = [1, 5, 10, 25, 50, 100, 200, 500];
 
 const NAKLADY_DEFAULT = {
   cena_folie_bm: 1.8, cena_lepidlo_kg: 18, spotreba_lepidlo_m2: 0.02,
@@ -139,7 +139,7 @@ export default function DtfMetrazTab({ supabase }) {
           <div className="space-y-1.5 mb-3">
             {BM_PREVIEW_LEVELS.map(level => {
               const rate = priceAt(nakladBm, level, pricingConfig);
-              const marginPct = rate > 0 ? Math.round(((rate - nakladBm) / rate) * 100) : 0;
+              const marginPct = Math.round(marginAt(nakladBm, level, pricingConfig));
               return (
                 <div key={level} className="p-2.5 bg-slate-950 rounded-xl border border-slate-800 flex flex-wrap items-center gap-3 text-xs">
                   <span className="text-slate-400 w-20">od {level} bm</span>

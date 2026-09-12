@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Shirt, Download, Settings, ExternalLink } from 'lucide-react';
-import { priceAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
+import { priceAt, marginAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 
 const PRINTSTUDIO_BASE_URL = 'https://printstudio-pro.vercel.app';
 const BUCKET = 'print-designs';
@@ -166,7 +166,7 @@ export default function TextilMetrazTab({ supabase }) {
             <span className="text-xs font-semibold text-slate-300 block mb-1">Predajná cena (jednotný maržový vzorec z Cenotvorby):</span>
             {BM_PREVIEW_LEVELS.map(level => {
               const rate = priceAt(nakladBmSub, level, pricingConfig);
-              const marginPct = rate > 0 ? Math.round(((rate - nakladBmSub) / rate) * 100) : 0;
+              const marginPct = Math.round(marginAt(nakladBmSub, level, pricingConfig));
               return (
                 <div key={level} className="p-2 bg-slate-950 rounded-lg border border-slate-800 flex flex-wrap items-center gap-3 text-xs">
                   <span className="text-slate-400 w-16">od {level} bm</span>
@@ -202,7 +202,7 @@ export default function TextilMetrazTab({ supabase }) {
             <span className="text-xs font-semibold text-slate-300 block mb-1">Predajná cena (jednotný maržový vzorec z Cenotvorby):</span>
             {BM_PREVIEW_LEVELS.map(level => {
               const rate = priceAt(nakladBmCot, level, pricingConfig);
-              const marginPct = rate > 0 ? Math.round(((rate - nakladBmCot) / rate) * 100) : 0;
+              const marginPct = Math.round(marginAt(nakladBmCot, level, pricingConfig));
               return (
                 <div key={level} className="p-2 bg-slate-950 rounded-lg border border-slate-800 flex flex-wrap items-center gap-3 text-xs">
                   <span className="text-slate-400 w-16">od {level} bm</span>
