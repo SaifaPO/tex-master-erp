@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Printer, Plus, Trash2, X, Tag, Wand2 } from 'lucide-react';
+import { Printer, Plus, Trash2, X, Tag, Wand2, Hash, Image as ImageIcon, Shirt, Sparkles, Scissors, Palette } from 'lucide-react';
 import { priceAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 
 // Rovnaky vzor ako printWithFilename v hlavnom ERP (src/App.jsx) — dočasne premenuje kartu
@@ -29,9 +29,25 @@ const NASTAVENIA_DEFAULT = {
 function zakladnaCenaPoMarzi(vyrobnaCena, nastavenia, pricingConfig) {
   return priceAt(vyrobnaCena, nastavenia.referencny_pocet_ks || 1, pricingConfig);
 }
+// Zaokruhlenie NAHOR na najblizsich 0,50€ — pekne "okruhle" ceny na tlacenom cenniku (2,34€ -> 2,50€).
+function zaokruhlitNahor50c(cena) {
+  return Math.ceil(cena / 0.5) * 0.5;
+}
 function retailPrice(vyrobnaCena, nastavenia, pricingConfig) {
   const poMarziKrivky = zakladnaCenaPoMarzi(vyrobnaCena, nastavenia, pricingConfig);
-  return poMarziKrivky * (1 + nastavenia.marza_percent / 100) * (1 + nastavenia.dph_percent / 100);
+  const cena = poMarziKrivky * (1 + nastavenia.marza_percent / 100) * (1 + nastavenia.dph_percent / 100);
+  return zaokruhlitNahor50c(cena);
+}
+
+// Ikonka podla kategorie — cisto vizualne spestrenie tlaceneho cennika pre zakaznikov.
+function kategoriaIcon(kategoria) {
+  const k = (kategoria || '').toLowerCase();
+  if (k.includes('číslo') || k.includes('cislo') || k.includes('meno') || k.includes('men')) return Hash;
+  if (k.includes('potlač') || k.includes('potlac')) return ImageIcon;
+  if (k.includes('tričk') || k.includes('tric') || k.includes('odev')) return Shirt;
+  if (k.includes('fólia') || k.includes('folia') || k.includes('rezan')) return Scissors;
+  if (k.includes('farb')) return Palette;
+  return Sparkles;
 }
 
 // Orientačná výrobná cena z reálnych výrobných nákladov DTF (materiál CMYK/biela/lepidlo
@@ -198,7 +214,7 @@ export default function PredajnyCennikTab({ supabase }) {
                   <button onClick={() => zmazPolozku(p.id)} className="text-slate-400 hover:text-rose-400 p-1.5 shrink-0"><Trash2 className="w-4 h-4" /></button>
                 </div>
                 <p className="text-[11px] text-slate-500 font-mono">
-                  VC {vc.toFixed(2)}€ → po marži krivky ({nastavenia.referencny_pocet_ks || 1}ks) {poMarziKrivky.toFixed(2)}€ → +marža predajne {nastavenia.marza_percent}% {(poMarziKrivky * (1 + nastavenia.marza_percent / 100)).toFixed(2)}€ → +DPH {nastavenia.dph_percent}% = <span className="text-emerald-400 font-bold">{cena.toFixed(2)}€</span>
+                  VC {vc.toFixed(2)}€ → po marži krivky ({nastavenia.referencny_pocet_ks || 1}ks) {poMarziKrivky.toFixed(2)}€ → +marža predajne {nastavenia.marza_percent}% {(poMarziKrivky * (1 + nastavenia.marza_percent / 100)).toFixed(2)}€ → +DPH {nastavenia.dph_percent}% {(poMarziKrivky * (1 + nastavenia.marza_percent / 100) * (1 + nastavenia.dph_percent / 100)).toFixed(2)}€ → zaokrúhlené nahor = <span className="text-emerald-400 font-bold">{cena.toFixed(2)}€</span>
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
                   <select
@@ -257,25 +273,31 @@ export default function PredajnyCennikTab({ supabase }) {
               <div>
                 <h2 className="text-sm font-extrabold uppercase tracking-wide border-b-2 border-slate-800 pb-1.5 mb-3 flex items-center gap-1.5"><Tag className="w-4 h-4" /> Druhy dotlače</h2>
                 <div className="space-y-4">
-                  {kategorie.map(kat => (
+                  {kategorie.map(kat => {
+                    const KatIcon = kategoriaIcon(kat);
+                    return (
                     <div key={kat}>
-                      <h3 className="text-[11px] font-bold uppercase text-slate-500 mb-1.5">{kat}</h3>
+                      <h3 className="text-[11px] font-bold uppercase text-slate-500 mb-1.5 flex items-center gap-1.5"><KatIcon className="w-3.5 h-3.5 text-indigo-500" /> {kat}</h3>
                       <div className="space-y-2">
                         {aktivnePolozky.filter(p => (p.kategoria || 'Ostatné') === kat).map(p => (
                           <div key={p.id} className="flex items-start justify-between gap-3 border-b border-dotted border-slate-300 pb-1.5">
-                            <div>
-                              <span className="font-bold text-sm block">
-                                {p.nazov}
-                                {p.sirka_cm && p.vyska_cm ? <span className="font-normal text-slate-500"> ({fmtCm(p.sirka_cm)}×{fmtCm(p.vyska_cm)} cm)</span> : ''}
-                              </span>
-                              {p.popis && <span className="text-[11px] text-slate-500">{p.popis}</span>}
+                            <div className="flex items-start gap-1.5">
+                              <KatIcon className="w-3.5 h-3.5 text-indigo-400 mt-0.5 shrink-0" />
+                              <div>
+                                <span className="font-bold text-sm block">
+                                  {p.nazov}
+                                  {p.sirka_cm && p.vyska_cm ? <span className="font-normal text-slate-500"> ({fmtCm(p.sirka_cm)}×{fmtCm(p.vyska_cm)} cm)</span> : ''}
+                                </span>
+                                {p.popis && <span className="text-[11px] text-slate-500">{p.popis}</span>}
+                              </div>
                             </div>
                             <span className="font-extrabold text-base whitespace-nowrap">{retailPrice(Number(p.vyrobna_cena) || 0, nastavenia, pricingConfig).toFixed(2)} €</span>
                           </div>
                         ))}
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                   {aktivnePolozky.length === 0 && <p className="text-xs text-slate-400">Žiadne aktívne položky.</p>}
                 </div>
               </div>
