@@ -58,7 +58,7 @@ export default function DtfMetraz({ supabase, onSpat }) {
   }, [supabase]);
 
   // ---- Výpočet ceny a metráže ----
-  let totalLengthBm = 0, totalM2 = 0, totalCm2 = 0, baseRate = 0, subtotal = 0, expressFee = 0, shippingFee = 0, grandTotal = 0, capacityIssue = null;
+  let totalLengthBm = 0, totalM2 = 0, totalCm2 = 0, baseRate = 0, subtotal = 0, expressFee = 0, shippingFee = 0, grandTotalBezDph = 0, dphSuma = 0, grandTotal = 0, capacityIssue = null;
 
   if (nastavenia) {
     if (mode === 'auto') {
@@ -78,7 +78,11 @@ export default function DtfMetraz({ supabase, onSpat }) {
     subtotal = Math.max(totalLengthBm * baseRate, Number(nastavenia.minimalna_cena_objednavky));
     expressFee = deliverySpeed === 'express' ? subtotal * (Number(nastavenia.priplatok_expres_percent) / 100) : 0;
     shippingFee = Number(nastavenia.cena_doprava);
-    grandTotal = subtotal + expressFee + shippingFee;
+    grandTotalBezDph = subtotal + expressFee + shippingFee;
+    // Slovensky B2C zakaznik vzdy plati s DPH — cena v kosiku aj cele vyuctovanie musi byt s DPH,
+    // nie len zobrazena orientacne bez nej.
+    dphSuma = grandTotalBezDph * (Number(nastavenia.dph_percent || 0) / 100);
+    grandTotal = grandTotalBezDph + dphSuma;
 
     if (deliverySpeed === 'express' && totalLengthBm > Number(nastavenia.limit_expres_bm)) {
       capacityIssue = {
@@ -353,7 +357,7 @@ export default function DtfMetraz({ supabase, onSpat }) {
           <div className="bg-slate-900 text-white p-5 rounded-2xl shadow-xl space-y-3">
             <h3 className="text-sm font-bold flex items-center justify-between border-b border-slate-800 pb-3">
               <span>Súhrn objednávky</span>
-              <span className="text-[10px] font-normal text-indigo-300 bg-indigo-500/10 px-2 py-1 rounded-full">Bez DPH</span>
+              <span className="text-[10px] font-normal text-indigo-300 bg-indigo-500/10 px-2 py-1 rounded-full">s DPH {nastavenia.dph_percent}%</span>
             </h3>
             <div className="space-y-2 text-xs text-slate-300">
               <Row label="Sadzba pri tomto odbere" value={`${baseRate.toFixed(2)} €/bm`} />
@@ -362,9 +366,11 @@ export default function DtfMetraz({ supabase, onSpat }) {
               <Row label="Príplatok za expres" value={`${expressFee.toFixed(2)} €`} />
               <Row label="Doprava" value={`${shippingFee.toFixed(2)} €`} />
               <Row label="Harmonogram dodania" value={aktualnyHarmonogram} small />
+              <Row label="Cena bez DPH" value={`${grandTotalBezDph.toFixed(2)} €`} />
+              <Row label={`DPH ${nastavenia.dph_percent}%`} value={`${dphSuma.toFixed(2)} €`} />
             </div>
             <div className="pt-3 border-t border-slate-800 flex items-baseline justify-between">
-              <span className="text-xs text-slate-400">Celková cena spolu (vrátane dopravy)</span>
+              <span className="text-xs text-slate-400">Celková cena spolu s DPH (vrátane dopravy)</span>
               <span className="text-2xl font-extrabold font-mono">{grandTotal.toFixed(2)} €</span>
             </div>
             <div className="p-2.5 rounded-lg bg-indigo-950/40 border border-indigo-500/20 flex items-center gap-2 text-[11px] text-indigo-300">

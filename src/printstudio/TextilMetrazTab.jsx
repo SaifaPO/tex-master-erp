@@ -16,6 +16,7 @@ const NASTAVENIA_DEFAULT = {
   shopify_variant_id: '', jednotka_cena_eur: 0.05, cena_doprava: 4.9, priplatok_expres_percent: 10, minimalna_cena_objednavky: 8,
   limit_expres_bm_sublimacia: 60, limit_standard_bm_sublimacia: 150,
   limit_expres_bm_bavlna: 35, limit_standard_bm_bavlna: 80,
+  dph_percent: 23,
 };
 
 // Naklad €/1bm (160cm sirka) z vyrobnych vstupov danej technologie — musi byt zosuladene
@@ -125,6 +126,7 @@ export default function TextilMetrazTab({ supabase }) {
           <Field label="Doprava (€)" value={nastavenia.cena_doprava} step="0.1" onChange={(v) => ulozNastavenia({ cena_doprava: v })} />
           <Field label="Príplatok expres (%)" value={nastavenia.priplatok_expres_percent} step="1" onChange={(v) => ulozNastavenia({ priplatok_expres_percent: v })} />
           <Field label="Minimálna cena objednávky (€)" value={nastavenia.minimalna_cena_objednavky} step="0.5" onChange={(v) => ulozNastavenia({ minimalna_cena_objednavky: v })} />
+          <Field label="DPH (%)" value={nastavenia.dph_percent} step="0.5" onChange={(v) => ulozNastavenia({ dph_percent: v })} />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="p-3 bg-slate-950 rounded-xl border border-teal-900/40">

@@ -15,6 +15,7 @@ const NAKLADY_DEFAULT = {
 const NASTAVENIA_DEFAULT = {
   shopify_variant_id: '', jednotka_cena_eur: 0.05, cena_doprava: 4.9,
   priplatok_expres_percent: 10, limit_expres_bm: 40, limit_standard_bm: 100, minimalna_cena_objednavky: 3,
+  dph_percent: 23,
 };
 
 export default function DtfMetrazTab({ supabase }) {
@@ -113,6 +114,7 @@ export default function DtfMetrazTab({ supabase }) {
           <Field label="Minimálna cena objednávky (€)" value={nastavenia.minimalna_cena_objednavky} step="0.5" onChange={(v) => ulozNastavenia({ minimalna_cena_objednavky: v })} />
           <Field label="Limit expres (bm/deň)" value={nastavenia.limit_expres_bm} step="1" onChange={(v) => ulozNastavenia({ limit_expres_bm: v })} />
           <Field label="Limit štandard (bm)" value={nastavenia.limit_standard_bm} step="1" onChange={(v) => ulozNastavenia({ limit_standard_bm: v })} />
+          <Field label="DPH (%)" value={nastavenia.dph_percent} step="0.5" onChange={(v) => ulozNastavenia({ dph_percent: v })} />
         </div>
       </div>
 
