@@ -126,8 +126,8 @@ export default function PotlaceTab({ supabase }) {
   const plochaM2 = plocha / 10000;
 
   const vcSublimacia = textilSub && sublimaciaGarment ? (() => {
-    const sirkaM = (parseFloat(sublimaciaGarment.sirka_papiera_cm) || 0) / 100;
-    const cenaPapierCm2 = sirkaM > 0 ? ((parseFloat(textilSub.cena_papier_bm) || 0) / sirkaM) / 10000 : 0;
+    // Papier sa reze z tej istej 160cm rolky podla plochy motivu (nie samostatna "sirka pre tricka")
+    const cenaPapierCm2 = ((parseFloat(textilSub.cena_papier_bm) || 0) / 160) / 100;
     const cenaAtramentCm2 = (((parseFloat(textilSub.cena_atrament_l) || 0) / 1000) * (parseFloat(textilSub.spotreba_atrament_ml_m2) || 0)) / 10000;
     const praca = ((parseFloat(sublimaciaGarment.cas_nazehlovania_min) || 0) / 60) * (parseFloat(textilSub.cena_prace_hod) || 0);
     const zaklad = plocha * (cenaPapierCm2 + cenaAtramentCm2) + (parseFloat(sublimaciaGarment.naklady_manipulacia) || 0) + (parseFloat(sublimaciaGarment.naklady_ochranny_papier) || 0) + praca;
@@ -161,8 +161,11 @@ export default function PotlaceTab({ supabase }) {
   const vcRezany = (() => {
     const naklad_cm2 = vybranaFolia ? (parseFloat(vybranaFolia.naklad_cm2) || 0) : 0;
     const material = plocha * naklad_cm2;
-    const praca = ((parseFloat(rezany.cas_rezania_min) || 0) + (parseFloat(rezany.cas_vylupovania_min) || 0) + (parseFloat(rezany.cas_nazehlovania_min) || 0)) / 60 * (parseFloat(rezany.cena_prace_hod) || 0);
-    return material + (parseFloat(rezany.naklady_manipulacia) || 0) + praca;
+    // Rezanie a vylupovanie zavisi od zlozitosti grafiky — zadava sa na 1cm², preto sa nasobi plochou.
+    // Nazehlovanie a manipulacia su fixne na kus.
+    const pracaCm2 = ((parseFloat(rezany.cas_rezania_min) || 0) + (parseFloat(rezany.cas_vylupovania_min) || 0)) / 60 * (parseFloat(rezany.cena_prace_hod) || 0) * plocha;
+    const pracaFlat = ((parseFloat(rezany.cas_nazehlovania_min) || 0) / 60) * (parseFloat(rezany.cena_prace_hod) || 0);
+    return material + (parseFloat(rezany.naklady_manipulacia) || 0) + pracaFlat + pracaCm2;
   })();
 
   if (isLoading) return <p className="text-sm text-slate-500">Načítavam…</p>;

@@ -126,26 +126,34 @@ export default function KostraCienTab({ supabase }) {
   }
 
   // --- Referencna plocha/mnozstvo pre nahlady VC nizsie (len orientacne zobrazenie) ---
-  const REF_PLOCHA_CM2 = 100; // 10x10cm
+  const REF_PLOCHA_CM2 = 100; // 10x10cm — male orientacne logo
   const REF_PLOCHA_M2 = REF_PLOCHA_CM2 / 10000;
+  // Max. format potlace na tricka (podla Martina — vsetko sa tlaci na tuto max. velkost alebo mensie
+  // vyrezy z rovnakej 160cm rolky, nie na celu sirku rolky)
+  const MAX_FORMAT_CM2 = 38 * 48;
 
   // Sublimacia — metraz (presne rovnaky vzorec ako vypocitajNakladBm v TextilMetrazTab.jsx)
-  const ROLL_WIDTH_M = 1.60;
+  const ROLL_WIDTH_CM = 160;
+  const ROLL_WIDTH_M = ROLL_WIDTH_CM / 100;
   const subInkM2 = ((textilSub.cena_atrament_l || 0) * (textilSub.spotreba_atrament_ml_m2 || 0) / 1000) * ROLL_WIDTH_M;
   const subLaborBm = (textilSub.cena_prace_hod || 0) / Math.max(0.01, textilSub.rychlost_m_hod || 1);
   const vcSublimaciaMetrazBm = (textilSub.cena_papier_bm || 0) + (textilSub.cena_ochranny_papier_bm || 0) + subInkM2 + subLaborBm;
 
-  // Sublimacia — potlac na tricka (zdielane vstupy z textilSub + garment-only extra polia)
-  const subGarmentSirkaM = (sublimaciaGarment.sirka_papiera_cm || 0) / 100;
-  const subCenaPapierCm2 = subGarmentSirkaM > 0 ? ((textilSub.cena_papier_bm || 0) / subGarmentSirkaM) / 10000 : 0;
+  // Sublimacia — potlac na tricka: papier sa reze z tej istej 160cm rolky (nie samostatna sirka),
+  // cena sa pocita proporcionalne podla plochy vyrezaneho kusa (max. format 38x48cm, vsetko mensie rovnako)
+  const subCenaPapierCm2 = ((textilSub.cena_papier_bm || 0) / ROLL_WIDTH_CM) / 100;
   const subCenaAtramentCm2 = (((textilSub.cena_atrament_l || 0) / 1000) * (textilSub.spotreba_atrament_ml_m2 || 0)) / 10000;
   const subGarmentPraca = ((sublimaciaGarment.cas_nazehlovania_min || 0) / 60) * (textilSub.cena_prace_hod || 0);
-  const vcSublimaciaGarmentZaklad = REF_PLOCHA_CM2 * (subCenaPapierCm2 + subCenaAtramentCm2) + (sublimaciaGarment.naklady_manipulacia || 0) + (sublimaciaGarment.naklady_ochranny_papier || 0) + subGarmentPraca;
-  const vcSublimaciaGarment = vcSublimaciaGarmentZaklad * (1 + (sublimaciaGarment.koeficient_rizika_percent || 0) / 100);
+  const subGarmentFlat = (sublimaciaGarment.naklady_manipulacia || 0) + (sublimaciaGarment.naklady_ochranny_papier || 0) + subGarmentPraca;
+  const subRizikoNasobok = 1 + (sublimaciaGarment.koeficient_rizika_percent || 0) / 100;
+  const vcSublimaciaGarment = (REF_PLOCHA_CM2 * (subCenaPapierCm2 + subCenaAtramentCm2) + subGarmentFlat) * subRizikoNasobok;
+  const vcSublimaciaGarmentMax = (MAX_FORMAT_CM2 * (subCenaPapierCm2 + subCenaAtramentCm2) + subGarmentFlat) * subRizikoNasobok;
 
-  // Rezany transfer — cas rezania+vylupovania+nazehlovania + manipulacia spolocne pre vsetky folie,
-  // naklad materialu per-folia (viz zoznam folii nizsie)
-  const rezanyPraca = ((rezany.cas_rezania_min || 0) + (rezany.cas_vylupovania_min || 0) + (rezany.cas_nazehlovania_min || 0)) / 60 * (rezany.cena_prace_hod || 0) + (rezany.naklady_manipulacia || 0);
+  // Rezany transfer — cas rezania a vylupovania zavisi od grafiky, zadava sa ako min/cm² (nie flat
+  // na zakazku) — nazehlovanie ostava flat na kus. Naklad materialu per-folia (viz zoznam folii nizsie).
+  const rezanyPracaFlat = ((rezany.cas_nazehlovania_min || 0) / 60) * (rezany.cena_prace_hod || 0) + (rezany.naklady_manipulacia || 0);
+  const rezanyPracaCm2 = ((rezany.cas_rezania_min || 0) + (rezany.cas_vylupovania_min || 0)) / 60 * (rezany.cena_prace_hod || 0);
+  const rezanyPraca = rezanyPracaFlat + rezanyPracaCm2 * REF_PLOCHA_CM2;
 
   // DTF — metraz (presne rovnaky vzorec ako v DtfMetrazTab.jsx, sirka role 56cm)
   const dtfFilmM2 = (dtf.cena_folie_bm || 0) / 0.56;
@@ -193,14 +201,15 @@ export default function KostraCienTab({ supabase }) {
             </div>
             <div className="p-3 bg-slate-950 rounded-xl border border-amber-900/40">
               <span className="text-xs font-bold text-amber-400 block mb-2">Variant: Potlač na tričká</span>
+              <p className="text-[11px] text-slate-500 mb-2">Papier sa reže z tej istej 160cm rolky podľa plochy motívu — max. používaný formát je 38×48cm, všetko menšie sa počíta rovnako proporcionálne.</p>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Šírka papiera pre tričká (cm)" value={sublimaciaGarment.sirka_papiera_cm} step="1" onChange={(v) => ulozSublimaciaGarment({ sirka_papiera_cm: v })} />
                 <Field label="Manipulácia strihania (€/ks)" value={sublimaciaGarment.naklady_manipulacia} step="0.01" onChange={(v) => ulozSublimaciaGarment({ naklady_manipulacia: v })} />
                 <Field label="Ochranný papier pri lise (€/ks)" value={sublimaciaGarment.naklady_ochranny_papier} step="0.01" onChange={(v) => ulozSublimaciaGarment({ naklady_ochranny_papier: v })} />
                 <Field label="Čas nažehlenia (min/ks)" value={sublimaciaGarment.cas_nazehlovania_min} step="0.1" onChange={(v) => ulozSublimaciaGarment({ cas_nazehlovania_min: v })} />
                 <Field label="Koeficient rizika (%, pokazené kusy)" value={sublimaciaGarment.koeficient_rizika_percent} step="1" onChange={(v) => ulozSublimaciaGarment({ koeficient_rizika_percent: v })} />
               </div>
-              <VysledokVC label={`VC pri ${REF_PLOCHA_CM2}cm²`} value={vcSublimaciaGarment} unit="€/ks" />
+              <VysledokVC label={`VC pri malom logu (${REF_PLOCHA_CM2}cm²)`} value={vcSublimaciaGarment} unit="€/ks" />
+              <VysledokVC label="VC pri max. formáte (38×48cm)" value={vcSublimaciaGarmentMax} unit="€/ks" />
             </div>
           </div>
         </div>
@@ -209,14 +218,15 @@ export default function KostraCienTab({ supabase }) {
       {/* REZANY TRANSFER */}
       <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-5">
         <h3 className="font-bold text-sm text-white mb-3">2. Rezaný transfer (fóliový vinyl)</h3>
+        <p className="text-[11px] text-slate-500 mb-2">Čas rezania a vyľupovania závisí od zložitosti grafiky, preto sa zadáva orientačne na 1cm² plochy motívu (nie fixne na kus). Nažehlovanie a manipulácia sú fixné na kus.</p>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 p-3 bg-slate-950 rounded-xl border border-slate-800 mb-3">
           <Field label="Cena práce (€/hod)" value={rezany.cena_prace_hod} step="0.5" onChange={(v) => ulozRezany({ cena_prace_hod: v })} />
-          <Field label="Čas rezania (min/ks)" value={rezany.cas_rezania_min} step="0.1" onChange={(v) => ulozRezany({ cas_rezania_min: v })} />
-          <Field label="Čas vyľupovania (min/ks)" value={rezany.cas_vylupovania_min} step="0.1" onChange={(v) => ulozRezany({ cas_vylupovania_min: v })} />
+          <Field label="Čas rezania (min/cm²)" value={rezany.cas_rezania_min} step="0.01" onChange={(v) => ulozRezany({ cas_rezania_min: v })} />
+          <Field label="Čas vyľupovania (min/cm²)" value={rezany.cas_vylupovania_min} step="0.01" onChange={(v) => ulozRezany({ cas_vylupovania_min: v })} />
           <Field label="Čas nažehlovania (min/ks)" value={rezany.cas_nazehlovania_min} step="0.1" onChange={(v) => ulozRezany({ cas_nazehlovania_min: v })} />
           <Field label="Manipulácia (€/ks)" value={rezany.naklady_manipulacia} step="0.01" onChange={(v) => ulozRezany({ naklady_manipulacia: v })} />
         </div>
-        <VysledokVC label="Práca + manipulácia spolu na 1 zákazku" value={rezanyPraca} unit="€/ks" />
+        <VysledokVC label={`Práca + manipulácia pri ${REF_PLOCHA_CM2}cm²`} value={rezanyPraca} unit="€/ks" />
         <div className="flex items-center justify-between mt-4 mb-2">
           <label className={labelCls}>Typy fólie — surový náklad materiálu (predajná sadzba sa nastavuje v karte Potlače)</label>
           <button onClick={pridajFoliu} className="text-xs text-indigo-400 font-semibold hover:text-indigo-300 flex items-center gap-1"><Plus className="w-3.5 h-3.5" /> Pridať typ fólie</button>
