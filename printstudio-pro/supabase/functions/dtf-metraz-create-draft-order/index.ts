@@ -81,7 +81,8 @@ Deno.serve(async (req) => {
       suborNazov = null, suborCesta = null,
     } = body;
 
-    if (mode !== 'auto' && mode !== 'subor') throw new Error('Neplatný režim objednávky.');
+    if (mode !== 'auto' && mode !== 'subor' && mode !== 'vzorky') throw new Error('Neplatný režim objednávky.');
+    if (mode === 'vzorky' && !suborCesta) throw new Error('Pre vzorku je potrebné nahrať súbor s grafikou.');
 
     const [{ data: nak }, { data: cfg }, { data: nastavenia }] = await Promise.all([
       supabase.from('dtf_naklady_verejny').select('naklad_bm').maybeSingle(),
@@ -95,25 +96,31 @@ Deno.serve(async (req) => {
       ? { coefA: Number(cfg.coef_a), coefB: Number(cfg.coef_b), marginFloor: Number(cfg.margin_floor), coefP: Number(cfg.coef_p), qtyAtFloor: Number(cfg.qty_at_floor) }
       : { coefA: 300, coefB: 54, marginFloor: 30, coefP: 1.3, qtyAtFloor: 1000 };
 
-    let totalLengthBm: number;
-    if (mode === 'auto') {
-      const w = Number(widthCm) || 0, h = Number(heightCm) || 0, q = Math.max(1, Math.round(Number(qty)) || 1);
-      if (w <= 0 || h <= 0) throw new Error('Neplatný rozmer loga.');
-      totalLengthBm = vypocitajRozlozenie(w, h, q);
-    } else {
-      totalLengthBm = Math.max(0.01, Number(directLengthBm) || 0.01);
-    }
-    const totalM2 = totalLengthBm * (ROLL_WIDTH_CM / 100);
+    // Vzorka (A4, 1 ks) ma pevnu cenu 5€ s DPH (vratane postovneho), nepocita sa podla bm ako
+    // zvysok appky — zakaznik len nahra vlastnu grafiku, tu sa vyskladane na jeden list A4.
+    const VZORKA_CENA_S_DPH = 5;
 
-    const nakladBm = Number(nak.naklad_bm) || 0;
-    const baseRate = priceAt(nakladBm, totalLengthBm, pricingConfig);
-    const subtotal = Math.max(totalLengthBm * baseRate, Number(nastavenia.minimalna_cena_objednavky) || 0);
-    const expressFee = deliverySpeed === 'express' ? subtotal * ((Number(nastavenia.priplatok_expres_percent) || 0) / 100) : 0;
-    const shippingFee = Number(nastavenia.cena_doprava) || 0;
-    const grandTotalBezDph = subtotal + expressFee + shippingFee;
-    const dphPercent = Number(nastavenia.dph_percent) || 0;
-    const dphSuma = grandTotalBezDph * (dphPercent / 100);
-    const grandTotal = grandTotalBezDph + dphSuma;
+    let totalLengthBm = 0, totalM2 = 0, baseRate = 0, grandTotal = VZORKA_CENA_S_DPH;
+    if (mode !== 'vzorky') {
+      if (mode === 'auto') {
+        const w = Number(widthCm) || 0, h = Number(heightCm) || 0, q = Math.max(1, Math.round(Number(qty)) || 1);
+        if (w <= 0 || h <= 0) throw new Error('Neplatný rozmer loga.');
+        totalLengthBm = vypocitajRozlozenie(w, h, q);
+      } else {
+        totalLengthBm = Math.max(0.01, Number(directLengthBm) || 0.01);
+      }
+      totalM2 = totalLengthBm * (ROLL_WIDTH_CM / 100);
+
+      const nakladBm = Number(nak.naklad_bm) || 0;
+      baseRate = priceAt(nakladBm, totalLengthBm, pricingConfig);
+      const subtotal = Math.max(totalLengthBm * baseRate, Number(nastavenia.minimalna_cena_objednavky) || 0);
+      const expressFee = deliverySpeed === 'express' ? subtotal * ((Number(nastavenia.priplatok_expres_percent) || 0) / 100) : 0;
+      const shippingFee = Number(nastavenia.cena_doprava) || 0;
+      const grandTotalBezDph = subtotal + expressFee + shippingFee;
+      const dphPercent = Number(nastavenia.dph_percent) || 0;
+      const dphSuma = grandTotalBezDph * (dphPercent / 100);
+      grandTotal = grandTotalBezDph + dphSuma;
+    }
 
     const objednavkaId = crypto.randomUUID();
     const { error: insertErr } = await supabase.from('dtf_objednavky').insert({
@@ -122,12 +129,12 @@ Deno.serve(async (req) => {
       sirka_cm: mode === 'auto' ? Number(widthCm) : null,
       vyska_cm: mode === 'auto' ? Number(heightCm) : null,
       pocet_ks: mode === 'auto' ? Math.max(1, Math.round(Number(qty)) || 1) : null,
-      dlzka_bm: Math.round(totalLengthBm * 100) / 100,
-      plocha_m2: Math.round(totalM2 * 100) / 100,
-      cena_hladina: `${baseRate.toFixed(2)} €/bm`,
+      dlzka_bm: mode === 'vzorky' ? null : Math.round(totalLengthBm * 100) / 100,
+      plocha_m2: mode === 'vzorky' ? null : Math.round(totalM2 * 100) / 100,
+      cena_hladina: mode === 'vzorky' ? 'A4 vzorka — pevná cena' : `${baseRate.toFixed(2)} €/bm`,
       cena_spolu: Math.round(grandTotal * 100) / 100,
-      doprava_rychlost: deliverySpeed,
-      harmonogram: harmonogram || null,
+      doprava_rychlost: mode === 'vzorky' ? 'standard' : deliverySpeed,
+      harmonogram: mode === 'vzorky' ? 'A4 vzorka' : (harmonogram || null),
       subor_nazov: suborNazov,
       subor_cesta: suborCesta,
     });
@@ -141,6 +148,8 @@ Deno.serve(async (req) => {
 
     const nazovPolozky = mode === 'auto'
       ? `DTF transfer — metráž ${totalLengthBm.toFixed(2)}bm (${qty}× ${widthCm}×${heightCm}cm)`
+      : mode === 'vzorky'
+      ? 'DTF transfer — vzorka vlastnej grafiky (A4, 1 ks)'
       : `DTF transfer — hotová rolka ${totalLengthBm.toFixed(2)}bm`;
 
     const draftPayload = {
@@ -154,8 +163,8 @@ Deno.serve(async (req) => {
             requires_shipping: true,
             properties: [
               { name: '_objednavka_id', value: objednavkaId },
-              { name: '_dlzka_bm', value: totalLengthBm.toFixed(2) },
-              { name: '_harmonogram', value: harmonogram || '' },
+              { name: '_dlzka_bm', value: mode === 'vzorky' ? 'A4' : totalLengthBm.toFixed(2) },
+              { name: '_harmonogram', value: mode === 'vzorky' ? '' : (harmonogram || '') },
               { name: '_subor', value: suborNazov || '' },
             ],
           },

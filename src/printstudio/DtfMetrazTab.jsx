@@ -97,12 +97,7 @@ export default function DtfMetrazTab({ supabase }) {
       {/* SHOPIFY PREPOJENIE */}
       <div className="bg-slate-900/60 rounded-2xl border border-indigo-900/40 p-5">
         <h3 className="font-bold text-sm text-white mb-1 flex items-center gap-1.5"><Settings className="w-4 h-4 text-indigo-400" /> Prepojenie na Shopify</h3>
-        <p className="text-xs text-slate-400">Platba beží cez <strong className="text-slate-200">Shopify Draft Order</strong> (Edge Function <code className="text-[11px] bg-slate-950 px-1 rounded">dtf-metraz-create-draft-order</code>) — appka vytvorí objednávku s presnou cenou a zákazníka rovno presmeruje na platbu, žiadny trik s počtom kusov. Nič sa tu nenastavuje — len over, že Supabase secrets <code className="text-[11px] bg-slate-950 px-1 rounded">SHOPIFY_STORE_DOMAIN</code>, <code className="text-[11px] bg-slate-950 px-1 rounded">SHOPIFY_CLIENT_ID</code> a <code className="text-[11px] bg-slate-950 px-1 rounded">SHOPIFY_CLIENT_SECRET</code> sú nastavené.</p>
-        <div className="mt-4 pt-4 border-t border-slate-800">
-          <p className="text-xs text-slate-400 mb-2">Záložka <strong className="text-slate-200">Vzorky (A4)</strong> v zákazníckej appke funguje inak — má pevnú cenu 5€ s DPH (vrátane poštovného), takže ide o skutočný Shopify produkt/variant pridaný do košíka, nie Draft Order. Vytvor v Shopify Admin produkt "Vzorky DTF transferov" (cena 5,00€ s DPH, Active, publikovaný do Online Store) a vlož sem jeho Variant ID.</p>
-          <label className="block text-slate-400 mb-1 text-xs">Shopify Variant ID — vzorky (5€ balíček)</label>
-          <input type="text" value={nastavenia.shopify_variant_id} onChange={(e) => ulozNastavenia({ shopify_variant_id: e.target.value })} placeholder="napr. 54913882620247" className="w-full max-w-xs bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs font-mono" />
-        </div>
+        <p className="text-xs text-slate-400">Platba beží cez <strong className="text-slate-200">Shopify Draft Order</strong> (Edge Function <code className="text-[11px] bg-slate-950 px-1 rounded">dtf-metraz-create-draft-order</code>) — appka vytvorí objednávku s presnou cenou a zákazníka rovno presmeruje na platbu, žiadny trik s počtom kusov. Nič sa tu nenastavuje — len over, že Supabase secrets <code className="text-[11px] bg-slate-950 px-1 rounded">SHOPIFY_STORE_DOMAIN</code>, <code className="text-[11px] bg-slate-950 px-1 rounded">SHOPIFY_CLIENT_ID</code> a <code className="text-[11px] bg-slate-950 px-1 rounded">SHOPIFY_CLIENT_SECRET</code> sú nastavené. Záložka <strong className="text-slate-200">Vzorky (A4)</strong> ide cez rovnakú Edge Function, len s pevnou cenou 5€ s DPH namiesto výpočtu z metráže.</p>
       </div>
 
       {/* DOPRAVA A KAPACITA */}
@@ -169,10 +164,10 @@ export default function DtfMetrazTab({ supabase }) {
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-bold text-white font-mono">{o.id.slice(0, 8)}</span>
-                    <span className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded text-[10px]">{o.rezim === 'auto' ? `${o.pocet_ks}ks ${o.sirka_cm}×${o.vyska_cm}cm` : 'Hotová rolka'}</span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] border ${o.rezim === 'vzorky' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30'}`}>{o.rezim === 'auto' ? `${o.pocet_ks}ks ${o.sirka_cm}×${o.vyska_cm}cm` : o.rezim === 'vzorky' ? 'Vzorka A4' : 'Hotová rolka'}</span>
                     <span className="text-slate-500 text-[10px]">{new Date(o.created_at).toLocaleString('sk-SK')}</span>
                   </div>
-                  <div className="text-slate-300">Metráž: <strong className="text-indigo-400 font-mono">{o.dlzka_bm} bm</strong> | Suma: <strong className="text-emerald-400 font-mono">{o.cena_spolu} €</strong> | {o.harmonogram}</div>
+                  <div className="text-slate-300">{o.rezim === 'vzorky' ? '' : <>Metráž: <strong className="text-indigo-400 font-mono">{o.dlzka_bm} bm</strong> | </>}Suma: <strong className="text-emerald-400 font-mono">{o.cena_spolu} €</strong> | {o.harmonogram}</div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <select value={o.stav} onChange={(e) => zmenStav(o.id, e.target.value)} className="px-2 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs">

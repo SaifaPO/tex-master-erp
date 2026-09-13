@@ -26,8 +26,6 @@ export default function DtfMetraz({ supabase, onSpat }) {
   const [nastavenia, setNastavenia] = useState(null);
 
   const [mode, setMode] = useState('auto'); // 'auto' | 'subor' | 'vzorky'
-  const [vzorkySubmitting, setVzorkySubmitting] = useState(false);
-  const [vzorkyError, setVzorkyError] = useState('');
   const [widthCm, setWidthCm] = useState(10);
   const [heightCm, setHeightCm] = useState(10);
   const [qty, setQty] = useState(30);
@@ -177,6 +175,7 @@ export default function DtfMetraz({ supabase, onSpat }) {
 
   const odoslatObjednavku = async () => {
     if (!nastavenia) return;
+    if (mode === 'vzorky' && !rawFile) { setSubmitError('Nahrajte súbor s grafikou pre A4 vzorku.'); return; }
     setIsSubmitting(true);
     setSubmitError('');
     setConfirmation('');
@@ -190,9 +189,10 @@ export default function DtfMetraz({ supabase, onSpat }) {
         if (!uploadErr) suborCesta = cesta;
       }
 
-      // Cena sa NEPOSIELA — Edge Function ju prepocita sama zo zivych DB tabuliek a vytvori
-      // Shopify Draft Order s 1 riadkom / 1 kusom / presnou cenou (namiesto triku s velkym
-      // poctom kusov cez /cart/add.js), zakaznika presmerujeme rovno na platbu tejto objednavky.
+      // Cena sa NEPOSIELA — Edge Function ju prepocita sama zo zivych DB tabuliek (alebo pouzije
+      // pevnu cenu vzorky) a vytvori Shopify Draft Order s 1 riadkom / 1 kusom / presnou cenou
+      // (namiesto triku s velkym poctom kusov cez /cart/add.js), zakaznika presmerujeme rovno na
+      // platbu tejto objednavky.
       const { data, error } = await supabase.functions.invoke('dtf-metraz-create-draft-order', {
         body: {
           mode, widthCm, heightCm, qty, directLengthBm,
@@ -204,38 +204,12 @@ export default function DtfMetraz({ supabase, onSpat }) {
       if (data?.error) throw new Error(data.error);
       if (!data?.checkoutUrl) throw new Error('Server nevrátil odkaz na platbu.');
 
-      setConfirmation(`Objednávka bola vytvorená — ${totalLengthBm.toFixed(2)} bm, ${Number(data.cenaSpolu).toFixed(2)} €. Presmerúvam na platbu…`);
+      setConfirmation(`Objednávka bola vytvorená — ${Number(data.cenaSpolu).toFixed(2)} €. Presmerúvam na platbu…`);
       window.location.href = data.checkoutUrl;
     } catch (e) {
       setSubmitError('Objednávku sa nepodarilo odoslať: ' + e.message);
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  // Vzorky maju pevnu cenu (5€ s DPH, vratane postovneho) — na rozdiel od zvysku appky sa
-  // nepocita server-side cez Draft Order, ale ide o skutocny Shopify produkt/variant s pevnou
-  // cenou, takze staci bezne pridanie do kosika s mnozstvom presne 1.
-  const objednatVzorky = async () => {
-    const variantId = nastavenia?.shopify_variant_id;
-    if (!variantId) { setVzorkyError('Vzorky zatiaľ nie sú nastavené (chýba Shopify Variant ID v admine).'); return; }
-    setVzorkySubmitting(true);
-    setVzorkyError('');
-    try {
-      const res = await fetch('/cart/add.js', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: variantId, quantity: 1 }),
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Shopify chyba ${res.status}: ${text}`);
-      }
-      window.location.href = '/cart';
-    } catch (e) {
-      setVzorkyError('Vzorky sa nepodarilo pridať do košíka (' + e.message + '). Mimo živého Shopify obchodu je to očakávané.');
-    } finally {
-      setVzorkySubmitting(false);
     }
   };
 
@@ -261,8 +235,13 @@ export default function DtfMetraz({ supabase, onSpat }) {
 
       {mode === 'vzorky' ? (
         <div className="max-w-xl bg-white p-5 sm:p-6 rounded-2xl border border-emerald-200 shadow-sm space-y-4">
-          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Gift className="w-4 h-4 text-emerald-600" /> Vzorková sada DTF transferov</h3>
-          <p className="text-sm text-slate-600">Nie ste si istí kvalitou? Objednajte si vzorku formátu <strong>A4, 1 ks</strong> — pošleme vám ukážku nášho DTF transferu, aby ste videli kvalitu tlače a materiálu ešte pred väčšou objednávkou.</p>
+          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Gift className="w-4 h-4 text-emerald-600" /> Vzorka vlastnej grafiky (A4)</h3>
+          <p className="text-sm text-slate-600">Nie ste si istí kvalitou? Nahrajte svoje logo/grafiku, vyskladáme ju na jeden list <strong>A4 (1 ks)</strong> a pošleme vám vytlačenú ukážku ešte pred väčšou objednávkou.</p>
+          <label className="border-2 border-dashed border-slate-200 hover:border-emerald-400 rounded-xl p-6 flex flex-col items-center gap-2 cursor-pointer transition bg-slate-50/50">
+            <UploadCloud className="w-7 h-7 text-emerald-500" />
+            <span className="text-xs text-slate-600 font-medium">{rawFile ? `Nahraté: ${rawFile.name}` : 'Kliknite pre výber (PNG / TIFF, 300 DPI)'}</span>
+            <input type="file" accept="image/png,image/tiff" onChange={handleFile} className="hidden" />
+          </label>
           <ul className="text-xs text-slate-500 list-disc pl-4 space-y-1">
             <li>Formát A4, 1 kus</li>
             <li>Cena zahŕňa aj poštovné</li>
@@ -272,10 +251,11 @@ export default function DtfMetraz({ supabase, onSpat }) {
             <span className="text-xs text-slate-500">Cena vzorky s DPH</span>
             <span className="text-2xl font-extrabold font-mono text-slate-900">5,00 €</span>
           </div>
-          <button onClick={objednatVzorky} disabled={vzorkySubmitting} className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white font-bold text-sm flex items-center justify-center gap-2 transition">
-            <ShoppingCart className="w-4 h-4" /> {vzorkySubmitting ? 'Pridávam do košíka…' : 'Objednať vzorky'}
+          <button onClick={odoslatObjednavku} disabled={isSubmitting} className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white font-bold text-sm flex items-center justify-center gap-2 transition">
+            <ShoppingCart className="w-4 h-4" /> {isSubmitting ? 'Vytváram objednávku…' : 'Objednať vzorku a zaplatiť'}
           </button>
-          {vzorkyError && <p className="text-xs text-rose-600">{vzorkyError}</p>}
+          {confirmation && <p className="text-xs text-emerald-600">{confirmation}</p>}
+          {submitError && <p className="text-xs text-rose-600">{submitError}</p>}
         </div>
       ) : (
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
