@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Scroll, UploadCloud, Truck, Eye, ShoppingCart, TriangleAlert, CreditCard, Gift, Shirt } from 'lucide-react';
+import { Scroll, UploadCloud, Truck, Eye, ShoppingCart, TriangleAlert, CreditCard, Gift } from 'lucide-react';
 import { priceAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 
 const BUCKET = 'print-designs';
@@ -24,8 +24,6 @@ export default function DtfMetraz({ supabase, onSpat }) {
   const [nakladBm, setNakladBm] = useState(0);
   const [pricingConfig, setPricingConfig] = useState(DEFAULT_PRICING_CONFIG);
   const [nastavenia, setNastavenia] = useState(null);
-  const [materialy, setMaterialy] = useState([]);
-  const [materialKod, setMaterialKod] = useState(''); // '' = vlastny material zakaznika
 
   const [mode, setMode] = useState('auto'); // 'auto' | 'subor' | 'vzorky'
   const [widthCm, setWidthCm] = useState(10);
@@ -47,23 +45,20 @@ export default function DtfMetraz({ supabase, onSpat }) {
   useEffect(() => {
     if (!supabase) { setLoadError('Supabase klient nie je nakonfigurovaný.'); setIsLoading(false); return; }
     (async () => {
-      const [{ data: nak }, { data: cfg }, { data: n }, { data: mat }] = await Promise.all([
+      const [{ data: nak }, { data: cfg }, { data: n }] = await Promise.all([
         supabase.from('dtf_naklady_verejny').select('naklad_bm').maybeSingle(),
         supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
         supabase.from('dtf_nastavenia').select('*').eq('id', 1).maybeSingle(),
-        supabase.from('dtf_materialy_verejny').select('*'),
       ]);
       setNakladBm(nak ? Number(nak.naklad_bm) : 0);
       if (cfg) setPricingConfig(mapConfigFromDb(cfg));
       setNastavenia(n || null);
-      setMaterialy(mat || []);
       setIsLoading(false);
     })();
   }, [supabase]);
 
   // ---- Výpočet ceny a metráže ----
-  let totalLengthBm = 0, totalM2 = 0, totalCm2 = 0, baseRate = 0, fabricRate = 0, fabricSubtotal = 0, subtotal = 0, expressFee = 0, shippingFee = 0, grandTotalBezDph = 0, dphSuma = 0, grandTotal = 0, capacityIssue = null;
-  const vybranyMaterial = materialy.find(m => m.kod === materialKod) || null;
+  let totalLengthBm = 0, totalM2 = 0, totalCm2 = 0, baseRate = 0, subtotal = 0, expressFee = 0, shippingFee = 0, grandTotalBezDph = 0, dphSuma = 0, grandTotal = 0, capacityIssue = null;
 
   if (nastavenia) {
     if (mode === 'auto') {
@@ -80,15 +75,7 @@ export default function DtfMetraz({ supabase, onSpat }) {
     // Sadzba (€/bm) sa dopocitava z vyrobnej ceny na meter + jednotneho marzoveho vzorca
     // (rovnaky ako v celom PrintStudio Pro) — vacsi odber = nizsia marza = nizsia sadzba.
     baseRate = priceAt(nakladBm, totalLengthBm, pricingConfig);
-    // Ak si zakaznik vybral aj nasu latku (nie vlastny material), jej cena sa pocita rovnakym
-    // vzorcom (na rovnakej sirke 56cm ako potlac) a PRIPOCITAVA k cene potlace — samostatna
-    // marzova krivka pre material, nie kombinovany naklad pred jednou marzou.
-    if (vybranyMaterial) {
-      const fabricNakladBm = Number(vybranyMaterial.naklad_m2) * (ROLL_WIDTH_CM / 100);
-      fabricRate = priceAt(fabricNakladBm, totalLengthBm, pricingConfig);
-      fabricSubtotal = totalLengthBm * fabricRate;
-    }
-    subtotal = Math.max(totalLengthBm * baseRate + fabricSubtotal, Number(nastavenia.minimalna_cena_objednavky));
+    subtotal = Math.max(totalLengthBm * baseRate, Number(nastavenia.minimalna_cena_objednavky));
     expressFee = deliverySpeed === 'express' ? subtotal * (Number(nastavenia.priplatok_expres_percent) / 100) : 0;
     shippingFee = Number(nastavenia.cena_doprava);
     grandTotalBezDph = subtotal + expressFee + shippingFee;
@@ -211,7 +198,6 @@ export default function DtfMetraz({ supabase, onSpat }) {
           mode, widthCm, heightCm, qty, directLengthBm,
           deliverySpeed, harmonogram: aktualnyHarmonogram,
           suborNazov: rawFile?.name || null, suborCesta,
-          materialKod: mode === 'vzorky' ? null : (materialKod || null),
         },
       });
       if (error) throw error;
@@ -314,36 +300,6 @@ export default function DtfMetraz({ supabase, onSpat }) {
           )}
 
           <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-3">
-            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-2"><Shirt className="w-4 h-4 text-indigo-500" /> Materiál</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <label className={`p-3.5 rounded-xl border cursor-pointer transition ${!materialKod ? 'border-indigo-500 bg-indigo-50/60' : 'border-slate-200'}`}>
-                <input type="radio" name="material" className="hidden" checked={!materialKod} onChange={() => setMaterialKod('')} />
-                <span className="text-sm font-bold text-slate-900 block">Vlastný materiál</span>
-                <span className="text-xs text-slate-500">Nažehlíte si sami, platíte len za potlač</span>
-              </label>
-              <label className={`p-3.5 rounded-xl border cursor-pointer transition ${materialKod ? 'border-indigo-500 bg-indigo-50/60' : 'border-slate-200'}`}>
-                <input type="radio" name="material" className="hidden" checked={!!materialKod} onChange={() => setMaterialKod(materialy[0]?.kod || '')} disabled={materialy.length === 0} />
-                <span className="text-sm font-bold text-slate-900 block">Objednať aj látku od nás</span>
-                <span className="text-xs text-slate-500">{materialy.length > 0 ? 'Vytlačíme priamo na náš materiál' : 'Momentálne nie je dostupné'}</span>
-              </label>
-            </div>
-            {materialKod && (
-              <div className="space-y-2 pt-1">
-                <select value={materialKod} onChange={(e) => setMaterialKod(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm">
-                  {materialy.map(m => <option key={m.kod} value={m.kod}>{m.nazov}</option>)}
-                </select>
-                {vybranyMaterial && (
-                  <div className="text-xs text-slate-600 bg-slate-50 border border-slate-100 rounded-lg p-3 space-y-1">
-                    {vybranyMaterial.popis && <p><strong className="text-slate-800">Popis:</strong> {vybranyMaterial.popis}</p>}
-                    {vybranyMaterial.pouzitie && <p><strong className="text-slate-800">Použitie:</strong> {vybranyMaterial.pouzitie}</p>}
-                    {vybranyMaterial.specifikacie && <p><strong className="text-slate-800">Špecifikácie:</strong> {vybranyMaterial.specifikacie}</p>}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-3">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-2"><Truck className="w-4 h-4 text-indigo-500" /> Rýchlosť doručenia</h3>
             <div className="grid grid-cols-2 gap-3">
               <label className={`p-3.5 rounded-xl border cursor-pointer transition ${deliverySpeed === 'standard' ? 'border-indigo-500 bg-indigo-50/60' : 'border-slate-200'}`}>
@@ -398,8 +354,7 @@ export default function DtfMetraz({ supabase, onSpat }) {
               <span className="text-[10px] font-normal text-indigo-300 bg-indigo-500/10 px-2 py-1 rounded-full">s DPH {nastavenia.dph_percent}%</span>
             </h3>
             <div className="space-y-2 text-xs text-slate-300">
-              <Row label="Sadzba potlače" value={`${baseRate.toFixed(2)} €/bm`} />
-              {vybranyMaterial && <Row label={`Látka: ${vybranyMaterial.nazov}`} value={`${fabricRate.toFixed(2)} €/bm`} />}
+              <Row label="Sadzba pri tomto odbere" value={`${baseRate.toFixed(2)} €/bm`} />
               <Row label="Potrebná dĺžka rolky" value={`${totalLengthBm.toFixed(2)} bm`} highlight />
               <Row label="Tlačová plocha" value={`${totalM2.toFixed(2)} m²`} />
               <Row label="Príplatok za expres" value={`${expressFee.toFixed(2)} €`} />

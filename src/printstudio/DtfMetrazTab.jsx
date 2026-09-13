@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Scroll, Download, Settings, ExternalLink, Trash2 } from 'lucide-react';
 import { priceAt, marginAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
-import DtfMaterialyTab from './DtfMaterialyTab';
 
 const PRINTSTUDIO_BASE_URL = 'https://printstudio-pro.vercel.app';
 const BUCKET = 'print-designs';
@@ -101,8 +100,6 @@ export default function DtfMetrazTab({ supabase }) {
         <p className="text-xs text-slate-400">Platba beží cez <strong className="text-slate-200">Shopify Draft Order</strong> (Edge Function <code className="text-[11px] bg-slate-950 px-1 rounded">dtf-metraz-create-draft-order</code>) — appka vytvorí objednávku s presnou cenou a zákazníka rovno presmeruje na platbu, žiadny trik s počtom kusov. Nič sa tu nenastavuje — len over, že Supabase secrets <code className="text-[11px] bg-slate-950 px-1 rounded">SHOPIFY_STORE_DOMAIN</code>, <code className="text-[11px] bg-slate-950 px-1 rounded">SHOPIFY_CLIENT_ID</code> a <code className="text-[11px] bg-slate-950 px-1 rounded">SHOPIFY_CLIENT_SECRET</code> sú nastavené. Záložka <strong className="text-slate-200">Vzorky (A4)</strong> ide cez rovnakú Edge Function, len s pevnou cenou 5€ s DPH namiesto výpočtu z metráže.</p>
       </div>
 
-      <DtfMaterialyTab supabase={supabase} />
-
       {/* DOPRAVA A KAPACITA */}
       <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-5">
         <h3 className="font-bold text-sm text-white mb-3">Doprava, expres a kapacitné limity</h3>
@@ -169,7 +166,6 @@ export default function DtfMetrazTab({ supabase }) {
                     <span className="font-bold text-white font-mono">{o.id.slice(0, 8)}</span>
                     <span className={`px-2 py-0.5 rounded text-[10px] border ${o.rezim === 'vzorky' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30'}`}>{o.rezim === 'auto' ? `${o.pocet_ks}ks ${o.sirka_cm}×${o.vyska_cm}cm` : o.rezim === 'vzorky' ? 'Vzorka A4' : 'Hotová rolka'}</span>
                     <span className="text-slate-500 text-[10px]">{new Date(o.created_at).toLocaleString('sk-SK')}</span>
-                    {o.material_nazov && <span className="bg-teal-500/20 text-teal-300 border border-teal-500/30 px-2 py-0.5 rounded text-[10px]">+ {o.material_nazov}</span>}
                   </div>
                   <div className="text-slate-300">{o.rezim === 'vzorky' ? '' : <>Metráž: <strong className="text-indigo-400 font-mono">{o.dlzka_bm} bm</strong> | </>}Suma: <strong className="text-emerald-400 font-mono">{o.cena_spolu} €</strong> | {o.harmonogram}</div>
                 </div>
