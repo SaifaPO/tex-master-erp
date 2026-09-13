@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Edit2, Trash2, Box, Loader2 } from 'lucide-react';
+import { Plus, Edit2, Trash2, Box, Loader2, Tag, Check, X } from 'lucide-react';
 
 const ZONE_KEYS = ['predok', 'chrbat', 'lavy_rukav', 'pravy_rukav', 'stitok_golier'];
 const NAZVY_ZON = { predok: 'Predok', chrbat: 'Chrbát', lavy_rukav: 'Ľ. rukáv', pravy_rukav: 'P. rukáv', stitok_golier: 'Štítok (golier)' };
@@ -16,6 +16,10 @@ const prazdnaZona = () => ({ w: '', h: '' });
 export default function ProduktyTab({ supabase }) {
   const [produkty, setProdukty] = useState([]);
   const [kategorie, setKategorie] = useState([]);
+  const [kategorieOpen, setKategorieOpen] = useState(false);
+  const [novaKategoria, setNovaKategoria] = useState('');
+  const [editKategoriaId, setEditKategoriaId] = useState(null);
+  const [editKategoriaNazov, setEditKategoriaNazov] = useState('');
   const [farby, setFarby] = useState([]);
   const [zonyPerProdukt, setZonyPerProdukt] = useState({}); // { produktId: Set(zona) }
   const [technologiePerProdukt, setTechnologiePerProdukt] = useState({}); // { produktId: [technologia,...] }
@@ -68,6 +72,29 @@ export default function ProduktyTab({ supabase }) {
   };
 
   useEffect(() => { nacitajZoznam(); }, []);
+
+  const pridajKategoriu = async () => {
+    const nazovTrim = novaKategoria.trim();
+    if (!nazovTrim) return;
+    const { error: err } = await supabase.from('kategorie').insert({ nazov: nazovTrim, poradie: kategorie.length });
+    if (err) { window.alert(err.message); return; }
+    setNovaKategoria('');
+    nacitajZoznam();
+  };
+  const zacniUpravovatKategoriu = (k) => { setEditKategoriaId(k.id); setEditKategoriaNazov(k.nazov); };
+  const ulozKategoriu = async () => {
+    const nazovTrim = editKategoriaNazov.trim();
+    if (!nazovTrim) { setEditKategoriaId(null); return; }
+    await supabase.from('kategorie').update({ nazov: nazovTrim }).eq('id', editKategoriaId);
+    setEditKategoriaId(null);
+    nacitajZoznam();
+  };
+  const zmazKategoriu = async (k) => {
+    if (!window.confirm(`Naozaj zmazať kategóriu "${k.nazov}"?`)) return;
+    const { error: err } = await supabase.from('kategorie').delete().eq('id', k.id);
+    if (err) { window.alert('Nepodarilo sa zmazať — pravdepodobne v nej ešte sú produkty. Presuň ich najprv do inej kategórie.\n\n' + err.message); return; }
+    nacitajZoznam();
+  };
 
   const resetForm = () => {
     setKategoriaId(kategorie[0]?.id || '');
@@ -244,10 +271,46 @@ export default function ProduktyTab({ supabase }) {
           <h2 className="text-xl font-bold text-white flex items-center gap-2"><Box className="text-indigo-400 h-5 w-5" /> Produkty (Blanks)</h2>
           <p className="text-xs text-slate-400 mt-1">Žiadne sledovanie skladových zásob — len definícia produktu, zón potlače a cien.</p>
         </div>
-        <button onClick={otvorNovy} className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-xl text-sm font-semibold transition">
-          <Plus className="w-4 h-4" /> Pridať produkt
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setKategorieOpen(o => !o)} className="flex items-center gap-1.5 border border-slate-700 text-slate-300 hover:bg-slate-800 px-3.5 py-2 rounded-xl text-sm font-semibold transition">
+            <Tag className="w-4 h-4" /> Kategórie
+          </button>
+          <button onClick={otvorNovy} className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-xl text-sm font-semibold transition">
+            <Plus className="w-4 h-4" /> Pridať produkt
+          </button>
+        </div>
       </div>
+
+      {kategorieOpen && (
+        <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-5 space-y-3">
+          <h3 className="font-bold text-sm text-slate-200 flex items-center gap-1.5"><Tag className="w-4 h-4 text-indigo-400" /> Kategórie produktov</h3>
+          <p className="text-[11px] text-slate-500">Vlastné kategórie si tu pridaj, premenuj alebo zmaž — napr. "Čelenky", "Buffky", "Iné". Kategóriu s produktmi nie je možné zmazať, kým z nej produkty nepresunieš inam.</p>
+          <div className="space-y-1.5">
+            {kategorie.map(k => (
+              <div key={k.id} className="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2">
+                {editKategoriaId === k.id ? (
+                  <>
+                    <input autoFocus value={editKategoriaNazov} onChange={(e) => setEditKategoriaNazov(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && ulozKategoriu()} className="flex-1 px-2 py-1 bg-slate-900 border border-slate-700 rounded-md text-sm text-white" />
+                    <button onClick={ulozKategoriu} className="text-emerald-400 hover:text-emerald-300 p-1"><Check className="w-4 h-4" /></button>
+                    <button onClick={() => setEditKategoriaId(null)} className="text-slate-500 hover:text-slate-300 p-1"><X className="w-4 h-4" /></button>
+                  </>
+                ) : (
+                  <>
+                    <span className="flex-1 text-sm text-slate-200">{k.nazov}</span>
+                    <button onClick={() => zacniUpravovatKategoriu(k)} className="text-slate-400 hover:text-indigo-400 p-1"><Edit2 className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => zmazKategoriu(k)} className="text-slate-400 hover:text-rose-400 p-1"><Trash2 className="w-3.5 h-3.5" /></button>
+                  </>
+                )}
+              </div>
+            ))}
+            {kategorie.length === 0 && <p className="text-xs text-slate-500">Zatiaľ žiadne kategórie.</p>}
+          </div>
+          <div className="flex items-center gap-2 pt-1">
+            <input value={novaKategoria} onChange={(e) => setNovaKategoria(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && pridajKategoriu()} type="text" placeholder="Názov novej kategórie (napr. Čelenky)" className="flex-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" />
+            <button onClick={pridajKategoriu} className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-lg text-xs font-semibold transition"><Plus className="w-3.5 h-3.5" /> Pridať</button>
+          </div>
+        </div>
+      )}
 
       {formOpen && (
         <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-5 space-y-4">
