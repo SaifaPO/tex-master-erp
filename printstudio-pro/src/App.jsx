@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Shirt, Scroll } from 'lucide-react';
+import pbtLogo from './assets/pbt-logo-black.png';
 import { supabase } from './supabaseClient';
 import { nacitajKategorieAProdukty } from './produktData';
 import Katalog from './Katalog';
@@ -54,7 +55,7 @@ export default function App() {
       <header className="bg-white border-b border-slate-200 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="bg-indigo-600 text-white p-2 rounded-lg"><Shirt className="w-6 h-6" /></div>
+            <div className="bg-white border border-slate-200 p-1.5 rounded-lg"><img src={pbtLogo} alt="PBT" className="w-7 h-7 object-contain" /></div>
             <div>
               <h1 className="font-bold text-lg leading-tight text-slate-900">PrintStudio Pro</h1>
               <p className="text-xs text-slate-500">Konfigurátor a tvorca potlače</p>
