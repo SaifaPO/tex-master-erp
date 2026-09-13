@@ -1301,6 +1301,7 @@ export default function App() {
   const [showRedukovaneVykony, setShowRedukovaneVykony] = useState(false);
 
   const [catalogSportFilter, setCatalogSportFilter] = useState('vsetko');
+  const [catalogViewMode, setCatalogViewMode] = useState('karty'); // 'karty' | 'riadky'
 
   const [newOrderCustomer, setNewOrderCustomer] = useState('');
   const [newOrderDeliveryDate, setNewOrderDeliveryDate] = useState(() => {
@@ -6916,8 +6917,50 @@ export default function App() {
                       <option value="vsetko">Všetky Športy</option>
                       {sports.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
+                    <div className="flex items-center gap-1 ml-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
+                      <button type="button" onClick={() => setCatalogViewMode('karty')} className={`px-2 py-1 rounded text-[11px] font-bold transition-all ${catalogViewMode === 'karty' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}>Karty</button>
+                      <button type="button" onClick={() => setCatalogViewMode('riadky')} className={`px-2 py-1 rounded text-[11px] font-bold transition-all ${catalogViewMode === 'riadky' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}>Riadky</button>
+                    </div>
                   </div>
                 </div>
+                {catalogViewMode === 'riadky' ? (
+                  <div className="overflow-x-auto bg-slate-900 border border-slate-800 rounded-xl">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-800 text-slate-400 uppercase text-[10px] tracking-wide">
+                          <th className="text-left p-2.5">Kód</th>
+                          <th className="text-left p-2.5">Názov</th>
+                          <th className="text-left p-2.5">Športy</th>
+                          <th className="text-left p-2.5">Látka 1</th>
+                          <th className="text-left p-2.5">Látka 2</th>
+                          <th className="text-left p-2.5">Výr. cena</th>
+                          <th className="text-right p-2.5">Akcie</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {catalogFilteredProducts.map(p => (
+                          <tr key={p.id} className="border-b border-slate-800/60 hover:bg-slate-800/30">
+                            <td className="p-2.5 font-mono text-slate-300 whitespace-nowrap">{p.customCode}</td>
+                            <td className="p-2.5 font-semibold text-slate-100 whitespace-nowrap">{p.name}</td>
+                            <td className="p-2.5 text-slate-400 whitespace-nowrap">{(p.sports || []).join(', ')}</td>
+                            <td className="p-2.5 text-slate-400 whitespace-nowrap">{p.layer1 ? materials.find(m => m.id === p.layer1?.materialId)?.name : <span className="italic text-slate-600">—</span>}</td>
+                            <td className="p-2.5 text-slate-400 whitespace-nowrap">{p.layer2 ? materials.find(m => m.id === p.layer2?.materialId)?.name : <span className="italic text-slate-600">—</span>}</td>
+                            <td className="p-2.5 text-slate-300 whitespace-nowrap">{p.productionCost != null ? `${Number(p.productionCost).toFixed(2)} €` : <span className="italic text-slate-600">—</span>}</td>
+                            <td className="p-2.5 text-right whitespace-nowrap">
+                              <div className="flex gap-1 justify-end">
+                                <button onClick={() => setEditingProduct(p)} className="bg-slate-800 hover:bg-slate-750 text-indigo-400 p-1.5 rounded transition-all"><FileEdit className="h-3.5 w-3.5" /></button>
+                                <button onClick={() => handleDeleteModel(p.id)} className="bg-slate-800 hover:bg-rose-900 text-rose-400 p-1.5 rounded transition-all"><Trash2 className="h-3.5 w-3.5" /></button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                        {catalogFilteredProducts.length === 0 && (
+                          <tr><td colSpan={7} className="text-center text-slate-500 py-6">Žiadne modely.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {catalogFilteredProducts.map(p => (
                     <div key={p.id} className="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-3 text-xs">
@@ -6942,6 +6985,7 @@ export default function App() {
                     </div>
                   ))}
                 </div>
+                )}
               </div>
             </div>
           </div>
