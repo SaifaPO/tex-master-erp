@@ -5554,7 +5554,7 @@ export default function App() {
                 <button onClick={() => setActiveTab('orders')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'orders' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><PlusCircle className="h-3.5 w-3.5" /> Konfigurátor Zákaziek</button>
               )}
               {canSeeTab(currentUser.role, 'catalog') && (
-                <button onClick={() => setActiveTab('catalog')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'catalog' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Tag className="h-3.5 w-3.5" /> Katalóg Modelov</button>
+                <button onClick={() => setActiveTab('catalog')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'catalog' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Tag className="h-3.5 w-3.5" /> Katalóg Produktov</button>
               )}
               {canSeeTab(currentUser.role, 'isolated-station') && (
                 <button onClick={() => setActiveTab('isolated-station')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'isolated-station' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Sliders className="h-3.5 w-3.5" /> Samostatné Dielne</button>
@@ -6568,7 +6568,7 @@ export default function App() {
           <div className="space-y-6 print:hidden animate-in fade-in duration-150">
             <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 shadow-xl">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-2">
-                <h2 className="text-xl font-bold text-white flex items-center gap-2"><Tag className="text-indigo-400 h-5 w-5" /> Správa Katalógu Modelov</h2>
+                <h2 className="text-xl font-bold text-white flex items-center gap-2"><Tag className="text-indigo-400 h-5 w-5" /> Správa Katalógu Produktov</h2>
                 {hasPermission('manage_catalog') && (
                   <div className="flex flex-wrap gap-2">
                     <button onClick={handleExportProducts} className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[11px] px-3 py-1.5 rounded-lg flex items-center gap-1.5"><Download className="h-3.5 w-3.5" /> Export do Excelu</button>
