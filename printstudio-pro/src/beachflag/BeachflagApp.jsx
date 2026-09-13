@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { fabric } from 'fabric';
 import { Flag, Eye } from 'lucide-react';
+import PbtHeader from '../PbtHeader';
 import { nacitajVlajkaKatalog } from './vlajkaData';
 import { getSessionId } from '../supabaseClient';
 import ParametreTab from './ParametreTab';
@@ -232,6 +233,8 @@ export default function BeachflagApp({ supabase }) {
   };
 
   return (
+    <>
+    <PbtHeader title="PrintStudio Pro" subtitle="Konfigurátor plážovej vlajky" />
     <div className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
       <div className="lg:col-span-7 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
         <div className="flex border-b border-slate-200 bg-slate-50 text-slate-600 font-medium text-xs sm:text-sm">
@@ -281,5 +284,6 @@ export default function BeachflagApp({ supabase }) {
         </div>
       </div>
     </div>
+    </>
   );
 }
