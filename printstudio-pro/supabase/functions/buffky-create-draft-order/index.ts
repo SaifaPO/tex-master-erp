@@ -10,7 +10,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface PricingConfig { coefA: number; coefB: number; marginFloor: number; coefP: number; qtyAtFloor: number; }
+interface PricingConfig { coefA: number; coefB: number; marginFloor: number; coefP: number; qtyAtFloor: number; dphPercent: number; }
 
 function baseMargin(cost: number, cfg: PricingConfig) {
   const c = Math.max(cost, 0.05);
@@ -74,8 +74,8 @@ Deno.serve(async (req) => {
     if (!nastavenia) throw new Error('Nastavenia buffiek sa nenašli.');
 
     const pricingConfig: PricingConfig = cfg
-      ? { coefA: Number(cfg.coef_a), coefB: Number(cfg.coef_b), marginFloor: Number(cfg.margin_floor), coefP: Number(cfg.coef_p), qtyAtFloor: Number(cfg.qty_at_floor) }
-      : { coefA: 300, coefB: 54, marginFloor: 30, coefP: 1.3, qtyAtFloor: 1000 };
+      ? { coefA: Number(cfg.coef_a), coefB: Number(cfg.coef_b), marginFloor: Number(cfg.margin_floor), coefP: Number(cfg.coef_p), qtyAtFloor: Number(cfg.qty_at_floor), dphPercent: Number(cfg.dph_percent ?? 23) }
+      : { coefA: 300, coefB: 54, marginFloor: 30, coefP: 1.3, qtyAtFloor: 1000, dphPercent: 23 };
 
     // Nikdy neveri klientom poslanej cene materialu — pri Premium sa nakladovy zaklad materialu
     // ZNOVA zisti zo servera (buffky_premium_materialy_verejny), materialKod len urcuje KTORY.
@@ -93,7 +93,7 @@ Deno.serve(async (req) => {
     const expressFee = deliverySpeed === 'express' ? subtotal * ((Number(nastavenia.priplatok_expres_percent) || 0) / 100) : 0;
     const shippingFee = Number(nastavenia.cena_doprava) || 0;
     const grandTotalBezDph = subtotal + expressFee + shippingFee;
-    const dphPercent = Number(nastavenia.dph_percent) || 0;
+    const dphPercent = Number(pricingConfig.dphPercent) || 0;
     const dphSuma = grandTotalBezDph * (dphPercent / 100);
     const grandTotal = grandTotalBezDph + dphSuma;
 

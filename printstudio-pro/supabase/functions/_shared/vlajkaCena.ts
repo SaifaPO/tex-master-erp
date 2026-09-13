@@ -10,10 +10,13 @@ export interface VlajkaCenaVstup {
   doplnky: { cena: number; mnozstvo: number }[];
   expresne: boolean;
   pocetKs: number;
-  nastavenia: { dph_percent: number; expresny_priplatok_percent: number };
+  nastavenia: { expresny_priplatok_percent: number };
+  // DPH je odteraz centralna pre cely PrintStudio Pro (pricing_config.dph_percent), nie vlastna
+  // kopia vo vlajka_nastavenia — volajuci ju musi zohnat sam a poslat sem.
+  dphPercent: number;
 }
 
-export function vypocitajCenuVlajky({ velkost, dokoncenie, stoziar, doplnky, expresne, pocetKs, nastavenia }: VlajkaCenaVstup) {
+export function vypocitajCenuVlajky({ velkost, dokoncenie, stoziar, doplnky, expresne, pocetKs, nastavenia, dphPercent }: VlajkaCenaVstup) {
   const cenaVelkosti = Number(velkost?.cena) || 0;
   const cenaDokoncenia = Number(dokoncenie?.cena) || 0;
   const cenaStoziara = Number(stoziar?.cena) || 0;
@@ -29,8 +32,7 @@ export function vypocitajCenuVlajky({ velkost, dokoncenie, stoziar, doplnky, exp
 
   const cenaBezDph = subtotal + expresnyPriplatok;
 
-  const dphPercent = Number(nastavenia?.dph_percent) || 0;
-  const dphSuma = cenaBezDph * (dphPercent / 100);
+  const dphSuma = cenaBezDph * ((Number(dphPercent) || 0) / 100);
 
   const cenaSpolu = cenaBezDph + dphSuma;
 

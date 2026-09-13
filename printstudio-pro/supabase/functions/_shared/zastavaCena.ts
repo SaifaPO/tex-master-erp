@@ -5,7 +5,7 @@
 // zmene vzorca uprav VSETKY tri miesta rovnako. Zdroj pravdy: erp-marzovy-modul-specifikacia.md.
 
 export interface PricingConfig {
-  coefA: number; coefB: number; marginFloor: number; coefP: number; qtyAtFloor: number;
+  coefA: number; coefB: number; marginFloor: number; coefP: number; qtyAtFloor: number; dphPercent: number;
 }
 
 function baseMargin(cost: number, cfg: PricingConfig) {
@@ -33,7 +33,6 @@ export interface ZastavaNaklady {
   naklad_ocko_ks: number;
   naklad_karabinka_ks: number;
   naklad_popruh_bm: number;
-  dph_percent: number;
   expresny_priplatok_percent: number;
 }
 
@@ -97,7 +96,7 @@ export function vypocitajCenuZastavy(v: ZastavaVstup) {
   const subtotal = cenaKus * ks;
   const expresnyPriplatok = v.expresne ? subtotal * (v.naklady.expresny_priplatok_percent / 100) : 0;
   const cenaBezDph = subtotal + expresnyPriplatok;
-  const dphSuma = cenaBezDph * (v.naklady.dph_percent / 100);
+  const dphSuma = cenaBezDph * ((Number(v.pricingConfig.dphPercent) || 0) / 100);
   const cenaSpolu = cenaBezDph + dphSuma;
 
   return {

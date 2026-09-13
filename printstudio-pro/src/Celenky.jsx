@@ -49,7 +49,7 @@ export default function Celenky({ supabase, onSpat }) {
   const expressFee = deliverySpeed === 'express' ? subtotal * ((Number(nastavenia?.priplatok_expres_percent) || 0) / 100) : 0;
   const shippingFee = Number(nastavenia?.cena_doprava) || 0;
   const grandTotalBezDph = subtotal + expressFee + shippingFee;
-  const dphPercent = Number(nastavenia?.dph_percent) || 0;
+  const dphPercent = Number(pricingConfig.dphPercent) || 0;
   const dphSuma = grandTotalBezDph * (dphPercent / 100);
   const grandTotal = grandTotalBezDph + dphSuma;
 
@@ -409,13 +409,13 @@ export default function Celenky({ supabase, onSpat }) {
             <div className="bg-slate-900 text-white p-4 rounded-xl space-y-2">
               <div className="flex items-center justify-between border-b border-slate-800 pb-2">
                 <span className="text-xs font-bold">Cena</span>
-                <span className="text-[10px] font-normal text-indigo-300 bg-indigo-500/10 px-2 py-1 rounded-full">s DPH {nastavenia.dph_percent}%</span>
+                <span className="text-[10px] font-normal text-indigo-300 bg-indigo-500/10 px-2 py-1 rounded-full">s DPH {dphPercent}%</span>
               </div>
               <RowSum label="Cena za kus" value={`${cenaKus.toFixed(2)} €`} />
               <RowSum label="Doprava" value={`${shippingFee.toFixed(2)} €`} />
               {expressFee > 0 && <RowSum label="Príplatok expres" value={`${expressFee.toFixed(2)} €`} />}
               <RowSum label="Cena bez DPH" value={`${grandTotalBezDph.toFixed(2)} €`} />
-              <RowSum label={`DPH ${nastavenia.dph_percent}%`} value={`${dphSuma.toFixed(2)} €`} />
+              <RowSum label={`DPH ${dphPercent}%`} value={`${dphSuma.toFixed(2)} €`} />
               <div className="pt-2 border-t border-slate-800 flex items-baseline justify-between">
                 <span className="text-xs text-slate-400">Celkom s DPH (vrátane dopravy)</span>
                 <span className="text-2xl font-extrabold font-mono">{grandTotal.toFixed(2)} €</span>

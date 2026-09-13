@@ -109,7 +109,11 @@ export default function DtfMetrazTab({ supabase }) {
           <Field label="Minimálna cena objednávky (€)" value={nastavenia.minimalna_cena_objednavky} step="0.5" onChange={(v) => ulozNastavenia({ minimalna_cena_objednavky: v })} />
           <Field label="Limit expres (bm/deň)" value={nastavenia.limit_expres_bm} step="1" onChange={(v) => ulozNastavenia({ limit_expres_bm: v })} />
           <Field label="Limit štandard (bm)" value={nastavenia.limit_standard_bm} step="1" onChange={(v) => ulozNastavenia({ limit_standard_bm: v })} />
-          <Field label="DPH (%)" value={nastavenia.dph_percent} step="0.5" onChange={(v) => ulozNastavenia({ dph_percent: v })} />
+          <div>
+            <label className="block text-slate-400 mb-1 text-xs">DPH (%)</label>
+            <input type="number" disabled value={pricingConfig.dphPercent} className="w-full px-2 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-400 font-mono opacity-70 cursor-not-allowed" />
+            <p className="text-[10px] text-slate-500 mt-1">Nastavuje sa centrálne v záložke Cenotvorba pre celý PrintStudio Pro.</p>
+          </div>
         </div>
       </div>
 

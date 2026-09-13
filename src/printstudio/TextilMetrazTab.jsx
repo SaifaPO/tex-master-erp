@@ -124,7 +124,11 @@ export default function TextilMetrazTab({ supabase }) {
           <Field label="Doprava (€)" value={nastavenia.cena_doprava} step="0.1" onChange={(v) => ulozNastavenia({ cena_doprava: v })} />
           <Field label="Príplatok expres (%)" value={nastavenia.priplatok_expres_percent} step="1" onChange={(v) => ulozNastavenia({ priplatok_expres_percent: v })} />
           <Field label="Minimálna cena objednávky (€)" value={nastavenia.minimalna_cena_objednavky} step="0.5" onChange={(v) => ulozNastavenia({ minimalna_cena_objednavky: v })} />
-          <Field label="DPH (%)" value={nastavenia.dph_percent} step="0.5" onChange={(v) => ulozNastavenia({ dph_percent: v })} />
+          <div>
+            <label className="block text-slate-400 mb-1 text-xs">DPH (%)</label>
+            <input type="number" disabled value={pricingConfig.dphPercent} className="w-full px-2 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-400 font-mono opacity-70 cursor-not-allowed" />
+            <p className="text-[10px] text-slate-500 mt-1">Nastavuje sa centrálne v záložke Cenotvorba pre celý PrintStudio Pro.</p>
+          </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="p-3 bg-slate-950 rounded-xl border border-teal-900/40">

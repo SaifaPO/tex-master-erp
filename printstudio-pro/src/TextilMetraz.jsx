@@ -96,7 +96,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
     shippingFee = Number(nastavenia.cena_doprava);
     grandTotalBezDph = subtotal + expressFee + shippingFee;
     // Slovensky B2C zakaznik vzdy plati s DPH — cena v kosiku aj cele vyuctovanie musi byt s DPH.
-    dphSuma = grandTotalBezDph * (Number(nastavenia.dph_percent || 0) / 100);
+    dphSuma = grandTotalBezDph * (Number(pricingConfig.dphPercent || 0) / 100);
     grandTotal = grandTotalBezDph + dphSuma;
 
     const limitExpres = technologia === 'sublimacia' ? Number(nastavenia.limit_expres_bm_sublimacia) : Number(nastavenia.limit_expres_bm_bavlna);
@@ -427,7 +427,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
           <div className="bg-slate-900 text-white p-5 rounded-2xl shadow-xl space-y-3">
             <h3 className="text-sm font-bold flex items-center justify-between border-b border-slate-800 pb-3">
               <span>Súhrn objednávky</span>
-              <span className="text-[10px] font-normal text-indigo-300 bg-indigo-500/10 px-2 py-1 rounded-full">s DPH {nastavenia.dph_percent}%</span>
+              <span className="text-[10px] font-normal text-indigo-300 bg-indigo-500/10 px-2 py-1 rounded-full">s DPH {pricingConfig.dphPercent}%</span>
             </h3>
             <div className="space-y-2 text-xs text-slate-300">
               <Row label="Technológia" value={technologia === 'sublimacia' ? 'Sublimácia' : 'Digitálna bavlna'} />
@@ -439,7 +439,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
               <Row label="Doprava (DPD kuriér)" value={`${shippingFee.toFixed(2)} €`} />
               <Row label="Harmonogram dodania" value={aktualnyHarmonogram} small />
               <Row label="Cena bez DPH" value={`${grandTotalBezDph.toFixed(2)} €`} />
-              <Row label={`DPH ${nastavenia.dph_percent}%`} value={`${dphSuma.toFixed(2)} €`} />
+              <Row label={`DPH ${pricingConfig.dphPercent}%`} value={`${dphSuma.toFixed(2)} €`} />
             </div>
             <div className="pt-3 border-t border-slate-800 flex items-baseline justify-between">
               <span className="text-xs text-slate-400">Celková cena spolu s DPH (vrátane dopravy)</span>

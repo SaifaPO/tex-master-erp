@@ -33,7 +33,7 @@ export function vypocitajCenuVlajky({ nakladMaterial, pricingConfig, dokoncenie,
 
   const cenaBezDph = subtotal + expresnyPriplatok;
 
-  const dphPercent = Number(nastavenia?.dph_percent) || 0;
+  const dphPercent = Number(pricingConfig?.dphPercent) || 0;
   const dphSuma = cenaBezDph * (dphPercent / 100);
 
   const cenaSpolu = cenaBezDph + dphSuma;

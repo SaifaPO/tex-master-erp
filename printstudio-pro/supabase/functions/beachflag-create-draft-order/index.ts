@@ -13,7 +13,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface PricingConfig { coefA: number; coefB: number; marginFloor: number; coefP: number; qtyAtFloor: number; }
+interface PricingConfig { coefA: number; coefB: number; marginFloor: number; coefP: number; qtyAtFloor: number; dphPercent: number; }
 
 function baseMargin(cost: number, cfg: PricingConfig) {
   const c = Math.max(cost, 0.05);
@@ -39,7 +39,7 @@ interface VlajkaCenaVstup {
   doplnky: { cena: number; mnozstvo: number }[];
   expresne: boolean;
   pocetKs: number;
-  nastavenia: { dph_percent: number; expresny_priplatok_percent: number };
+  nastavenia: { expresny_priplatok_percent: number };
   pricingConfig: PricingConfig;
 }
 
@@ -59,7 +59,7 @@ function vypocitajCenuVlajky({ nakladMaterial, dokoncenie, stoziar, doplnky, exp
 
   const cenaBezDph = subtotal + expresnyPriplatok;
 
-  const dphPercent = Number(nastavenia?.dph_percent) || 0;
+  const dphPercent = Number(pricingConfig.dphPercent) || 0;
   const dphSuma = cenaBezDph * (dphPercent / 100);
 
   const cenaSpolu = cenaBezDph + dphSuma;
@@ -119,8 +119,8 @@ Deno.serve(async (req) => {
     if (!rozmer || rozmer.spotreba_m2 == null) throw new Error(`Spotreba materiálu pre tvar "${tvarKod}" a veľkosť "${velkostKod}" nie je nastavená.`);
 
     const pricingConfig: PricingConfig = cfg
-      ? { coefA: Number(cfg.coef_a), coefB: Number(cfg.coef_b), marginFloor: Number(cfg.margin_floor), coefP: Number(cfg.coef_p), qtyAtFloor: Number(cfg.qty_at_floor) }
-      : { coefA: 300, coefB: 54, marginFloor: 30, coefP: 1.3, qtyAtFloor: 1000 };
+      ? { coefA: Number(cfg.coef_a), coefB: Number(cfg.coef_b), marginFloor: Number(cfg.margin_floor), coefP: Number(cfg.coef_p), qtyAtFloor: Number(cfg.qty_at_floor), dphPercent: Number(cfg.dph_percent ?? 23) }
+      : { coefA: 300, coefB: 54, marginFloor: 30, coefP: 1.3, qtyAtFloor: 1000, dphPercent: 23 };
 
     const doplnkyVypocet = (doplnky as { kod: string; mnozstvo: number }[]).map((d) => {
       const dbRow = (doplnkyDb || []).find((x: any) => x.kod === d.kod);
@@ -136,7 +136,7 @@ Deno.serve(async (req) => {
       pricingConfig,
       expresne: !!expresne,
       pocetKs: Number(pocetKs) || 1,
-      nastavenia: nastavenia || { dph_percent: 23, expresny_priplatok_percent: 10 },
+      nastavenia: nastavenia || { expresny_priplatok_percent: 10 },
     });
 
     const domain = Deno.env.get('SHOPIFY_STORE_DOMAIN');

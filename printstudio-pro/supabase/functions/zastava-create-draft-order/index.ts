@@ -28,7 +28,7 @@ async function resolveNakladM2(supabase: ReturnType<typeof createClient>, materi
   return (Number(sklad.price_per_m) || 0) / (Number(sklad.width) / 100);
 }
 
-interface PricingConfig { coefA: number; coefB: number; marginFloor: number; coefP: number; qtyAtFloor: number; }
+interface PricingConfig { coefA: number; coefB: number; marginFloor: number; coefP: number; qtyAtFloor: number; dphPercent: number; }
 
 function baseMargin(cost: number, cfg: PricingConfig) {
   const c = Math.max(cost, 0.05);
@@ -92,8 +92,8 @@ Deno.serve(async (req) => {
     if (!naklady) throw new Error('Nákladové sadzby (zastava_nastavenia) nie sú nastavené.');
 
     const pricingConfig: PricingConfig = cfg
-      ? { coefA: Number(cfg.coef_a), coefB: Number(cfg.coef_b), marginFloor: Number(cfg.margin_floor), coefP: Number(cfg.coef_p), qtyAtFloor: Number(cfg.qty_at_floor) }
-      : { coefA: 300, coefB: 54, marginFloor: 30, coefP: 1.3, qtyAtFloor: 1000 };
+      ? { coefA: Number(cfg.coef_a), coefB: Number(cfg.coef_b), marginFloor: Number(cfg.margin_floor), coefP: Number(cfg.coef_p), qtyAtFloor: Number(cfg.qty_at_floor), dphPercent: Number(cfg.dph_percent ?? 23) }
+      : { coefA: 300, coefB: 54, marginFloor: 30, coefP: 1.3, qtyAtFloor: 1000, dphPercent: 23 };
 
     const nakladM2Material = await resolveNakladM2(supabase, material);
 
@@ -117,7 +117,7 @@ Deno.serve(async (req) => {
     const subtotal = cenaKus * ks;
     const expresnyPriplatok = expresne ? subtotal * (Number(naklady.expresny_priplatok_percent) / 100) : 0;
     const cenaBezDph = subtotal + expresnyPriplatok;
-    const dphSuma = cenaBezDph * (Number(naklady.dph_percent) / 100);
+    const dphSuma = cenaBezDph * (Number(pricingConfig.dphPercent) / 100);
     const cenaSpolu = Math.round((cenaBezDph + dphSuma) * 100) / 100;
 
     const domain = Deno.env.get('SHOPIFY_STORE_DOMAIN');

@@ -96,7 +96,8 @@ export default function VlajkaVelkostiTab({ supabase }) {
       <div className="bg-indigo-950/30 border border-indigo-900/40 p-4 rounded-xl grid grid-cols-2 gap-4 max-w-md">
         <div>
           <label className="text-xs text-indigo-300 font-medium">DPH (%)</label>
-          <input type="number" step="0.5" value={nastavenia.dph_percent} onChange={(e) => ulozNastavenia({ dph_percent: parseFloat(e.target.value) || 0 })} className="w-full mt-1 px-3 py-2 bg-slate-950 border border-indigo-800 rounded-lg text-sm text-white" />
+          <input type="number" disabled value={pricingConfig.dphPercent} className="w-full mt-1 px-3 py-2 bg-slate-950 border border-indigo-900/40 rounded-lg text-sm text-slate-400 opacity-70 cursor-not-allowed" />
+          <p className="text-[10px] text-slate-500 mt-1">Nastavuje sa centrálne v záložke Cenotvorba.</p>
         </div>
         <div>
           <label className="text-xs text-indigo-300 font-medium">Expresný príplatok (%)</label>

@@ -21,6 +21,10 @@ export function priceAt(cost, qty, cfg) {
 export const mapConfigFromDb = (r) => ({
   coefA: Number(r.coef_a), coefB: Number(r.coef_b), marginFloor: Number(r.margin_floor),
   coefP: Number(r.coef_p), qtyAtFloor: Number(r.qty_at_floor),
+  dphPercent: Number(r.dph_percent ?? 23),
 });
 
-export const DEFAULT_PRICING_CONFIG = { coefA: 300, coefB: 54, marginFloor: 30, coefP: 1.3, qtyAtFloor: 1000 };
+// dphPercent — JEDINA DPH sadzba pre cely PrintStudio Pro, nastavuje sa v admin appke (zalozka
+// Cenotvorba), sem sa len cita. Predtym mal kazdy modul vlastnu nezavislu kopiu v *_nastavenia,
+// co sa raz rozislo (Buffky 15% namiesto 23%) — odteraz jeden zdroj pravdy.
+export const DEFAULT_PRICING_CONFIG = { coefA: 300, coefB: 54, marginFloor: 30, coefP: 1.3, qtyAtFloor: 1000, dphPercent: 23 };

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Settings, Calculator, Loader2 } from 'lucide-react';
+import { mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 
 const inputCls = 'w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white';
 const labelCls = 'text-xs text-slate-400 font-medium';
@@ -7,11 +8,12 @@ const labelCls = 'text-xs text-slate-400 font-medium';
 const DEFAULT_NASTAVENIA = {
   naklad_sitia_min: 0.35, min_sitia_na_m2: 4.0, naklad_laser_m2: 1.8,
   naklad_tunel_bm: 1.5, naklad_ocko_ks: 0.25, naklad_karabinka_ks: 0.55, naklad_popruh_bm: 0.8,
-  dph_percent: 23, expresny_priplatok_percent: 10,
+  expresny_priplatok_percent: 10,
 };
 
 export default function ZastavaNastaveniaTab({ supabase }) {
   const [nastavenia, setNastavenia] = useState(DEFAULT_NASTAVENIA);
+  const [pricingConfig, setPricingConfig] = useState(DEFAULT_PRICING_CONFIG);
   const [materialy, setMaterialy] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -26,12 +28,14 @@ export default function ZastavaNastaveniaTab({ supabase }) {
 
   const nacitaj = async () => {
     setIsLoading(true);
-    const [{ data: n }, { data: m }] = await Promise.all([
+    const [{ data: n }, { data: m }, { data: cfg }] = await Promise.all([
       supabase.from('zastava_nastavenia').select('*').eq('id', 1).maybeSingle(),
       supabase.from('zastava_materialy').select('*').order('poradie'),
+      supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
     ]);
     if (n) setNastavenia(n);
     setMaterialy(m || []);
+    if (cfg) setPricingConfig(mapConfigFromDb(cfg));
     if ((m || []).length > 0) setTestMaterial(m[0].kod);
     setIsLoading(false);
   };
@@ -77,7 +81,11 @@ export default function ZastavaNastaveniaTab({ supabase }) {
         <div><label className={labelCls}>Kovové očko/priechodka (€/ks)</label><input type="number" step="0.05" value={nastavenia.naklad_ocko_ks} onChange={(e) => uloz({ naklad_ocko_ks: parseFloat(e.target.value) || 0 })} className={inputCls} /></div>
         <div><label className={labelCls}>Karabínka (€/ks)</label><input type="number" step="0.05" value={nastavenia.naklad_karabinka_ks} onChange={(e) => uloz({ naklad_karabinka_ks: parseFloat(e.target.value) || 0 })} className={inputCls} /></div>
         <div><label className={labelCls}>Spevňujúci popruh (€/bm)</label><input type="number" step="0.1" value={nastavenia.naklad_popruh_bm} onChange={(e) => uloz({ naklad_popruh_bm: parseFloat(e.target.value) || 0 })} className={inputCls} /></div>
-        <div><label className={labelCls}>DPH (%)</label><input type="number" step="1" value={nastavenia.dph_percent} onChange={(e) => uloz({ dph_percent: parseFloat(e.target.value) || 0 })} className={inputCls} /></div>
+        <div>
+          <label className={labelCls}>DPH (%)</label>
+          <input type="number" disabled value={pricingConfig.dphPercent} className={`${inputCls} text-slate-400 opacity-70 cursor-not-allowed`} />
+          <p className="text-[10px] text-slate-500 mt-1">Nastavuje sa centrálne v záložke Cenotvorba.</p>
+        </div>
         <div><label className={labelCls}>Expresný príplatok (%)</label><input type="number" step="1" value={nastavenia.expresny_priplatok_percent} onChange={(e) => uloz({ expresny_priplatok_percent: parseFloat(e.target.value) || 0 })} className={inputCls} /></div>
       </div>
 

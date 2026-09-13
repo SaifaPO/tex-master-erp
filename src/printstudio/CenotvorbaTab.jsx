@@ -193,7 +193,7 @@ export default function CenotvorbaTab({ supabase }) {
       {/* Koeficienty */}
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-4">
         <h3 className="font-bold text-sm text-slate-200 mb-3">Koeficienty cenotvorby</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
           <div>
             <label className="block text-[11px] text-slate-400 mb-1">Strop marže pri 1 ks (coef_a, %)</label>
             <input type="number" step="0.1" value={config.coefA} onChange={e => setConfig({ ...config, coefA: parseFloat(e.target.value) || 0 })} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white text-sm" />
@@ -214,7 +214,12 @@ export default function CenotvorbaTab({ supabase }) {
             <label className="block text-[11px] text-slate-400 mb-1">Ks pri podlahe marže</label>
             <input type="number" step="1" value={config.qtyAtFloor} onChange={e => setConfig({ ...config, qtyAtFloor: parseInt(e.target.value, 10) || 1 })} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white text-sm" />
           </div>
+          <div>
+            <label className="block text-[11px] text-emerald-400 mb-1 font-semibold">DPH (%) — platí pre všetky konfigurátory</label>
+            <input type="number" step="0.5" value={config.dphPercent} onChange={e => setConfig({ ...config, dphPercent: parseFloat(e.target.value) || 0 })} className="w-full bg-slate-950 border border-emerald-900/50 rounded p-2 text-white text-sm" />
+          </div>
         </div>
+        <p className="text-[11px] text-emerald-500/80 mt-2">DPH sa odteraz nastavuje LEN tu — DTF/Textilná metráž, Zástava, Beachflag, Čelenky aj Buffky ju čítajú odtiaľto, nie zo svojich vlastných nastavení.</p>
         <button onClick={handleSaveConfig} disabled={saving} className="mt-3 flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold px-3 py-2 rounded-lg">
           {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Uložiť koeficienty
         </button>

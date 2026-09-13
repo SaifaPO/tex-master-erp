@@ -81,7 +81,7 @@ export default function DtfMetraz({ supabase, onSpat }) {
     grandTotalBezDph = subtotal + expressFee + shippingFee;
     // Slovensky B2C zakaznik vzdy plati s DPH — cena v kosiku aj cele vyuctovanie musi byt s DPH,
     // nie len zobrazena orientacne bez nej.
-    dphSuma = grandTotalBezDph * (Number(nastavenia.dph_percent || 0) / 100);
+    dphSuma = grandTotalBezDph * (Number(pricingConfig.dphPercent || 0) / 100);
     grandTotal = grandTotalBezDph + dphSuma;
 
     if (deliverySpeed === 'express' && totalLengthBm > Number(nastavenia.limit_expres_bm)) {
@@ -245,7 +245,7 @@ export default function DtfMetraz({ supabase, onSpat }) {
           <ul className="text-xs text-slate-500 list-disc pl-4 space-y-1">
             <li>Formát A4, 1 kus</li>
             <li>Cena zahŕňa aj poštovné</li>
-            <li>Cena je s DPH {nastavenia.dph_percent}%</li>
+            <li>Cena je s DPH {pricingConfig.dphPercent}%</li>
           </ul>
           <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
             <span className="text-xs text-slate-500">Cena vzorky s DPH</span>
@@ -351,7 +351,7 @@ export default function DtfMetraz({ supabase, onSpat }) {
           <div className="bg-slate-900 text-white p-5 rounded-2xl shadow-xl space-y-3">
             <h3 className="text-sm font-bold flex items-center justify-between border-b border-slate-800 pb-3">
               <span>Súhrn objednávky</span>
-              <span className="text-[10px] font-normal text-indigo-300 bg-indigo-500/10 px-2 py-1 rounded-full">s DPH {nastavenia.dph_percent}%</span>
+              <span className="text-[10px] font-normal text-indigo-300 bg-indigo-500/10 px-2 py-1 rounded-full">s DPH {pricingConfig.dphPercent}%</span>
             </h3>
             <div className="space-y-2 text-xs text-slate-300">
               <Row label="Sadzba pri tomto odbere" value={`${baseRate.toFixed(2)} €/bm`} />
@@ -361,7 +361,7 @@ export default function DtfMetraz({ supabase, onSpat }) {
               <Row label="Doprava" value={`${shippingFee.toFixed(2)} €`} />
               <Row label="Harmonogram dodania" value={aktualnyHarmonogram} small />
               <Row label="Cena bez DPH" value={`${grandTotalBezDph.toFixed(2)} €`} />
-              <Row label={`DPH ${nastavenia.dph_percent}%`} value={`${dphSuma.toFixed(2)} €`} />
+              <Row label={`DPH ${pricingConfig.dphPercent}%`} value={`${dphSuma.toFixed(2)} €`} />
             </div>
             <div className="pt-3 border-t border-slate-800 flex items-baseline justify-between">
               <span className="text-xs text-slate-400">Celková cena spolu s DPH (vrátane dopravy)</span>
