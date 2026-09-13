@@ -45,6 +45,15 @@ function vypocitajRozlozenie(widthCm: number, heightCm: number, qty: number) {
   return Math.max(0.1, totalHeightCm / 100);
 }
 
+// Nikdy neveri klientom poslanej cene latky — vzdy nanovo zisti aktualnu cenu zo skladu (ak je
+// latka prepojena), rovnaky vzor ako resolveNakladM2 v zastava/beachflag price-preview funkciach.
+async function resolveNakladM2(supabase: ReturnType<typeof createClient>, material: { naklad_m2: number; sklad_material_id: string | null }) {
+  if (!material.sklad_material_id) return Number(material.naklad_m2) || 0;
+  const { data: sklad } = await supabase.from('materials').select('price_per_m, width').eq('id', material.sklad_material_id).maybeSingle();
+  if (!sklad || !sklad.width || Number(sklad.width) <= 0) return Number(material.naklad_m2) || 0;
+  return (Number(sklad.price_per_m) || 0) / (Number(sklad.width) / 100);
+}
+
 function odpoved(body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 }
@@ -79,6 +88,7 @@ Deno.serve(async (req) => {
       mode, widthCm, heightCm, qty, directLengthBm,
       deliverySpeed = 'standard', harmonogram = '',
       suborNazov = null, suborCesta = null,
+      materialKod = null,
     } = body;
 
     if (mode !== 'auto' && mode !== 'subor' && mode !== 'vzorky') throw new Error('Neplatný režim objednávky.');
@@ -100,7 +110,8 @@ Deno.serve(async (req) => {
     // zvysok appky — zakaznik len nahra vlastnu grafiku, tu sa vyskladane na jeden list A4.
     const VZORKA_CENA_S_DPH = 5;
 
-    let totalLengthBm = 0, totalM2 = 0, baseRate = 0, grandTotal = VZORKA_CENA_S_DPH;
+    let totalLengthBm = 0, totalM2 = 0, baseRate = 0, fabricRate = 0, grandTotal = VZORKA_CENA_S_DPH;
+    let vybranyMaterial: { kod: string; nazov: string } | null = null;
     if (mode !== 'vzorky') {
       if (mode === 'auto') {
         const w = Number(widthCm) || 0, h = Number(heightCm) || 0, q = Math.max(1, Math.round(Number(qty)) || 1);
@@ -113,7 +124,23 @@ Deno.serve(async (req) => {
 
       const nakladBm = Number(nak.naklad_bm) || 0;
       baseRate = priceAt(nakladBm, totalLengthBm, pricingConfig);
-      const subtotal = Math.max(totalLengthBm * baseRate, Number(nastavenia.minimalna_cena_objednavky) || 0);
+
+      // Ak si zakaznik vybral aj nasu latku, jej cena sa dopocita SAMOSTATNE (vlastna marzova
+      // krivka na rovnakej 56cm sirke ako potlac) a pripocita k cene potlace. Cena latky sa NIKDY
+      // neveri klientovi — materialKod len urcuje KTORU latku, cenu si funkcia zisti sama.
+      let fabricSubtotal = 0;
+      if (materialKod) {
+        const { data: material } = await supabase.from('dtf_materialy').select('kod, nazov, naklad_m2, sklad_material_id, aktivny').eq('kod', materialKod).maybeSingle();
+        if (material && material.aktivny) {
+          const nakladM2 = await resolveNakladM2(supabase, material);
+          const fabricNakladBm = nakladM2 * (ROLL_WIDTH_CM / 100);
+          fabricRate = priceAt(fabricNakladBm, totalLengthBm, pricingConfig);
+          fabricSubtotal = totalLengthBm * fabricRate;
+          vybranyMaterial = { kod: material.kod, nazov: material.nazov };
+        }
+      }
+
+      const subtotal = Math.max(totalLengthBm * baseRate + fabricSubtotal, Number(nastavenia.minimalna_cena_objednavky) || 0);
       const expressFee = deliverySpeed === 'express' ? subtotal * ((Number(nastavenia.priplatok_expres_percent) || 0) / 100) : 0;
       const shippingFee = Number(nastavenia.cena_doprava) || 0;
       const grandTotalBezDph = subtotal + expressFee + shippingFee;
@@ -137,6 +164,8 @@ Deno.serve(async (req) => {
       harmonogram: mode === 'vzorky' ? 'A4 vzorka' : (harmonogram || null),
       subor_nazov: suborNazov,
       subor_cesta: suborCesta,
+      material_kod: vybranyMaterial?.kod || null,
+      material_nazov: vybranyMaterial?.nazov || null,
     });
     if (insertErr) throw insertErr;
 
@@ -146,11 +175,11 @@ Deno.serve(async (req) => {
     if (!domain || !clientId || !clientSecret) throw new Error('SHOPIFY_STORE_DOMAIN, SHOPIFY_CLIENT_ID alebo SHOPIFY_CLIENT_SECRET nie je nastavený v Supabase secrets.');
     const token = await ziskajAdminToken(domain, clientId, clientSecret);
 
-    const nazovPolozky = mode === 'auto'
+    const nazovPolozky = (mode === 'auto'
       ? `DTF transfer — metráž ${totalLengthBm.toFixed(2)}bm (${qty}× ${widthCm}×${heightCm}cm)`
       : mode === 'vzorky'
       ? 'DTF transfer — vzorka vlastnej grafiky (A4, 1 ks)'
-      : `DTF transfer — hotová rolka ${totalLengthBm.toFixed(2)}bm`;
+      : `DTF transfer — hotová rolka ${totalLengthBm.toFixed(2)}bm`) + (vybranyMaterial ? ` + látka: ${vybranyMaterial.nazov}` : '');
 
     const draftPayload = {
       draft_order: {
@@ -166,6 +195,7 @@ Deno.serve(async (req) => {
               { name: '_dlzka_bm', value: mode === 'vzorky' ? 'A4' : totalLengthBm.toFixed(2) },
               { name: '_harmonogram', value: mode === 'vzorky' ? '' : (harmonogram || '') },
               { name: '_subor', value: suborNazov || '' },
+              { name: '_material', value: vybranyMaterial?.nazov || '' },
             ],
           },
         ],
