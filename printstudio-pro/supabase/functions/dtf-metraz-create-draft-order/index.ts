@@ -129,7 +129,7 @@ Deno.serve(async (req) => {
       sirka_cm: mode === 'auto' ? Number(widthCm) : null,
       vyska_cm: mode === 'auto' ? Number(heightCm) : null,
       pocet_ks: mode === 'auto' ? Math.max(1, Math.round(Number(qty)) || 1) : null,
-      dlzka_bm: mode === 'vzorky' ? null : Math.round(totalLengthBm * 100) / 100,
+      dlzka_bm: mode === 'vzorky' ? 0 : Math.round(totalLengthBm * 100) / 100,
       plocha_m2: mode === 'vzorky' ? null : Math.round(totalM2 * 100) / 100,
       cena_hladina: mode === 'vzorky' ? 'A4 vzorka — pevná cena' : `${baseRate.toFixed(2)} €/bm`,
       cena_spolu: Math.round(grandTotal * 100) / 100,
@@ -190,6 +190,7 @@ Deno.serve(async (req) => {
 
     return odpoved({ checkoutUrl: draftOrder.invoice_url, cenaSpolu: grandTotal, objednavkaId });
   } catch (e) {
-    return odpoved({ error: e instanceof Error ? e.message : String(e) });
+    const msg = e instanceof Error ? e.message : (e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : JSON.stringify(e));
+    return odpoved({ error: msg });
   }
 });
