@@ -8,6 +8,9 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 const CANON = 1000; // kanonicky priestor kreslenia — stvorec, zhodny s 50x50cm formatom
+// Premium ma horny a spodny okraj obsity/zahnuty dovnutra (2cm lem) — tam sa grafika neda
+// vidiet po zositi. 2cm z 50cm formatu = 40 kanonickych jednotiek (1000/50*2).
+const HEM_MARGIN_CANON_PREMIUM = 40;
 
 const ICON_UNICODE = {
   mountain: '',
@@ -17,14 +20,22 @@ const ICON_UNICODE = {
   snowflake: '',
 };
 
-export function initBuffkyEngine(root) {
+export function initBuffkyEngine(root, opts = {}) {
+  const typ = opts.typ === 'premium' ? 'premium' : 'tubular_basic';
+  const isPremium = typ === 'premium';
+  const hemMargin = isPremium ? HEM_MARGIN_CANON_PREMIUM : 0;
+
   const state = {
     backgroundColor: '#0f172a',
     pattern: 'mountain',
     showGuides: true,
     show3DSeams: true,
     autoRotate: true,
-    items: [
+    items: isPremium ? [
+      { type: 'text', text: 'TATRA MOUNTAINS', x: 500, y: 430, fontSize: 40, fontFamily: 'Montserrat', fontWeight: 'bold', color: '#ffffff', scale: 1, rotation: 0 },
+      { type: 'text', text: 'EXPEDITION 2026', x: 500, y: 490, fontSize: 22, fontFamily: 'Plus Jakarta Sans', fontWeight: '600', color: '#38bdf8', scale: 1, rotation: 0 },
+      { type: 'icon', unicode: ICON_UNICODE.mountain, iconName: 'mountain', x: 500, y: 330, fontSize: 84, color: '#38bdf8', scale: 1, rotation: 0 },
+    ] : [
       { type: 'text', text: 'TATRA MOUNTAINS', x: 250, y: 420, fontSize: 34, fontFamily: 'Montserrat', fontWeight: 'bold', color: '#ffffff', scale: 1, rotation: 0 },
       { type: 'text', text: 'EXPEDITION 2026', x: 250, y: 470, fontSize: 20, fontFamily: 'Plus Jakarta Sans', fontWeight: '600', color: '#38bdf8', scale: 1, rotation: 0 },
       { type: 'icon', unicode: ICON_UNICODE.mountain, iconName: 'mountain', x: 250, y: 330, fontSize: 74, color: '#38bdf8', scale: 1, rotation: 0 },
@@ -284,6 +295,7 @@ export function initBuffkyEngine(root) {
     scene.add(buffMesh);
 
     createSeamIndicators(radius, height);
+    if (isPremium) createHemIndicators(radius, height);
 
     const shadowGeo = new THREE.PlaneGeometry(30, 30);
     const shadowMat = new THREE.ShadowMaterial({ opacity: 0.25 });
@@ -298,10 +310,26 @@ export function initBuffkyEngine(root) {
   function createSeamIndicators(radius, height) {
     const seamGeo = new THREE.CylinderGeometry(0.04, 0.04, height * 1.02, 16);
     const seamMat = new THREE.MeshBasicMaterial({ color: 0xf43f5e });
+    // Tubular Basic je bezsvova (potlac priamo na tubularnu pletenu latku) — cervene linie tu len
+    // oznacuju okraj laveho/praveho panelu v ploche navrhu (A/B), nie realny fyzicky sev. Premium
+    // ma NAOPAK jeden skutocny bocny sev (zosite ako rukav tricka) — len JEDNA linia.
     seamLine1 = new THREE.Mesh(seamGeo, seamMat); seamLine1.position.set(radius * 1.01, 0, 0); buffMesh.add(seamLine1);
-    seamLine2 = new THREE.Mesh(seamGeo, seamMat); seamLine2.position.set(-radius * 1.01, 0, 0); buffMesh.add(seamLine2);
     addSeamBadge('SPOJ', radius * 1.02, height * 0.45);
-    addSeamBadge('SPOJ', -radius * 1.02, height * 0.45);
+    if (!isPremium) {
+      seamLine2 = new THREE.Mesh(seamGeo, seamMat); seamLine2.position.set(-radius * 1.01, 0, 0); buffMesh.add(seamLine2);
+      addSeamBadge('SPOJ', -radius * 1.02, height * 0.45);
+    }
+  }
+
+  // Premium: horny a spodny okraj je obsity/zahnuty dovnutra (ako lem rukava tricka) — vizualne
+  // to naznacime tenkym tmavsim prstencom na oboch okrajoch valca.
+  function createHemIndicators(radius, height) {
+    const hemMat = new THREE.MeshBasicMaterial({ color: 0x1e293b, transparent: true, opacity: 0.85, side: THREE.DoubleSide });
+    const hemHeight = height * 0.05;
+    const hemGeoTop = new THREE.CylinderGeometry(radius * 1.015, radius * 1.005, hemHeight, 72, 1, true);
+    const hemTop = new THREE.Mesh(hemGeoTop, hemMat); hemTop.position.set(0, height / 2 - hemHeight / 2, 0); buffMesh.add(hemTop);
+    const hemGeoBottom = new THREE.CylinderGeometry(radius * 1.005, radius * 1.015, hemHeight, 72, 1, true);
+    const hemBottom = new THREE.Mesh(hemGeoBottom, hemMat); hemBottom.position.set(0, -height / 2 + hemHeight / 2, 0); buffMesh.add(hemBottom);
   }
 
   function addSeamBadge(text, x, y) {
@@ -367,7 +395,7 @@ export function initBuffkyEngine(root) {
     const { x, y } = getCanvasCoords(e);
     const item = state.items[state.selectedItemIndex];
     item.x = Math.max(20, Math.min(CANON - 20, x - state.dragOffsetX));
-    item.y = Math.max(20, Math.min(CANON - 20, y - state.dragOffsetY));
+    item.y = Math.max(20 + hemMargin, Math.min(CANON - 20 - hemMargin, y - state.dragOffsetY));
     render2D();
   }
 
@@ -381,8 +409,8 @@ export function initBuffkyEngine(root) {
       label.className = 'font-bold text-slate-500';
     } else {
       const item = state.items[state.selectedItemIndex];
-      const side = item.x < 500 ? 'Predná (A)' : 'Zadná (B)';
-      label.textContent = `${item.type.toUpperCase()}: ${item.text || 'Grafika'} [${side}]`;
+      const side = isPremium ? '' : (item.x < 500 ? ' [Predná (A)]' : ' [Zadná (B)]');
+      label.textContent = `${item.type.toUpperCase()}: ${item.text || 'Grafika'}${side}`;
       label.className = 'font-bold text-cyan-400';
     }
   }
@@ -409,11 +437,14 @@ export function initBuffkyEngine(root) {
       state.pattern = btn.dataset.pattern; render2D(); toast(`Aplikovaný motív: ${btn.textContent.trim()}`);
     }));
 
+    const defaultItemX = isPremium ? 500 : 250;
+    const defaultItemY = Math.max(500, 20 + hemMargin);
+
     const textInput = q('#textInput'), fontSelect = q('#fontSelect'), textColorPicker = q('#textColorPicker');
     on(q('#btnAddTextFront'), 'click', () => {
       const txt = textInput.value.trim() || 'BUFFKA ADVENTURE';
-      state.items.push({ type: 'text', text: txt, x: 250, y: 500, fontSize: 48, fontFamily: fontSelect.value, fontWeight: 'bold', color: textColorPicker.value, scale: 1, rotation: 0 });
-      state.selectedItemIndex = state.items.length - 1; updateSelectedLabel(); render2D(); toast('Text pridaný na Prednú stranu (A)');
+      state.items.push({ type: 'text', text: txt, x: defaultItemX, y: defaultItemY, fontSize: 48, fontFamily: fontSelect.value, fontWeight: 'bold', color: textColorPicker.value, scale: 1, rotation: 0 });
+      state.selectedItemIndex = state.items.length - 1; updateSelectedLabel(); render2D(); toast(isPremium ? 'Text pridaný do návrhu' : 'Text pridaný na Prednú stranu (A)');
     });
     on(q('#btnAddTextBack'), 'click', () => {
       const txt = textInput.value.trim() || 'SLOVAKIA OUTDOOR';
@@ -423,7 +454,7 @@ export function initBuffkyEngine(root) {
 
     qa('.add-icon-btn').forEach(btn => on(btn, 'click', () => {
       const iconKey = btn.dataset.icon;
-      state.items.push({ type: 'icon', unicode: ICON_UNICODE[iconKey], iconName: iconKey, x: 250, y: 350, fontSize: 70, color: '#38bdf8', scale: 1, rotation: 0 });
+      state.items.push({ type: 'icon', unicode: ICON_UNICODE[iconKey], iconName: iconKey, x: defaultItemX, y: Math.max(350, 20 + hemMargin), fontSize: 70, color: '#38bdf8', scale: 1, rotation: 0 });
       state.selectedItemIndex = state.items.length - 1; updateSelectedLabel(); render2D(); toast('Ikona vložená do návrhu');
     }));
 
@@ -437,7 +468,7 @@ export function initBuffkyEngine(root) {
           let w = img.width, h = img.height;
           const maxDim = 260;
           if (w > maxDim || h > maxDim) { if (w > h) { h = (h / w) * maxDim; w = maxDim; } else { w = (w / h) * maxDim; h = maxDim; } }
-          state.items.push({ type: 'image', imgElement: img, width: w, height: h, x: 250, y: 500, scale: 1, rotation: 0 });
+          state.items.push({ type: 'image', imgElement: img, width: w, height: h, x: defaultItemX, y: defaultItemY, scale: 1, rotation: 0 });
           state.selectedItemIndex = state.items.length - 1; updateSelectedLabel(); render2D(); toast('Logo bolo úspešne nahraté');
         };
         img.src = event.target.result;
@@ -491,7 +522,8 @@ export function initBuffkyEngine(root) {
     const btnToggle3DSeams = q('#btnToggle3DSeams');
     on(btnToggle3DSeams, 'click', () => {
       state.show3DSeams = !state.show3DSeams;
-      seamLine1.visible = state.show3DSeams; seamLine2.visible = state.show3DSeams;
+      if (seamLine1) seamLine1.visible = state.show3DSeams;
+      if (seamLine2) seamLine2.visible = state.show3DSeams;
       btnToggle3DSeams.classList.toggle('text-rose-400', state.show3DSeams);
       btnToggle3DSeams.classList.toggle('text-slate-500', !state.show3DSeams);
       toast(state.show3DSeams ? '3D Spoj zobrazený' : '3D Spoj skrytý');

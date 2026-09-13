@@ -9,10 +9,13 @@ const BUCKET = 'print-designs';
 export default function Buffky({ supabase, onSpat }) {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
-  const [nakladKs, setNakladKs] = useState(0);
+  const [naklady, setNaklady] = useState(null); // { naklad_ks, naklad_potlac_ks, cena_sitia_bok_ks }
+  const [premiumMaterialy, setPremiumMaterialy] = useState([]);
   const [pricingConfig, setPricingConfig] = useState(DEFAULT_PRICING_CONFIG);
   const [nastavenia, setNastavenia] = useState(null);
 
+  const [typ, setTyp] = useState('tubular_basic'); // 'tubular_basic' | 'premium'
+  const [materialKod, setMaterialKod] = useState('');
   const [pocetKs, setPocetKs] = useState(1);
   const [deliverySpeed, setDeliverySpeed] = useState('standard');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -25,23 +28,32 @@ export default function Buffky({ supabase, onSpat }) {
   useEffect(() => {
     if (!supabase) { setLoadError('Supabase klient nie je nakonfigurovaný.'); setIsLoading(false); return; }
     (async () => {
-      const [{ data: nak }, { data: cfg }, { data: n }] = await Promise.all([
-        supabase.from('buffky_naklady_verejny').select('naklad_ks').maybeSingle(),
+      const [{ data: nak }, { data: cfg }, { data: n }, { data: pm }] = await Promise.all([
+        supabase.from('buffky_naklady_verejny').select('*').maybeSingle(),
         supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
         supabase.from('buffky_nastavenia').select('*').eq('id', 1).maybeSingle(),
+        supabase.from('buffky_premium_materialy_verejny').select('*'),
       ]);
-      setNakladKs(nak ? Number(nak.naklad_ks) : 0);
+      setNaklady(nak || null);
       if (cfg) setPricingConfig(mapConfigFromDb(cfg));
       setNastavenia(n || null);
+      setPremiumMaterialy(pm || []);
+      if (pm && pm.length > 0) setMaterialKod(pm[0].kod);
       setIsLoading(false);
     })();
   }, [supabase]);
 
   useEffect(() => {
     if (isLoading || loadError || !nastavenia || !rootRef.current) return;
-    engineRef.current = initBuffkyEngine(rootRef.current);
+    engineRef.current?.destroy();
+    engineRef.current = initBuffkyEngine(rootRef.current, { typ });
     return () => { engineRef.current?.destroy(); engineRef.current = null; };
-  }, [isLoading, loadError, nastavenia]);
+  }, [isLoading, loadError, nastavenia, typ]);
+
+  const vybranyMaterial = premiumMaterialy.find(m => m.kod === materialKod);
+  const nakladKs = !naklady ? 0 : (typ === 'premium'
+    ? Number(vybranyMaterial?.naklad_material_ks || 0) + Number(naklady.naklad_potlac_ks || 0) + Number(naklady.cena_sitia_bok_ks || 0)
+    : Number(naklady.naklad_ks || 0));
 
   const cenaKus = priceAt(nakladKs, pocetKs, pricingConfig);
   const subtotal = Math.max(cenaKus * pocetKs, Number(nastavenia?.minimalna_cena_objednavky) || 0);
@@ -54,6 +66,7 @@ export default function Buffky({ supabase, onSpat }) {
 
   const odoslatObjednavku = async () => {
     if (!engineRef.current) return;
+    if (typ === 'premium' && !materialKod) { setSubmitError('Vyber materiál buffky.'); return; }
     setIsSubmitting(true);
     setSubmitError('');
     setConfirmation('');
@@ -66,7 +79,7 @@ export default function Buffky({ supabase, onSpat }) {
       const dizajnJson = engineRef.current.getDesignJson();
 
       const { data, error } = await supabase.functions.invoke('buffky-create-draft-order', {
-        body: { pocetKs, deliverySpeed, suborNazov: 'buffka.png', suborCesta: cesta, dizajnJson },
+        body: { typ, materialKod: typ === 'premium' ? materialKod : null, pocetKs, deliverySpeed, suborNazov: 'buffka.png', suborCesta: cesta, dizajnJson },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -92,6 +105,24 @@ export default function Buffky({ supabase, onSpat }) {
         subtitle="Konfigurátor multifunkčných šatiek (Buffiek)"
         right={onSpat && <button onClick={onSpat} className="text-slate-300 hover:text-cyan-400 hover:bg-slate-800 px-3 py-2 rounded-lg text-sm font-medium transition self-start">← Katalóg</button>}
       />
+
+      <div className="px-4 py-3 border-b border-slate-800 bg-slate-900/80 flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-1.5 p-1 bg-slate-800/90 rounded-xl border border-slate-700/60">
+          <button onClick={() => setTyp('tubular_basic')} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${typ === 'tubular_basic' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'}`}>Tubular Basic</button>
+          <button onClick={() => setTyp('premium')} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${typ === 'premium' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'}`}>Premium</button>
+        </div>
+        {typ === 'tubular_basic' ? (
+          <p className="text-[11px] text-slate-400">Bez švov, bez obšívania — potlač priamo na bezšvovú tubulárnu pletenú látku.</p>
+        ) : (
+          <>
+            <p className="text-[11px] text-slate-400">Jeden bočný šev, obšitý horný aj spodný okraj (ako rukáv trička).</p>
+            <select value={materialKod} onChange={(e) => setMaterialKod(e.target.value)} className="ml-auto bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
+              {premiumMaterialy.length === 0 && <option value="">-- materiály nie sú nastavené --</option>}
+              {premiumMaterialy.map(m => <option key={m.kod} value={m.kod}>{m.nazov}</option>)}
+            </select>
+          </>
+        )}
+      </div>
 
       <main ref={rootRef} className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-0 overflow-hidden relative">
         {/* ĽAVÝ PANEL: 2D dizajn a nástroje */}
@@ -158,8 +189,14 @@ export default function Buffky({ supabase, onSpat }) {
               </select>
               <input type="color" id="textColorPicker" defaultValue="#ffffff" className="w-8 h-8 rounded-lg border border-slate-700 bg-transparent cursor-pointer" />
               <div className="flex items-center gap-1.5">
-                <button id="btnAddTextFront" className="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-xs font-bold text-white shadow">+ Na predok (A)</button>
-                <button id="btnAddTextBack" className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white shadow">+ Na zadok (B)</button>
+                {typ === 'tubular_basic' ? (
+                  <>
+                    <button id="btnAddTextFront" className="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-xs font-bold text-white shadow">+ Na prednú stranu (A)</button>
+                    <button id="btnAddTextBack" className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white shadow">+ Na zadnú stranu (B)</button>
+                  </>
+                ) : (
+                  <button id="btnAddTextFront" className="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-xs font-bold text-white shadow">+ Pridať text</button>
+                )}
               </div>
             </div>
 
@@ -201,43 +238,68 @@ export default function Buffky({ supabase, onSpat }) {
 
           <div className="flex-1 p-4 md:p-6 flex flex-col items-center justify-start relative select-none">
             <div className="w-full max-w-[520px] flex flex-col items-center mt-1">
-              <div className="w-full grid grid-cols-2 text-center text-xs font-semibold mb-3 gap-2 relative z-10">
-                <div className="bg-cyan-950/60 border border-cyan-500/40 text-cyan-300 py-2 px-3 rounded-xl flex items-center justify-between shadow-sm">
-                  <span className="flex items-center gap-1.5 font-bold"><i className="fa-solid fa-shirt text-cyan-400"></i> Strana A: PREDOK</span>
-                  <span className="text-[11px] font-mono text-cyan-300 bg-cyan-900/60 px-2 py-0.5 rounded border border-cyan-500/30">25 × 50 cm</span>
+              {typ === 'tubular_basic' ? (
+                <div className="w-full grid grid-cols-2 text-center text-xs font-semibold mb-3 gap-2 relative z-10">
+                  <div className="bg-cyan-950/60 border border-cyan-500/40 text-cyan-300 py-2 px-3 rounded-xl flex items-center justify-between shadow-sm">
+                    <span className="flex items-center gap-1.5 font-bold"><i className="fa-solid fa-shirt text-cyan-400"></i> A: Predná strana</span>
+                    <span className="text-[11px] font-mono text-cyan-300 bg-cyan-900/60 px-2 py-0.5 rounded border border-cyan-500/30">25 × 50 cm</span>
+                  </div>
+                  <div className="bg-indigo-950/60 border border-indigo-500/40 text-indigo-300 py-2 px-3 rounded-xl flex items-center justify-between shadow-sm">
+                    <span className="flex items-center gap-1.5 font-bold"><i className="fa-regular fa-clone text-indigo-400"></i> B: Zadná strana</span>
+                    <span className="text-[11px] font-mono text-indigo-300 bg-indigo-900/60 px-2 py-0.5 rounded border border-indigo-500/30">25 × 50 cm</span>
+                  </div>
                 </div>
-                <div className="bg-indigo-950/60 border border-indigo-500/40 text-indigo-300 py-2 px-3 rounded-xl flex items-center justify-between shadow-sm">
-                  <span className="flex items-center gap-1.5 font-bold"><i className="fa-regular fa-clone text-indigo-400"></i> Strana B: ZADOK</span>
-                  <span className="text-[11px] font-mono text-indigo-300 bg-indigo-900/60 px-2 py-0.5 rounded border border-indigo-500/30">25 × 50 cm</span>
+              ) : (
+                <div className="w-full text-center text-xs font-semibold mb-3 relative z-10">
+                  <div className="bg-cyan-950/60 border border-cyan-500/40 text-cyan-300 py-2 px-3 rounded-xl flex items-center justify-between shadow-sm">
+                    <span className="flex items-center gap-1.5 font-bold"><i className="fa-solid fa-image text-cyan-400"></i> Jeden celkový obrázok (obopína celú šatku)</span>
+                    <span className="text-[11px] font-mono text-cyan-300 bg-cyan-900/60 px-2 py-0.5 rounded border border-cyan-500/30">50 × 50 cm</span>
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="relative w-full aspect-square rounded-2xl overflow-hidden shadow-2xl border-2 border-slate-700/80 bg-slate-950 group">
                 <canvas id="designCanvas" width="960" height="960" className="w-full h-full cursor-crosshair checkerboard-bg block"></canvas>
                 <div id="guidesOverlay" className="absolute inset-0 pointer-events-none transition-opacity duration-200 opacity-100">
-                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-rose-500/70 border-r border-rose-300/40 flex items-center">
-                    <span className="text-[9px] bg-rose-600 text-white font-black px-1.5 py-0.5 rounded-r rotate-90 origin-left ml-2 tracking-widest uppercase">SPOJ</span>
-                  </div>
-                  <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-[2px] bg-rose-500/80 flex flex-col items-center justify-between py-3 shadow-[0_0_8px_rgba(244,63,94,0.6)]">
-                    <span className="text-[10px] bg-rose-600 text-white font-bold px-2 py-0.5 rounded-full shadow tracking-wider uppercase">SPOJ</span>
-                    <div className="h-full border-r-2 border-dashed border-rose-400/80 my-2"></div>
-                    <span className="text-[10px] bg-rose-600 text-white font-bold px-2 py-0.5 rounded-full shadow tracking-wider uppercase">SPOJ (25 cm)</span>
-                  </div>
-                  <div className="absolute right-0 top-0 bottom-0 w-1 bg-rose-500/70 border-l border-rose-300/40 flex items-center justify-end">
-                    <span className="text-[9px] bg-rose-600 text-white font-black px-1.5 py-0.5 rounded-l -rotate-90 origin-right mr-2 tracking-widest uppercase">SPOJ</span>
-                  </div>
-                  <div className="absolute top-0 left-0 right-0 h-4 border-b border-dashed border-sky-400/40 bg-sky-500/10 flex items-center justify-center">
-                    <span className="text-[9px] text-sky-300 font-mono">↑ Horný okraj šatky (otvorený koniec) ↑</span>
-                  </div>
-                  <div className="absolute bottom-0 left-0 right-0 h-4 border-t border-dashed border-sky-400/40 bg-sky-500/10 flex items-center justify-center">
-                    <span className="text-[9px] text-sky-300 font-mono">↓ Spodný okraj šatky (otvorený koniec) ↓</span>
-                  </div>
+                  {typ === 'tubular_basic' ? (
+                    <>
+                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-rose-500/70 border-r border-rose-300/40 flex items-center">
+                        <span className="text-[9px] bg-rose-600 text-white font-black px-1.5 py-0.5 rounded-r rotate-90 origin-left ml-2 tracking-widest uppercase">SPOJ</span>
+                      </div>
+                      <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-[2px] bg-rose-500/80 flex flex-col items-center justify-between py-3 shadow-[0_0_8px_rgba(244,63,94,0.6)]">
+                        <span className="text-[10px] bg-rose-600 text-white font-bold px-2 py-0.5 rounded-full shadow tracking-wider uppercase">SPOJ</span>
+                        <div className="h-full border-r-2 border-dashed border-rose-400/80 my-2"></div>
+                        <span className="text-[10px] bg-rose-600 text-white font-bold px-2 py-0.5 rounded-full shadow tracking-wider uppercase">SPOJ (25 cm)</span>
+                      </div>
+                      <div className="absolute right-0 top-0 bottom-0 w-1 bg-rose-500/70 border-l border-rose-300/40 flex items-center justify-end">
+                        <span className="text-[9px] bg-rose-600 text-white font-black px-1.5 py-0.5 rounded-l -rotate-90 origin-right mr-2 tracking-widest uppercase">SPOJ</span>
+                      </div>
+                      <div className="absolute top-0 left-0 right-0 h-4 border-b border-dashed border-sky-400/40 bg-sky-500/10 flex items-center justify-center">
+                        <span className="text-[9px] text-sky-300 font-mono">↑ Horný okraj šatky (otvorený koniec) ↑</span>
+                      </div>
+                      <div className="absolute bottom-0 left-0 right-0 h-4 border-t border-dashed border-sky-400/40 bg-sky-500/10 flex items-center justify-center">
+                        <span className="text-[9px] text-sky-300 font-mono">↓ Spodný okraj šatky (otvorený koniec) ↓</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="absolute right-0 top-0 bottom-0 w-1 bg-rose-500/70 border-l border-rose-300/40 flex items-center justify-end">
+                        <span className="text-[9px] bg-rose-600 text-white font-black px-1.5 py-0.5 rounded-l -rotate-90 origin-right mr-2 tracking-widest uppercase">SPOJ</span>
+                      </div>
+                      <div className="absolute top-0 left-0 right-0 h-[4%] bg-amber-500/25 border-b-2 border-dashed border-amber-400/70 flex items-center justify-center">
+                        <span className="text-[9px] text-amber-300 font-mono font-bold">⚠ Nedávať obsah — obšitý lem 2cm (zahne sa dovnútra)</span>
+                      </div>
+                      <div className="absolute bottom-0 left-0 right-0 h-[4%] bg-amber-500/25 border-t-2 border-dashed border-amber-400/70 flex items-center justify-center">
+                        <span className="text-[9px] text-amber-300 font-mono font-bold">⚠ Nedávať obsah — obšitý lem 2cm (zahne sa dovnútra)</span>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
               <div className="w-full flex items-center justify-between text-[11px] text-slate-400 mt-2 px-1">
                 <span className="flex items-center gap-1"><i className="fa-solid fa-arrows-up-down-left-right text-cyan-400"></i> Kliknite a ťahajte prvky na plátne</span>
-                <span className="text-rose-400/90 font-medium">Červené línie znázorňujú SPOJ šatky</span>
+                <span className="text-rose-400/90 font-medium">{typ === 'tubular_basic' ? 'Červené línie znázorňujú SPOJ šatky' : 'Červená línia = bočný šev, žlté pásy = obšitý lem'}</span>
               </div>
               <p className="text-[10px] text-amber-500 mt-2 text-center">ℹ️ Toto je len orientačný náhľad v nižšej kvalite — tlačový súbor sa pri odoslaní objednávky vygeneruje v plnej kvalite (300 DPI) a nie je možné ho stiahnuť.</p>
             </div>
@@ -259,10 +321,12 @@ export default function Buffky({ supabase, onSpat }) {
           </div>
 
           <div className="absolute top-16 left-4 z-20 flex flex-col gap-1.5">
-            <button className="cam-preset-btn text-[11px] px-2.5 py-1 rounded-lg bg-slate-900/80 backdrop-blur border border-slate-700 text-slate-300 hover:text-white hover:border-cyan-500 text-left transition flex items-center gap-1.5" data-angle="0"><span className="w-2 h-2 rounded-full bg-cyan-400"></span> Predná strana (A)</button>
-            <button className="cam-preset-btn text-[11px] px-2.5 py-1 rounded-lg bg-slate-900/80 backdrop-blur border border-slate-700 text-slate-300 hover:text-white hover:border-indigo-500 text-left transition flex items-center gap-1.5" data-angle="180"><span className="w-2 h-2 rounded-full bg-indigo-400"></span> Zadná strana (B)</button>
-            <button className="cam-preset-btn text-[11px] px-2.5 py-1 rounded-lg bg-slate-900/80 backdrop-blur border border-slate-700 text-slate-300 hover:text-white hover:border-rose-500 text-left transition flex items-center gap-1.5" data-angle="90"><span className="w-2 h-2 rounded-full bg-rose-500"></span> Bočný SPOJ (A/B)</button>
-            <button className="cam-preset-btn text-[11px] px-2.5 py-1 rounded-lg bg-slate-900/80 backdrop-blur border border-slate-700 text-slate-300 hover:text-white hover:border-rose-500 text-left transition flex items-center gap-1.5" data-angle="270"><span className="w-2 h-2 rounded-full bg-rose-500"></span> Bočný SPOJ (B/A)</button>
+            <button className="cam-preset-btn text-[11px] px-2.5 py-1 rounded-lg bg-slate-900/80 backdrop-blur border border-slate-700 text-slate-300 hover:text-white hover:border-cyan-500 text-left transition flex items-center gap-1.5" data-angle="0"><span className="w-2 h-2 rounded-full bg-cyan-400"></span> {typ === 'tubular_basic' ? 'Predná strana (A)' : 'Pohľad spredu'}</button>
+            <button className="cam-preset-btn text-[11px] px-2.5 py-1 rounded-lg bg-slate-900/80 backdrop-blur border border-slate-700 text-slate-300 hover:text-white hover:border-indigo-500 text-left transition flex items-center gap-1.5" data-angle="180"><span className="w-2 h-2 rounded-full bg-indigo-400"></span> {typ === 'tubular_basic' ? 'Zadná strana (B)' : 'Pohľad zozadu'}</button>
+            <button className="cam-preset-btn text-[11px] px-2.5 py-1 rounded-lg bg-slate-900/80 backdrop-blur border border-slate-700 text-slate-300 hover:text-white hover:border-rose-500 text-left transition flex items-center gap-1.5" data-angle="90"><span className="w-2 h-2 rounded-full bg-rose-500"></span> {typ === 'tubular_basic' ? 'Bočný SPOJ (A/B)' : 'Bočný SPOJ'}</button>
+            {typ === 'tubular_basic' && (
+              <button className="cam-preset-btn text-[11px] px-2.5 py-1 rounded-lg bg-slate-900/80 backdrop-blur border border-slate-700 text-slate-300 hover:text-white hover:border-rose-500 text-left transition flex items-center gap-1.5" data-angle="270"><span className="w-2 h-2 rounded-full bg-rose-500"></span> Bočný SPOJ (B/A)</button>
+            )}
           </div>
 
           <div id="threeContainer" className="flex-1 min-h-[360px] w-full relative cursor-grab active:cursor-grabbing overflow-hidden">
@@ -275,11 +339,11 @@ export default function Buffky({ supabase, onSpat }) {
           <div className="p-4 border-t border-slate-800 bg-slate-900/70 grid grid-cols-3 gap-2 text-center text-xs">
             <div className="bg-slate-800/60 rounded-xl p-2 border border-slate-700/50">
               <div className="text-slate-400 text-[10px] uppercase font-bold">Materiál</div>
-              <div className="font-bold text-slate-200 mt-0.5">100% Polyester CoolMax</div>
+              <div className="font-bold text-slate-200 mt-0.5">{typ === 'tubular_basic' ? '100% Polyester CoolMax' : (vybranyMaterial?.nazov || 'Vyber materiál')}</div>
             </div>
             <div className="bg-slate-800/60 rounded-xl p-2 border border-slate-700/50">
-              <div className="text-slate-400 text-[10px] uppercase font-bold">Technológia</div>
-              <div className="font-bold text-slate-200 mt-0.5">Sublimácia 360°</div>
+              <div className="text-slate-400 text-[10px] uppercase font-bold">Konštrukcia</div>
+              <div className="font-bold text-slate-200 mt-0.5">{typ === 'tubular_basic' ? 'Tubulárna, bez švov' : '1 bočný šev, obšitý lem'}</div>
             </div>
             <div className="bg-slate-800/60 rounded-xl p-2 border border-slate-700/50">
               <div className="text-slate-400 text-[10px] uppercase font-bold">Rozmery</div>

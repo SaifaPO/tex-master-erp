@@ -56,15 +56,17 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json();
     const {
+      typ = 'tubular_basic', materialKod = null,
       pocetKs, deliverySpeed = 'standard',
       suborNazov = null, suborCesta = null, dizajnJson = null,
     } = body;
 
+    if (typ !== 'tubular_basic' && typ !== 'premium') throw new Error('Neplatný typ buffky.');
     const ks = Math.max(1, Math.round(Number(pocetKs)) || 1);
     if (!suborCesta) throw new Error('Chýba tlačový súbor buffky.');
 
     const [{ data: nak }, { data: cfg }, { data: nastavenia }] = await Promise.all([
-      supabase.from('buffky_naklady_verejny').select('naklad_ks').maybeSingle(),
+      supabase.from('buffky_naklady_verejny').select('*').maybeSingle(),
       supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
       supabase.from('buffky_nastavenia').select('*').eq('id', 1).maybeSingle(),
     ]);
@@ -75,7 +77,17 @@ Deno.serve(async (req) => {
       ? { coefA: Number(cfg.coef_a), coefB: Number(cfg.coef_b), marginFloor: Number(cfg.margin_floor), coefP: Number(cfg.coef_p), qtyAtFloor: Number(cfg.qty_at_floor) }
       : { coefA: 300, coefB: 54, marginFloor: 30, coefP: 1.3, qtyAtFloor: 1000 };
 
-    const nakladKs = Number(nak.naklad_ks) || 0;
+    // Nikdy neveri klientom poslanej cene materialu — pri Premium sa nakladovy zaklad materialu
+    // ZNOVA zisti zo servera (buffky_premium_materialy_verejny), materialKod len urcuje KTORY.
+    let nakladKs = Number(nak.naklad_ks) || 0;
+    let vybranyMaterialNazov: string | null = null;
+    if (typ === 'premium') {
+      if (!materialKod) throw new Error('Chýba zvolený materiál Premium buffky.');
+      const { data: material } = await supabase.from('buffky_premium_materialy_verejny').select('kod, nazov, naklad_material_ks').eq('kod', materialKod).maybeSingle();
+      if (!material) throw new Error('Zvolený materiál sa nenašiel alebo nie je aktívny.');
+      nakladKs = Number(material.naklad_material_ks || 0) + Number(nak.naklad_potlac_ks || 0) + Number(nak.cena_sitia_bok_ks || 0);
+      vybranyMaterialNazov = material.nazov;
+    }
     const cenaKus = priceAt(nakladKs, ks, pricingConfig);
     const subtotal = Math.max(cenaKus * ks, Number(nastavenia.minimalna_cena_objednavky) || 0);
     const expressFee = deliverySpeed === 'express' ? subtotal * ((Number(nastavenia.priplatok_expres_percent) || 0) / 100) : 0;
@@ -88,6 +100,8 @@ Deno.serve(async (req) => {
     const objednavkaId = crypto.randomUUID();
     const { error: insertErr } = await supabase.from('buffky_objednavky').insert({
       id: objednavkaId,
+      typ,
+      material_kod: typ === 'premium' ? materialKod : null,
       pocet_ks: ks,
       cena_kus: Math.round(cenaKus * 100) / 100,
       cena_spolu: Math.round(grandTotal * 100) / 100,
@@ -104,17 +118,19 @@ Deno.serve(async (req) => {
     if (!domain || !clientId || !clientSecret) throw new Error('SHOPIFY_STORE_DOMAIN, SHOPIFY_CLIENT_ID alebo SHOPIFY_CLIENT_SECRET nie je nastavený v Supabase secrets.');
     const token = await ziskajAdminToken(domain, clientId, clientSecret);
 
+    const typLabel = typ === 'premium' ? `Premium${vybranyMaterialNazov ? ' — ' + vybranyMaterialNazov : ''}` : 'Tubular Basic';
     const draftPayload = {
       draft_order: {
         line_items: [
           {
-            title: `Buffka — vlastný dizajn (${ks} ks)`,
+            title: `Buffka — ${typLabel} — vlastný dizajn (${ks} ks)`,
             price: grandTotal.toFixed(2),
             quantity: 1,
             taxable: false, // cena uz zahrna DPH (vypocitana server-side) — Shopify ju druhykrat neprirata
             requires_shipping: true,
             properties: [
               { name: '_objednavka_id', value: objednavkaId },
+              { name: '_typ', value: typLabel },
               { name: '_pocet_ks', value: String(ks) },
               { name: '_subor', value: suborNazov || '' },
             ],
