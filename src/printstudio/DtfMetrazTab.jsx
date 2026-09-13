@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Scroll, Download, Settings, ExternalLink } from 'lucide-react';
+import { Scroll, Download, Settings, ExternalLink, Trash2 } from 'lucide-react';
 import { priceAt, marginAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 
 const PRINTSTUDIO_BASE_URL = 'https://printstudio-pro.vercel.app';
@@ -63,6 +63,12 @@ export default function DtfMetrazTab({ supabase }) {
   const zmenStav = async (id, stav) => {
     setObjednavky(o => o.map(x => x.id === id ? { ...x, stav } : x));
     await supabase.from('dtf_objednavky').update({ stav }).eq('id', id);
+  };
+
+  const zmazObjednavku = async (id) => {
+    if (!window.confirm('Naozaj zmazať túto objednávku? (Zmaže len záznam tu — prípadnú Shopify draft objednávku treba zmazať samostatne v Shopify Admin → Orders → Drafts.)')) return;
+    setObjednavky(o => o.filter(x => x.id !== id));
+    await supabase.from('dtf_objednavky').delete().eq('id', id);
   };
 
   // Náklad na 1 bm z výrobných vstupov
@@ -173,6 +179,7 @@ export default function DtfMetrazTab({ supabase }) {
                   {o.subor_cesta && (
                     <button onClick={() => stiahniSubor(o)} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-1.5"><Download className="w-3.5 h-3.5" /> Súbor</button>
                   )}
+                  <button onClick={() => zmazObjednavku(o.id)} title="Zmazať" className="p-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900 text-rose-400 border border-rose-900/60"><Trash2 className="w-3.5 h-3.5" /></button>
                 </div>
               </div>
             ))}
