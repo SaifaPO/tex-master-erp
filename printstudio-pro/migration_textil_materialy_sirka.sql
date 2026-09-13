@@ -10,8 +10,10 @@
 
 alter table textil_materialy add column if not exists sirka_tlace_cm numeric(10,1);
 
+-- Novy stlpec MUSI byt na konci zoznamu (za poradie) — CREATE OR REPLACE VIEW v Postgrese
+-- nedovoli zmenit poradie/nazvy existujucich stlpcov, len pridat nove na koniec.
 create or replace view textil_materialy_verejny as
-select kod, nazov, popis, pouzitie, specifikacie, technologia, naklad_m2, sirka_tlace_cm, poradie
+select kod, nazov, popis, pouzitie, specifikacie, technologia, naklad_m2, poradie, sirka_tlace_cm
 from textil_materialy
 where aktivny = true
 order by poradie;
