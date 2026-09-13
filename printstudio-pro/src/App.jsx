@@ -11,6 +11,7 @@ import BeachflagApp from './beachflag/BeachflagApp';
 import ZastavaApp from './zastava/ZastavaApp';
 import Dres3DApp from './dres3d/Dres3DApp';
 import Celenky from './Celenky';
+import Buffky from './Buffky';
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -23,10 +24,11 @@ export default function App() {
   const jeVlajka = new URLSearchParams(window.location.search).get('typ') === 'beachflag';
   const jeZastava = new URLSearchParams(window.location.search).get('typ') === 'zastava';
   const jeCelenka = new URLSearchParams(window.location.search).get('typ') === 'celenka';
+  const jeBuffka = new URLSearchParams(window.location.search).get('typ') === 'buffka';
 
   useEffect(() => {
     if (!supabase) { setLoadError('Supabase klient nie je nakonfigurovaný (chýbajú VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).'); setIsLoading(false); return; }
-    if (jeVlajka || jeZastava || jeCelenka) { setIsLoading(false); return; }
+    if (jeVlajka || jeZastava || jeCelenka || jeBuffka) { setIsLoading(false); return; }
     (async () => {
       const { kategorie: kats, produkty: prods } = await nacitajKategorieAProdukty(supabase);
       setKategorie(kats);
@@ -53,6 +55,9 @@ export default function App() {
   }
   if (jeCelenka) {
     return <Celenky supabase={supabase} />;
+  }
+  if (jeBuffka) {
+    return <Buffky supabase={supabase} />;
   }
 
   return (
