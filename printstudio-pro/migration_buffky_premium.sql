@@ -10,6 +10,10 @@
 -- Spustiť v Supabase SQL editore. Bezpečné spustiť opakovane.
 -- ============================================================
 
+-- Tento subor je SAMOSTATNY a zahrna aj obsah migration_buffky_naklad_prerobenie.sql (nakup
+-- cistej buffky flat cena_buffka_ks + potlac z Kostra cien) — ak si tamtu migraciu uz spustil,
+-- nizsie prikazy su bezpecne re-run (idempotentne); ak nie, sposobi rovnaky vysledok v jednom kroku.
+alter table buffky_naklady add column if not exists cena_buffka_ks numeric(10,2) not null default 0.50;
 -- Cena prišitia bočného švu (len Premium, Tubular Basic ho nemá — bez švov).
 alter table buffky_naklady add column if not exists cena_sitia_bok_ks numeric(10,2) not null default 0.90;
 
