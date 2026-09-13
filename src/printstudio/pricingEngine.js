@@ -72,16 +72,18 @@ export const mapConfigFromDb = (r) => ({
   wholesaleDiscountPercent: Number(r.wholesale_discount_percent ?? 15),
   dphPercent: Number(r.dph_percent ?? 23),
   cenaMinutySitia: Number(r.cena_minuty_sitia ?? 0),
+  cenaStrihania100cm2: Number(r.cena_strihania_100cm2 ?? 0),
 });
 export const mapConfigToDb = (c) => ({
   coef_a: c.coefA, coef_b: c.coefB, margin_floor: c.marginFloor, coef_p: c.coefP, qty_at_floor: c.qtyAtFloor,
   cap_margin_target: c.capMarginTarget ?? 0, wholesale_discount_percent: c.wholesaleDiscountPercent ?? 15,
   dph_percent: c.dphPercent ?? 23,
   cena_minuty_sitia: c.cenaMinutySitia ?? 0,
+  cena_strihania_100cm2: c.cenaStrihania100cm2 ?? 0,
 });
 
 // dphPercent — JEDINA DPH sadzba pre cely PrintStudio Pro (vsetky zakaznicke konfiguratory aj ich
 // Edge Functions). Predtym mal kazdy modul (DTF/Textil/Zastava/Beachflag/Celenky/Buffky) vlastnu
 // nezavislu kopiu v *_nastavenia — jedna z nich sa raz omylom rozisla (Buffky 15% namiesto 23%).
 // Odteraz sa DPH nastavuje LEN tu (zalozka Cenotvorba) a vsade inde sa len cita.
-export const DEFAULT_PRICING_CONFIG = { coefA: 300, coefB: 54, marginFloor: 30, coefP: 1.3, qtyAtFloor: 1000, capMarginTarget: 0, wholesaleDiscountPercent: 15, dphPercent: 23, cenaMinutySitia: 0 };
+export const DEFAULT_PRICING_CONFIG = { coefA: 300, coefB: 54, marginFloor: 30, coefP: 1.3, qtyAtFloor: 1000, capMarginTarget: 0, wholesaleDiscountPercent: 15, dphPercent: 23, cenaMinutySitia: 0, cenaStrihania100cm2: 0 };

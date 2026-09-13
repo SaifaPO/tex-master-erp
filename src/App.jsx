@@ -6,6 +6,7 @@ import { encode as encodeBySquare, CurrencyCode, PaymentOptions } from 'bysquare
 import { Html5Qrcode } from 'html5-qrcode';
 import CenovePonukyTab from './CenovePonukyTab';
 import PrintStudioAdmin from './printstudio/PrintStudioAdmin';
+import { nacitajKostru, vcSublimaciaGarment } from './printstudio/vyrobneNaklady';
 import {
   ClipboardList, Package, Cpu, QrCode, Plus, User, Clock, Layers, Search, Check, X, Calendar,
   Palette, Scissors, Printer, Sliders, Sparkles, ZoomIn, ZoomOut, FileText, PlusCircle, Table,
@@ -233,8 +234,8 @@ const FALLBACK_ACL = {
 const mapMaterialFromDb = (r) => ({ id: r.id, name: r.name, color: r.color, colorHex: r.color_hex || '', width: r.width, weight: r.weight, pricePerM: r.price_per_m, qty: r.qty, unit: r.unit, minQty: r.min_qty, warehouseId: r.warehouse_id || 'sklad-1', manufacturer: r.manufacturer || '', productType: r.product_type || '', deliveryNoteNumber: r.delivery_note_number || '', deliveryNoteDate: r.delivery_note_date || '', history: r.history || [] });
 const mapMaterialToDb = (m) => ({ id: m.id, name: m.name, color: m.color, color_hex: m.colorHex || null, width: m.width, weight: m.weight, price_per_m: m.pricePerM, qty: m.qty, unit: m.unit, min_qty: m.minQty, warehouse_id: m.warehouseId, manufacturer: m.manufacturer || null, product_type: m.productType || null, delivery_note_number: m.deliveryNoteNumber || null, delivery_note_date: m.deliveryNoteDate || null, history: m.history });
 
-const mapProductFromDb = (r) => ({ id: r.id, customCode: r.custom_code, name: r.name, sports: r.sports || [], layer1: r.layer1, layer2: r.layer2, layer3: r.layer3, threadM: r.thread_m, womenRatioPercent: r.women_ratio_percent ?? 90, childrenRatioPercent: r.children_ratio_percent ?? 65, productionCost: r.production_cost ?? null, priceGroup: r.price_group || '', redukovanyVykon: r.redukovany_vykon ?? null, attachments: r.attachments || [], minutySitia: r.minuty_sitia ?? null, reziaKs: r.rezia_ks ?? null, cenaPotlaceKs: r.cena_potlace_ks ?? null });
-const mapProductToDb = (p) => ({ id: p.id, custom_code: p.customCode, name: p.name, sports: p.sports, layer1: p.layer1, layer2: p.layer2, layer3: p.layer3, thread_m: p.threadM, women_ratio_percent: p.womenRatioPercent, children_ratio_percent: p.childrenRatioPercent, production_cost: p.productionCost ?? null, price_group: p.priceGroup || null, redukovany_vykon: p.redukovanyVykon ?? null, attachments: p.attachments || [], minuty_sitia: p.minutySitia ?? null, rezia_ks: p.reziaKs ?? null, cena_potlace_ks: p.cenaPotlaceKs ?? null });
+const mapProductFromDb = (r) => ({ id: r.id, customCode: r.custom_code, name: r.name, sports: r.sports || [], layer1: r.layer1, layer2: r.layer2, layer3: r.layer3, threadM: r.thread_m, womenRatioPercent: r.women_ratio_percent ?? 90, childrenRatioPercent: r.children_ratio_percent ?? 65, productionCost: r.production_cost ?? null, priceGroup: r.price_group || '', redukovanyVykon: r.redukovany_vykon ?? null, attachments: r.attachments || [], minutySitia: r.minuty_sitia ?? null, reziaKs: r.rezia_ks ?? null, cenaPotlaceKs: r.cena_potlace_ks ?? null, tlacSublimacia: !!r.tlac_sublimacia, tlacDtf: !!r.tlac_dtf, cenaPotlaceDtfKs: r.cena_potlace_dtf_ks ?? null, tlacSietotlac: !!r.tlac_sietotlac, cenaPotlaceSietotlacKs: r.cena_potlace_sietotlac_ks ?? null, tlacRezanyTransfer: !!r.tlac_rezany_transfer, cenaPotlaceRezanyTransferKs: r.cena_potlace_rezany_transfer_ks ?? null, tlacVysivka: !!r.tlac_vysivka, cenaPotlaceVysivkaKs: r.cena_potlace_vysivka_ks ?? null, strihaSaRezeVyseka: !!r.striha_sa_reze_vyseka });
+const mapProductToDb = (p) => ({ id: p.id, custom_code: p.customCode, name: p.name, sports: p.sports, layer1: p.layer1, layer2: p.layer2, layer3: p.layer3, thread_m: p.threadM, women_ratio_percent: p.womenRatioPercent, children_ratio_percent: p.childrenRatioPercent, production_cost: p.productionCost ?? null, price_group: p.priceGroup || null, redukovany_vykon: p.redukovanyVykon ?? null, attachments: p.attachments || [], minuty_sitia: p.minutySitia ?? null, rezia_ks: p.reziaKs ?? null, cena_potlace_ks: p.cenaPotlaceKs ?? null, tlac_sublimacia: !!p.tlacSublimacia, tlac_dtf: !!p.tlacDtf, cena_potlace_dtf_ks: p.cenaPotlaceDtfKs ?? null, tlac_sietotlac: !!p.tlacSietotlac, cena_potlace_sietotlac_ks: p.cenaPotlaceSietotlacKs ?? null, tlac_rezany_transfer: !!p.tlacRezanyTransfer, cena_potlace_rezany_transfer_ks: p.cenaPotlaceRezanyTransferKs ?? null, tlac_vysivka: !!p.tlacVysivka, cena_potlace_vysivka_ks: p.cenaPotlaceVysivkaKs ?? null, striha_sa_reze_vyseka: !!p.strihaSaRezeVyseka });
 
 const mapTierFromDb = (r) => ({ id: r.id, name: r.name, fit: r.fit, ventilation: r.ventilation, desc: r.description });
 const mapTierToDb = (t) => ({ id: t.id, name: t.name, fit: t.fit, ventilation: t.ventilation, description: t.desc });
@@ -1045,9 +1046,16 @@ export default function App() {
   const [stationNowTick, setStationNowTick] = useState(Date.now());
   const [companySettings, setCompanySettings] = useState({ companyName: '', address: '', ico: '', dic: '', icDph: '', iban: '', bankName: '', defaultVatRate: 23, nextInvoiceNumber: 1, invoiceNumberPrefix: '' });
   const [companySettingsDraft, setCompanySettingsDraft] = useState(null);
-  // Cena sitia (€/min) — jediny zdroj pravdy je pricing_config (zdielane s Cenotvorbou v PrintStudio
-  // Pro), pouziva sa na automaticky dopocet Vyrobnej ceny v Katalogu Produktov (minuty sitia x sadzba).
+  // Cena sitia (€/min) a cena strihania/rezania/vysekavania (€/100cm2) — jediny zdroj pravdy je
+  // pricing_config (zdielane s Cenotvorbou v PrintStudio Pro), pouziva sa na automaticky dopocet
+  // Vyrobnej ceny v Katalogu Produktov.
   const [cenaMinutySitia, setCenaMinutySitia] = useState(0);
+  const [cenaStrihania100cm2, setCenaStrihania100cm2] = useState(0);
+  // Kostra cien (sublimacia/DTF/sietotlac/rezany transfer/vysivka) — nacitane raz, pouzite na
+  // automaticky dopocet ceny potlace pri sublimacii (plocha = spotreba latky x sirka rolky).
+  const [kostra, setKostra] = useState(null);
+  const [krajcirky, setKrajcirky] = useState([]);
+  const [vyrobnaKapacitaNastavenia, setVyrobnaKapacitaNastavenia] = useState({ dlzka_smeny_min: 480 });
   const [invoices, setInvoices] = useState([]);
   const [selectedInvoiceForDetail, setSelectedInvoiceForDetail] = useState(null);
   const [showNewInvoiceForm, setShowNewInvoiceForm] = useState(false);
@@ -1383,8 +1391,20 @@ export default function App() {
   const [newModelMinutySitia, setNewModelMinutySitia] = useState('');
   const [newModelReziaKs, setNewModelReziaKs] = useState('');
   const [newModelCenaPotlaceKs, setNewModelCenaPotlaceKs] = useState('');
+  const [newModelTlacSublimacia, setNewModelTlacSublimacia] = useState(false);
+  const [newModelTlacDtf, setNewModelTlacDtf] = useState(false);
+  const [newModelCenaPotlaceDtfKs, setNewModelCenaPotlaceDtfKs] = useState('');
+  const [newModelTlacSietotlac, setNewModelTlacSietotlac] = useState(false);
+  const [newModelCenaPotlaceSietotlacKs, setNewModelCenaPotlaceSietotlacKs] = useState('');
+  const [newModelTlacRezanyTransfer, setNewModelTlacRezanyTransfer] = useState(false);
+  const [newModelCenaPotlaceRezanyTransferKs, setNewModelCenaPotlaceRezanyTransferKs] = useState('');
+  const [newModelTlacVysivka, setNewModelTlacVysivka] = useState(false);
+  const [newModelCenaPotlaceVysivkaKs, setNewModelCenaPotlaceVysivkaKs] = useState('');
+  const [newModelStrihaSaRezeVyseka, setNewModelStrihaSaRezeVyseka] = useState(false);
 
   const [newSportInput, setNewSportInput] = useState('');
+  const [newKrajcirkaMeno, setNewKrajcirkaMeno] = useState('');
+  const [newKrajcirkaVykon, setNewKrajcirkaVykon] = useState('');
   const [editingSportIndex, setEditingSportIndex] = useState(null);
   const [editingSportValue, setEditingSportValue] = useState('');
 
@@ -1441,7 +1461,7 @@ export default function App() {
     }
     async function loadAll() {
       try {
-        const [matRes, prodRes, tierRes, sportRes, empRes, aclRes, orderRes, whRes, rateRes, assignRes, stationDefaultRes, stationExclusionRes, checkinRes, attendanceRes, mismatchRes, problemRes, companyRes, invoiceRes, bankRes, journalRes, deadlineRes, cashDocRes, capacityRes, productTimesRes, assetRes, metricRes, tierRuleRes, travelRes, vehicleRes, vehicleLogRes, customerRes, dotlackovkaPriceRes, addonTypeRes, helpRequestRes, intercompanyRateRes, pricingConfigRes] = await Promise.all([
+        const [matRes, prodRes, tierRes, sportRes, empRes, aclRes, orderRes, whRes, rateRes, assignRes, stationDefaultRes, stationExclusionRes, checkinRes, attendanceRes, mismatchRes, problemRes, companyRes, invoiceRes, bankRes, journalRes, deadlineRes, cashDocRes, capacityRes, productTimesRes, assetRes, metricRes, tierRuleRes, travelRes, vehicleRes, vehicleLogRes, customerRes, dotlackovkaPriceRes, addonTypeRes, helpRequestRes, intercompanyRateRes, pricingConfigRes, krajcirkyRes, kapacitaRes] = await Promise.all([
           supabase.from('materials').select('*').order('name'),
           supabase.from('products').select('*'),
           supabase.from('quality_tiers').select('*'),
@@ -1477,7 +1497,9 @@ export default function App() {
           supabase.from('addon_types').select('*').order('sort_order'),
           supabase.from('help_requests').select('*').order('created_at', { ascending: false }).limit(200),
           supabase.from('intercompany_rates').select('*'),
-          supabase.from('pricing_config').select('cena_minuty_sitia').eq('id', 1).maybeSingle()
+          supabase.from('pricing_config').select('cena_minuty_sitia, cena_strihania_100cm2').eq('id', 1).maybeSingle(),
+          supabase.from('krajcirky').select('*').order('poradie').order('id'),
+          supabase.from('vyrobna_kapacita_nastavenia').select('*').eq('id', 1).maybeSingle()
         ]);
         const firstErr = [matRes, prodRes, tierRes, sportRes, empRes, orderRes, whRes].find(r => r.error);
         if (firstErr) throw firstErr.error;
@@ -1524,6 +1546,10 @@ export default function App() {
         setHelpRequests(helpRequestRes.error ? [] : (helpRequestRes.data || []).map(mapHelpRequestFromDb));
         setIntercompanyRates(intercompanyRateRes.error ? [] : (intercompanyRateRes.data || []).map(mapIntercompanyRateFromDb));
         setCenaMinutySitia(pricingConfigRes.error || !pricingConfigRes.data ? 0 : Number(pricingConfigRes.data.cena_minuty_sitia) || 0);
+        setCenaStrihania100cm2(pricingConfigRes.error || !pricingConfigRes.data ? 0 : Number(pricingConfigRes.data.cena_strihania_100cm2) || 0);
+        setKrajcirky(krajcirkyRes.error ? [] : (krajcirkyRes.data || []));
+        if (kapacitaRes.data) setVyrobnaKapacitaNastavenia(kapacitaRes.data);
+        nacitajKostru(supabase).then(setKostra).catch(() => setKostra(null));
 
         if (loadedWarehouses.length > 0) {
           setActiveWarehouseId(loadedWarehouses[0].id);
@@ -3412,23 +3438,60 @@ export default function App() {
     return parseFloat((baseRate * ratio * qty).toFixed(2));
   };
 
+  // Plocha latky (cm2) odvodena zo spotreby (bulk sadzba 5+ ks, ak nie je zadana pouzije sa 1-4ks)
+  // a sirky rolky zo Skladu — pouziva sa pre sublimaciu (cela plocha strihu sa potlaca) aj strihanie.
+  const vypocitajPlochaCm2ZLatky = (layer) => {
+    if (!layer?.materialId) return 0;
+    const material = materials.find(m => m.id === layer.materialId);
+    const widthCm = parseFloat(material?.width) || 0;
+    const consumptionM = parseFloat(layer.consumption?.ge5 ?? layer.consumption?.lt5) || 0;
+    return consumptionM * widthCm * 100;
+  };
+
+  // Cena potlace: sublimacia sa pocita AUTOMATICKY z plochy latky (Kostra cien), ostatne technologie
+  // (DTF, sietotlac, rezany transfer, vysivka) su vzdy rucne zadane €/ks (nedaju sa odvodit zo spotreby
+  // materialu — su to lokalne motivy, nie cela plocha strihu). Vracia null, ak nie je zaskrtnuta ziadna
+  // technologia (fallback na povodne cisto rucne pole cenaPotlaceKs).
+  const vypocitajCenuPotlaceZRozpisu = (p) => {
+    const anyChecked = p.tlacSublimacia || p.tlacDtf || p.tlacSietotlac || p.tlacRezanyTransfer || p.tlacVysivka;
+    if (!anyChecked) return null;
+    let sum = 0;
+    if (p.tlacSublimacia && kostra) sum += vcSublimaciaGarment(kostra, vypocitajPlochaCm2ZLatky(p.layer1));
+    if (p.tlacDtf) sum += parseFloat(p.cenaPotlaceDtfKs) || 0;
+    if (p.tlacSietotlac) sum += parseFloat(p.cenaPotlaceSietotlacKs) || 0;
+    if (p.tlacRezanyTransfer) sum += parseFloat(p.cenaPotlaceRezanyTransferKs) || 0;
+    if (p.tlacVysivka) sum += parseFloat(p.cenaPotlaceVysivkaKs) || 0;
+    return Math.round(sum * 100) / 100;
+  };
+
+  // Strihanie/rezanie/vysekavanie — jedna spolocna sadzba (€/100cm2), pocitana z celkovej plochy
+  // vsetkych pouzitych latok (cim vacsia spotreba, tym vacsi naklad na vystrihnutie).
+  const vypocitajCenuStrihania = (p) => {
+    if (!p.strihaSaRezeVyseka) return 0;
+    const totalPlocha = vypocitajPlochaCm2ZLatky(p.layer1) + vypocitajPlochaCm2ZLatky(p.layer2) + vypocitajPlochaCm2ZLatky(p.layer3);
+    return Math.round((totalPlocha / 100) * cenaStrihania100cm2 * 100) / 100;
+  };
+
   // Ak su minuty sitia vyplnene, vyrobna cena sa DOPOCITA (minuty x sadzba sitia z Cenotvorby + rezia
-  // + cena potlace) namiesto rucneho zadavania. Ak minuty sitia nie su vyplnene (null/prazdne), sprava
-  // sa presne ako doteraz — vyrobna cena ostava cisto rucne pole (spatna kompatibilita so starymi modelmi).
-  const vypocitajVyrobnuCenuZRozpisu = (minutySitia, reziaKs, cenaPotlaceKs) => {
-    if (minutySitia === null || minutySitia === undefined || minutySitia === '') return null;
-    const ms = parseFloat(minutySitia) || 0;
-    const rezia = parseFloat(reziaKs) || 0;
-    const potlac = parseFloat(cenaPotlaceKs) || 0;
-    return Math.round((ms * cenaMinutySitia + rezia + potlac) * 100) / 100;
+  // + cena potlace + cena strihania) namiesto rucneho zadavania. Ak minuty sitia nie su vyplnene
+  // (null/prazdne), sprava sa presne ako doteraz — vyrobna cena ostava cisto rucne pole (spatna
+  // kompatibilita so starymi modelmi).
+  const vypocitajVyrobnuCenuZRozpisu = (p) => {
+    if (p.minutySitia === null || p.minutySitia === undefined || p.minutySitia === '') return null;
+    const ms = parseFloat(p.minutySitia) || 0;
+    const rezia = parseFloat(p.reziaKs) || 0;
+    const cenaPotlacEfektivna = vypocitajCenuPotlaceZRozpisu(p) ?? (parseFloat(p.cenaPotlaceKs) || 0);
+    const cenaStrih = vypocitajCenuStrihania(p);
+    return Math.round((ms * cenaMinutySitia + rezia + cenaPotlacEfektivna + cenaStrih) * 100) / 100;
   };
 
   const handleSaveModel = async (e) => {
     e.preventDefault();
     if (!hasPermission('manage_catalog')) { triggerNotification('error', 'Prístup zamietnutý do správy katalógu.'); return; }
     if (editingProduct) {
-      const vypocitana = vypocitajVyrobnuCenuZRozpisu(editingProduct.minutySitia, editingProduct.reziaKs, editingProduct.cenaPotlaceKs);
-      const toSave = vypocitana !== null ? { ...editingProduct, productionCost: vypocitana } : editingProduct;
+      const vypocitana = vypocitajVyrobnuCenuZRozpisu(editingProduct);
+      const cenaPotlacEfektivna = vypocitajCenuPotlaceZRozpisu(editingProduct);
+      const toSave = vypocitana !== null ? { ...editingProduct, productionCost: vypocitana, cenaPotlaceKs: cenaPotlacEfektivna ?? editingProduct.cenaPotlaceKs } : editingProduct;
       const { error } = await supabase.from('products').update(mapProductToDb(toSave)).eq('id', editingProduct.id);
       if (error) { triggerNotification('error', error.message); return; }
       setEditingProduct(null);
@@ -3438,17 +3501,32 @@ export default function App() {
       const minutySitiaVal = newModelMinutySitia === '' ? null : parseFloat(newModelMinutySitia) || 0;
       const reziaKsVal = newModelReziaKs === '' ? null : parseFloat(newModelReziaKs) || 0;
       const cenaPotlaceKsVal = newModelCenaPotlaceKs === '' ? null : parseFloat(newModelCenaPotlaceKs) || 0;
-      const vypocitana = vypocitajVyrobnuCenuZRozpisu(minutySitiaVal, reziaKsVal, cenaPotlaceKsVal);
+      const layer1 = newModelPrimary ? { materialId: newModelPrimary, alternativeIds: newModelLayer1Alt, consumption: { lt5: parseFloat(newModelLayer1Lt5) || 0, ge5: parseFloat(newModelLayer1Ge5) || 0 } } : null;
+      const layer2 = newModelSecondary ? { materialId: newModelSecondary, alternativeIds: newModelLayer2Alt, consumption: { lt5: parseFloat(newModelLayer2Lt5) || 0, ge5: parseFloat(newModelLayer2Ge5) || 0 } } : null;
+      const layer3 = newModelTertiary ? { materialId: newModelTertiary, alternativeIds: newModelLayer3Alt, consumption: { lt5: parseFloat(newModelLayer3Lt5) || 0, ge5: parseFloat(newModelLayer3Ge5) || 0 } } : null;
+      const noveModel = {
+        layer1, layer2, layer3, minutySitia: minutySitiaVal, reziaKs: reziaKsVal, cenaPotlaceKs: cenaPotlaceKsVal,
+        tlacSublimacia: newModelTlacSublimacia, tlacDtf: newModelTlacDtf, cenaPotlaceDtfKs: newModelCenaPotlaceDtfKs,
+        tlacSietotlac: newModelTlacSietotlac, cenaPotlaceSietotlacKs: newModelCenaPotlaceSietotlacKs,
+        tlacRezanyTransfer: newModelTlacRezanyTransfer, cenaPotlaceRezanyTransferKs: newModelCenaPotlaceRezanyTransferKs,
+        tlacVysivka: newModelTlacVysivka, cenaPotlaceVysivkaKs: newModelCenaPotlaceVysivkaKs,
+        strihaSaRezeVyseka: newModelStrihaSaRezeVyseka,
+      };
+      const vypocitana = vypocitajVyrobnuCenuZRozpisu(noveModel);
+      const cenaPotlacEfektivna = vypocitajCenuPotlaceZRozpisu(noveModel);
       const created = {
         id: `prod-${Date.now()}`, customCode: newModelCode, name: newModelName, sports: newModelSports,
-        layer1: newModelPrimary ? { materialId: newModelPrimary, alternativeIds: newModelLayer1Alt, consumption: { lt5: parseFloat(newModelLayer1Lt5) || 0, ge5: parseFloat(newModelLayer1Ge5) || 0 } } : null,
-        layer2: newModelSecondary ? { materialId: newModelSecondary, alternativeIds: newModelLayer2Alt, consumption: { lt5: parseFloat(newModelLayer2Lt5) || 0, ge5: parseFloat(newModelLayer2Ge5) || 0 } } : null,
-        layer3: newModelTertiary ? { materialId: newModelTertiary, alternativeIds: newModelLayer3Alt, consumption: { lt5: parseFloat(newModelLayer3Lt5) || 0, ge5: parseFloat(newModelLayer3Ge5) || 0 } } : null,
+        layer1, layer2, layer3,
         womenRatioPercent: parseFloat(newModelWomenRatio) || 90,
         childrenRatioPercent: parseFloat(newModelChildrenRatio) || 65,
         productionCost: vypocitana !== null ? vypocitana : (newModelProductionCost === '' ? null : parseFloat(newModelProductionCost) || 0),
         redukovanyVykon: newModelRedukovanyVykon === '' ? null : parseFloat(newModelRedukovanyVykon) || 0,
-        minutySitia: minutySitiaVal, reziaKs: reziaKsVal, cenaPotlaceKs: cenaPotlaceKsVal,
+        minutySitia: minutySitiaVal, reziaKs: reziaKsVal, cenaPotlaceKs: cenaPotlacEfektivna ?? cenaPotlaceKsVal,
+        tlacSublimacia: newModelTlacSublimacia, tlacDtf: newModelTlacDtf, cenaPotlaceDtfKs: newModelCenaPotlaceDtfKs,
+        tlacSietotlac: newModelTlacSietotlac, cenaPotlaceSietotlacKs: newModelCenaPotlaceSietotlacKs,
+        tlacRezanyTransfer: newModelTlacRezanyTransfer, cenaPotlaceRezanyTransferKs: newModelCenaPotlaceRezanyTransferKs,
+        tlacVysivka: newModelTlacVysivka, cenaPotlaceVysivkaKs: newModelCenaPotlaceVysivkaKs,
+        strihaSaRezeVyseka: newModelStrihaSaRezeVyseka,
         attachments: [],
         threadM: 15
       };
@@ -3459,6 +3537,11 @@ export default function App() {
       setNewModelWomenRatio(90); setNewModelChildrenRatio(65);
       setNewModelProductionCost(''); setNewModelRedukovanyVykon('');
       setNewModelMinutySitia(''); setNewModelReziaKs(''); setNewModelCenaPotlaceKs('');
+      setNewModelTlacSublimacia(false); setNewModelTlacDtf(false); setNewModelCenaPotlaceDtfKs('');
+      setNewModelTlacSietotlac(false); setNewModelCenaPotlaceSietotlacKs('');
+      setNewModelTlacRezanyTransfer(false); setNewModelCenaPotlaceRezanyTransferKs('');
+      setNewModelTlacVysivka(false); setNewModelCenaPotlaceVysivkaKs('');
+      setNewModelStrihaSaRezeVyseka(false);
       setNewModelLayer1Alt([]); setNewModelLayer2Alt([]); setNewModelLayer3Alt([]);
       triggerNotification('success', `Model "${created.name}" pridaný do katalógu.`);
     }
@@ -3538,6 +3621,29 @@ export default function App() {
       await supabase.from('products').update({ sports: updatedSports }).eq('id', p.id);
     }
     if (catalogSportFilter === val) setCatalogSportFilter('vsetko');
+  };
+
+  const handleAddKrajcirka = async () => {
+    if (!hasPermission('manage_catalog')) { triggerNotification('error', 'Nemáte prístup do správy katalógu.'); return; }
+    if (!newKrajcirkaMeno.trim()) return;
+    const { data, error } = await supabase.from('krajcirky').insert({ meno: newKrajcirkaMeno.trim(), vykon_za_smenu: parseFloat(newKrajcirkaVykon) || 0, poradie: krajcirky.length }).select().single();
+    if (error) { triggerNotification('error', error.message); return; }
+    setKrajcirky(k => [...k, data]);
+    setNewKrajcirkaMeno(''); setNewKrajcirkaVykon('');
+  };
+  const handleUpravKrajcirku = async (id, patch) => {
+    setKrajcirky(k => k.map(x => x.id === id ? { ...x, ...patch } : x));
+    await supabase.from('krajcirky').update(patch).eq('id', id);
+  };
+  const handleDeleteKrajcirku = async (id) => {
+    if (!window.confirm('Naozaj vymazať túto krajčírku zo zoznamu?')) return;
+    setKrajcirky(k => k.filter(x => x.id !== id));
+    await supabase.from('krajcirky').delete().eq('id', id);
+  };
+  const handleUlozDlzkuSmeny = async (val) => {
+    const dlzka = parseFloat(val) || 0;
+    setVyrobnaKapacitaNastavenia({ dlzka_smeny_min: dlzka });
+    await supabase.from('vyrobna_kapacita_nastavenia').upsert({ id: 1, dlzka_smeny_min: dlzka });
   };
 
   const handleSaveTier = async (e) => {
@@ -5329,6 +5435,19 @@ export default function App() {
   });
 
   const catalogFilteredProducts = products.filter(p => catalogSportFilter === 'vsetko' ? true : p.sports?.includes(catalogSportFilter));
+  // Zjednotene "aktualne editovany produkt" (bud realny editingProduct, alebo poskladany z
+  // newModel* poli formulara pre novy model) — pouziva sa na ziveho nahladu Vyrobnej ceny nizsie.
+  const aktualnyFormularProdukt = editingProduct || {
+    minutySitia: newModelMinutySitia, reziaKs: newModelReziaKs, cenaPotlaceKs: newModelCenaPotlaceKs,
+    tlacSublimacia: newModelTlacSublimacia, tlacDtf: newModelTlacDtf, cenaPotlaceDtfKs: newModelCenaPotlaceDtfKs,
+    tlacSietotlac: newModelTlacSietotlac, cenaPotlaceSietotlacKs: newModelCenaPotlaceSietotlacKs,
+    tlacRezanyTransfer: newModelTlacRezanyTransfer, cenaPotlaceRezanyTransferKs: newModelCenaPotlaceRezanyTransferKs,
+    tlacVysivka: newModelTlacVysivka, cenaPotlaceVysivkaKs: newModelCenaPotlaceVysivkaKs,
+    strihaSaRezeVyseka: newModelStrihaSaRezeVyseka,
+    layer1: newModelPrimary ? { materialId: newModelPrimary, consumption: { lt5: parseFloat(newModelLayer1Lt5) || 0, ge5: parseFloat(newModelLayer1Ge5) || 0 } } : null,
+    layer2: newModelSecondary ? { materialId: newModelSecondary, consumption: { lt5: parseFloat(newModelLayer2Lt5) || 0, ge5: parseFloat(newModelLayer2Ge5) || 0 } } : null,
+    layer3: newModelTertiary ? { materialId: newModelTertiary, consumption: { lt5: parseFloat(newModelLayer3Lt5) || 0, ge5: parseFloat(newModelLayer3Ge5) || 0 } } : null,
+  };
   const pendingTotalQty = pendingItems.reduce((sum, i) => sum + i.qty, 0);
   const genderLabel = (g) => g === 'men' ? 'Muži' : g === 'women' ? 'Ženy' : g === 'children' ? 'Deti' : 'Neutrálne';
 
@@ -6799,24 +6918,66 @@ export default function App() {
                         <label className="block text-slate-400 font-semibold mb-1">Réžia (€/ks)</label>
                         <input type="number" step="0.01" placeholder="0" value={editingProduct ? (editingProduct.reziaKs ?? '') : newModelReziaKs} onChange={(e) => { const v = e.target.value === '' ? null : parseFloat(e.target.value) || 0; editingProduct ? setEditingProduct({ ...editingProduct, reziaKs: v }) : setNewModelReziaKs(e.target.value); }} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" />
                       </div>
-                      <div>
-                        <label className="block text-slate-400 font-semibold mb-1">Cena potlače (€/ks)</label>
-                        <input type="number" step="0.01" placeholder="0" value={editingProduct ? (editingProduct.cenaPotlaceKs ?? '') : newModelCenaPotlaceKs} onChange={(e) => { const v = e.target.value === '' ? null : parseFloat(e.target.value) || 0; editingProduct ? setEditingProduct({ ...editingProduct, cenaPotlaceKs: v }) : setNewModelCenaPotlaceKs(e.target.value); }} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" />
-                      </div>
                     </div>
+
+                    {/* CENA POTLACE — rozpis podla technologie */}
+                    <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 space-y-2.5">
+                      <label className="block text-slate-400 font-semibold">Potlač — technológie a cena</label>
+                      <p className="text-[10px] text-slate-500 -mt-1.5">Sublimácia sa počíta automaticky z plochy látky (Kostra cien) — potlačí sa celá plocha strihu. Ostatné technológie sú vždy ručné €/ks (lokálny motív, neviaže sa na spotrebu materiálu).</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <label className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-2 cursor-pointer">
+                          <input type="checkbox" checked={editingProduct ? !!editingProduct.tlacSublimacia : newModelTlacSublimacia} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, tlacSublimacia: e.target.checked }) : setNewModelTlacSublimacia(e.target.checked)} className="rounded border-slate-700 bg-slate-950" />
+                          <span className="text-slate-200 font-semibold flex-1">Sublimácia</span>
+                          {(editingProduct ? editingProduct.tlacSublimacia : newModelTlacSublimacia) && kostra && (
+                            <span className="text-emerald-400 font-mono text-[11px]">{vcSublimaciaGarment(kostra, vypocitajPlochaCm2ZLatky(aktualnyFormularProdukt.layer1)).toFixed(2)} €/ks</span>
+                          )}
+                        </label>
+                        {[
+                          { key: 'Dtf', label: 'DTF transfer', checked: editingProduct ? editingProduct.tlacDtf : newModelTlacDtf, setChecked: (v) => editingProduct ? setEditingProduct({ ...editingProduct, tlacDtf: v }) : setNewModelTlacDtf(v), cena: editingProduct ? editingProduct.cenaPotlaceDtfKs : newModelCenaPotlaceDtfKs, setCena: (v) => editingProduct ? setEditingProduct({ ...editingProduct, cenaPotlaceDtfKs: v }) : setNewModelCenaPotlaceDtfKs(v) },
+                          { key: 'Sietotlac', label: 'Sieťotlač', checked: editingProduct ? editingProduct.tlacSietotlac : newModelTlacSietotlac, setChecked: (v) => editingProduct ? setEditingProduct({ ...editingProduct, tlacSietotlac: v }) : setNewModelTlacSietotlac(v), cena: editingProduct ? editingProduct.cenaPotlaceSietotlacKs : newModelCenaPotlaceSietotlacKs, setCena: (v) => editingProduct ? setEditingProduct({ ...editingProduct, cenaPotlaceSietotlacKs: v }) : setNewModelCenaPotlaceSietotlacKs(v) },
+                          { key: 'RezanyTransfer', label: 'Rezaný transfer', checked: editingProduct ? editingProduct.tlacRezanyTransfer : newModelTlacRezanyTransfer, setChecked: (v) => editingProduct ? setEditingProduct({ ...editingProduct, tlacRezanyTransfer: v }) : setNewModelTlacRezanyTransfer(v), cena: editingProduct ? editingProduct.cenaPotlaceRezanyTransferKs : newModelCenaPotlaceRezanyTransferKs, setCena: (v) => editingProduct ? setEditingProduct({ ...editingProduct, cenaPotlaceRezanyTransferKs: v }) : setNewModelCenaPotlaceRezanyTransferKs(v) },
+                          { key: 'Vysivka', label: 'Výšivka', checked: editingProduct ? editingProduct.tlacVysivka : newModelTlacVysivka, setChecked: (v) => editingProduct ? setEditingProduct({ ...editingProduct, tlacVysivka: v }) : setNewModelTlacVysivka(v), cena: editingProduct ? editingProduct.cenaPotlaceVysivkaKs : newModelCenaPotlaceVysivkaKs, setCena: (v) => editingProduct ? setEditingProduct({ ...editingProduct, cenaPotlaceVysivkaKs: v }) : setNewModelCenaPotlaceVysivkaKs(v) },
+                        ].map(t => (
+                          <label key={t.key} className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-2">
+                            <input type="checkbox" checked={!!t.checked} onChange={(e) => t.setChecked(e.target.checked)} className="rounded border-slate-700 bg-slate-950" />
+                            <span className="text-slate-200 font-semibold flex-1">{t.label}</span>
+                            {t.checked && (
+                              <input type="number" step="0.01" placeholder="€/ks" value={t.cena ?? ''} onChange={(e) => t.setCena(e.target.value === '' ? null : parseFloat(e.target.value) || 0)} onClick={(e) => e.stopPropagation()} className="w-20 bg-slate-950 border border-slate-800 rounded px-1.5 py-1 text-white text-right" />
+                            )}
+                          </label>
+                        ))}
+                      </div>
+                      {!(editingProduct ? (editingProduct.tlacSublimacia || editingProduct.tlacDtf || editingProduct.tlacSietotlac || editingProduct.tlacRezanyTransfer || editingProduct.tlacVysivka) : (newModelTlacSublimacia || newModelTlacDtf || newModelTlacSietotlac || newModelTlacRezanyTransfer || newModelTlacVysivka)) && (
+                        <div>
+                          <label className="block text-slate-400 font-semibold mb-1 text-[11px]">Alebo cena potlače ručne, ak sa nehodí žiadna technológia vyššie (€/ks)</label>
+                          <input type="number" step="0.01" placeholder="0" value={editingProduct ? (editingProduct.cenaPotlaceKs ?? '') : newModelCenaPotlaceKs} onChange={(e) => { const v = e.target.value === '' ? null : parseFloat(e.target.value) || 0; editingProduct ? setEditingProduct({ ...editingProduct, cenaPotlaceKs: v }) : setNewModelCenaPotlaceKs(e.target.value); }} className="w-full max-w-[160px] bg-slate-900 border border-slate-800 rounded p-2 text-white" />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* STRIHANIE/REZANIE/VYSEKAVANIE */}
+                    <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={editingProduct ? !!editingProduct.strihaSaRezeVyseka : newModelStrihaSaRezeVyseka} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, strihaSaRezeVyseka: e.target.checked }) : setNewModelStrihaSaRezeVyseka(e.target.checked)} className="rounded border-slate-700 bg-slate-950" />
+                        <span className="text-slate-200 font-semibold">Strihanie / rezanie / vysekávanie</span>
+                        {(editingProduct ? editingProduct.strihaSaRezeVyseka : newModelStrihaSaRezeVyseka) && (
+                          <span className="text-emerald-400 font-mono text-[11px] ml-auto">{vypocitajCenuStrihania(aktualnyFormularProdukt).toFixed(2)} €/ks</span>
+                        )}
+                      </label>
+                      <p className="text-[10px] text-slate-500 mt-1">Cena sa počíta z celkovej plochy použitých látok × sadzba {cenaStrihania100cm2.toFixed(2)} €/100cm² (nastavuje sa v Cenotvorbe).</p>
+                    </div>
+
                     <div className="grid grid-cols-2 gap-3 bg-slate-950 p-3 rounded-lg border border-slate-800">
                       <div>
                         <label className="block text-slate-400 font-semibold mb-1">Výrobná cena (€/ks)</label>
                         {(() => {
-                          const vypocitana = editingProduct
-                            ? vypocitajVyrobnuCenuZRozpisu(editingProduct.minutySitia, editingProduct.reziaKs, editingProduct.cenaPotlaceKs)
-                            : vypocitajVyrobnuCenuZRozpisu(newModelMinutySitia, newModelReziaKs, newModelCenaPotlaceKs);
+                          const vypocitana = vypocitajVyrobnuCenuZRozpisu(aktualnyFormularProdukt);
                           if (vypocitana !== null) {
                             return <input type="number" disabled value={vypocitana} className="w-full bg-slate-900/60 border border-emerald-900/40 rounded p-2 text-emerald-400 font-bold cursor-not-allowed" />;
                           }
                           return <input type="number" step="0.01" placeholder="nezadané" value={editingProduct ? (editingProduct.productionCost ?? '') : newModelProductionCost} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, productionCost: e.target.value === '' ? null : parseFloat(e.target.value) || 0 }) : setNewModelProductionCost(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" />;
                         })()}
-                        <p className="text-[10px] text-slate-500 mt-0.5">{vypocitajVyrobnuCenuZRozpisu(editingProduct ? editingProduct.minutySitia : newModelMinutySitia, editingProduct ? editingProduct.reziaKs : newModelReziaKs, editingProduct ? editingProduct.cenaPotlaceKs : newModelCenaPotlaceKs) !== null ? 'Dopočítané automaticky z minút šitia + réžie + potlače (vyplň minúty šitia vyššie, ak chceš zadávať ručne).' : 'Rovnaké pole ako v Cenotvorbe (PrintStudio Pro) — materiál + šitie + režia + potlač na 1ks. Vyplň "Minúty šitia" vyššie, ak chceš, aby sa počítalo automaticky.'}</p>
+                        <p className="text-[10px] text-slate-500 mt-0.5">{vypocitajVyrobnuCenuZRozpisu(aktualnyFormularProdukt) !== null ? 'Dopočítané automaticky z minút šitia + réžie + potlače + strihania (vyplň minúty šitia vyššie, ak chceš zadávať ručne).' : 'Rovnaké pole ako v Cenotvorbe (PrintStudio Pro) — materiál + šitie + režia + potlač na 1ks. Vyplň "Minúty šitia" vyššie, ak chceš, aby sa počítalo automaticky.'}</p>
                       </div>
                       <div>
                         <label className="block text-slate-400 font-semibold mb-1">Redukovaný výkon (jednotky/ks)</label>
@@ -6903,6 +7064,42 @@ export default function App() {
                   <input type="text" placeholder="Nový šport" value={newSportInput} onChange={(e) => setNewSportInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAddSport()} className="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white" />
                   <button onClick={handleAddSport} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 rounded-lg flex items-center gap-1"><Plus className="h-3.5 w-3.5" /> Pridať</button>
                 </div>
+              </div>
+
+              <div className="mt-6 bg-slate-900/60 p-4 rounded-xl border border-slate-800 space-y-3">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                  <div>
+                    <h3 className="font-bold text-sm text-slate-200">Krajčírky — kapacita šitia</h3>
+                    <p className="text-[11px] text-slate-500 mt-0.5">Výkon za smenu v redukovaných jednotkách, pre výpočet Redukovaného výkonu produktov (Plánovacia Matica).</p>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs">
+                    <label className="text-slate-400 font-semibold">Dĺžka smeny (min)</label>
+                    <input type="number" step="1" value={vyrobnaKapacitaNastavenia.dlzka_smeny_min} onChange={(e) => handleUlozDlzkuSmeny(e.target.value)} className="w-20 bg-slate-950 border border-slate-800 rounded p-1.5 text-white" />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  {krajcirky.map(k => (
+                    <div key={k.id} className="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs">
+                      <input type="text" value={k.meno} onChange={(e) => handleUpravKrajcirku(k.id, { meno: e.target.value })} className="flex-1 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-white" />
+                      <input type="number" step="0.5" value={k.vykon_za_smenu} onChange={(e) => handleUpravKrajcirku(k.id, { vykon_za_smenu: parseFloat(e.target.value) || 0 })} className="w-24 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-white text-right" title="Výkon za smenu (red. jednotky)" />
+                      <label className="flex items-center gap-1 text-slate-400 shrink-0">
+                        <input type="checkbox" checked={k.aktivna} onChange={(e) => handleUpravKrajcirku(k.id, { aktivna: e.target.checked })} /> aktívna
+                      </label>
+                      <button onClick={() => handleDeleteKrajcirku(k.id)} className="text-slate-500 hover:text-rose-400 p-1"><Trash2 className="h-3.5 w-3.5" /></button>
+                    </div>
+                  ))}
+                  {krajcirky.length === 0 && <p className="text-xs text-slate-500">Zatiaľ žiadne krajčírky.</p>}
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <input type="text" placeholder="Meno krajčírky" value={newKrajcirkaMeno} onChange={(e) => setNewKrajcirkaMeno(e.target.value)} className="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white" />
+                  <input type="number" step="0.5" placeholder="Výkon/smenu" value={newKrajcirkaVykon} onChange={(e) => setNewKrajcirkaVykon(e.target.value)} className="w-28 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white" />
+                  <button onClick={handleAddKrajcirka} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 rounded-lg flex items-center gap-1"><Plus className="h-3.5 w-3.5" /> Pridať</button>
+                </div>
+                {krajcirky.filter(k => k.aktivna).length > 0 && (
+                  <p className="text-[11px] text-emerald-500/80 pt-1 border-t border-slate-800">
+                    Spolu: {krajcirky.filter(k => k.aktivna).length} aktívnych krajčíriek, {krajcirky.filter(k => k.aktivna).reduce((s, k) => s + (parseFloat(k.vykon_za_smenu) || 0), 0).toFixed(1)} red. jednotiek/smenu dokopy.
+                  </p>
+                )}
               </div>
 
               <div className="mt-8 border-t border-slate-800 pt-6">
