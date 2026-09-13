@@ -20,6 +20,8 @@ export default function TextilMetraz({ supabase, onSpat }) {
   const [nakladBmByTech, setNakladBmByTech] = useState({ sublimacia: 0, bavlna: 0 });
   const [pricingConfig, setPricingConfig] = useState(DEFAULT_PRICING_CONFIG);
   const [nastavenia, setNastavenia] = useState(null);
+  const [materialy, setMaterialy] = useState([]);
+  const [materialKod, setMaterialKod] = useState(''); // '' = vlastny material zakaznika
 
   const [technologia, setTechnologia] = useState('sublimacia'); // 'sublimacia' | 'bavlna'
   const [mode, setMode] = useState('auto'); // 'auto' (vzor s opakovaním) | 'subor' (hotova rolka)
@@ -43,23 +45,27 @@ export default function TextilMetraz({ supabase, onSpat }) {
   useEffect(() => {
     if (!supabase) { setLoadError('Supabase klient nie je nakonfigurovaný.'); setIsLoading(false); return; }
     (async () => {
-      const [{ data: nak }, { data: cfg }, { data: n }] = await Promise.all([
+      const [{ data: nak }, { data: cfg }, { data: n }, { data: mat }] = await Promise.all([
         supabase.from('textil_naklady_verejny').select('technologia, naklad_bm'),
         supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
         supabase.from('textil_nastavenia').select('*').eq('id', 1).maybeSingle(),
+        supabase.from('textil_materialy_verejny').select('*'),
       ]);
       const map = { sublimacia: 0, bavlna: 0 };
       (nak || []).forEach(r => { map[r.technologia] = Number(r.naklad_bm) || 0; });
       setNakladBmByTech(map);
       if (cfg) setPricingConfig(mapConfigFromDb(cfg));
       setNastavenia(n || null);
+      setMaterialy(mat || []);
       setIsLoading(false);
     })();
   }, [supabase]);
 
   // ---- Výpočet ceny a metráže ----
-  let totalLengthBm = 0, totalM2 = 0, baseRate = 0, subtotal = 0, expressFee = 0, shippingFee = 0, grandTotalBezDph = 0, dphSuma = 0, grandTotal = 0, capacityIssue = null;
+  let totalLengthBm = 0, totalM2 = 0, baseRate = 0, fabricRate = 0, fabricSubtotal = 0, subtotal = 0, expressFee = 0, shippingFee = 0, grandTotalBezDph = 0, dphSuma = 0, grandTotal = 0, capacityIssue = null;
   const nakladBm = nakladBmByTech[technologia] || 0;
+  const dostupneMaterialy = materialy.filter(m => m.technologia === 'obe' || m.technologia === technologia);
+  const vybranyMaterial = dostupneMaterialy.find(m => m.kod === materialKod) || null;
 
   if (nastavenia) {
     totalLengthBm = mode === 'auto' ? Math.max(0.5, lengthBm) : Math.max(0.5, directLengthBm);
@@ -68,7 +74,14 @@ export default function TextilMetraz({ supabase, onSpat }) {
     // Sadzba (€/bm) sa dopocitava z vyrobnej ceny na meter + jednotneho marzoveho vzorca
     // (rovnaky ako v celom PrintStudio Pro) — vacsi odber = nizsia marza = nizsia sadzba.
     baseRate = priceAt(nakladBm, totalLengthBm, pricingConfig);
-    subtotal = Math.max(totalLengthBm * baseRate, Number(nastavenia.minimalna_cena_objednavky));
+    // Ak si zakaznik vybral aj nasu latku (nie vlastny material), jej cena sa pocita rovnakym
+    // vzorcom (na rovnakej sirke 160cm ako potlac) a PRIPOCITAVA k cene potlace.
+    if (vybranyMaterial) {
+      const fabricNakladBm = Number(vybranyMaterial.naklad_m2) * ROLL_WIDTH_M;
+      fabricRate = priceAt(fabricNakladBm, totalLengthBm, pricingConfig);
+      fabricSubtotal = totalLengthBm * fabricRate;
+    }
+    subtotal = Math.max(totalLengthBm * baseRate + fabricSubtotal, Number(nastavenia.minimalna_cena_objednavky));
     expressFee = deliverySpeed === 'express' ? subtotal * (Number(nastavenia.priplatok_expres_percent) / 100) : 0;
     shippingFee = Number(nastavenia.cena_doprava);
     grandTotalBezDph = subtotal + expressFee + shippingFee;
@@ -99,6 +112,14 @@ export default function TextilMetraz({ supabase, onSpat }) {
       };
     }
   }
+
+  // Ak zakaznik prepne technologiu a vybrana latka uz pre nu nie je vhodna, zrus vyber (nech
+  // sa neplatia za necompatible material).
+  useEffect(() => {
+    if (materialKod && !materialy.some(m => m.kod === materialKod && (m.technologia === 'obe' || m.technologia === technologia))) {
+      setMaterialKod('');
+    }
+  }, [technologia, materialy]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const aktualnyHarmonogram = capacityIssue
     ? (scheduleOption ? capacityIssue.options.find(o => o.value === scheduleOption)?.label : capacityIssue.options[0].label)
@@ -194,6 +215,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
           technologia, mode, lengthBm, directLengthBm, widthCm, heightCm, patternRepeat,
           deliverySpeed, harmonogram: aktualnyHarmonogram,
           suborNazov: rawFile?.name || null, suborCesta,
+          materialKod: materialKod || null,
         },
       });
       if (error) throw error;
@@ -229,11 +251,11 @@ export default function TextilMetraz({ supabase, onSpat }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <button type="button" onClick={() => setTechnologia('sublimacia')} className={`p-4 rounded-xl border-2 text-left transition ${technologia === 'sublimacia' ? 'border-teal-500 bg-teal-50/60' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
           <span className="font-bold text-slate-900 text-sm block">1. Sublimačná potlač</span>
-          <span className="text-xs text-slate-500 mt-1 block">Transferový papier + kalander — polyester, funkčný úplet, softshell, vlajkovina.</span>
+          <span className="text-xs text-slate-500 mt-1 block">Potlač polyesterových látok rôzneho druhu sublimačnou technológiou — žiarivé, trvácne farby, ktoré zafarbia samotné vlákno a nie je ich cítiť na dotyk. Možnosť tlače fluorescenčnými farbami.</span>
         </button>
         <button type="button" onClick={() => setTechnologia('bavlna')} className={`p-4 rounded-xl border-2 text-left transition ${technologia === 'bavlna' ? 'border-amber-500 bg-amber-50/60' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
           <span className="font-bold text-slate-900 text-sm block">2. Digitálna potlač bavlny</span>
-          <span className="text-xs text-slate-500 mt-1 block">Priama pigmentová tlač (bez papiera) — popelín, mušelín, teplákovina, bavlna satén.</span>
+          <span className="text-xs text-slate-500 mt-1 block">Priama pigmentová potlač bavlnených látok — jednolíc, výplňok, tkaniny.</span>
         </button>
       </div>
 
@@ -301,6 +323,36 @@ export default function TextilMetraz({ supabase, onSpat }) {
           )}
 
           <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-2"><Shirt className="w-4 h-4 text-teal-500" /> Materiál</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className={`p-3.5 rounded-xl border cursor-pointer transition ${!materialKod ? 'border-teal-500 bg-teal-50/60' : 'border-slate-200'}`}>
+                <input type="radio" name="material" className="hidden" checked={!materialKod} onChange={() => setMaterialKod('')} />
+                <span className="text-sm font-bold text-slate-900 block">Vlastný materiál</span>
+                <span className="text-xs text-slate-500">Dodáte vlastnú látku, platíte len za potlač</span>
+              </label>
+              <label className={`p-3.5 rounded-xl border cursor-pointer transition ${materialKod ? 'border-teal-500 bg-teal-50/60' : 'border-slate-200'}`}>
+                <input type="radio" name="material" className="hidden" checked={!!materialKod} onChange={() => setMaterialKod(dostupneMaterialy[0]?.kod || '')} disabled={dostupneMaterialy.length === 0} />
+                <span className="text-sm font-bold text-slate-900 block">Objednať aj látku od nás</span>
+                <span className="text-xs text-slate-500">{dostupneMaterialy.length > 0 ? 'Vytlačíme priamo na náš materiál' : 'Momentálne nie je dostupné'}</span>
+              </label>
+            </div>
+            {materialKod && (
+              <div className="space-y-2 pt-1">
+                <select value={materialKod} onChange={(e) => setMaterialKod(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm">
+                  {dostupneMaterialy.map(m => <option key={m.kod} value={m.kod}>{m.nazov}</option>)}
+                </select>
+                {vybranyMaterial && (
+                  <div className="text-xs text-slate-600 bg-slate-50 border border-slate-100 rounded-lg p-3 space-y-1">
+                    {vybranyMaterial.popis && <p><strong className="text-slate-800">Popis:</strong> {vybranyMaterial.popis}</p>}
+                    {vybranyMaterial.pouzitie && <p><strong className="text-slate-800">Použitie:</strong> {vybranyMaterial.pouzitie}</p>}
+                    {vybranyMaterial.specifikacie && <p><strong className="text-slate-800">Špecifikácie:</strong> {vybranyMaterial.specifikacie}</p>}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-3">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-2"><Truck className="w-4 h-4 text-teal-500" /> Rýchlosť doručenia</h3>
             <div className="grid grid-cols-2 gap-3">
               <label className={`p-3.5 rounded-xl border cursor-pointer transition ${deliverySpeed === 'standard' ? 'border-teal-500 bg-teal-50/60' : 'border-slate-200'}`}>
@@ -356,7 +408,8 @@ export default function TextilMetraz({ supabase, onSpat }) {
             </h3>
             <div className="space-y-2 text-xs text-slate-300">
               <Row label="Technológia" value={technologia === 'sublimacia' ? 'Sublimácia' : 'Digitálna bavlna'} />
-              <Row label="Sadzba pri tomto odbere" value={`${baseRate.toFixed(2)} €/bm`} />
+              <Row label="Sadzba potlače" value={`${baseRate.toFixed(2)} €/bm`} />
+              {vybranyMaterial && <Row label={`Látka: ${vybranyMaterial.nazov}`} value={`${fabricRate.toFixed(2)} €/bm`} />}
               <Row label="Objednaná dĺžka metráže" value={`${totalLengthBm.toFixed(2)} bm`} highlight />
               <Row label="Tlačová plocha" value={`${totalM2.toFixed(2)} m²`} />
               <Row label="Príplatok za expres" value={`${expressFee.toFixed(2)} €`} />

@@ -32,6 +32,15 @@ function priceAt(cost: number, qty: number, cfg: PricingConfig) {
   return Math.round(cost * (1 + marginAt(cost, qty, cfg) / 100) * 100) / 100;
 }
 
+// Nikdy neveri klientom poslanej cene latky — vzdy nanovo zisti aktualnu cenu zo skladu (ak je
+// latka prepojena), rovnaky vzor ako resolveNakladM2 v zastava/beachflag price-preview funkciach.
+async function resolveNakladM2(supabase: ReturnType<typeof createClient>, material: { naklad_m2: number; sklad_material_id: string | null }) {
+  if (!material.sklad_material_id) return Number(material.naklad_m2) || 0;
+  const { data: sklad } = await supabase.from('materials').select('price_per_m, width').eq('id', material.sklad_material_id).maybeSingle();
+  if (!sklad || !sklad.width || Number(sklad.width) <= 0) return Number(material.naklad_m2) || 0;
+  return (Number(sklad.price_per_m) || 0) / (Number(sklad.width) / 100);
+}
+
 function odpoved(body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 }
@@ -66,6 +75,7 @@ Deno.serve(async (req) => {
       technologia, mode, lengthBm, directLengthBm, widthCm, heightCm, patternRepeat,
       deliverySpeed = 'standard', harmonogram = '',
       suborNazov = null, suborCesta = null,
+      materialKod = null,
     } = body;
 
     if (technologia !== 'sublimacia' && technologia !== 'bavlna') throw new Error('Neplatná technológia.');
@@ -89,7 +99,24 @@ Deno.serve(async (req) => {
     const totalM2 = totalLengthBm * (ROLL_WIDTH_CM / 100);
 
     const baseRate = priceAt(nakladBm, totalLengthBm, pricingConfig);
-    const subtotal = Math.max(totalLengthBm * baseRate, Number(nastavenia.minimalna_cena_objednavky) || 0);
+
+    // Ak si zakaznik vybral aj nasu latku, jej cena sa dopocita SAMOSTATNE (vlastna marzova
+    // krivka na rovnakej 160cm sirke ako potlac) a pripocita k cene potlace. Cena latky sa NIKDY
+    // neveri klientovi — materialKod len urcuje KTORU latku, cenu si funkcia zisti sama.
+    let fabricRate = 0, fabricSubtotal = 0;
+    let vybranyMaterial: { kod: string; nazov: string } | null = null;
+    if (materialKod) {
+      const { data: material } = await supabase.from('textil_materialy').select('kod, nazov, naklad_m2, sklad_material_id, aktivny, technologia').eq('kod', materialKod).maybeSingle();
+      if (material && material.aktivny && (material.technologia === 'obe' || material.technologia === technologia)) {
+        const nakladM2 = await resolveNakladM2(supabase, material);
+        const fabricNakladBm = nakladM2 * (ROLL_WIDTH_CM / 100);
+        fabricRate = priceAt(fabricNakladBm, totalLengthBm, pricingConfig);
+        fabricSubtotal = totalLengthBm * fabricRate;
+        vybranyMaterial = { kod: material.kod, nazov: material.nazov };
+      }
+    }
+
+    const subtotal = Math.max(totalLengthBm * baseRate + fabricSubtotal, Number(nastavenia.minimalna_cena_objednavky) || 0);
     const expressFee = deliverySpeed === 'express' ? subtotal * ((Number(nastavenia.priplatok_expres_percent) || 0) / 100) : 0;
     const shippingFee = Number(nastavenia.cena_doprava) || 0;
     const grandTotalBezDph = subtotal + expressFee + shippingFee;
@@ -113,6 +140,8 @@ Deno.serve(async (req) => {
       harmonogram: harmonogram || null,
       subor_nazov: suborNazov,
       subor_cesta: suborCesta,
+      material_kod: vybranyMaterial?.kod || null,
+      material_nazov: vybranyMaterial?.nazov || null,
     });
     if (insertErr) throw insertErr;
 
@@ -123,7 +152,7 @@ Deno.serve(async (req) => {
     const token = await ziskajAdminToken(domain, clientId, clientSecret);
 
     const technikaLabel = technologia === 'sublimacia' ? 'Sublimačná potlač' : 'Digitálna potlač bavlny';
-    const nazovPolozky = `Textilná metráž — ${technikaLabel} ${totalLengthBm.toFixed(2)}bm`;
+    const nazovPolozky = `Textilná metráž — ${technikaLabel} ${totalLengthBm.toFixed(2)}bm` + (vybranyMaterial ? ` + látka: ${vybranyMaterial.nazov}` : '');
 
     const draftPayload = {
       draft_order: {
@@ -140,6 +169,7 @@ Deno.serve(async (req) => {
               { name: '_dlzka_bm', value: totalLengthBm.toFixed(2) },
               { name: '_harmonogram', value: harmonogram || '' },
               { name: '_subor', value: suborNazov || '' },
+              { name: '_material', value: vybranyMaterial?.nazov || '' },
             ],
           },
         ],
@@ -164,6 +194,7 @@ Deno.serve(async (req) => {
 
     return odpoved({ checkoutUrl: draftOrder.invoice_url, cenaSpolu: grandTotal, objednavkaId });
   } catch (e) {
-    return odpoved({ error: e instanceof Error ? e.message : String(e) });
+    const msg = e instanceof Error ? e.message : (e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : JSON.stringify(e));
+    return odpoved({ error: msg });
   }
 });

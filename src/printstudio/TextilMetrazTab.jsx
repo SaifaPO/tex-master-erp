@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Shirt, Download, Settings, ExternalLink, Trash2 } from 'lucide-react';
 import { priceAt, marginAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
+import TextilMaterialyTab from './TextilMaterialyTab';
 
 const PRINTSTUDIO_BASE_URL = 'https://printstudio-pro.vercel.app';
 const BUCKET = 'print-designs';
@@ -113,6 +114,8 @@ export default function TextilMetrazTab({ supabase }) {
         <h3 className="font-bold text-sm text-white mb-1 flex items-center gap-1.5"><Settings className="w-4 h-4 text-indigo-400" /> Prepojenie na Shopify</h3>
         <p className="text-xs text-slate-400">Platba beží cez <strong className="text-slate-200">Shopify Draft Order</strong> (Edge Function <code className="text-[11px] bg-slate-950 px-1 rounded">textil-metraz-create-draft-order</code>) — appka vytvorí objednávku s presnou cenou a zákazníka rovno presmeruje na platbu, žiadny trik s počtom kusov. Nič sa tu nenastavuje — len over, že Supabase secrets <code className="text-[11px] bg-slate-950 px-1 rounded">SHOPIFY_STORE_DOMAIN</code>, <code className="text-[11px] bg-slate-950 px-1 rounded">SHOPIFY_CLIENT_ID</code> a <code className="text-[11px] bg-slate-950 px-1 rounded">SHOPIFY_CLIENT_SECRET</code> sú nastavené.</p>
       </div>
+
+      <TextilMaterialyTab supabase={supabase} />
 
       {/* DOPRAVA A KAPACITA */}
       <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-5">
@@ -232,6 +235,7 @@ export default function TextilMetrazTab({ supabase }) {
                     </span>
                     <span className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded text-[10px]">{o.rezim === 'auto' ? `${o.sirka_cm}×${o.vyska_cm}cm` : 'Hotová rolka'}</span>
                     <span className="text-slate-500 text-[10px]">{new Date(o.created_at).toLocaleString('sk-SK')}</span>
+                    {o.material_nazov && <span className="bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded text-[10px]">+ {o.material_nazov}</span>}
                   </div>
                   <div className="text-slate-300">Metráž: <strong className="text-indigo-400 font-mono">{o.dlzka_bm} bm</strong> | Suma: <strong className="text-emerald-400 font-mono">{o.cena_spolu} €</strong> | {o.harmonogram}</div>
                 </div>
