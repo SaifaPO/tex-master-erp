@@ -49,6 +49,22 @@ function odpoved(body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 }
 
+// Obchod uz nema klasicky staly "Admin API access token" (Shopify presiel na Dev Dashboard
+// aplikacie bez tejto moznosti) — token si preto appka vyziada sama, za behu, cez OAuth
+// "client credentials" grant (Client ID + Secret appky, ktora ma nastavene opravnenie
+// write_draft_orders). Token je kratkodoby (cca 2 hodiny), preto sa nikdy neuklada, len pouzije.
+async function ziskajAdminToken(domain: string, clientId: string, clientSecret: string) {
+  const res = await fetch(`https://${domain}/admin/oauth/access_token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, grant_type: 'client_credentials' }),
+  });
+  if (!res.ok) throw new Error(`Nepodarilo sa získať Shopify token (${res.status}): ${await res.text()}`);
+  const data = await res.json();
+  if (!data?.access_token) throw new Error('Shopify nevrátil access_token.');
+  return data.access_token as string;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -118,8 +134,10 @@ Deno.serve(async (req) => {
     if (insertErr) throw insertErr;
 
     const domain = Deno.env.get('SHOPIFY_STORE_DOMAIN');
-    const token = Deno.env.get('SHOPIFY_ADMIN_TOKEN');
-    if (!domain || !token) throw new Error('SHOPIFY_STORE_DOMAIN alebo SHOPIFY_ADMIN_TOKEN nie je nastavený v Supabase secrets.');
+    const clientId = Deno.env.get('SHOPIFY_CLIENT_ID');
+    const clientSecret = Deno.env.get('SHOPIFY_CLIENT_SECRET');
+    if (!domain || !clientId || !clientSecret) throw new Error('SHOPIFY_STORE_DOMAIN, SHOPIFY_CLIENT_ID alebo SHOPIFY_CLIENT_SECRET nie je nastavený v Supabase secrets.');
+    const token = await ziskajAdminToken(domain, clientId, clientSecret);
 
     const nazovPolozky = mode === 'auto'
       ? `DTF transfer — metráž ${totalLengthBm.toFixed(2)}bm (${qty}× ${widthCm}×${heightCm}cm)`

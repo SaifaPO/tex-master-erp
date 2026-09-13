@@ -105,7 +105,7 @@ export default function TextilMetrazTab({ supabase }) {
       {/* SHOPIFY PREPOJENIE */}
       <div className="bg-slate-900/60 rounded-2xl border border-indigo-900/40 p-5">
         <h3 className="font-bold text-sm text-white mb-1 flex items-center gap-1.5"><Settings className="w-4 h-4 text-indigo-400" /> Prepojenie na Shopify</h3>
-        <p className="text-xs text-slate-400">Platba beží cez <strong className="text-slate-200">Shopify Draft Order</strong> (Edge Function <code className="text-[11px] bg-slate-950 px-1 rounded">textil-metraz-create-draft-order</code>) — appka vytvorí objednávku s presnou cenou a zákazníka rovno presmeruje na platbu, žiadny trik s počtom kusov. Nič sa tu nenastavuje — len over, že Supabase secrets <code className="text-[11px] bg-slate-950 px-1 rounded">SHOPIFY_STORE_DOMAIN</code> a <code className="text-[11px] bg-slate-950 px-1 rounded">SHOPIFY_ADMIN_TOKEN</code> sú nastavené (rovnaké ako pre Beachvlajky).</p>
+        <p className="text-xs text-slate-400">Platba beží cez <strong className="text-slate-200">Shopify Draft Order</strong> (Edge Function <code className="text-[11px] bg-slate-950 px-1 rounded">textil-metraz-create-draft-order</code>) — appka vytvorí objednávku s presnou cenou a zákazníka rovno presmeruje na platbu, žiadny trik s počtom kusov. Nič sa tu nenastavuje — len over, že Supabase secrets <code className="text-[11px] bg-slate-950 px-1 rounded">SHOPIFY_STORE_DOMAIN</code>, <code className="text-[11px] bg-slate-950 px-1 rounded">SHOPIFY_CLIENT_ID</code> a <code className="text-[11px] bg-slate-950 px-1 rounded">SHOPIFY_CLIENT_SECRET</code> sú nastavené.</p>
       </div>
 
       {/* DOPRAVA A KAPACITA */}
