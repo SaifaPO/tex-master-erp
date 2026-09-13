@@ -11,8 +11,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const ROLL_WIDTH_CM = 160;
-
 interface PricingConfig { coefA: number; coefB: number; marginFloor: number; coefP: number; qtyAtFloor: number; }
 
 function baseMargin(cost: number, cfg: PricingConfig) {
@@ -32,13 +30,35 @@ function priceAt(cost: number, qty: number, cfg: PricingConfig) {
   return Math.round(cost * (1 + marginAt(cost, qty, cfg) / 100) * 100) / 100;
 }
 
-// Nikdy neveri klientom poslanej cene latky — vzdy nanovo zisti aktualnu cenu zo skladu (ak je
-// latka prepojena), rovnaky vzor ako resolveNakladM2 v zastava/beachflag price-preview funkciach.
-async function resolveNakladM2(supabase: ReturnType<typeof createClient>, material: { naklad_m2: number; sklad_material_id: string | null }) {
-  if (!material.sklad_material_id) return Number(material.naklad_m2) || 0;
+const REZERVA_SPADAVKA_CM = 8; // rezerva na spadavku/okraje (4cm z kazdej strany), odpocitana zo sirky skladovej rolky
+const MAX_SIRKA_CM: Record<string, number> = { sublimacia: 160, bavlna: 180 };
+
+// Nikdy neveri klientom poslanej cene/sirke latky — vzdy nanovo zisti aktualne udaje zo skladu
+// (ak je latka prepojena), rovnaky vzor ako resolveNakladM2 v zastava/beachflag price-preview
+// funkciach. Vracia aj sirku tlace (sirka rolky - rezerva), orezanu na strojovy max danej technologie.
+async function resolveMaterialLive(
+  supabase: ReturnType<typeof createClient>,
+  material: { naklad_m2: number; sklad_material_id: string | null; sirka_tlace_cm: number | null },
+  technologia: string,
+) {
+  const maxSirka = MAX_SIRKA_CM[technologia] || 160;
+  if (!material.sklad_material_id) {
+    return {
+      nakladM2: Number(material.naklad_m2) || 0,
+      sirkaTlaceCm: Math.min(Number(material.sirka_tlace_cm) || maxSirka, maxSirka),
+    };
+  }
   const { data: sklad } = await supabase.from('materials').select('price_per_m, width').eq('id', material.sklad_material_id).maybeSingle();
-  if (!sklad || !sklad.width || Number(sklad.width) <= 0) return Number(material.naklad_m2) || 0;
-  return (Number(sklad.price_per_m) || 0) / (Number(sklad.width) / 100);
+  if (!sklad || !sklad.width || Number(sklad.width) <= 0) {
+    return {
+      nakladM2: Number(material.naklad_m2) || 0,
+      sirkaTlaceCm: Math.min(Number(material.sirka_tlace_cm) || maxSirka, maxSirka),
+    };
+  }
+  return {
+    nakladM2: (Number(sklad.price_per_m) || 0) / (Number(sklad.width) / 100),
+    sirkaTlaceCm: Math.min(Math.max(0, Number(sklad.width) - REZERVA_SPADAVKA_CM), maxSirka),
+  };
 }
 
 function odpoved(body: Record<string, unknown>) {
@@ -75,7 +95,7 @@ Deno.serve(async (req) => {
       technologia, mode, lengthBm, directLengthBm, widthCm, heightCm, patternRepeat,
       deliverySpeed = 'standard', harmonogram = '',
       suborNazov = null, suborCesta = null,
-      materialKod = null,
+      materialKod = null, manualSirkaCm = null,
     } = body;
 
     if (technologia !== 'sublimacia' && technologia !== 'bavlna') throw new Error('Neplatná technológia.');
@@ -96,25 +116,28 @@ Deno.serve(async (req) => {
     // Rovnako ako v TextilMetraz.jsx — v oboch rezimoch si zakaznik priamo zvoli dlzku rolky
     // (sirka/vyska pri "auto" rezime sluzia len na nahlad opakovania vzoru, nie na vypocet dlzky).
     const totalLengthBm = mode === 'auto' ? Math.max(0.5, Number(lengthBm) || 0.5) : Math.max(0.5, Number(directLengthBm) || 0.5);
-    const totalM2 = totalLengthBm * (ROLL_WIDTH_CM / 100);
 
     const baseRate = priceAt(nakladBm, totalLengthBm, pricingConfig);
 
-    // Ak si zakaznik vybral aj nasu latku, jej cena sa dopocita SAMOSTATNE (vlastna marzova
-    // krivka na rovnakej 160cm sirke ako potlac) a pripocita k cene potlace. Cena latky sa NIKDY
-    // neveri klientovi — materialKod len urcuje KTORU latku, cenu si funkcia zisti sama.
-    let fabricRate = 0, fabricSubtotal = 0;
+    // Ak si zakaznik vybral aj nasu latku, jej cena aj sirka tlace sa zistia SAMOSTATNE (zivo zo
+    // skladu) a pripocitaju k cene potlace. Cena/sirka sa NIKDY neveri klientovi — materialKod len
+    // urcuje KTORU latku, hodnoty si funkcia zisti sama. Pri vlastnom materiali sa pouzije sirka,
+    // ktoru zadal zakaznik (orezana na strojovy max danej technologie).
+    const maxSirka = MAX_SIRKA_CM[technologia] || 160;
+    let fabricRate = 0, fabricSubtotal = 0, printWidthCm = Math.min(Number(manualSirkaCm) || maxSirka, maxSirka);
     let vybranyMaterial: { kod: string; nazov: string } | null = null;
     if (materialKod) {
-      const { data: material } = await supabase.from('textil_materialy').select('kod, nazov, naklad_m2, sklad_material_id, aktivny, technologia').eq('kod', materialKod).maybeSingle();
+      const { data: material } = await supabase.from('textil_materialy').select('kod, nazov, naklad_m2, sklad_material_id, sirka_tlace_cm, aktivny, technologia').eq('kod', materialKod).maybeSingle();
       if (material && material.aktivny && (material.technologia === 'obe' || material.technologia === technologia)) {
-        const nakladM2 = await resolveNakladM2(supabase, material);
-        const fabricNakladBm = nakladM2 * (ROLL_WIDTH_CM / 100);
+        const { nakladM2, sirkaTlaceCm } = await resolveMaterialLive(supabase, material, technologia);
+        printWidthCm = sirkaTlaceCm;
+        const fabricNakladBm = nakladM2 * (printWidthCm / 100);
         fabricRate = priceAt(fabricNakladBm, totalLengthBm, pricingConfig);
         fabricSubtotal = totalLengthBm * fabricRate;
         vybranyMaterial = { kod: material.kod, nazov: material.nazov };
       }
     }
+    const totalM2 = totalLengthBm * (printWidthCm / 100);
 
     const subtotal = Math.max(totalLengthBm * baseRate + fabricSubtotal, Number(nastavenia.minimalna_cena_objednavky) || 0);
     const expressFee = deliverySpeed === 'express' ? subtotal * ((Number(nastavenia.priplatok_expres_percent) || 0) / 100) : 0;
@@ -134,6 +157,7 @@ Deno.serve(async (req) => {
       vyska_cm: mode === 'auto' ? Number(heightCm) || null : null,
       dlzka_bm: Math.round(totalLengthBm * 100) / 100,
       plocha_m2: Math.round(totalM2 * 100) / 100,
+      sirka_tlace_cm: Math.round(printWidthCm * 10) / 10,
       cena_hladina: `${baseRate.toFixed(2)} €/bm`,
       cena_spolu: Math.round(grandTotal * 100) / 100,
       doprava_rychlost: deliverySpeed,
@@ -167,6 +191,7 @@ Deno.serve(async (req) => {
               { name: '_objednavka_id', value: objednavkaId },
               { name: '_technologia', value: technikaLabel },
               { name: '_dlzka_bm', value: totalLengthBm.toFixed(2) },
+              { name: '_sirka_tlace_cm', value: String(Math.round(printWidthCm * 10) / 10) },
               { name: '_harmonogram', value: harmonogram || '' },
               { name: '_subor', value: suborNazov || '' },
               { name: '_material', value: vybranyMaterial?.nazov || '' },

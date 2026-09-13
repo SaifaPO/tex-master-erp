@@ -9,6 +9,14 @@ function vypocitajNakladZoSkladu(skladMaterial) {
   return Math.round((Number(skladMaterial.price_per_m) || 0) / sirkaM * 100) / 100;
 }
 
+// Skutocna tlacitelna sirka je uzsia ako fyzicka sirka rolky — treba rezervu na spadavku/okraje
+// (8cm spolu, 4cm z kazdej strany), inak by sa tlacilo az po samotny kraj latky.
+const REZERVA_SPADAVKA_CM = 8;
+function vypocitajSirkuTlaceZoSkladu(skladMaterial) {
+  if (!skladMaterial || !skladMaterial.width || skladMaterial.width <= 0) return null;
+  return Math.max(0, Number(skladMaterial.width) - REZERVA_SPADAVKA_CM);
+}
+
 const TECHNOLOGIA_LABEL = { sublimacia: 'Len sublimácia', bavlna: 'Len digitálna bavlna', obe: 'Obe technológie' };
 
 export default function TextilMaterialyTab({ supabase }) {
@@ -46,13 +54,20 @@ export default function TextilMaterialyTab({ supabase }) {
     if (!skladMaterialId) { await uprav(m.id, { sklad_material_id: null }); return; }
     const sklad = skladMaterialy.find(s => s.id === skladMaterialId);
     const vypocet = vypocitajNakladZoSkladu(sklad);
-    const patch = vypocet != null ? { sklad_material_id: skladMaterialId, naklad_m2: vypocet } : { sklad_material_id: skladMaterialId };
+    const sirka = vypocitajSirkuTlaceZoSkladu(sklad);
+    const patch = { sklad_material_id: skladMaterialId };
+    if (vypocet != null) patch.naklad_m2 = vypocet;
+    if (sirka != null) patch.sirka_tlace_cm = sirka;
     await uprav(m.id, patch);
   };
   const prepocitajZoSkladu = async (m) => {
     const sklad = skladMaterialy.find(s => s.id === m.sklad_material_id);
     const vypocet = vypocitajNakladZoSkladu(sklad);
-    if (vypocet != null) await uprav(m.id, { naklad_m2: vypocet });
+    const sirka = vypocitajSirkuTlaceZoSkladu(sklad);
+    const patch = {};
+    if (vypocet != null) patch.naklad_m2 = vypocet;
+    if (sirka != null) patch.sirka_tlace_cm = sirka;
+    if (Object.keys(patch).length) await uprav(m.id, patch);
   };
 
   if (isLoading) return <p className="text-sm text-slate-500">Načítavam…</p>;
@@ -67,8 +82,10 @@ export default function TextilMaterialyTab({ supabase }) {
           k cene potlače. "Náklad €/m²" je nákupná cena — zákazník ju nevidí, len výslednú predajnú cenu.
         </p>
         <p className="text-xs text-slate-400 mt-1">
-          Prepoj na skutočný sklad (Materiály, položky na bežný meter) — cena €/m² sa dopočíta sama z €/bm
-          a šírky. Ak sklad. položka nemá vyplnenú šírku, prepočet sa nedá urobiť — treba ju doplniť v Sklade.
+          Prepoj na skutočný sklad (Materiály, položky na bežný meter) — cena €/m² aj šírka tlače sa dopočítajú
+          sami z €/bm a šírky rolky. Ak sklad. položka nemá vyplnenú šírku, prepočet sa nedá urobiť — treba ju
+          doplniť v Sklade. Šírka tlače je automaticky o {REZERVA_SPADAVKA_CM}cm menšia ako šírka rolky (rezerva
+          na spadávku/okraje). Pri "vlastnom materiáli" si šírku zadáva zákazník sám v appke.
         </p>
       </div>
 
@@ -91,6 +108,9 @@ export default function TextilMaterialyTab({ supabase }) {
                     <button type="button" onClick={() => prepocitajZoSkladu(m)} title="Prepočítať zo skladu" className="text-slate-500 hover:text-indigo-400 p-1"><RefreshCw className="w-3.5 h-3.5" /></button>
                   )}
                 </div>
+                <div className="flex items-center gap-1 text-xs text-slate-400 shrink-0">
+                  <input type="number" step="1" value={m.sirka_tlace_cm ?? ''} disabled={jePrepojeny && !chybaSirka} onChange={(e) => uprav(m.id, { sirka_tlace_cm: parseFloat(e.target.value) || 0 })} placeholder="šírka" className="w-20 px-2 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-sm text-white disabled:opacity-60" /> cm šírka tlače
+                </div>
                 <label className="flex items-center gap-1.5 text-xs text-slate-400 shrink-0">
                   <input type="checkbox" checked={m.aktivny} onChange={(e) => uprav(m.id, { aktivny: e.target.checked })} /> aktívna
                 </label>
@@ -104,7 +124,7 @@ export default function TextilMaterialyTab({ supabase }) {
                 </select>
               </div>
               {jePrepojeny && !chybaSirka && !skladNenajdeny && (
-                <p className="text-[10px] text-emerald-500">✓ Prepojené: {sklad.price_per_m} €/bm ÷ {(sklad.width / 100).toFixed(2)}m šírka = {vypocitajNakladZoSkladu(sklad)?.toFixed(2)} €/m² (na sklade {sklad.qty}m)</p>
+                <p className="text-[10px] text-emerald-500">✓ Prepojené: {sklad.price_per_m} €/bm ÷ {(sklad.width / 100).toFixed(2)}m šírka = {vypocitajNakladZoSkladu(sklad)?.toFixed(2)} €/m² · šírka tlače {sklad.width}cm − {REZERVA_SPADAVKA_CM}cm rezerva = {vypocitajSirkuTlaceZoSkladu(sklad)}cm (na sklade {sklad.qty}m)</p>
               )}
               {chybaSirka && (
                 <p className="text-[10px] text-amber-500 flex items-center gap-1"><AlertTriangle className="w-3 h-3 shrink-0" /> Skladová položka "{sklad.name}" nemá vyplnenú šírku (cm) — doplň ju v Sklade, potom sa dá prepočítať. Zatiaľ treba náklad/m² zadať ručne.</p>

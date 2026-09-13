@@ -3,7 +3,9 @@ import { Shirt, UploadCloud, Truck, Eye, ShoppingCart, TriangleAlert, CreditCard
 import { priceAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 
 const BUCKET = 'print-designs';
-const ROLL_WIDTH_CM = 160;
+const ROLL_WIDTH_CM = 160; // nominalna sirka, na ktorej je pocitany naklad_bm procesu (textil_naklady_verejny) — nemeni sa podla objednavky
+// Max dosiahnutelna sirka tlace na stroji podla technologie — bavlna vie tlacit sirsie ako sublimacia.
+const MAX_SIRKA_CM = { sublimacia: 160, bavlna: 180 };
 // Referencne urovne (bm) len pre "Prehlad mnozstevnych zliav" nizsie — samotny vypocet ceny
 // funguje pre lubovolnu (aj neceloriselnu) dlzku, toto je len ilustracna tabulka.
 const BM_PREVIEW_LEVELS = [1, 5, 10, 25, 50, 100, 200, 500, 1000];
@@ -24,6 +26,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
   const [materialKod, setMaterialKod] = useState(''); // '' = vlastny material zakaznika
 
   const [technologia, setTechnologia] = useState('sublimacia'); // 'sublimacia' | 'bavlna'
+  const [manualSirkaCm, setManualSirkaCm] = useState(160); // sirka VLASTNEHO materialu zakaznika (ked nie je vybrata nasa latka)
   const [mode, setMode] = useState('auto'); // 'auto' (vzor s opakovaním) | 'subor' (hotova rolka)
   const [patternRepeat, setPatternRepeat] = useState('grid');
   const [widthCm, setWidthCm] = useState(20);
@@ -66,18 +69,25 @@ export default function TextilMetraz({ supabase, onSpat }) {
   const nakladBm = nakladBmByTech[technologia] || 0;
   const dostupneMaterialy = materialy.filter(m => m.technologia === 'obe' || m.technologia === technologia);
   const vybranyMaterial = dostupneMaterialy.find(m => m.kod === materialKod) || null;
+  const maxSirka = MAX_SIRKA_CM[technologia] || 160;
+  // Sirka tlace: pri "nasej latke" sa berie automaticky zo skladu (uz zohladnena rezerva na
+  // spadavku), pri "vlastnom materiali" ju zadava zakaznik — obe su orezane na max dosiahnutelnu
+  // sirku stroja pre danu technologiu (bavlna az 180cm, sublimacia 160cm).
+  const printWidthCm = Math.min(vybranyMaterial ? (Number(vybranyMaterial.sirka_tlace_cm) || maxSirka) : manualSirkaCm, maxSirka);
 
   if (nastavenia) {
     totalLengthBm = mode === 'auto' ? Math.max(0.5, lengthBm) : Math.max(0.5, directLengthBm);
-    totalM2 = totalLengthBm * (ROLL_WIDTH_CM / 100);
+    totalM2 = totalLengthBm * (printWidthCm / 100);
 
     // Sadzba (€/bm) sa dopocitava z vyrobnej ceny na meter + jednotneho marzoveho vzorca
     // (rovnaky ako v celom PrintStudio Pro) — vacsi odber = nizsia marza = nizsia sadzba.
+    // Poznamka: sadzba potlace je nezavisla od zvolenej sirky (naklad_bm procesu je pocitany na
+    // nominalnej sirke rolky, nie na skutocne pouzitej sirke tlace).
     baseRate = priceAt(nakladBm, totalLengthBm, pricingConfig);
     // Ak si zakaznik vybral aj nasu latku (nie vlastny material), jej cena sa pocita rovnakym
-    // vzorcom (na rovnakej sirke 160cm ako potlac) a PRIPOCITAVA k cene potlace.
+    // vzorcom (na skutocnej sirke tlace danej latky) a PRIPOCITAVA k cene potlace.
     if (vybranyMaterial) {
-      const fabricNakladBm = Number(vybranyMaterial.naklad_m2) * ROLL_WIDTH_M;
+      const fabricNakladBm = Number(vybranyMaterial.naklad_m2) * (printWidthCm / 100);
       fabricRate = priceAt(fabricNakladBm, totalLengthBm, pricingConfig);
       fabricSubtotal = totalLengthBm * fabricRate;
     }
@@ -121,6 +131,12 @@ export default function TextilMetraz({ supabase, onSpat }) {
     }
   }, [technologia, materialy]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Ak zakaznik prepne technologiu a rucne zadana sirka presahuje novy strojovy limit, oreze sa.
+  useEffect(() => {
+    const max = MAX_SIRKA_CM[technologia] || 160;
+    setManualSirkaCm(v => Math.min(v, max));
+  }, [technologia]);
+
   const aktualnyHarmonogram = capacityIssue
     ? (scheduleOption ? capacityIssue.options.find(o => o.value === scheduleOption)?.label : capacityIssue.options[0].label)
     : (deliverySpeed === 'express' ? 'Expresne v deň objednávky' : 'Štandardne do 48 hodín');
@@ -130,7 +146,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
     const canvas = canvasRef.current;
     if (!canvas || !nastavenia) return;
     const ctx = canvas.getContext('2d');
-    const ratio = 280 / ROLL_WIDTH_CM;
+    const ratio = 280 / printWidthCm;
     canvas.width = 280;
     const previewLengthBm = mode === 'auto' ? Math.max(0.5, lengthBm) : Math.max(0.5, directLengthBm);
     const canvasHeightPx = Math.min(440, Math.max(180, previewLengthBm * 100 * ratio));
@@ -169,10 +185,10 @@ export default function TextilMetraz({ supabase, onSpat }) {
       ctx.strokeRect(5, 5, canvas.width - 10, canvas.height - 10);
       ctx.fillStyle = '#047857';
       ctx.font = '11px sans-serif';
-      ctx.fillText('Pripravená rolka 160cm (150-300 DPI)', 16, 28);
+      ctx.fillText(`Pripravená rolka ${printWidthCm}cm (150-300 DPI)`, 16, 28);
       ctx.fillText(`Dĺžka: ${directLengthBm.toFixed(2)} bm`, 16, 46);
     }
-  }, [mode, technologia, widthCm, heightCm, lengthBm, directLengthBm, patternRepeat, patternImage, nastavenia]);
+  }, [mode, technologia, widthCm, heightCm, lengthBm, directLengthBm, patternRepeat, patternImage, nastavenia, printWidthCm]);
 
   const handlePatternUpload = (e) => {
     const file = e.target.files[0];
@@ -216,6 +232,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
           deliverySpeed, harmonogram: aktualnyHarmonogram,
           suborNazov: rawFile?.name || null, suborCesta,
           materialKod: materialKod || null,
+          manualSirkaCm, // pouzije sa len ak nie je vybrana nasa latka — pri latke si sirku server zisti sam
         },
       });
       if (error) throw error;
@@ -242,7 +259,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
       <div className="bg-gradient-to-r from-slate-50 to-white p-5 sm:p-6 rounded-2xl border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2"><Shirt className="text-teal-600 w-6 h-6" /> Textilná metráž — sublimácia & digitálna bavlna</h1>
-          <p className="text-slate-500 text-xs sm:text-sm mt-1">Tlač na rolku šírky 160 cm. Nahraj vzor s opakovaním alebo hotovú rolku (150-300 DPI, TIFF/PNG/PDF).</p>
+          <p className="text-slate-500 text-xs sm:text-sm mt-1">Tlač na rolku šírky do 160 cm (sublimácia) / do 180 cm (bavlna). Nahraj vzor s opakovaním alebo hotovú rolku (150-300 DPI, TIFF/PNG/PDF).</p>
         </div>
         {onSpat && <button onClick={onSpat} className="text-slate-600 hover:text-teal-600 hover:bg-teal-50 px-3 py-2 rounded-lg text-sm font-medium transition self-start">← Katalóg</button>}
       </div>
@@ -273,7 +290,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Šírka motívu (cm)</label>
-                  <input type="number" min="1" max={ROLL_WIDTH_CM} step="0.5" value={widthCm} onChange={(e) => setWidthCm(parseFloat(e.target.value) || 1)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+                  <input type="number" min="1" max={printWidthCm} step="0.5" value={widthCm} onChange={(e) => setWidthCm(parseFloat(e.target.value) || 1)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Výška motívu (cm)</label>
@@ -309,10 +326,10 @@ export default function TextilMetraz({ supabase, onSpat }) {
             </div>
           ) : (
             <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-              <h3 className="text-sm font-bold text-slate-900 border-b border-slate-100 pb-2">Nahrať hotovú pripravenú rolku (160 cm)</h3>
+              <h3 className="text-sm font-bold text-slate-900 border-b border-slate-100 pb-2">Nahrať hotovú pripravenú rolku ({printWidthCm} cm)</h3>
               <label className="border-2 border-dashed border-slate-200 hover:border-teal-400 rounded-xl p-6 flex flex-col items-center gap-2 cursor-pointer transition bg-slate-50/50">
                 <UploadCloud className="w-7 h-7 text-teal-500" />
-                <span className="text-xs text-slate-600 font-medium">{rawFile ? `Súbor pripravený: ${rawFile.name}` : 'Vyberte exportný súbor (TIFF/PNG/PDF, 150-300 DPI, šírka 160cm)'}</span>
+                <span className="text-xs text-slate-600 font-medium">{rawFile ? `Súbor pripravený: ${rawFile.name}` : `Vyberte exportný súbor (TIFF/PNG/PDF, 150-300 DPI, šírka ${printWidthCm}cm)`}</span>
                 <input type="file" accept="image/png,image/tiff,application/pdf" onChange={handleRollUpload} className="hidden" />
               </label>
               <div>
@@ -336,7 +353,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
                 <span className="text-xs text-slate-500">{dostupneMaterialy.length > 0 ? 'Vytlačíme priamo na náš materiál' : 'Momentálne nie je dostupné'}</span>
               </label>
             </div>
-            {materialKod && (
+            {materialKod ? (
               <div className="space-y-2 pt-1">
                 <select value={materialKod} onChange={(e) => setMaterialKod(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm">
                   {dostupneMaterialy.map(m => <option key={m.kod} value={m.kod}>{m.nazov}</option>)}
@@ -346,8 +363,14 @@ export default function TextilMetraz({ supabase, onSpat }) {
                     {vybranyMaterial.popis && <p><strong className="text-slate-800">Popis:</strong> {vybranyMaterial.popis}</p>}
                     {vybranyMaterial.pouzitie && <p><strong className="text-slate-800">Použitie:</strong> {vybranyMaterial.pouzitie}</p>}
                     {vybranyMaterial.specifikacie && <p><strong className="text-slate-800">Špecifikácie:</strong> {vybranyMaterial.specifikacie}</p>}
+                    <p><strong className="text-slate-800">Šírka tlače:</strong> {printWidthCm} cm (podľa šírky tejto látky)</p>
                   </div>
                 )}
+              </div>
+            ) : (
+              <div className="pt-1">
+                <label className="block text-xs font-medium text-slate-500 mb-1">Šírka vašej látky (cm) — max {maxSirka}cm pre túto technológiu</label>
+                <input type="number" min="10" max={maxSirka} step="1" value={manualSirkaCm} onChange={(e) => setManualSirkaCm(Math.min(maxSirka, Math.max(10, parseFloat(e.target.value) || maxSirka)))} className="w-full sm:w-48 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
               </div>
             )}
           </div>
@@ -393,8 +416,8 @@ export default function TextilMetraz({ supabase, onSpat }) {
         <div className="lg:col-span-5 space-y-6">
           <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
             <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-              <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5"><Eye className="w-4 h-4 text-teal-500" /> Náhľad látky (160 cm)</span>
-              <span className="text-[10px] text-slate-400 font-mono">{ROLL_WIDTH_CM}cm × {totalLengthBm.toFixed(2)}m</span>
+              <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5"><Eye className="w-4 h-4 text-teal-500" /> Náhľad látky ({printWidthCm} cm)</span>
+              <span className="text-[10px] text-slate-400 font-mono">{printWidthCm}cm × {totalLengthBm.toFixed(2)}m</span>
             </div>
             <div className="rounded-xl overflow-hidden border border-slate-100 flex items-center justify-center p-2 bg-slate-50 min-h-[200px]">
               <canvas ref={canvasRef} className="max-w-full h-auto" />
