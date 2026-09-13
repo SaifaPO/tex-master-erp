@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Scroll, UploadCloud, Truck, Eye, ShoppingCart, TriangleAlert, CreditCard } from 'lucide-react';
+import { Scroll, UploadCloud, Truck, Eye, ShoppingCart, TriangleAlert, CreditCard, Gift } from 'lucide-react';
 import { priceAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 
 const BUCKET = 'print-designs';
@@ -25,7 +25,9 @@ export default function DtfMetraz({ supabase, onSpat }) {
   const [pricingConfig, setPricingConfig] = useState(DEFAULT_PRICING_CONFIG);
   const [nastavenia, setNastavenia] = useState(null);
 
-  const [mode, setMode] = useState('auto'); // 'auto' | 'subor'
+  const [mode, setMode] = useState('auto'); // 'auto' | 'subor' | 'vzorky'
+  const [vzorkySubmitting, setVzorkySubmitting] = useState(false);
+  const [vzorkyError, setVzorkyError] = useState('');
   const [widthCm, setWidthCm] = useState(10);
   const [heightCm, setHeightCm] = useState(10);
   const [qty, setQty] = useState(30);
@@ -211,6 +213,32 @@ export default function DtfMetraz({ supabase, onSpat }) {
     }
   };
 
+  // Vzorky maju pevnu cenu (5€ s DPH, vratane postovneho) — na rozdiel od zvysku appky sa
+  // nepocita server-side cez Draft Order, ale ide o skutocny Shopify produkt/variant s pevnou
+  // cenou, takze staci bezne pridanie do kosika s mnozstvom presne 1.
+  const objednatVzorky = async () => {
+    const variantId = nastavenia?.shopify_variant_id;
+    if (!variantId) { setVzorkyError('Vzorky zatiaľ nie sú nastavené (chýba Shopify Variant ID v admine).'); return; }
+    setVzorkySubmitting(true);
+    setVzorkyError('');
+    try {
+      const res = await fetch('/cart/add.js', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: variantId, quantity: 1 }),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Shopify chyba ${res.status}: ${text}`);
+      }
+      window.location.href = '/cart';
+    } catch (e) {
+      setVzorkyError('Vzorky sa nepodarilo pridať do košíka (' + e.message + '). Mimo živého Shopify obchodu je to očakávané.');
+    } finally {
+      setVzorkySubmitting(false);
+    }
+  };
+
   if (isLoading) return <div className="min-h-screen flex items-center justify-center text-slate-500 text-sm">Načítavam…</div>;
   if (loadError) return <div className="min-h-screen flex items-center justify-center text-rose-600 text-sm px-4 text-center">{loadError}</div>;
   if (!nastavenia) return <div className="min-h-screen flex items-center justify-center text-slate-500 text-sm px-4 text-center">DTF metráž ešte nie je nastavená — spusti migráciu `migration_dtf_metraz.sql`.</div>;
@@ -225,14 +253,34 @@ export default function DtfMetraz({ supabase, onSpat }) {
         {onSpat && <button onClick={onSpat} className="text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 px-3 py-2 rounded-lg text-sm font-medium transition self-start">← Katalóg</button>}
       </div>
 
+      <div className="bg-white p-1.5 rounded-xl border border-slate-200 grid grid-cols-3 gap-1 shadow-sm max-w-2xl">
+        <button onClick={() => setMode('auto')} className={`py-2.5 px-2 rounded-lg text-[11px] sm:text-sm font-semibold transition ${mode === 'auto' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>1. Skladanie z loga</button>
+        <button onClick={() => setMode('subor')} className={`py-2.5 px-2 rounded-lg text-[11px] sm:text-sm font-semibold transition ${mode === 'subor' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>2. Nahrať hotovú rolku</button>
+        <button onClick={() => setMode('vzorky')} className={`py-2.5 px-2 rounded-lg text-[11px] sm:text-sm font-semibold transition flex items-center justify-center gap-1 ${mode === 'vzorky' ? 'bg-emerald-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}><Gift className="w-3.5 h-3.5" /> Vzorky (A4)</button>
+      </div>
+
+      {mode === 'vzorky' ? (
+        <div className="max-w-xl bg-white p-5 sm:p-6 rounded-2xl border border-emerald-200 shadow-sm space-y-4">
+          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Gift className="w-4 h-4 text-emerald-600" /> Vzorková sada DTF transferov</h3>
+          <p className="text-sm text-slate-600">Nie ste si istí kvalitou? Objednajte si vzorku formátu <strong>A4, 1 ks</strong> — pošleme vám ukážku nášho DTF transferu, aby ste videli kvalitu tlače a materiálu ešte pred väčšou objednávkou.</p>
+          <ul className="text-xs text-slate-500 list-disc pl-4 space-y-1">
+            <li>Formát A4, 1 kus</li>
+            <li>Cena zahŕňa aj poštovné</li>
+            <li>Cena je s DPH {nastavenia.dph_percent}%</li>
+          </ul>
+          <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+            <span className="text-xs text-slate-500">Cena vzorky s DPH</span>
+            <span className="text-2xl font-extrabold font-mono text-slate-900">5,00 €</span>
+          </div>
+          <button onClick={objednatVzorky} disabled={vzorkySubmitting} className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white font-bold text-sm flex items-center justify-center gap-2 transition">
+            <ShoppingCart className="w-4 h-4" /> {vzorkySubmitting ? 'Pridávam do košíka…' : 'Objednať vzorky'}
+          </button>
+          {vzorkyError && <p className="text-xs text-rose-600">{vzorkyError}</p>}
+        </div>
+      ) : (
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Ľavý stĺpec */}
         <div className="lg:col-span-7 space-y-6">
-          <div className="bg-white p-1.5 rounded-xl border border-slate-200 grid grid-cols-2 gap-1 shadow-sm">
-            <button onClick={() => setMode('auto')} className={`py-2.5 px-3 rounded-lg text-xs sm:text-sm font-semibold transition ${mode === 'auto' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>1. Skladanie z loga</button>
-            <button onClick={() => setMode('subor')} className={`py-2.5 px-3 rounded-lg text-xs sm:text-sm font-semibold transition ${mode === 'subor' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>2. Nahrať hotovú rolku</button>
-          </div>
-
           {mode === 'auto' ? (
             <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
               <h3 className="text-sm font-bold text-slate-900 border-b border-slate-100 pb-2">Zadať rozmer a počet kusov</h3>
@@ -350,7 +398,9 @@ export default function DtfMetraz({ supabase, onSpat }) {
           </div>
         </div>
       </div>
+      )}
 
+      {mode !== 'vzorky' && (
       <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm">
         <h3 className="text-sm font-bold text-slate-900 mb-3">Prehľad množstevných zliav (šírka 56 cm)</h3>
         <div className="overflow-x-auto">
@@ -378,6 +428,7 @@ export default function DtfMetraz({ supabase, onSpat }) {
           </table>
         </div>
       </div>
+      )}
     </div>
   );
 }

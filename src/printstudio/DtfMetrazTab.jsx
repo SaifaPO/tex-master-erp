@@ -98,6 +98,11 @@ export default function DtfMetrazTab({ supabase }) {
       <div className="bg-slate-900/60 rounded-2xl border border-indigo-900/40 p-5">
         <h3 className="font-bold text-sm text-white mb-1 flex items-center gap-1.5"><Settings className="w-4 h-4 text-indigo-400" /> Prepojenie na Shopify</h3>
         <p className="text-xs text-slate-400">Platba beží cez <strong className="text-slate-200">Shopify Draft Order</strong> (Edge Function <code className="text-[11px] bg-slate-950 px-1 rounded">dtf-metraz-create-draft-order</code>) — appka vytvorí objednávku s presnou cenou a zákazníka rovno presmeruje na platbu, žiadny trik s počtom kusov. Nič sa tu nenastavuje — len over, že Supabase secrets <code className="text-[11px] bg-slate-950 px-1 rounded">SHOPIFY_STORE_DOMAIN</code>, <code className="text-[11px] bg-slate-950 px-1 rounded">SHOPIFY_CLIENT_ID</code> a <code className="text-[11px] bg-slate-950 px-1 rounded">SHOPIFY_CLIENT_SECRET</code> sú nastavené.</p>
+        <div className="mt-4 pt-4 border-t border-slate-800">
+          <p className="text-xs text-slate-400 mb-2">Záložka <strong className="text-slate-200">Vzorky (A4)</strong> v zákazníckej appke funguje inak — má pevnú cenu 5€ s DPH (vrátane poštovného), takže ide o skutočný Shopify produkt/variant pridaný do košíka, nie Draft Order. Vytvor v Shopify Admin produkt "Vzorky DTF transferov" (cena 5,00€ s DPH, Active, publikovaný do Online Store) a vlož sem jeho Variant ID.</p>
+          <label className="block text-slate-400 mb-1 text-xs">Shopify Variant ID — vzorky (5€ balíček)</label>
+          <input type="text" value={nastavenia.shopify_variant_id} onChange={(e) => ulozNastavenia({ shopify_variant_id: e.target.value })} placeholder="napr. 54913882620247" className="w-full max-w-xs bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs font-mono" />
+        </div>
       </div>
 
       {/* DOPRAVA A KAPACITA */}
