@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Waves, Download, Settings, ExternalLink, Trash2 } from 'lucide-react';
+import { Waves, Download, Settings, ExternalLink, Trash2, AlertTriangle } from 'lucide-react';
 import { priceAt, marginAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 
 const PRINTSTUDIO_BASE_URL = 'https://printstudio-pro.vercel.app';
@@ -7,34 +7,33 @@ const BUCKET = 'print-designs';
 // Referencne urovne (ks) len na nahlad v tabulke nizsie — realny vypocet funguje pre lubovolny pocet.
 const KS_PREVIEW_LEVELS = [1, 5, 10, 25, 50, 100];
 
-const NAKLADY_DEFAULT = {
-  cena_material_m2: 9.5, cena_transfer_papier_m2: 3.2, cena_farba_m2: 1.8, cena_sitia_ks: 0.9,
-};
+const NAKLADY_DEFAULT = { produkt_id: null };
 const NASTAVENIA_DEFAULT = {
   cena_doprava: 3.9, priplatok_expres_percent: 15, minimalna_cena_objednavky: 8, dph_percent: 23,
 };
-// Pevny vyrobny format celenky — 51x9cm (300 DPI) — nemeni sa podla objednavky.
-const PLOCHA_M2 = 0.51 * 0.09;
 
 export default function CelenkyTab({ supabase }) {
   const [naklady, setNaklady] = useState(NAKLADY_DEFAULT);
   const [nastavenia, setNastavenia] = useState(NASTAVENIA_DEFAULT);
   const [pricingConfig, setPricingConfig] = useState(DEFAULT_PRICING_CONFIG);
   const [objednavky, setObjednavky] = useState([]);
+  const [produkty, setProdukty] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const nacitaj = async () => {
     setIsLoading(true);
-    const [{ data: n }, { data: s }, { data: cfg }, { data: o }] = await Promise.all([
+    const [{ data: n }, { data: s }, { data: cfg }, { data: o }, { data: p }] = await Promise.all([
       supabase.from('celenky_naklady').select('*').eq('id', 1).maybeSingle(),
       supabase.from('celenky_nastavenia').select('*').eq('id', 1).maybeSingle(),
       supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
       supabase.from('celenky_objednavky').select('*').order('created_at', { ascending: false }).limit(50),
+      supabase.from('produkty').select('id, nazov, zakladna_cena, aktivny').eq('aktivny', true).order('nazov'),
     ]);
     if (n) setNaklady(n);
     if (s) setNastavenia(s);
     if (cfg) setPricingConfig(mapConfigFromDb(cfg));
     setObjednavky(o || []);
+    setProdukty(p || []);
     setIsLoading(false);
   };
 
@@ -69,7 +68,8 @@ export default function CelenkyTab({ supabase }) {
     await supabase.from('celenky_objednavky').delete().eq('id', id);
   };
 
-  const nakladKs = (Number(naklady.cena_material_m2) + Number(naklady.cena_transfer_papier_m2) + Number(naklady.cena_farba_m2)) * PLOCHA_M2 + Number(naklady.cena_sitia_ks);
+  const vybranyProdukt = produkty.find(p => p.id === naklady.produkt_id);
+  const nakladKs = Number(vybranyProdukt?.zakladna_cena) || 0;
 
   if (isLoading) return <p className="text-sm text-slate-500">Načítavam…</p>;
 
@@ -105,13 +105,16 @@ export default function CelenkyTab({ supabase }) {
       {/* VÝROBNÉ NÁKLADY + CENOVÉ HLADINY */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-6 bg-slate-900/60 rounded-2xl border border-slate-800 p-5">
-          <h3 className="font-bold text-sm text-white mb-3">Vstupné výrobné náklady (na 1 ks, formát 51×9cm)</h3>
-          <div className="space-y-2.5 text-xs">
-            <Field label="Sublimačný elastický úplet (€/m²)" value={naklady.cena_material_m2} step="0.1" onChange={(v) => ulozNaklady({ cena_material_m2: v })} />
-            <Field label="Sublimačný transferový papier (€/m²)" value={naklady.cena_transfer_papier_m2} step="0.1" onChange={(v) => ulozNaklady({ cena_transfer_papier_m2: v })} />
-            <Field label="Spotreba sublimačnej farby (€/m²)" value={naklady.cena_farba_m2} step="0.1" onChange={(v) => ulozNaklady({ cena_farba_m2: v })} />
-            <Field label="Strih + šitie (€/ks)" value={naklady.cena_sitia_ks} step="0.1" onChange={(v) => ulozNaklady({ cena_sitia_ks: v })} />
-          </div>
+          <h3 className="font-bold text-sm text-white mb-3">Vstupný výrobný náklad (na 1 ks)</h3>
+          <p className="text-xs text-slate-400 mb-3">Náklad na kus sa berie priamo zo záložky <strong className="text-slate-200">Produkty</strong> — vyber tam nadefinovaný produkt čelenky (jeho "Základná cena" = nákupná cena za kus). Marža a DPH sa pripočítajú rovnakým jednotným vzorcom ako všade.</p>
+          <label className="block text-slate-400 mb-1 text-xs">Produkt (čelenka)</label>
+          <select value={naklady.produkt_id || ''} onChange={(e) => ulozNaklady({ produkt_id: e.target.value ? Number(e.target.value) : null })} className="w-full px-2 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs">
+            <option value="">-- vyber produkt --</option>
+            {produkty.map(p => <option key={p.id} value={p.id}>{p.nazov} — {Number(p.zakladna_cena).toFixed(2)} €/ks</option>)}
+          </select>
+          {!vybranyProdukt && (
+            <p className="text-[10px] text-amber-500 flex items-center gap-1 mt-2"><AlertTriangle className="w-3 h-3 shrink-0" /> Nie je vybraný žiadny produkt — náklad je 0€, appka by predávala čelenky len za maržu. Vytvor produkt v záložke Produkty a vyber ho tu.</p>
+          )}
         </div>
 
         <div className="lg:col-span-6 bg-slate-900/60 rounded-2xl border border-slate-800 p-5">

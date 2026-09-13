@@ -7,34 +7,35 @@ const BUCKET = 'print-designs';
 // Referencne urovne (ks) len na nahlad v tabulke nizsie — realny vypocet funguje pre lubovolny pocet.
 const KS_PREVIEW_LEVELS = [1, 5, 10, 25, 50, 100];
 
-const NAKLADY_DEFAULT = {
-  cena_material_m2: 8.5, cena_transfer_papier_m2: 3.2, cena_farba_m2: 1.8, cena_sitia_ks: 1.2,
-};
+const NAKLADY_DEFAULT = { cena_buffka_ks: 0.5 };
 const NASTAVENIA_DEFAULT = {
   cena_doprava: 3.9, priplatok_expres_percent: 15, minimalna_cena_objednavky: 8, dph_percent: 23,
 };
-// Pevny vyrobny format rozlozeneho strihu buffky — 50x50cm (300 DPI) — nemeni sa podla objednavky.
-const PLOCHA_M2 = 0.5 * 0.5;
+// Vyrobny vytazok sublimacnej potlace: 5 buffiek na 1 bm potlace (viz Kostra cien nizsie).
+const BUFFIEK_NA_BM = 5;
 
 export default function BuffkyTab({ supabase }) {
   const [naklady, setNaklady] = useState(NAKLADY_DEFAULT);
   const [nastavenia, setNastavenia] = useState(NASTAVENIA_DEFAULT);
   const [pricingConfig, setPricingConfig] = useState(DEFAULT_PRICING_CONFIG);
   const [objednavky, setObjednavky] = useState([]);
+  const [nakladBmSublimacia, setNakladBmSublimacia] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
   const nacitaj = async () => {
     setIsLoading(true);
-    const [{ data: n }, { data: s }, { data: cfg }, { data: o }] = await Promise.all([
+    const [{ data: n }, { data: s }, { data: cfg }, { data: o }, { data: tn }] = await Promise.all([
       supabase.from('buffky_naklady').select('*').eq('id', 1).maybeSingle(),
       supabase.from('buffky_nastavenia').select('*').eq('id', 1).maybeSingle(),
       supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
       supabase.from('buffky_objednavky').select('*').order('created_at', { ascending: false }).limit(50),
+      supabase.from('textil_naklady_verejny').select('naklad_bm').eq('technologia', 'sublimacia').maybeSingle(),
     ]);
     if (n) setNaklady(n);
     if (s) setNastavenia(s);
     if (cfg) setPricingConfig(mapConfigFromDb(cfg));
     setObjednavky(o || []);
+    setNakladBmSublimacia(tn ? Number(tn.naklad_bm) : 0);
     setIsLoading(false);
   };
 
@@ -69,7 +70,8 @@ export default function BuffkyTab({ supabase }) {
     await supabase.from('buffky_objednavky').delete().eq('id', id);
   };
 
-  const nakladKs = (Number(naklady.cena_material_m2) + Number(naklady.cena_transfer_papier_m2) + Number(naklady.cena_farba_m2)) * PLOCHA_M2 + Number(naklady.cena_sitia_ks);
+  const nakladPotlacKs = nakladBmSublimacia / BUFFIEK_NA_BM;
+  const nakladKs = Number(naklady.cena_buffka_ks) + nakladPotlacKs;
 
   if (isLoading) return <p className="text-sm text-slate-500">Načítavam…</p>;
 
@@ -105,13 +107,15 @@ export default function BuffkyTab({ supabase }) {
       {/* VÝROBNÉ NÁKLADY + CENOVÉ HLADINY */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-6 bg-slate-900/60 rounded-2xl border border-slate-800 p-5">
-          <h3 className="font-bold text-sm text-white mb-3">Vstupné výrobné náklady (na 1 ks, formát 50×50cm)</h3>
+          <h3 className="font-bold text-sm text-white mb-3">Vstupné výrobné náklady (na 1 ks)</h3>
           <div className="space-y-2.5 text-xs">
-            <Field label="Sublimačný mikrovláknový úplet (€/m²)" value={naklady.cena_material_m2} step="0.1" onChange={(v) => ulozNaklady({ cena_material_m2: v })} />
-            <Field label="Sublimačný transferový papier (€/m²)" value={naklady.cena_transfer_papier_m2} step="0.1" onChange={(v) => ulozNaklady({ cena_transfer_papier_m2: v })} />
-            <Field label="Spotreba sublimačnej farby (€/m²)" value={naklady.cena_farba_m2} step="0.1" onChange={(v) => ulozNaklady({ cena_farba_m2: v })} />
-            <Field label="Zošitie do tunela (€/ks)" value={naklady.cena_sitia_ks} step="0.1" onChange={(v) => ulozNaklady({ cena_sitia_ks: v })} />
+            <Field label="Nákup čistej (nepotlačenej) buffky (€/ks, bez DPH)" value={naklady.cena_buffka_ks} step="0.05" onChange={(v) => ulozNaklady({ cena_buffka_ks: v })} />
+            <div className="p-2.5 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between">
+              <span className="text-slate-400">Potlač — 5 buffiek/1bm sublimácie (živo z Kostra cien)</span>
+              <span className="text-white font-mono font-bold">{nakladBmSublimacia.toFixed(2)} € / bm ÷ {BUFFIEK_NA_BM} = {nakladPotlacKs.toFixed(2)} €/ks</span>
+            </div>
           </div>
+          <p className="text-xs text-slate-400 mt-2">Náklad na potlač sa počíta automaticky z ceny sublimačnej potlače v Kostra cien (rovnaká hodnota, akú používa aj Textilná metráž) — nič sa tu ručne nezadáva. Ak sa zmenia ceny papiera/farby/práce v Kostra cien, prejaví sa to okamžite aj tu.</p>
         </div>
 
         <div className="lg:col-span-6 bg-slate-900/60 rounded-2xl border border-slate-800 p-5">
