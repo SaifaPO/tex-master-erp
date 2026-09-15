@@ -1383,6 +1383,7 @@ export default function App() {
   const [stockCorrectionNote, setStockCorrectionNote] = useState('');
   const [stockCorrectionPendingPrice, setStockCorrectionPendingPrice] = useState(null);
   const [stockBalPocetKusov, setStockBalPocetKusov] = useState('');
+  const [stockBalHmotnostKg, setStockBalHmotnostKg] = useState('');
   const [stockBalObjemKus, setStockBalObjemKus] = useState('');
   const [stockBalCenaKus, setStockBalCenaKus] = useState('');
   const [stockBalAktualizovatCenu, setStockBalAktualizovatCenu] = useState(true);
@@ -2437,7 +2438,7 @@ export default function App() {
     setStockCorrectionQty('');
     setStockCorrectionNote('');
     setStockCorrectionPendingPrice(null);
-    setStockBalPocetKusov(''); setStockBalObjemKus(''); setStockBalCenaKus('');
+    setStockBalPocetKusov(''); setStockBalObjemKus(''); setStockBalCenaKus(''); setStockBalHmotnostKg('');
     triggerNotification('success', 'Stav skladovej položky bol aktualizovaný.');
   };
 
@@ -8702,11 +8703,22 @@ export default function App() {
               )}
 
               <div className="bg-slate-950 p-4 rounded-xl border border-indigo-900/40 space-y-2 mb-4">
-                <span className="font-bold text-xs text-indigo-300 block">Naskladniť podľa balenia (napr. fľaše)</span>
+                <span className="font-bold text-xs text-indigo-300 block">Naskladniť podľa balenia (napr. fľaše, rolky)</span>
                 <p className="text-[10px] text-slate-500 -mt-1">Zadaj počet kusov a objem/hmotnosť na 1 kus — množstvo v {selectedMaterialForDetail.unit} sa dopočíta samo (rôzne dodávky môžu mať iný objem aj cenu za kus).</p>
+                {(selectedMaterialForDetail.unit === 'm' || selectedMaterialForDetail.unit === 'bm') && selectedMaterialForDetail.width && selectedMaterialForDetail.weight && (
+                  <div className="bg-slate-900 border border-slate-800 rounded-lg p-2 flex items-center gap-2">
+                    <label className="text-[10px] text-slate-400 shrink-0">Rolka príde v kg? Zadaj hmotnosť balenia (kg):</label>
+                    <input type="number" step="0.01" placeholder="napr. 50" value={stockBalHmotnostKg} onChange={(e) => {
+                      setStockBalHmotnostKg(e.target.value);
+                      const kg = parseFloat(e.target.value) || 0;
+                      if (kg > 0) setStockBalObjemKus(String(calculateMeters(kg, selectedMaterialForDetail.width, selectedMaterialForDetail.weight)));
+                    }} className="w-24 bg-slate-950 border border-slate-800 rounded p-1.5 text-xs text-white" />
+                    <span className="text-[10px] text-slate-500">→ dopočíta bm nižšie (šírka {selectedMaterialForDetail.width}cm, gramáž {selectedMaterialForDetail.weight}g/m²)</span>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <div><label className="text-[10px] text-slate-500 block mb-0.5">Počet kusov</label><input type="number" step="1" placeholder="napr. 20" value={stockBalPocetKusov} onChange={(e) => setStockBalPocetKusov(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" /></div>
-                  <div><label className="text-[10px] text-slate-500 block mb-0.5">Objem/hmotnosť na kus ({selectedMaterialForDetail.unit})</label><input type="number" step="0.01" placeholder="napr. 1000" value={stockBalObjemKus} onChange={(e) => setStockBalObjemKus(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" /></div>
+                  <div><label className="text-[10px] text-slate-500 block mb-0.5">Objem/hmotnosť na kus ({selectedMaterialForDetail.unit})</label><input type="number" step="0.01" placeholder="napr. 1000" value={stockBalObjemKus} onChange={(e) => { setStockBalObjemKus(e.target.value); setStockBalHmotnostKg(''); }} className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" /></div>
                   <div><label className="text-[10px] text-slate-500 block mb-0.5">Cena za kus (€)</label><input type="number" step="0.01" placeholder="napr. 18.50" value={stockBalCenaKus} onChange={(e) => setStockBalCenaKus(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" /></div>
                   <div className="flex flex-col justify-end">
                     <button type="button" onClick={() => {
@@ -8716,7 +8728,7 @@ export default function App() {
                       if (pocet <= 0 || objem <= 0) { alert('Zadaj počet kusov a objem/hmotnosť na kus.'); return; }
                       setStockCorrectionQty(String(Math.round(pocet * objem * 100) / 100));
                       setStockCorrectionType('Pridanie na sklad');
-                      setStockCorrectionNote(`Dodávka: ${pocet}× ${objem}${selectedMaterialForDetail.unit}${cenaKus ? ` @ ${cenaKus}€/ks` : ''}`);
+                      setStockCorrectionNote(`Dodávka: ${pocet}× ${objem}${selectedMaterialForDetail.unit}${stockBalHmotnostKg ? ` (${stockBalHmotnostKg}kg/rolka)` : ''}${cenaKus ? ` @ ${cenaKus}€/ks` : ''}`);
                       if (stockBalAktualizovatCenu && cenaKus > 0) setStockCorrectionPendingPrice(Math.round((cenaKus / objem) * 10000) / 10000);
                       else setStockCorrectionPendingPrice(null);
                     }} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1.5 rounded text-xs">Použiť do korekcie ↓</button>
