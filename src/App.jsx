@@ -234,8 +234,8 @@ const FALLBACK_ACL = {
 const mapMaterialFromDb = (r) => ({ id: r.id, name: r.name, color: r.color, colorHex: r.color_hex || '', width: r.width, weight: r.weight, pricePerM: r.price_per_m, qty: r.qty, unit: r.unit, minQty: r.min_qty, warehouseId: r.warehouse_id || 'sklad-1', manufacturer: r.manufacturer || '', productType: r.product_type || '', deliveryNoteNumber: r.delivery_note_number || '', deliveryNoteDate: r.delivery_note_date || '', history: r.history || [] });
 const mapMaterialToDb = (m) => ({ id: m.id, name: m.name, color: m.color, color_hex: m.colorHex || null, width: m.width, weight: m.weight, price_per_m: m.pricePerM, qty: m.qty, unit: m.unit, min_qty: m.minQty, warehouse_id: m.warehouseId, manufacturer: m.manufacturer || null, product_type: m.productType || null, delivery_note_number: m.deliveryNoteNumber || null, delivery_note_date: m.deliveryNoteDate || null, history: m.history });
 
-const mapProductFromDb = (r) => ({ id: r.id, customCode: r.custom_code, name: r.name, sports: r.sports || [], layer1: r.layer1, layer2: r.layer2, layer3: r.layer3, threadM: r.thread_m, womenRatioPercent: r.women_ratio_percent ?? 90, childrenRatioPercent: r.children_ratio_percent ?? 65, productionCost: r.production_cost ?? null, priceGroup: r.price_group || '', redukovanyVykon: r.redukovany_vykon ?? null, attachments: r.attachments || [], minutySitia: r.minuty_sitia ?? null, reziaKs: r.rezia_ks ?? null, cenaPotlaceKs: r.cena_potlace_ks ?? null, tlacSublimacia: !!r.tlac_sublimacia, tlacDtf: !!r.tlac_dtf, cenaPotlaceDtfKs: r.cena_potlace_dtf_ks ?? null, tlacSietotlac: !!r.tlac_sietotlac, cenaPotlaceSietotlacKs: r.cena_potlace_sietotlac_ks ?? null, tlacRezanyTransfer: !!r.tlac_rezany_transfer, cenaPotlaceRezanyTransferKs: r.cena_potlace_rezany_transfer_ks ?? null, tlacVysivka: !!r.tlac_vysivka, cenaPotlaceVysivkaKs: r.cena_potlace_vysivka_ks ?? null, strihaSaRezeVyseka: !!r.striha_sa_reze_vyseka });
-const mapProductToDb = (p) => ({ id: p.id, custom_code: p.customCode, name: p.name, sports: p.sports, layer1: p.layer1, layer2: p.layer2, layer3: p.layer3, thread_m: p.threadM, women_ratio_percent: p.womenRatioPercent, children_ratio_percent: p.childrenRatioPercent, production_cost: p.productionCost ?? null, price_group: p.priceGroup || null, redukovany_vykon: p.redukovanyVykon ?? null, attachments: p.attachments || [], minuty_sitia: p.minutySitia ?? null, rezia_ks: p.reziaKs ?? null, cena_potlace_ks: p.cenaPotlaceKs ?? null, tlac_sublimacia: !!p.tlacSublimacia, tlac_dtf: !!p.tlacDtf, cena_potlace_dtf_ks: p.cenaPotlaceDtfKs ?? null, tlac_sietotlac: !!p.tlacSietotlac, cena_potlace_sietotlac_ks: p.cenaPotlaceSietotlacKs ?? null, tlac_rezany_transfer: !!p.tlacRezanyTransfer, cena_potlace_rezany_transfer_ks: p.cenaPotlaceRezanyTransferKs ?? null, tlac_vysivka: !!p.tlacVysivka, cena_potlace_vysivka_ks: p.cenaPotlaceVysivkaKs ?? null, striha_sa_reze_vyseka: !!p.strihaSaRezeVyseka });
+const mapProductFromDb = (r) => ({ id: r.id, customCode: r.custom_code, name: r.name, sports: r.sports || [], layer1: r.layer1, layer2: r.layer2, layer3: r.layer3, threadM: r.thread_m, womenRatioPercent: r.women_ratio_percent ?? 90, childrenRatioPercent: r.children_ratio_percent ?? 65, productionCost: r.production_cost ?? null, priceGroup: r.price_group || '', redukovanyVykon: r.redukovany_vykon ?? null, attachments: r.attachments || [], minutySitia: r.minuty_sitia ?? null, reziaKs: r.rezia_ks ?? null, reziaPoznamka: r.rezia_poznamka || '', cenaPotlaceKs: r.cena_potlace_ks ?? null, tlacSublimacia: !!r.tlac_sublimacia, tlacDtf: !!r.tlac_dtf, cenaPotlaceDtfKs: r.cena_potlace_dtf_ks ?? null, tlacSietotlac: !!r.tlac_sietotlac, cenaPotlaceSietotlacKs: r.cena_potlace_sietotlac_ks ?? null, tlacRezanyTransfer: !!r.tlac_rezany_transfer, cenaPotlaceRezanyTransferKs: r.cena_potlace_rezany_transfer_ks ?? null, tlacVysivka: !!r.tlac_vysivka, cenaPotlaceVysivkaKs: r.cena_potlace_vysivka_ks ?? null, strihaSaRezeVyseka: !!r.striha_sa_reze_vyseka });
+const mapProductToDb = (p) => ({ id: p.id, custom_code: p.customCode, name: p.name, sports: p.sports, layer1: p.layer1, layer2: p.layer2, layer3: p.layer3, thread_m: p.threadM, women_ratio_percent: p.womenRatioPercent, children_ratio_percent: p.childrenRatioPercent, production_cost: p.productionCost ?? null, price_group: p.priceGroup || null, redukovany_vykon: p.redukovanyVykon ?? null, attachments: p.attachments || [], minuty_sitia: p.minutySitia ?? null, rezia_ks: p.reziaKs ?? null, rezia_poznamka: p.reziaPoznamka || null, cena_potlace_ks: p.cenaPotlaceKs ?? null, tlac_sublimacia: !!p.tlacSublimacia, tlac_dtf: !!p.tlacDtf, cena_potlace_dtf_ks: p.cenaPotlaceDtfKs ?? null, tlac_sietotlac: !!p.tlacSietotlac, cena_potlace_sietotlac_ks: p.cenaPotlaceSietotlacKs ?? null, tlac_rezany_transfer: !!p.tlacRezanyTransfer, cena_potlace_rezany_transfer_ks: p.cenaPotlaceRezanyTransferKs ?? null, tlac_vysivka: !!p.tlacVysivka, cena_potlace_vysivka_ks: p.cenaPotlaceVysivkaKs ?? null, striha_sa_reze_vyseka: !!p.strihaSaRezeVyseka });
 
 const mapTierFromDb = (r) => ({ id: r.id, name: r.name, fit: r.fit, ventilation: r.ventilation, desc: r.description });
 const mapTierToDb = (t) => ({ id: t.id, name: t.name, fit: t.fit, ventilation: t.ventilation, description: t.desc });
@@ -1399,6 +1399,7 @@ export default function App() {
   const [newModelRedukovanyVykon, setNewModelRedukovanyVykon] = useState('');
   const [newModelMinutySitia, setNewModelMinutySitia] = useState('');
   const [newModelReziaKs, setNewModelReziaKs] = useState('');
+  const [newModelReziaPoznamka, setNewModelReziaPoznamka] = useState('');
   const [newModelCenaPotlaceKs, setNewModelCenaPotlaceKs] = useState('');
   const [newModelTlacSublimacia, setNewModelTlacSublimacia] = useState(false);
   const [newModelTlacDtf, setNewModelTlacDtf] = useState(false);
@@ -3524,7 +3525,7 @@ export default function App() {
       const layer2 = newModelSecondary ? { materialId: newModelSecondary, alternativeIds: newModelLayer2Alt, consumption: { lt5: parseFloat(newModelLayer2Lt5) || 0, ge5: parseFloat(newModelLayer2Ge5) || 0 } } : null;
       const layer3 = newModelTertiary ? { materialId: newModelTertiary, alternativeIds: newModelLayer3Alt, consumption: { lt5: parseFloat(newModelLayer3Lt5) || 0, ge5: parseFloat(newModelLayer3Ge5) || 0 } } : null;
       const noveModel = {
-        layer1, layer2, layer3, minutySitia: minutySitiaVal, reziaKs: reziaKsVal, cenaPotlaceKs: cenaPotlaceKsVal,
+        layer1, layer2, layer3, minutySitia: minutySitiaVal, reziaKs: reziaKsVal, reziaPoznamka: newModelReziaPoznamka, cenaPotlaceKs: cenaPotlaceKsVal,
         tlacSublimacia: newModelTlacSublimacia, tlacDtf: newModelTlacDtf, cenaPotlaceDtfKs: newModelCenaPotlaceDtfKs,
         tlacSietotlac: newModelTlacSietotlac, cenaPotlaceSietotlacKs: newModelCenaPotlaceSietotlacKs,
         tlacRezanyTransfer: newModelTlacRezanyTransfer, cenaPotlaceRezanyTransferKs: newModelCenaPotlaceRezanyTransferKs,
@@ -3541,7 +3542,7 @@ export default function App() {
         childrenRatioPercent: parseFloat(newModelChildrenRatio) || 65,
         productionCost: vypocitana !== null ? vypocitana : (newModelProductionCost === '' ? null : parseFloat(newModelProductionCost) || 0),
         redukovanyVykon: vypocitanyRv !== null ? vypocitanyRv : (newModelRedukovanyVykon === '' ? null : parseFloat(newModelRedukovanyVykon) || 0),
-        minutySitia: minutySitiaVal, reziaKs: reziaKsVal, cenaPotlaceKs: cenaPotlacEfektivna ?? cenaPotlaceKsVal,
+        minutySitia: minutySitiaVal, reziaKs: reziaKsVal, reziaPoznamka: newModelReziaPoznamka, cenaPotlaceKs: cenaPotlacEfektivna ?? cenaPotlaceKsVal,
         tlacSublimacia: newModelTlacSublimacia, tlacDtf: newModelTlacDtf, cenaPotlaceDtfKs: newModelCenaPotlaceDtfKs,
         tlacSietotlac: newModelTlacSietotlac, cenaPotlaceSietotlacKs: newModelCenaPotlaceSietotlacKs,
         tlacRezanyTransfer: newModelTlacRezanyTransfer, cenaPotlaceRezanyTransferKs: newModelCenaPotlaceRezanyTransferKs,
@@ -3556,7 +3557,7 @@ export default function App() {
       setNewModelLayer1Lt5(''); setNewModelLayer1Ge5(''); setNewModelLayer2Lt5(''); setNewModelLayer2Ge5(''); setNewModelLayer3Lt5(''); setNewModelLayer3Ge5('');
       setNewModelWomenRatio(90); setNewModelChildrenRatio(65);
       setNewModelProductionCost(''); setNewModelRedukovanyVykon('');
-      setNewModelMinutySitia(''); setNewModelReziaKs(''); setNewModelCenaPotlaceKs('');
+      setNewModelMinutySitia(''); setNewModelReziaKs(''); setNewModelReziaPoznamka(''); setNewModelCenaPotlaceKs('');
       setNewModelTlacSublimacia(false); setNewModelTlacDtf(false); setNewModelCenaPotlaceDtfKs('');
       setNewModelTlacSietotlac(false); setNewModelCenaPotlaceSietotlacKs('');
       setNewModelTlacRezanyTransfer(false); setNewModelCenaPotlaceRezanyTransferKs('');
@@ -6971,6 +6972,7 @@ export default function App() {
                       <div>
                         <label className="block text-slate-400 font-semibold mb-1">Réžia (€/ks)</label>
                         <input type="number" step="0.01" placeholder="0" value={editingProduct ? (editingProduct.reziaKs ?? '') : newModelReziaKs} onChange={(e) => { const v = e.target.value === '' ? null : parseFloat(e.target.value) || 0; editingProduct ? setEditingProduct({ ...editingProduct, reziaKs: v }) : setNewModelReziaKs(e.target.value); }} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" />
+                        <input type="text" placeholder="Čo réžia obsahuje (napr. nite, gombíky, gumičky)" value={editingProduct ? (editingProduct.reziaPoznamka || '') : newModelReziaPoznamka} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, reziaPoznamka: e.target.value }) : setNewModelReziaPoznamka(e.target.value)} className="w-full mt-1.5 bg-slate-900 border border-slate-800 rounded p-2 text-white text-[11px]" />
                       </div>
                     </div>
 
