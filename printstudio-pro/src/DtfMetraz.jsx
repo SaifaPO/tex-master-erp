@@ -9,13 +9,26 @@ const MARGIN_CM = 0.5;
 // funguje pre lubovolnu (aj neceloriselnu) dlzku, toto je len ilustracna tabulka.
 const BM_PREVIEW_LEVELS = [1, 5, 10, 25, 50, 100];
 
-function vypocitajRozlozenie(widthCm, heightCm, qty) {
-  const effectiveWidth = Math.min(widthCm, ROLL_WIDTH_CM);
+function vypocitajJednuOrientaciu(itemWidthCm, itemHeightCm, qty) {
+  const effectiveWidth = Math.min(itemWidthCm, ROLL_WIDTH_CM);
   const itemsPerRow = Math.max(1, Math.floor((ROLL_WIDTH_CM + MARGIN_CM) / (effectiveWidth + MARGIN_CM)));
   const totalRows = Math.ceil(qty / itemsPerRow);
-  const rowHeightCm = heightCm + MARGIN_CM;
+  const rowHeightCm = itemHeightCm + MARGIN_CM;
   const totalHeightCm = totalRows * rowHeightCm;
   return { itemsPerRow, totalRows, dlzkaBm: Math.max(0.1, totalHeightCm / 100) };
+}
+
+// Vyskusa obe orientacie motivu (tak ako zadal zakaznik, aj otocenu o 90°) a vyberie tu, ktora
+// vyjde na kratsiu dlzku metraze — mensia spotreba materialu je lacnejsie pre zakaznika aj menej
+// odpadu pre nas. Rovnaky vzorec je duplikovany aj v Edge Function (dtf-metraz-create-draft-order),
+// kde je AJ autoritativny na cenu — musia davat rovnaky vysledok, inak by sa nahlad nezhodoval s cenou.
+function vypocitajRozlozenie(widthCm, heightCm, qty) {
+  const normal = vypocitajJednuOrientaciu(widthCm, heightCm, qty);
+  const otoceny = vypocitajJednuOrientaciu(heightCm, widthCm, qty);
+  if (otoceny.dlzkaBm < normal.dlzkaBm) {
+    return { ...otoceny, jeOtoceny: true, efektivnaSirkaCm: heightCm, efektivnaVyskaCm: widthCm };
+  }
+  return { ...normal, jeOtoceny: false, efektivnaSirkaCm: widthCm, efektivnaVyskaCm: heightCm };
 }
 
 export default function DtfMetraz({ supabase, onSpat }) {
@@ -60,11 +73,11 @@ export default function DtfMetraz({ supabase, onSpat }) {
 
   // ---- Výpočet ceny a metráže ----
   let totalLengthBm = 0, totalM2 = 0, totalCm2 = 0, baseRate = 0, subtotal = 0, expressFee = 0, shippingFee = 0, grandTotalBezDph = 0, dphSuma = 0, grandTotal = 0, capacityIssue = null;
+  const rozlozenieAuto = mode === 'auto' ? vypocitajRozlozenie(widthCm, heightCm, qty) : null;
 
   if (nastavenia) {
     if (mode === 'auto') {
-      const { dlzkaBm } = vypocitajRozlozenie(widthCm, heightCm, qty);
-      totalLengthBm = dlzkaBm;
+      totalLengthBm = rozlozenieAuto.dlzkaBm;
       totalM2 = totalLengthBm * (ROLL_WIDTH_CM / 100);
       totalCm2 = widthCm * heightCm * qty;
     } else {
@@ -117,7 +130,7 @@ export default function DtfMetraz({ supabase, onSpat }) {
     const ctx = canvas.getContext('2d');
     const ratio = 300 / ROLL_WIDTH_CM;
     canvas.width = 300;
-    const lengthBm = mode === 'auto' ? vypocitajRozlozenie(widthCm, heightCm, qty).dlzkaBm : directLengthBm;
+    const lengthBm = mode === 'auto' ? rozlozenieAuto.dlzkaBm : directLengthBm;
     const canvasHeightPx = Math.min(450, Math.max(180, lengthBm * 100 * ratio));
     canvas.height = canvasHeightPx;
 
@@ -129,12 +142,22 @@ export default function DtfMetraz({ supabase, onSpat }) {
     }
 
     if (mode === 'auto') {
-      const wPx = widthCm * ratio, hPx = heightCm * ratio, marginPx = MARGIN_CM * ratio;
+      const { jeOtoceny, efektivnaSirkaCm, efektivnaVyskaCm } = rozlozenieAuto;
+      const wPx = efektivnaSirkaCm * ratio, hPx = efektivnaVyskaCm * ratio, marginPx = MARGIN_CM * ratio;
       let x = marginPx, y = marginPx;
       for (let i = 0; i < qty; i++) {
         if (y + hPx > canvas.height + 10) break;
         if (logoImage) {
-          ctx.drawImage(logoImage, x, y, wPx, hPx);
+          if (jeOtoceny) {
+            // Motiv je otoceny o 90° — vykresli ho rovnako otoceny (rozmery uz su prehodene v wPx/hPx).
+            ctx.save();
+            ctx.translate(x + wPx / 2, y + hPx / 2);
+            ctx.rotate(Math.PI / 2);
+            ctx.drawImage(logoImage, -hPx / 2, -wPx / 2, hPx, wPx);
+            ctx.restore();
+          } else {
+            ctx.drawImage(logoImage, x, y, wPx, hPx);
+          }
         } else {
           ctx.fillStyle = 'rgba(79, 70, 229, 0.15)';
           ctx.fillRect(x, y, wPx, hPx);
@@ -313,6 +336,11 @@ export default function DtfMetraz({ supabase, onSpat }) {
                   <input type="number" min="1" step="1" value={qty} onChange={(e) => setQty(parseInt(e.target.value) || 1)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
                 </div>
               </div>
+              {rozlozenieAuto?.jeOtoceny && (
+                <p className="text-xs text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2 flex items-center gap-1.5">
+                  <Wand2 className="w-3.5 h-3.5 shrink-0" /> Motív otočíme o 90° na rolke — takto vyjde kratšia (a teda lacnejšia) metráž.
+                </p>
+              )}
               <label className="border-2 border-dashed border-slate-200 hover:border-indigo-400 rounded-xl p-4 flex flex-col items-center gap-2 cursor-pointer transition bg-slate-50/50">
                 <UploadCloud className="w-6 h-6 text-indigo-500" />
                 <span className="text-xs text-slate-600 font-medium">{rawFile ? `Nahraté: ${rawFile.name}` : 'Kliknite pre výber (PNG / TIFF, 300 DPI)'}</span>

@@ -34,15 +34,28 @@ function priceAt(cost: number, qty: number, cfg: PricingConfig) {
   return Math.round(cost * (1 + marginAt(cost, qty, cfg) / 100) * 100) / 100;
 }
 
-// Rovnaky vzorec ako vypocitajRozlozenie v DtfMetraz.jsx — kolko bm rolky treba na dany
+// Rovnaky vzorec ako vypocitajJednuOrientaciu v DtfMetraz.jsx — kolko bm rolky treba na dany
 // pocet kusov pri danom rozmere (skladanie do riadkov na 56cm sirku).
-function vypocitajRozlozenie(widthCm: number, heightCm: number, qty: number) {
-  const effectiveWidth = Math.min(widthCm, ROLL_WIDTH_CM);
+function vypocitajJednuOrientaciu(itemWidthCm: number, itemHeightCm: number, qty: number) {
+  const effectiveWidth = Math.min(itemWidthCm, ROLL_WIDTH_CM);
   const itemsPerRow = Math.max(1, Math.floor((ROLL_WIDTH_CM + MARGIN_CM) / (effectiveWidth + MARGIN_CM)));
   const totalRows = Math.ceil(qty / itemsPerRow);
-  const rowHeightCm = heightCm + MARGIN_CM;
+  const rowHeightCm = itemHeightCm + MARGIN_CM;
   const totalHeightCm = totalRows * rowHeightCm;
   return Math.max(0.1, totalHeightCm / 100);
+}
+
+// Vyskusa obe orientacie motivu (tak ako zadal zakaznik, aj otocenu o 90°) a vyberie tu, ktora
+// vyjde na kratsiu dlzku metraze — AUTORITATIVNY vypocet ceny aj pre production (efektivnaSirkaCm/
+// efektivnaVyskaCm sa uklada do objednavky, aby vyroba vedela, v akej orientacii ma motiv polozit).
+// Rovnaky vzorec je duplikovany aj v DtfMetraz.jsx pre zivy nahlad — musia davat rovnaky vysledok.
+function vypocitajRozlozenie(widthCm: number, heightCm: number, qty: number) {
+  const normalBm = vypocitajJednuOrientaciu(widthCm, heightCm, qty);
+  const otocenyBm = vypocitajJednuOrientaciu(heightCm, widthCm, qty);
+  if (otocenyBm < normalBm) {
+    return { dlzkaBm: otocenyBm, jeOtoceny: true, efektivnaSirkaCm: heightCm, efektivnaVyskaCm: widthCm };
+  }
+  return { dlzkaBm: normalBm, jeOtoceny: false, efektivnaSirkaCm: widthCm, efektivnaVyskaCm: heightCm };
 }
 
 function odpoved(body: Record<string, unknown>) {
@@ -105,11 +118,13 @@ Deno.serve(async (req) => {
     const PRIPRAVA_GRAFIKY_EUR = 10;
 
     let totalLengthBm = 0, totalM2 = 0, baseRate = 0, grandTotal = mode === 'paleta' ? PALETA_CENA_S_DPH : VZORKA_CENA_S_DPH;
+    let rozlozenie: { jeOtoceny: boolean; efektivnaSirkaCm: number; efektivnaVyskaCm: number } | null = null;
     if (mode === 'auto' || mode === 'subor') {
       if (mode === 'auto') {
         const w = Number(widthCm) || 0, h = Number(heightCm) || 0, q = Math.max(1, Math.round(Number(qty)) || 1);
         if (w <= 0 || h <= 0) throw new Error('Neplatný rozmer loga.');
-        totalLengthBm = vypocitajRozlozenie(w, h, q);
+        rozlozenie = vypocitajRozlozenie(w, h, q);
+        totalLengthBm = rozlozenie.dlzkaBm;
       } else {
         totalLengthBm = Math.max(0.01, Number(directLengthBm) || 0.01);
       }
@@ -130,8 +145,9 @@ Deno.serve(async (req) => {
     const { error: insertErr } = await supabase.from('dtf_objednavky').insert({
       id: objednavkaId,
       rezim: mode,
-      sirka_cm: mode === 'auto' ? Number(widthCm) : null,
-      vyska_cm: mode === 'auto' ? Number(heightCm) : null,
+      sirka_cm: mode === 'auto' ? rozlozenie!.efektivnaSirkaCm : null,
+      vyska_cm: mode === 'auto' ? rozlozenie!.efektivnaVyskaCm : null,
+      otoceny: mode === 'auto' ? rozlozenie!.jeOtoceny : false,
       pocet_ks: mode === 'auto' ? Math.max(1, Math.round(Number(qty)) || 1) : null,
       dlzka_bm: mode === 'auto' || mode === 'subor' ? Math.round(totalLengthBm * 100) / 100 : 0,
       plocha_m2: mode === 'auto' || mode === 'subor' ? Math.round(totalM2 * 100) / 100 : null,
