@@ -6,7 +6,7 @@ import { encode as encodeBySquare, CurrencyCode, PaymentOptions } from 'bysquare
 import { Html5Qrcode } from 'html5-qrcode';
 import CenovePonukyTab from './CenovePonukyTab';
 import PrintStudioAdmin from './printstudio/PrintStudioAdmin';
-import { nacitajKostru, vcSublimaciaGarment, vcSublimaciaGarmentRozpis, vcRezanyTransfer } from './printstudio/vyrobneNaklady';
+import { nacitajKostru, vcSublimaciaGarment, vcSublimaciaGarmentRozpis, vcRezanyTransfer, vcSietotlacCelkom, vcSietotlacRozpad } from './printstudio/vyrobneNaklady';
 import {
   ClipboardList, Package, Cpu, QrCode, Plus, User, Clock, Layers, Search, Check, X, Calendar,
   Palette, Scissors, Printer, Sliders, Sparkles, ZoomIn, ZoomOut, FileText, PlusCircle, Table,
@@ -234,8 +234,8 @@ const FALLBACK_ACL = {
 const mapMaterialFromDb = (r) => ({ id: r.id, name: r.name, color: r.color, colorHex: r.color_hex || '', width: r.width, weight: r.weight, pricePerM: r.price_per_m, qty: r.qty, unit: r.unit, minQty: r.min_qty, warehouseId: r.warehouse_id || 'sklad-1', manufacturer: r.manufacturer || '', productType: r.product_type || '', deliveryNoteNumber: r.delivery_note_number || '', deliveryNoteDate: r.delivery_note_date || '', zakazkaOdberatel: r.zakazka_odberatel || '', history: r.history || [] });
 const mapMaterialToDb = (m) => ({ id: m.id, name: m.name, color: m.color, color_hex: m.colorHex || null, width: m.width, weight: m.weight, price_per_m: m.pricePerM, qty: m.qty, unit: m.unit, min_qty: m.minQty, warehouse_id: m.warehouseId, manufacturer: m.manufacturer || null, product_type: m.productType || null, delivery_note_number: m.deliveryNoteNumber || null, delivery_note_date: m.deliveryNoteDate || null, zakazka_odberatel: m.zakazkaOdberatel || null, history: m.history });
 
-const mapProductFromDb = (r) => ({ id: r.id, customCode: r.custom_code, name: r.name, sports: r.sports || [], layer1: r.layer1, layer2: r.layer2, layer3: r.layer3, threadM: r.thread_m, womenRatioPercent: r.women_ratio_percent ?? 90, childrenRatioPercent: r.children_ratio_percent ?? 65, productionCost: r.production_cost ?? null, priceGroup: r.price_group || '', redukovanyVykon: r.redukovany_vykon ?? null, attachments: r.attachments || [], minutySitia: r.minuty_sitia ?? null, reziaKs: r.rezia_ks ?? null, reziaPoznamka: r.rezia_poznamka || '', reziaPolozky: r.rezia_polozky || [], cenaPotlaceKs: r.cena_potlace_ks ?? null, tlacSublimacia: !!r.tlac_sublimacia, tlacDtf: !!r.tlac_dtf, cenaPotlaceDtfKs: r.cena_potlace_dtf_ks ?? null, tlacSietotlac: !!r.tlac_sietotlac, cenaPotlaceSietotlacKs: r.cena_potlace_sietotlac_ks ?? null, tlacRezanyTransfer: !!r.tlac_rezany_transfer, cenaPotlaceRezanyTransferKs: r.cena_potlace_rezany_transfer_ks ?? null, rezanyTransferFoliaId: r.rezany_transfer_folia_id ?? null, rezanyTransferPlochaCm2: r.rezany_transfer_plocha_cm2 ?? null, tlacVysivka: !!r.tlac_vysivka, cenaPotlaceVysivkaKs: r.cena_potlace_vysivka_ks ?? null, strihaSaRezeVyseka: !!r.striha_sa_reze_vyseka, laserZariadenieId: r.laser_zariadenie_id || null });
-const mapProductToDb = (p) => ({ id: p.id, custom_code: p.customCode, name: p.name, sports: p.sports, layer1: p.layer1, layer2: p.layer2, layer3: p.layer3, thread_m: p.threadM, women_ratio_percent: p.womenRatioPercent, children_ratio_percent: p.childrenRatioPercent, production_cost: p.productionCost ?? null, price_group: p.priceGroup || null, redukovany_vykon: p.redukovanyVykon ?? null, attachments: p.attachments || [], minuty_sitia: p.minutySitia ?? null, rezia_ks: p.reziaKs ?? null, rezia_poznamka: p.reziaPoznamka || null, rezia_polozky: p.reziaPolozky || [], cena_potlace_ks: p.cenaPotlaceKs ?? null, tlac_sublimacia: !!p.tlacSublimacia, tlac_dtf: !!p.tlacDtf, cena_potlace_dtf_ks: p.cenaPotlaceDtfKs ?? null, tlac_sietotlac: !!p.tlacSietotlac, cena_potlace_sietotlac_ks: p.cenaPotlaceSietotlacKs ?? null, tlac_rezany_transfer: !!p.tlacRezanyTransfer, cena_potlace_rezany_transfer_ks: p.cenaPotlaceRezanyTransferKs ?? null, rezany_transfer_folia_id: p.rezanyTransferFoliaId ?? null, rezany_transfer_plocha_cm2: p.rezanyTransferPlochaCm2 ?? null, tlac_vysivka: !!p.tlacVysivka, cena_potlace_vysivka_ks: p.cenaPotlaceVysivkaKs ?? null, striha_sa_reze_vyseka: !!p.strihaSaRezeVyseka, laser_zariadenie_id: p.laserZariadenieId || null });
+const mapProductFromDb = (r) => ({ id: r.id, customCode: r.custom_code, name: r.name, sports: r.sports || [], layer1: r.layer1, layer2: r.layer2, layer3: r.layer3, threadM: r.thread_m, womenRatioPercent: r.women_ratio_percent ?? 90, childrenRatioPercent: r.children_ratio_percent ?? 65, productionCost: r.production_cost ?? null, priceGroup: r.price_group || '', redukovanyVykon: r.redukovany_vykon ?? null, attachments: r.attachments || [], minutySitia: r.minuty_sitia ?? null, reziaKs: r.rezia_ks ?? null, reziaPoznamka: r.rezia_poznamka || '', reziaPolozky: r.rezia_polozky || [], cenaPotlaceKs: r.cena_potlace_ks ?? null, tlacSublimacia: !!r.tlac_sublimacia, tlacDtf: !!r.tlac_dtf, cenaPotlaceDtfKs: r.cena_potlace_dtf_ks ?? null, tlacSietotlac: !!r.tlac_sietotlac, cenaPotlaceSietotlacKs: r.cena_potlace_sietotlac_ks ?? null, sietotlacVelkostId: r.sietotlac_velkost_id ?? null, sietotlacJeTmavy: !!r.sietotlac_je_tmavy, sietotlacPocetFarieb: r.sietotlac_pocet_farieb ?? 1, tlacRezanyTransfer: !!r.tlac_rezany_transfer, cenaPotlaceRezanyTransferKs: r.cena_potlace_rezany_transfer_ks ?? null, rezanyTransferFoliaId: r.rezany_transfer_folia_id ?? null, rezanyTransferPlochaCm2: r.rezany_transfer_plocha_cm2 ?? null, tlacVysivka: !!r.tlac_vysivka, cenaPotlaceVysivkaKs: r.cena_potlace_vysivka_ks ?? null, strihaSaRezeVyseka: !!r.striha_sa_reze_vyseka, laserZariadenieId: r.laser_zariadenie_id || null });
+const mapProductToDb = (p) => ({ id: p.id, custom_code: p.customCode, name: p.name, sports: p.sports, layer1: p.layer1, layer2: p.layer2, layer3: p.layer3, thread_m: p.threadM, women_ratio_percent: p.womenRatioPercent, children_ratio_percent: p.childrenRatioPercent, production_cost: p.productionCost ?? null, price_group: p.priceGroup || null, redukovany_vykon: p.redukovanyVykon ?? null, attachments: p.attachments || [], minuty_sitia: p.minutySitia ?? null, rezia_ks: p.reziaKs ?? null, rezia_poznamka: p.reziaPoznamka || null, rezia_polozky: p.reziaPolozky || [], cena_potlace_ks: p.cenaPotlaceKs ?? null, tlac_sublimacia: !!p.tlacSublimacia, tlac_dtf: !!p.tlacDtf, cena_potlace_dtf_ks: p.cenaPotlaceDtfKs ?? null, tlac_sietotlac: !!p.tlacSietotlac, cena_potlace_sietotlac_ks: p.cenaPotlaceSietotlacKs ?? null, sietotlac_velkost_id: p.sietotlacVelkostId ?? null, sietotlac_je_tmavy: !!p.sietotlacJeTmavy, sietotlac_pocet_farieb: p.sietotlacPocetFarieb ?? 1, tlac_rezany_transfer: !!p.tlacRezanyTransfer, cena_potlace_rezany_transfer_ks: p.cenaPotlaceRezanyTransferKs ?? null, rezany_transfer_folia_id: p.rezanyTransferFoliaId ?? null, rezany_transfer_plocha_cm2: p.rezanyTransferPlochaCm2 ?? null, tlac_vysivka: !!p.tlacVysivka, cena_potlace_vysivka_ks: p.cenaPotlaceVysivkaKs ?? null, striha_sa_reze_vyseka: !!p.strihaSaRezeVyseka, laser_zariadenie_id: p.laserZariadenieId || null });
 
 const mapTierFromDb = (r) => ({ id: r.id, name: r.name, fit: r.fit, ventilation: r.ventilation, desc: r.description });
 const mapTierToDb = (t) => ({ id: t.id, name: t.name, fit: t.fit, ventilation: t.ventilation, description: t.desc });
@@ -1430,6 +1430,9 @@ export default function App() {
   const [newModelCenaPotlaceDtfKs, setNewModelCenaPotlaceDtfKs] = useState('');
   const [newModelTlacSietotlac, setNewModelTlacSietotlac] = useState(false);
   const [newModelCenaPotlaceSietotlacKs, setNewModelCenaPotlaceSietotlacKs] = useState('');
+  const [newModelSietotlacVelkostId, setNewModelSietotlacVelkostId] = useState('');
+  const [newModelSietotlacJeTmavy, setNewModelSietotlacJeTmavy] = useState(false);
+  const [newModelSietotlacPocetFarieb, setNewModelSietotlacPocetFarieb] = useState(1);
   const [newModelTlacRezanyTransfer, setNewModelTlacRezanyTransfer] = useState(false);
   const [newModelCenaPotlaceRezanyTransferKs, setNewModelCenaPotlaceRezanyTransferKs] = useState('');
   const [newModelTlacVysivka, setNewModelTlacVysivka] = useState(false);
@@ -3499,8 +3502,16 @@ export default function App() {
     return Math.round(vcRezanyTransfer(kostra, p.rezanyTransferFoliaId, parseFloat(p.rezanyTransferPlochaCm2) || 0) * 100) / 100;
   };
 
-  // Cena potlace: sublimacia sa pocita AUTOMATICKY z plochy latky (Kostra cien), rezany transfer sa
-  // pocita automaticky ak je zvolena folia+plocha motivu, ostatne technologie (DTF, sietotlac, vysivka)
+  // Sietotlac — ak je zvoleny format (velkost motivu z Kostry cien), cena sa pocita automaticky
+  // (sito + gramaz farby na kazdu farbu, klesajuca o 20% za dalsiu farbu, rovnaky vzorec ako
+  // v Kostre cien). Ak format nie je zvoleny, vracia null a pouzije sa rucne zadana cena.
+  const vypocitajCenuSietotlace = (p) => {
+    if (!p.sietotlacVelkostId || !kostra) return null;
+    return Math.round(vcSietotlacCelkom(kostra, p.sietotlacVelkostId, !!p.sietotlacJeTmavy, parseInt(p.sietotlacPocetFarieb) || 1) * 100) / 100;
+  };
+
+  // Cena potlace: sublimacia sa pocita AUTOMATICKY z plochy latky (Kostra cien), rezany transfer aj
+  // sietotlac sa pocitaju automaticky ak je zvoleny format/folia, ostatne technologie (DTF, vysivka)
   // su vzdy rucne zadane €/ks (nedaju sa odvodit zo spotreby materialu — su to lokalne motivy, nie cela
   // plocha strihu). Vracia null, ak nie je zaskrtnuta ziadna technologia (fallback na povodne cisto
   // rucne pole cenaPotlaceKs).
@@ -3510,7 +3521,7 @@ export default function App() {
     let sum = 0;
     if (p.tlacSublimacia && kostra) sum += vcSublimaciaGarment(kostra, vypocitajPlochaCm2ZLatky(p.layer1));
     if (p.tlacDtf) sum += parseFloat(p.cenaPotlaceDtfKs) || 0;
-    if (p.tlacSietotlac) sum += parseFloat(p.cenaPotlaceSietotlacKs) || 0;
+    if (p.tlacSietotlac) sum += vypocitajCenuSietotlace(p) ?? (parseFloat(p.cenaPotlaceSietotlacKs) || 0);
     if (p.tlacRezanyTransfer) sum += vypocitajCenuRezanehoTransferu(p) ?? (parseFloat(p.cenaPotlaceRezanyTransferKs) || 0);
     if (p.tlacVysivka) sum += parseFloat(p.cenaPotlaceVysivkaKs) || 0;
     return Math.round(sum * 100) / 100;
@@ -3596,7 +3607,7 @@ export default function App() {
       const noveModel = {
         layer1, layer2, layer3, minutySitia: minutySitiaVal, reziaKs: reziaKsVal, reziaPoznamka: newModelReziaPoznamka, reziaPolozky: newModelReziaPolozky, cenaPotlaceKs: cenaPotlaceKsVal,
         tlacSublimacia: newModelTlacSublimacia, tlacDtf: newModelTlacDtf, cenaPotlaceDtfKs: newModelCenaPotlaceDtfKs,
-        tlacSietotlac: newModelTlacSietotlac, cenaPotlaceSietotlacKs: newModelCenaPotlaceSietotlacKs,
+        tlacSietotlac: newModelTlacSietotlac, cenaPotlaceSietotlacKs: newModelCenaPotlaceSietotlacKs, sietotlacVelkostId: newModelSietotlacVelkostId || null, sietotlacJeTmavy: newModelSietotlacJeTmavy, sietotlacPocetFarieb: newModelSietotlacPocetFarieb,
         tlacRezanyTransfer: newModelTlacRezanyTransfer, cenaPotlaceRezanyTransferKs: newModelCenaPotlaceRezanyTransferKs,
         rezanyTransferFoliaId: newModelRezanyTransferFoliaId || null, rezanyTransferPlochaCm2: newModelRezanyTransferPlochaCm2 === '' ? null : parseFloat(newModelRezanyTransferPlochaCm2) || 0,
         tlacVysivka: newModelTlacVysivka, cenaPotlaceVysivkaKs: newModelCenaPotlaceVysivkaKs,
@@ -3615,7 +3626,7 @@ export default function App() {
         redukovanyVykon: vypocitanyRv !== null ? vypocitanyRv : (newModelRedukovanyVykon === '' ? null : parseFloat(newModelRedukovanyVykon) || 0),
         minutySitia: minutySitiaVal, reziaKs: cenaRezieEfektivna ?? reziaKsVal, reziaPoznamka: newModelReziaPoznamka, reziaPolozky: newModelReziaPolozky, cenaPotlaceKs: cenaPotlacEfektivna ?? cenaPotlaceKsVal,
         tlacSublimacia: newModelTlacSublimacia, tlacDtf: newModelTlacDtf, cenaPotlaceDtfKs: newModelCenaPotlaceDtfKs,
-        tlacSietotlac: newModelTlacSietotlac, cenaPotlaceSietotlacKs: newModelCenaPotlaceSietotlacKs,
+        tlacSietotlac: newModelTlacSietotlac, cenaPotlaceSietotlacKs: newModelCenaPotlaceSietotlacKs, sietotlacVelkostId: newModelSietotlacVelkostId || null, sietotlacJeTmavy: newModelSietotlacJeTmavy, sietotlacPocetFarieb: newModelSietotlacPocetFarieb,
         tlacRezanyTransfer: newModelTlacRezanyTransfer, cenaPotlaceRezanyTransferKs: newModelCenaPotlaceRezanyTransferKs,
         rezanyTransferFoliaId: noveModel.rezanyTransferFoliaId, rezanyTransferPlochaCm2: noveModel.rezanyTransferPlochaCm2,
         tlacVysivka: newModelTlacVysivka, cenaPotlaceVysivkaKs: newModelCenaPotlaceVysivkaKs,
@@ -3631,7 +3642,7 @@ export default function App() {
       setNewModelProductionCost(''); setNewModelRedukovanyVykon('');
       setNewModelMinutySitia(''); setNewModelReziaKs(''); setNewModelReziaPoznamka(''); setNewModelReziaPolozky([]); setNewModelCenaPotlaceKs('');
       setNewModelTlacSublimacia(false); setNewModelTlacDtf(false); setNewModelCenaPotlaceDtfKs('');
-      setNewModelTlacSietotlac(false); setNewModelCenaPotlaceSietotlacKs('');
+      setNewModelTlacSietotlac(false); setNewModelCenaPotlaceSietotlacKs(''); setNewModelSietotlacVelkostId(''); setNewModelSietotlacJeTmavy(false); setNewModelSietotlacPocetFarieb(1);
       setNewModelTlacRezanyTransfer(false); setNewModelCenaPotlaceRezanyTransferKs(''); setNewModelRezanyTransferFoliaId(''); setNewModelRezanyTransferPlochaCm2('');
       setNewModelTlacVysivka(false); setNewModelCenaPotlaceVysivkaKs('');
       setNewModelStrihaSaRezeVyseka(false); setNewModelLaserZariadenieId('');
@@ -5555,7 +5566,7 @@ export default function App() {
   const aktualnyFormularProdukt = editingProduct || {
     minutySitia: newModelMinutySitia, reziaKs: newModelReziaKs, reziaPolozky: newModelReziaPolozky, cenaPotlaceKs: newModelCenaPotlaceKs,
     tlacSublimacia: newModelTlacSublimacia, tlacDtf: newModelTlacDtf, cenaPotlaceDtfKs: newModelCenaPotlaceDtfKs,
-    tlacSietotlac: newModelTlacSietotlac, cenaPotlaceSietotlacKs: newModelCenaPotlaceSietotlacKs,
+    tlacSietotlac: newModelTlacSietotlac, cenaPotlaceSietotlacKs: newModelCenaPotlaceSietotlacKs, sietotlacVelkostId: newModelSietotlacVelkostId || null, sietotlacJeTmavy: newModelSietotlacJeTmavy, sietotlacPocetFarieb: newModelSietotlacPocetFarieb,
     tlacRezanyTransfer: newModelTlacRezanyTransfer, cenaPotlaceRezanyTransferKs: newModelCenaPotlaceRezanyTransferKs,
     rezanyTransferFoliaId: newModelRezanyTransferFoliaId || null, rezanyTransferPlochaCm2: newModelRezanyTransferPlochaCm2,
     tlacVysivka: newModelTlacVysivka, cenaPotlaceVysivkaKs: newModelCenaPotlaceVysivkaKs,
@@ -7094,7 +7105,6 @@ export default function App() {
                         </label>
                         {[
                           { key: 'Dtf', label: 'DTF transfer', checked: editingProduct ? editingProduct.tlacDtf : newModelTlacDtf, setChecked: (v) => editingProduct ? setEditingProduct({ ...editingProduct, tlacDtf: v }) : setNewModelTlacDtf(v), cena: editingProduct ? editingProduct.cenaPotlaceDtfKs : newModelCenaPotlaceDtfKs, setCena: (v) => editingProduct ? setEditingProduct({ ...editingProduct, cenaPotlaceDtfKs: v }) : setNewModelCenaPotlaceDtfKs(v) },
-                          { key: 'Sietotlac', label: 'Sieťotlač', checked: editingProduct ? editingProduct.tlacSietotlac : newModelTlacSietotlac, setChecked: (v) => editingProduct ? setEditingProduct({ ...editingProduct, tlacSietotlac: v }) : setNewModelTlacSietotlac(v), cena: editingProduct ? editingProduct.cenaPotlaceSietotlacKs : newModelCenaPotlaceSietotlacKs, setCena: (v) => editingProduct ? setEditingProduct({ ...editingProduct, cenaPotlaceSietotlacKs: v }) : setNewModelCenaPotlaceSietotlacKs(v) },
                           { key: 'Vysivka', label: 'Výšivka', checked: editingProduct ? editingProduct.tlacVysivka : newModelTlacVysivka, setChecked: (v) => editingProduct ? setEditingProduct({ ...editingProduct, tlacVysivka: v }) : setNewModelTlacVysivka(v), cena: editingProduct ? editingProduct.cenaPotlaceVysivkaKs : newModelCenaPotlaceVysivkaKs, setCena: (v) => editingProduct ? setEditingProduct({ ...editingProduct, cenaPotlaceVysivkaKs: v }) : setNewModelCenaPotlaceVysivkaKs(v) },
                         ].map(t => (
                           <label key={t.key} className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-2">
@@ -7105,6 +7115,34 @@ export default function App() {
                             )}
                           </label>
                         ))}
+                        <div className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-2">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" checked={editingProduct ? !!editingProduct.tlacSietotlac : newModelTlacSietotlac} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, tlacSietotlac: e.target.checked }) : setNewModelTlacSietotlac(e.target.checked)} className="rounded border-slate-700 bg-slate-950" />
+                            <span className="text-slate-200 font-semibold flex-1">Sieťotlač</span>
+                            {(editingProduct ? editingProduct.tlacSietotlac : newModelTlacSietotlac) && (
+                              <span className="text-emerald-400 font-mono text-[11px]">{(vypocitajCenuSietotlace(aktualnyFormularProdukt) ?? (parseFloat(editingProduct ? editingProduct.cenaPotlaceSietotlacKs : newModelCenaPotlaceSietotlacKs) || 0)).toFixed(2)} €/ks</span>
+                            )}
+                          </label>
+                          {(editingProduct ? editingProduct.tlacSietotlac : newModelTlacSietotlac) && (
+                            <div className="space-y-1.5 mt-1.5">
+                              <div className="flex items-center gap-1.5">
+                                <select value={(editingProduct ? editingProduct.sietotlacVelkostId : newModelSietotlacVelkostId) || ''} onChange={(e) => { const v = e.target.value ? parseInt(e.target.value) : null; editingProduct ? setEditingProduct({ ...editingProduct, sietotlacVelkostId: v }) : setNewModelSietotlacVelkostId(e.target.value); }} className="flex-1 min-w-0 bg-slate-950 border border-slate-800 rounded p-1.5 text-white text-[11px]">
+                                  <option value="">— formát motívu —</option>
+                                  {(kostra?.sietotlacVelkosti || []).map(v => (<option key={v.id} value={v.id}>{v.label}</option>))}
+                                </select>
+                                <input type="number" step="1" min="1" placeholder="počet farieb" value={(editingProduct ? editingProduct.sietotlacPocetFarieb : newModelSietotlacPocetFarieb) ?? 1} onChange={(e) => { const v = Math.max(1, parseInt(e.target.value) || 1); editingProduct ? setEditingProduct({ ...editingProduct, sietotlacPocetFarieb: v }) : setNewModelSietotlacPocetFarieb(v); }} className="w-24 bg-slate-950 border border-slate-800 rounded p-1.5 text-white text-[11px]" />
+                              </div>
+                              <label className="flex items-center gap-1.5 text-[11px] text-slate-300">
+                                <input type="checkbox" checked={editingProduct ? !!editingProduct.sietotlacJeTmavy : newModelSietotlacJeTmavy} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, sietotlacJeTmavy: e.target.checked }) : setNewModelSietotlacJeTmavy(e.target.checked)} className="rounded border-slate-700 bg-slate-950" />
+                                Tmavý textil (vyššia spotreba farby)
+                              </label>
+                              {!(editingProduct ? editingProduct.sietotlacVelkostId : newModelSietotlacVelkostId) && (
+                                <input type="number" step="0.01" placeholder="alebo €/ks" value={(editingProduct ? editingProduct.cenaPotlaceSietotlacKs : newModelCenaPotlaceSietotlacKs) ?? ''} onChange={(e) => { const v = e.target.value === '' ? null : parseFloat(e.target.value) || 0; editingProduct ? setEditingProduct({ ...editingProduct, cenaPotlaceSietotlacKs: v }) : setNewModelCenaPotlaceSietotlacKs(v); }} className="w-24 bg-slate-950 border border-slate-800 rounded p-1.5 text-white text-[11px]" />
+                              )}
+                            </div>
+                          )}
+                          <p className="text-[10px] text-slate-500 mt-1">Formáty a spotreba farby na svetlý/tmavý textil sa nastavujú v Kostre cien. Každá ďalšia farba = ďalšie sito + klesajúca spotreba.</p>
+                        </div>
                         <div className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-2">
                           <label className="flex items-center gap-2 cursor-pointer">
                             <input type="checkbox" checked={editingProduct ? !!editingProduct.tlacRezanyTransfer : newModelTlacRezanyTransfer} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, tlacRezanyTransfer: e.target.checked }) : setNewModelTlacRezanyTransfer(e.target.checked)} className="rounded border-slate-700 bg-slate-950" />
@@ -7166,6 +7204,27 @@ export default function App() {
                             </div>
                           </div>
                           <p className="text-[10px] text-slate-500 mt-2">+ manipulácia {rozpis.manipulacia.toFixed(2)}€ + nažehlovanie/lis {rozpis.casNazehlovaniaMin} min ({rozpis.praca.toFixed(3)}€) + koeficient rizika {rozpis.koeficientPercent}% = <span className="text-emerald-400 font-semibold">{rozpis.spolu.toFixed(2)} €/ks spolu</span></p>
+                        </div>
+                      );
+                    })()}
+
+                    {/* ROZPIS SIETOTLACE — sito + farba na kazdu farbu zvlast */}
+                    {(editingProduct ? editingProduct.tlacSietotlac : newModelTlacSietotlac) && kostra && (editingProduct ? editingProduct.sietotlacVelkostId : newModelSietotlacVelkostId) && (() => {
+                      const p = aktualnyFormularProdukt;
+                      const rozpad = vcSietotlacRozpad(kostra, p.sietotlacVelkostId, !!p.sietotlacJeTmavy, parseInt(p.sietotlacPocetFarieb) || 1);
+                      return (
+                        <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
+                          <label className="block text-slate-400 font-semibold mb-2">Rozpis sieťotlače (Kostra cien)</label>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+                            {rozpad.map(f => (
+                              <div key={f.n} className="bg-slate-900 rounded p-2">
+                                <p className="text-slate-500">Farba č.{f.n}</p>
+                                <p className="text-white font-mono">{f.gramaz.toFixed(2)} g</p>
+                                <p className="text-emerald-400 font-mono">{f.farbaCena.toFixed(3)}€ + síto {f.sitoCena.toFixed(2)}€</p>
+                              </div>
+                            ))}
+                          </div>
+                          <p className="text-[10px] text-slate-500 mt-2">Spolu (vrátane manipulácie/čistenia): <span className="text-emerald-400 font-semibold">{vypocitajCenuSietotlace(p)?.toFixed(2)} €/ks</span></p>
                         </div>
                       );
                     })()}
