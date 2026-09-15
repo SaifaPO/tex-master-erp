@@ -1269,6 +1269,11 @@ export default function App() {
   const [draggedMatrixCard, setDraggedMatrixCard] = useState(null);
   const [dragOverMatrixCell, setDragOverMatrixCell] = useState(null); // { date, stationId } | null
   const [matrixDensity, setMatrixDensity] = useState('full'); // 'full' | 'compact' | 'ultra'
+  // Skryvanie startu Planovacej Matice — ak najstarsie dni maju UZ VSETKY zakazky hotove na
+  // vsetkych staniciach, schovaju sa (aby sa nemuselo scrollovat cez uz vybaveny front). Skryva sa
+  // len suvisly usek OD ZACIATKU — akonahle sa najde prvy nehotovy den, dalsie dni sa uz nezhrnuju,
+  // aj keby boli medzi nimi jednotlivo tiez hotove.
+  const [planovaciaMaticaSkryteRozbalene, setPlanovaciaMaticaSkryteRozbalene] = useState(false);
   const [ultraStatusEditKey, setUltraStatusEditKey] = useState(null); // `${itemId}|${stationId}` alebo null
   const [showExpressDotlackovka, setShowExpressDotlackovka] = useState(false);
   const [expressCompany, setExpressCompany] = useState('ADY');
@@ -5417,6 +5422,28 @@ export default function App() {
     return result;
   };
   const plannerDates = getPlannerDates();
+  const todayIsoPlanner = toIsoLocal(new Date());
+  // Den je "hotovy", ak na kazdej stanici, kde ma preto den nejaku aktivnu polozku, su VSETKY
+  // take polozky v stave 'hotove' (den bez ziadnych polozok sa berie tiez ako hotovy/prazdny).
+  const jeDenPlneHotovy = (date) => STATION_ORDER.every(stationId => {
+    const dayItems = allItems.filter(it => getItemStationDate(it, stationId) === date && it.stationStatuses[stationId] && it.stationStatuses[stationId] !== 'neaktivne');
+    return dayItems.every(it => it.stationStatuses[stationId] === 'hotove');
+  });
+  // Pocet dni, ktore SA DAJU skryt — suvisly usek OD ZACIATKU (najstarsich dni, len pred dneskom).
+  // Akonahle narazime na prvy nehotovy den, dalsie uz nezhrname, aj keby boli medzi nimi jednotlivo
+  // tiez hotove. Pocita sa vzdy (aj ked je usek rozbaleny), aby sa dalo znova zbalit spravnym poctom.
+  let planovaciaMaticaPocetVolitelnych = 0;
+  for (const date of plannerDates) {
+    if (date >= todayIsoPlanner) break;
+    if (jeDenPlneHotovy(date)) planovaciaMaticaPocetVolitelnych++;
+    else break;
+  }
+  const planovaciaMaticaPocetSkrytych = planovaciaMaticaSkryteRozbalene ? 0 : planovaciaMaticaPocetVolitelnych;
+  const viditelnePlannerDates = plannerDates.slice(planovaciaMaticaPocetSkrytych);
+  const handlePreskocitNaDnes = () => {
+    const row = matrixTableWrapRef.current?.querySelector(`[data-planner-date="${todayIsoPlanner}"]`);
+    if (row) row.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
   const matrixRowMinH = matrixDensity === 'ultra' ? 'min-h-[34px]' : matrixDensity === 'compact' ? 'min-h-[54px]' : 'min-h-[110px]';
   const capacityByStation = {};
   capacityConfigs.forEach(c => { capacityByStation[c.stationId] = c; });
@@ -5793,6 +5820,7 @@ export default function App() {
                       <button onClick={handleToggleMatrixFullscreen} title="Celá obrazovka" className="px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded font-bold text-slate-200">
                         {isMatrixFullscreen ? '✕ Zavrieť celú obrazovku' : '⛶ Celá obrazovka'}
                       </button>
+                      <button onClick={handlePreskocitNaDnes} title="Preskočiť na dnešný deň" className="px-2 py-1 bg-indigo-600 hover:bg-indigo-500 rounded font-bold text-white flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> Dnes</button>
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
                       <div className="flex items-center bg-slate-800 rounded-lg p-0.5 gap-0.5">
@@ -5833,14 +5861,25 @@ export default function App() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800">
-                        {plannerDates.map((date, dateIdx) => {
+                        {planovaciaMaticaPocetVolitelnych > 0 && (
+                          <tr>
+                            <td colSpan={1 + STATION_ORDER.length + (showRedukovaneVykony ? 1 : 0)} className="p-0">
+                              <button onClick={() => setPlanovaciaMaticaSkryteRozbalene(v => !v)} className="w-full py-2 text-[11px] font-bold text-slate-400 hover:text-white bg-slate-900/60 hover:bg-slate-800 transition-colors">
+                                {planovaciaMaticaSkryteRozbalene
+                                  ? `▲ Skryť ${planovaciaMaticaPocetVolitelnych} starších hotových dní`
+                                  : `▼ Zobraziť ${planovaciaMaticaPocetVolitelnych} starších dní (všetko hotové)`}
+                              </button>
+                            </td>
+                          </tr>
+                        )}
+                        {viditelnePlannerDates.map((date, dateIdx) => {
                           const holiday = isSkHoliday(date);
                           const weekend = isWeekendDate(date);
                           const zebra = dateIdx % 2 === 1;
                           const rowTintClass = holiday ? 'bg-amber-950/20' : weekend ? 'bg-slate-800/30' : zebra ? 'bg-slate-900/25' : 'bg-slate-950/10';
                           const dayLabel = holiday ? 'sviatok' : weekend ? 'víkend' : '';
                           return (
-                          <tr key={date} className={`hover:bg-indigo-950/10 ${rowTintClass}`}>
+                          <tr key={date} data-planner-date={date} className={`hover:bg-indigo-950/10 ${rowTintClass} ${date === todayIsoPlanner ? 'ring-2 ring-inset ring-indigo-500/60' : ''}`}>
                             <td className={`p-0 font-bold text-xs border-r border-slate-850 sticky left-0 z-10 align-top ${rowTintClass} ${isUrgentDate(date) ? '!bg-rose-900/50 text-rose-300' : 'text-slate-200'}`}>
                               <div className={`${matrixRowMinH} h-full flex flex-col justify-between items-start py-2 px-3 gap-1`}>
                                 <span className="text-[9px] font-semibold text-slate-500/70">{formatDeliveryDate(date)}</span>
