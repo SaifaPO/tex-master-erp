@@ -6,7 +6,7 @@ import { encode as encodeBySquare, CurrencyCode, PaymentOptions } from 'bysquare
 import { Html5Qrcode } from 'html5-qrcode';
 import CenovePonukyTab from './CenovePonukyTab';
 import PrintStudioAdmin from './printstudio/PrintStudioAdmin';
-import { nacitajKostru, vcSublimaciaGarment, vcLaserCm2 } from './printstudio/vyrobneNaklady';
+import { nacitajKostru, vcSublimaciaGarment } from './printstudio/vyrobneNaklady';
 import {
   ClipboardList, Package, Cpu, QrCode, Plus, User, Clock, Layers, Search, Check, X, Calendar,
   Palette, Scissors, Printer, Sliders, Sparkles, ZoomIn, ZoomOut, FileText, PlusCircle, Table,
@@ -234,8 +234,8 @@ const FALLBACK_ACL = {
 const mapMaterialFromDb = (r) => ({ id: r.id, name: r.name, color: r.color, colorHex: r.color_hex || '', width: r.width, weight: r.weight, pricePerM: r.price_per_m, qty: r.qty, unit: r.unit, minQty: r.min_qty, warehouseId: r.warehouse_id || 'sklad-1', manufacturer: r.manufacturer || '', productType: r.product_type || '', deliveryNoteNumber: r.delivery_note_number || '', deliveryNoteDate: r.delivery_note_date || '', zakazkaOdberatel: r.zakazka_odberatel || '', history: r.history || [] });
 const mapMaterialToDb = (m) => ({ id: m.id, name: m.name, color: m.color, color_hex: m.colorHex || null, width: m.width, weight: m.weight, price_per_m: m.pricePerM, qty: m.qty, unit: m.unit, min_qty: m.minQty, warehouse_id: m.warehouseId, manufacturer: m.manufacturer || null, product_type: m.productType || null, delivery_note_number: m.deliveryNoteNumber || null, delivery_note_date: m.deliveryNoteDate || null, zakazka_odberatel: m.zakazkaOdberatel || null, history: m.history });
 
-const mapProductFromDb = (r) => ({ id: r.id, customCode: r.custom_code, name: r.name, sports: r.sports || [], layer1: r.layer1, layer2: r.layer2, layer3: r.layer3, threadM: r.thread_m, womenRatioPercent: r.women_ratio_percent ?? 90, childrenRatioPercent: r.children_ratio_percent ?? 65, productionCost: r.production_cost ?? null, priceGroup: r.price_group || '', redukovanyVykon: r.redukovany_vykon ?? null, attachments: r.attachments || [], minutySitia: r.minuty_sitia ?? null, reziaKs: r.rezia_ks ?? null, reziaPoznamka: r.rezia_poznamka || '', cenaPotlaceKs: r.cena_potlace_ks ?? null, tlacSublimacia: !!r.tlac_sublimacia, tlacDtf: !!r.tlac_dtf, cenaPotlaceDtfKs: r.cena_potlace_dtf_ks ?? null, tlacSietotlac: !!r.tlac_sietotlac, cenaPotlaceSietotlacKs: r.cena_potlace_sietotlac_ks ?? null, tlacRezanyTransfer: !!r.tlac_rezany_transfer, cenaPotlaceRezanyTransferKs: r.cena_potlace_rezany_transfer_ks ?? null, tlacVysivka: !!r.tlac_vysivka, cenaPotlaceVysivkaKs: r.cena_potlace_vysivka_ks ?? null, strihaSaRezeVyseka: !!r.striha_sa_reze_vyseka, laserSaReze: !!r.laser_sa_reze });
-const mapProductToDb = (p) => ({ id: p.id, custom_code: p.customCode, name: p.name, sports: p.sports, layer1: p.layer1, layer2: p.layer2, layer3: p.layer3, thread_m: p.threadM, women_ratio_percent: p.womenRatioPercent, children_ratio_percent: p.childrenRatioPercent, production_cost: p.productionCost ?? null, price_group: p.priceGroup || null, redukovany_vykon: p.redukovanyVykon ?? null, attachments: p.attachments || [], minuty_sitia: p.minutySitia ?? null, rezia_ks: p.reziaKs ?? null, rezia_poznamka: p.reziaPoznamka || null, cena_potlace_ks: p.cenaPotlaceKs ?? null, tlac_sublimacia: !!p.tlacSublimacia, tlac_dtf: !!p.tlacDtf, cena_potlace_dtf_ks: p.cenaPotlaceDtfKs ?? null, tlac_sietotlac: !!p.tlacSietotlac, cena_potlace_sietotlac_ks: p.cenaPotlaceSietotlacKs ?? null, tlac_rezany_transfer: !!p.tlacRezanyTransfer, cena_potlace_rezany_transfer_ks: p.cenaPotlaceRezanyTransferKs ?? null, tlac_vysivka: !!p.tlacVysivka, cena_potlace_vysivka_ks: p.cenaPotlaceVysivkaKs ?? null, striha_sa_reze_vyseka: !!p.strihaSaRezeVyseka, laser_sa_reze: !!p.laserSaReze });
+const mapProductFromDb = (r) => ({ id: r.id, customCode: r.custom_code, name: r.name, sports: r.sports || [], layer1: r.layer1, layer2: r.layer2, layer3: r.layer3, threadM: r.thread_m, womenRatioPercent: r.women_ratio_percent ?? 90, childrenRatioPercent: r.children_ratio_percent ?? 65, productionCost: r.production_cost ?? null, priceGroup: r.price_group || '', redukovanyVykon: r.redukovany_vykon ?? null, attachments: r.attachments || [], minutySitia: r.minuty_sitia ?? null, reziaKs: r.rezia_ks ?? null, reziaPoznamka: r.rezia_poznamka || '', cenaPotlaceKs: r.cena_potlace_ks ?? null, tlacSublimacia: !!r.tlac_sublimacia, tlacDtf: !!r.tlac_dtf, cenaPotlaceDtfKs: r.cena_potlace_dtf_ks ?? null, tlacSietotlac: !!r.tlac_sietotlac, cenaPotlaceSietotlacKs: r.cena_potlace_sietotlac_ks ?? null, tlacRezanyTransfer: !!r.tlac_rezany_transfer, cenaPotlaceRezanyTransferKs: r.cena_potlace_rezany_transfer_ks ?? null, tlacVysivka: !!r.tlac_vysivka, cenaPotlaceVysivkaKs: r.cena_potlace_vysivka_ks ?? null, strihaSaRezeVyseka: !!r.striha_sa_reze_vyseka, laserZariadenieId: r.laser_zariadenie_id || null });
+const mapProductToDb = (p) => ({ id: p.id, custom_code: p.customCode, name: p.name, sports: p.sports, layer1: p.layer1, layer2: p.layer2, layer3: p.layer3, thread_m: p.threadM, women_ratio_percent: p.womenRatioPercent, children_ratio_percent: p.childrenRatioPercent, production_cost: p.productionCost ?? null, price_group: p.priceGroup || null, redukovany_vykon: p.redukovanyVykon ?? null, attachments: p.attachments || [], minuty_sitia: p.minutySitia ?? null, rezia_ks: p.reziaKs ?? null, rezia_poznamka: p.reziaPoznamka || null, cena_potlace_ks: p.cenaPotlaceKs ?? null, tlac_sublimacia: !!p.tlacSublimacia, tlac_dtf: !!p.tlacDtf, cena_potlace_dtf_ks: p.cenaPotlaceDtfKs ?? null, tlac_sietotlac: !!p.tlacSietotlac, cena_potlace_sietotlac_ks: p.cenaPotlaceSietotlacKs ?? null, tlac_rezany_transfer: !!p.tlacRezanyTransfer, cena_potlace_rezany_transfer_ks: p.cenaPotlaceRezanyTransferKs ?? null, tlac_vysivka: !!p.tlacVysivka, cena_potlace_vysivka_ks: p.cenaPotlaceVysivkaKs ?? null, striha_sa_reze_vyseka: !!p.strihaSaRezeVyseka, laser_zariadenie_id: p.laserZariadenieId || null });
 
 const mapTierFromDb = (r) => ({ id: r.id, name: r.name, fit: r.fit, ventilation: r.ventilation, desc: r.description });
 const mapTierToDb = (t) => ({ id: t.id, name: t.name, fit: t.fit, ventilation: t.ventilation, description: t.desc });
@@ -641,8 +641,8 @@ const mapTierRuleFromDb = (r) => ({ tier: r.tier, sortOrder: r.sort_order, minOr
 const TIER_LABELS = { standard: 'Standard', bronze: 'Bronze', silver: 'Silver', gold: 'Gold' };
 const TIER_COLORS = { standard: 'bg-slate-700 text-slate-200', bronze: 'bg-amber-800 text-amber-100', silver: 'bg-slate-400 text-slate-900', gold: 'bg-yellow-500 text-yellow-950' };
 
-const mapCostMetricFromDb = (r) => ({ id: r.id, name: r.name, value: r.value || 0, unit: r.unit || '', description: r.description || '', category: r.category || 'vseobecne', powerKw: r.power_kw, hoursPerMonth: r.hours_per_month, costType: r.cost_type || 'fixny', company: r.company || '' });
-const mapCostMetricToDb = (m) => ({ id: m.id, name: m.name, value: m.value, unit: m.unit || null, description: m.description || null, category: m.category || 'vseobecne', power_kw: m.powerKw ?? null, hours_per_month: m.hoursPerMonth ?? null, cost_type: m.costType || 'fixny', company: m.company || null });
+const mapCostMetricFromDb = (r) => ({ id: r.id, name: r.name, value: r.value || 0, unit: r.unit || '', description: r.description || '', category: r.category || 'vseobecne', powerKw: r.power_kw, hoursPerMonth: r.hours_per_month, costType: r.cost_type || 'fixny', company: r.company || '', vykonZaHodinu: r.vykon_za_hodinu, vykonJednotka: r.vykon_jednotka || '' });
+const mapCostMetricToDb = (m) => ({ id: m.id, name: m.name, value: m.value, unit: m.unit || null, description: m.description || null, category: m.category || 'vseobecne', power_kw: m.powerKw ?? null, hours_per_month: m.hoursPerMonth ?? null, cost_type: m.costType || 'fixny', company: m.company || null, vykon_za_hodinu: m.vykonZaHodinu ?? null, vykon_jednotka: m.vykonJednotka || null });
 
 // Mesačný náklad zariadenia = výkon (kW) × hodiny prevádzky za mesiac × cena elektriny/plynu (podľa kategórie).
 function calculateDeviceMonthlyCost(metric, allMetrics) {
@@ -650,6 +650,18 @@ function calculateDeviceMonthlyCost(metric, allMetrics) {
   const rateMetric = allMetrics.find(m => m.name === (metric.category === 'kurenie' ? 'Cena plynu' : 'Cena elektriny'));
   if (!rateMetric) return null;
   return parseFloat((metric.powerKw * metric.hoursPerMonth * rateMetric.value).toFixed(2));
+}
+
+// Sadzba zariadenia na 1 jednotku vykonu (napr. €/cm² pri laseri) = naklad na hodinu prevadzky
+// (kW x cena elektriny/plynu) delene vykonom za hodinu (kolko jednotiek stroj spravi za hodinu).
+// Pouziva sa v Katalogu Produktov (napr. Laser) namiesto samostatnej "Kostry cien" pre kazdy stroj —
+// vsetky stroje (tlaciarne, lasery a pod.) su spolu v jednom registri, rovnako ako mzdy/elektrina/kurenie.
+function calculateDeviceRatePerUnit(metric, allMetrics) {
+  if (metric.powerKw == null || metric.vykonZaHodinu == null || metric.vykonZaHodinu <= 0) return null;
+  const rateMetric = allMetrics.find(m => m.name === (metric.category === 'kurenie' ? 'Cena plynu' : 'Cena elektriny'));
+  if (!rateMetric) return null;
+  const nakladHod = metric.powerKw * rateMetric.value;
+  return nakladHod / metric.vykonZaHodinu;
 }
 
 const mapAssetFromDb = (r) => ({ id: r.id, name: r.name, acquisitionDate: r.acquisition_date, acquisitionPrice: r.acquisition_price || 0, depreciationGroup: r.depreciation_group, depreciationMethod: r.depreciation_method || 'rovnomerne', status: r.status || 'aktivny', disposalDate: r.disposal_date, notes: r.notes || '', createdBy: r.created_by || '', createdAt: r.created_at });
@@ -1107,6 +1119,8 @@ export default function App() {
   const [newMetricCostType, setNewMetricCostType] = useState('fixny');
   const [newMetricPowerKw, setNewMetricPowerKw] = useState('');
   const [newMetricHoursPerMonth, setNewMetricHoursPerMonth] = useState('');
+  const [newMetricVykonZaHodinu, setNewMetricVykonZaHodinu] = useState('');
+  const [newMetricVykonJednotka, setNewMetricVykonJednotka] = useState('');
   const [newMetricCompany, setNewMetricCompany] = useState('');
   const [najomName, setNajomName] = useState(''); const [najomValue, setNajomValue] = useState('');
   const [splatkyName, setSplatkyName] = useState(''); const [splatkyValue, setSplatkyValue] = useState('');
@@ -1412,7 +1426,7 @@ export default function App() {
   const [newModelTlacVysivka, setNewModelTlacVysivka] = useState(false);
   const [newModelCenaPotlaceVysivkaKs, setNewModelCenaPotlaceVysivkaKs] = useState('');
   const [newModelStrihaSaRezeVyseka, setNewModelStrihaSaRezeVyseka] = useState(false);
-  const [newModelLaserSaReze, setNewModelLaserSaReze] = useState(false);
+  const [newModelLaserZariadenieId, setNewModelLaserZariadenieId] = useState('');
 
   const [newSportInput, setNewSportInput] = useState('');
   const [newKrajcirkaMeno, setNewKrajcirkaMeno] = useState('');
@@ -2792,11 +2806,12 @@ export default function App() {
       id: `metric-${Date.now()}`, name: newMetricName.trim(), value: parseFloat(newMetricValue) || 0, unit: newMetricUnit.trim(), description: newMetricDescription.trim(),
       category: newMetricCategory, costType: newMetricCostType,
       powerKw: newMetricPowerKw.trim() ? parseFloat(newMetricPowerKw) : null, hoursPerMonth: newMetricHoursPerMonth.trim() ? parseFloat(newMetricHoursPerMonth) : null,
+      vykonZaHodinu: newMetricVykonZaHodinu.trim() ? parseFloat(newMetricVykonZaHodinu) : null, vykonJednotka: newMetricVykonJednotka.trim(),
       company: newMetricCompany || null
     };
     const { error } = await supabase.from('cost_metrics').insert(mapCostMetricToDb(created));
     if (error) { triggerNotification('error', error.message); return; }
-    setNewMetricName(''); setNewMetricValue(''); setNewMetricUnit(''); setNewMetricDescription(''); setNewMetricCategory('vseobecne'); setNewMetricCostType('fixny'); setNewMetricPowerKw(''); setNewMetricHoursPerMonth(''); setNewMetricCompany('');
+    setNewMetricName(''); setNewMetricValue(''); setNewMetricUnit(''); setNewMetricDescription(''); setNewMetricCategory('vseobecne'); setNewMetricCostType('fixny'); setNewMetricPowerKw(''); setNewMetricHoursPerMonth(''); setNewMetricVykonZaHodinu(''); setNewMetricVykonJednotka(''); setNewMetricCompany('');
     triggerNotification('success', `Metrika "${created.name}" bola pridaná.`);
   };
 
@@ -2804,7 +2819,7 @@ export default function App() {
     if (!hasPermission('create_order')) { triggerNotification('error', 'Nemáte prístup do správy nákladov.'); return; }
     let parsedValue = value;
     if (field === 'value') parsedValue = parseFloat(value) || 0;
-    else if (field === 'power_kw' || field === 'hours_per_month') parsedValue = value.trim() === '' ? null : (parseFloat(value) || 0);
+    else if (field === 'power_kw' || field === 'hours_per_month' || field === 'vykon_za_hodinu') parsedValue = value.trim() === '' ? null : (parseFloat(value) || 0);
     else if (field === 'company') parsedValue = value === '' ? null : value;
     const { error } = await supabase.from('cost_metrics').update({ [field]: parsedValue }).eq('id', id);
     if (error) triggerNotification('error', error.message);
@@ -3487,13 +3502,17 @@ export default function App() {
     return Math.round((totalPlocha / 100) * cenaStrihania100cm2 * 100) / 100;
   };
 
-  // Laser — vlastny stroj PBT, SAMOSTATNE od Strihania/kompletaze. Cena za cm² sa odvodi z realnej
-  // prevadzkovej ceny stroja (Kostra cien -> Laser: elektrina + obsluha + amortizacia), nie zo
-  // sadzby krajcirskej dielne.
+  // Laser — vlastny stroj PBT, SAMOSTATNE od Strihania/kompletaze. Sadzba €/jednotku sa neta zvlast
+  // (ako predtym), ale ci ta z registra zariadeni vo Financiach -> Rezia firiem (rovnake miesto ako
+  // mzdy/elektrina/kurenie) — admin pri produkte len vyberie KTORY stroj sa pouziva.
   const vypocitajCenuLasera = (p) => {
-    if (!p.laserSaReze || !kostra) return 0;
+    if (!p.laserZariadenieId) return 0;
+    const zariadenie = costMetrics.find(m => m.id === p.laserZariadenieId);
+    if (!zariadenie) return 0;
+    const sadzba = calculateDeviceRatePerUnit(zariadenie, costMetrics);
+    if (sadzba == null) return 0;
     const totalPlocha = vypocitajPlochaCm2ZLatky(p.layer1) + vypocitajPlochaCm2ZLatky(p.layer2) + vypocitajPlochaCm2ZLatky(p.layer3);
-    return Math.round(totalPlocha * vcLaserCm2(kostra) * 100) / 100;
+    return Math.round(totalPlocha * sadzba * 100) / 100;
   };
 
   // Redukovany vykon (€) = minuty sitia x sadzba RV — overene z realnych historickych dat (Vydaj
@@ -3544,7 +3563,7 @@ export default function App() {
         tlacSietotlac: newModelTlacSietotlac, cenaPotlaceSietotlacKs: newModelCenaPotlaceSietotlacKs,
         tlacRezanyTransfer: newModelTlacRezanyTransfer, cenaPotlaceRezanyTransferKs: newModelCenaPotlaceRezanyTransferKs,
         tlacVysivka: newModelTlacVysivka, cenaPotlaceVysivkaKs: newModelCenaPotlaceVysivkaKs,
-        strihaSaRezeVyseka: newModelStrihaSaRezeVyseka, laserSaReze: newModelLaserSaReze,
+        strihaSaRezeVyseka: newModelStrihaSaRezeVyseka, laserZariadenieId: newModelLaserZariadenieId || null,
       };
       const vypocitana = vypocitajVyrobnuCenuZRozpisu(noveModel);
       const cenaPotlacEfektivna = vypocitajCenuPotlaceZRozpisu(noveModel);
@@ -3561,7 +3580,7 @@ export default function App() {
         tlacSietotlac: newModelTlacSietotlac, cenaPotlaceSietotlacKs: newModelCenaPotlaceSietotlacKs,
         tlacRezanyTransfer: newModelTlacRezanyTransfer, cenaPotlaceRezanyTransferKs: newModelCenaPotlaceRezanyTransferKs,
         tlacVysivka: newModelTlacVysivka, cenaPotlaceVysivkaKs: newModelCenaPotlaceVysivkaKs,
-        strihaSaRezeVyseka: newModelStrihaSaRezeVyseka, laserSaReze: newModelLaserSaReze,
+        strihaSaRezeVyseka: newModelStrihaSaRezeVyseka, laserZariadenieId: newModelLaserZariadenieId || null,
         attachments: [],
         threadM: 15
       };
@@ -3576,7 +3595,7 @@ export default function App() {
       setNewModelTlacSietotlac(false); setNewModelCenaPotlaceSietotlacKs('');
       setNewModelTlacRezanyTransfer(false); setNewModelCenaPotlaceRezanyTransferKs('');
       setNewModelTlacVysivka(false); setNewModelCenaPotlaceVysivkaKs('');
-      setNewModelStrihaSaRezeVyseka(false); setNewModelLaserSaReze(false);
+      setNewModelStrihaSaRezeVyseka(false); setNewModelLaserZariadenieId('');
       setNewModelLayer1Alt([]); setNewModelLayer2Alt([]); setNewModelLayer3Alt([]);
       triggerNotification('success', `Model "${created.name}" pridaný do katalógu.`);
     }
@@ -5500,7 +5519,7 @@ export default function App() {
     tlacSietotlac: newModelTlacSietotlac, cenaPotlaceSietotlacKs: newModelCenaPotlaceSietotlacKs,
     tlacRezanyTransfer: newModelTlacRezanyTransfer, cenaPotlaceRezanyTransferKs: newModelCenaPotlaceRezanyTransferKs,
     tlacVysivka: newModelTlacVysivka, cenaPotlaceVysivkaKs: newModelCenaPotlaceVysivkaKs,
-    strihaSaRezeVyseka: newModelStrihaSaRezeVyseka, laserSaReze: newModelLaserSaReze,
+    strihaSaRezeVyseka: newModelStrihaSaRezeVyseka, laserZariadenieId: newModelLaserZariadenieId || null,
     layer1: newModelPrimary ? { materialId: newModelPrimary, consumption: { lt5: parseFloat(newModelLayer1Lt5) || 0, ge5: parseFloat(newModelLayer1Ge5) || 0 } } : null,
     layer2: newModelSecondary ? { materialId: newModelSecondary, consumption: { lt5: parseFloat(newModelLayer2Lt5) || 0, ge5: parseFloat(newModelLayer2Ge5) || 0 } } : null,
     layer3: newModelTertiary ? { materialId: newModelTertiary, consumption: { lt5: parseFloat(newModelLayer3Lt5) || 0, ge5: parseFloat(newModelLayer3Ge5) || 0 } } : null,
@@ -7038,14 +7057,21 @@ export default function App() {
                         <p className="text-[10px] text-slate-500 mt-1">Výkon krajčírskej dielne (ATAK). Z celkovej plochy použitých látok × sadzba {cenaStrihania100cm2.toFixed(2)} €/100cm² (Cenotvorba).</p>
                       </div>
                       <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input type="checkbox" checked={editingProduct ? !!editingProduct.laserSaReze : newModelLaserSaReze} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, laserSaReze: e.target.checked }) : setNewModelLaserSaReze(e.target.checked)} className="rounded border-slate-700 bg-slate-950" />
-                          <span className="text-slate-200 font-semibold">Laser (rezanie/vysekávanie)</span>
-                          {(editingProduct ? editingProduct.laserSaReze : newModelLaserSaReze) && (
-                            <span className="text-emerald-400 font-mono text-[11px] ml-auto">{vypocitajCenuLasera(aktualnyFormularProdukt).toFixed(2)} €/ks</span>
-                          )}
-                        </label>
-                        <p className="text-[10px] text-slate-500 mt-1">Vlastný stroj PBT. Sadzba €/cm² sa nastavuje v Kostre cien → Laser (elektrina + obsluha + amortizácia).</p>
+                        <label className="block text-slate-200 font-semibold mb-1.5">Laser (rezanie/vysekávanie)</label>
+                        <select
+                          value={(editingProduct ? editingProduct.laserZariadenieId : newModelLaserZariadenieId) || ''}
+                          onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, laserZariadenieId: e.target.value || null }) : setNewModelLaserZariadenieId(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white"
+                        >
+                          <option value="">— nepoužíva sa —</option>
+                          {costMetrics.filter(m => m.category === 'zariadenie' && m.powerKw != null && m.vykonZaHodinu != null).map(m => (
+                            <option key={m.id} value={m.id}>{m.name}</option>
+                          ))}
+                        </select>
+                        {(editingProduct ? editingProduct.laserZariadenieId : newModelLaserZariadenieId) && (
+                          <span className="text-emerald-400 font-mono text-[11px] block mt-1">{vypocitajCenuLasera(aktualnyFormularProdukt).toFixed(2)} €/ks</span>
+                        )}
+                        <p className="text-[10px] text-slate-500 mt-1">Vlastný stroj (Financie → Réžia firiem → register zariadení). Sadzba €/cm² sa počíta z elektriny + výkonu daného stroja.</p>
                       </div>
                     </div>
 
@@ -8986,13 +9012,16 @@ export default function App() {
                       <th className="px-3 py-3">Názov</th><th className="px-3 py-3 text-center">Firma</th><th className="px-3 py-3 text-center">Kategória</th><th className="px-3 py-3 text-center">Typ</th>
                       <th className="px-3 py-3 text-center">Hodnota</th><th className="px-3 py-3 text-center">Jednotka</th>
                       <th className="px-3 py-3 text-center">Výkon (kW)</th><th className="px-3 py-3 text-center">Hod./mesiac</th>
-                      <th className="px-3 py-3 text-center">Mesačný náklad</th><th className="px-3 py-3">Popis / vzorec / zdroj</th><th className="px-3 py-3"></th>
+                      <th className="px-3 py-3 text-center">Mesačný náklad</th>
+                      <th className="px-3 py-3 text-center">Výkon (jedn./hod)</th><th className="px-3 py-3 text-center">Jedn. výkonu</th><th className="px-3 py-3 text-center">Sadzba €/jedn.</th>
+                      <th className="px-3 py-3">Popis / vzorec / zdroj</th><th className="px-3 py-3"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800">
-                    {costMetrics.length === 0 && (<tr><td colSpan={11} className="px-4 py-6 text-center text-slate-500 italic">Zatiaľ žiadne metriky.</td></tr>)}
+                    {costMetrics.length === 0 && (<tr><td colSpan={14} className="px-4 py-6 text-center text-slate-500 italic">Zatiaľ žiadne metriky.</td></tr>)}
                     {costMetrics.map(m => {
                       const monthlyCost = calculateDeviceMonthlyCost(m, costMetrics);
+                      const ratePerUnit = calculateDeviceRatePerUnit(m, costMetrics);
                       return (
                         <tr key={m.id} className="hover:bg-slate-800/40">
                           <td className="px-3 py-3"><input type="text" defaultValue={m.name} onBlur={(e) => handleUpdateCostMetric(m.id, 'name', e.target.value)} className="w-32 bg-slate-950 border border-slate-800 rounded p-1 font-bold text-white" /></td>
@@ -9026,6 +9055,9 @@ export default function App() {
                           <td className="px-3 py-3 text-center"><input type="number" step="0.01" defaultValue={m.powerKw ?? ''} onBlur={(e) => handleUpdateCostMetric(m.id, 'power_kw', e.target.value)} placeholder="—" className="w-16 bg-slate-950 border border-slate-800 rounded p-1 text-center text-white" /></td>
                           <td className="px-3 py-3 text-center"><input type="number" step="1" defaultValue={m.hoursPerMonth ?? ''} onBlur={(e) => handleUpdateCostMetric(m.id, 'hours_per_month', e.target.value)} placeholder="—" className="w-16 bg-slate-950 border border-slate-800 rounded p-1 text-center text-white" /></td>
                           <td className="px-3 py-3 text-center font-bold text-emerald-400">{monthlyCost !== null ? `${monthlyCost.toFixed(2)} €` : '—'}</td>
+                          <td className="px-3 py-3 text-center"><input type="number" step="0.01" defaultValue={m.vykonZaHodinu ?? ''} onBlur={(e) => handleUpdateCostMetric(m.id, 'vykon_za_hodinu', e.target.value)} placeholder="—" className="w-16 bg-slate-950 border border-slate-800 rounded p-1 text-center text-white" /></td>
+                          <td className="px-3 py-3 text-center"><input type="text" defaultValue={m.vykonJednotka} onBlur={(e) => handleUpdateCostMetric(m.id, 'vykon_jednotka', e.target.value)} placeholder="napr. cm²" className="w-16 bg-slate-950 border border-slate-800 rounded p-1 text-center text-white" /></td>
+                          <td className="px-3 py-3 text-center font-bold text-teal-400">{ratePerUnit !== null ? `${ratePerUnit.toFixed(4)} €` : '—'}</td>
                           <td className="px-3 py-3"><input type="text" defaultValue={m.description} onBlur={(e) => handleUpdateCostMetric(m.id, 'description', e.target.value)} placeholder="odkiaľ pochádza toto číslo" className="w-40 bg-slate-950 border border-slate-800 rounded p-1 text-white" /></td>
                           <td className="px-3 py-3 text-center"><button onClick={() => handleDeleteCostMetric(m)} className="text-rose-400 hover:text-rose-300"><Trash2 className="h-3.5 w-3.5" /></button></td>
                         </tr>
@@ -9068,6 +9100,8 @@ export default function App() {
                 <input type="text" value={newMetricUnit} onChange={(e) => setNewMetricUnit(e.target.value)} placeholder="Jednotka" className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white" />
                 <input type="number" step="0.01" value={newMetricPowerKw} onChange={(e) => setNewMetricPowerKw(e.target.value)} placeholder="Výkon kW" className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white" />
                 <input type="number" step="1" value={newMetricHoursPerMonth} onChange={(e) => setNewMetricHoursPerMonth(e.target.value)} placeholder="Hod./mesiac" className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white" />
+                <input type="number" step="0.01" value={newMetricVykonZaHodinu} onChange={(e) => setNewMetricVykonZaHodinu(e.target.value)} placeholder="Výkon (jedn./hod)" className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white" />
+                <input type="text" value={newMetricVykonJednotka} onChange={(e) => setNewMetricVykonJednotka(e.target.value)} placeholder="Jednotka výkonu (napr. cm²)" className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white" />
                 <input type="text" value={newMetricDescription} onChange={(e) => setNewMetricDescription(e.target.value)} placeholder="Popis / vzorec / zdroj" className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white col-span-2 sm:col-span-3 lg:col-span-5" />
                 <button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center justify-center gap-1.5 col-span-2 sm:col-span-1 lg:col-span-3"><Plus className="h-4 w-4" /> Pridať</button>
               </form>
