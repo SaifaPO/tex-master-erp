@@ -7067,7 +7067,7 @@ export default function App() {
                                   <div key={i} className="flex items-center gap-1.5">
                                     <select value={pol.materialId || ''} onChange={(e) => { const next = [...polozky]; next[i] = { ...pol, materialId: e.target.value }; setPolozky(next); }} className="flex-1 min-w-0 bg-slate-900 border border-slate-800 rounded p-1.5 text-white text-[11px]">
                                       <option value="">— vyber položku zo skladu —</option>
-                                      {materials.map(m => (<option key={m.id} value={m.id}>{m.name} ({m.unit || 'ks'})</option>))}
+                                      {materials.map(m => (<option key={m.id} value={m.id}>{m.name} ({m.unit || 'ks'}) — {warehouses.find(w => w.id === m.warehouseId)?.name || '?'}</option>))}
                                     </select>
                                     <input type="number" step="0.01" placeholder="množstvo" value={pol.mnozstvo ?? ''} onChange={(e) => { const next = [...polozky]; next[i] = { ...pol, mnozstvo: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 }; setPolozky(next); }} className="w-20 bg-slate-900 border border-slate-800 rounded p-1.5 text-white text-[11px]" />
                                     {mat && <span className="text-emerald-400 font-mono text-[10px] w-14 text-right shrink-0">{cena.toFixed(3)}€</span>}
