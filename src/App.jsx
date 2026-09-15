@@ -1051,6 +1051,10 @@ export default function App() {
   // Vyrobnej ceny v Katalogu Produktov.
   const [cenaMinutySitia, setCenaMinutySitia] = useState(0);
   const [cenaStrihania100cm2, setCenaStrihania100cm2] = useState(0);
+  // Sadzba RV (redukovany vykon, €/min) — z historickych dat vo Vydaji z vyroby overene presne
+  // 0,30 €/min (RV za ks = minuty sitia x 0,30, bez vynimky naprieč stovkami zaznamov). Pouziva sa
+  // na automaticky dopocet Redukovaneho vykonu z Minut sitia v Katalogu Produktov.
+  const [sadzbaRvMin, setSadzbaRvMin] = useState(0.3);
   // Kostra cien (sublimacia/DTF/sietotlac/rezany transfer/vysivka) — nacitane raz, pouzite na
   // automaticky dopocet ceny potlace pri sublimacii (plocha = spotreba latky x sirka rolky).
   const [kostra, setKostra] = useState(null);
@@ -1502,7 +1506,7 @@ export default function App() {
           supabase.from('addon_types').select('*').order('sort_order'),
           supabase.from('help_requests').select('*').order('created_at', { ascending: false }).limit(200),
           supabase.from('intercompany_rates').select('*'),
-          supabase.from('pricing_config').select('cena_minuty_sitia, cena_strihania_100cm2').eq('id', 1).maybeSingle(),
+          supabase.from('pricing_config').select('cena_minuty_sitia, cena_strihania_100cm2, sadzba_rv_min').eq('id', 1).maybeSingle(),
           supabase.from('krajcirky').select('*').order('poradie').order('id'),
           supabase.from('vyrobna_kapacita_nastavenia').select('*').eq('id', 1).maybeSingle()
         ]);
@@ -1552,6 +1556,7 @@ export default function App() {
         setIntercompanyRates(intercompanyRateRes.error ? [] : (intercompanyRateRes.data || []).map(mapIntercompanyRateFromDb));
         setCenaMinutySitia(pricingConfigRes.error || !pricingConfigRes.data ? 0 : Number(pricingConfigRes.data.cena_minuty_sitia) || 0);
         setCenaStrihania100cm2(pricingConfigRes.error || !pricingConfigRes.data ? 0 : Number(pricingConfigRes.data.cena_strihania_100cm2) || 0);
+        setSadzbaRvMin(pricingConfigRes.error || !pricingConfigRes.data || pricingConfigRes.data.sadzba_rv_min == null ? 0.3 : Number(pricingConfigRes.data.sadzba_rv_min));
         setKrajcirky(krajcirkyRes.error ? [] : (krajcirkyRes.data || []));
         if (kapacitaRes.data) setVyrobnaKapacitaNastavenia(kapacitaRes.data);
         nacitajKostru(supabase).then(setKostra).catch(() => setKostra(null));
@@ -3477,6 +3482,14 @@ export default function App() {
     return Math.round((totalPlocha / 100) * cenaStrihania100cm2 * 100) / 100;
   };
 
+  // Redukovany vykon (€) = minuty sitia x sadzba RV — overene z realnych historickych dat (Vydaj
+  // z vyroby 04-07/2026, 1018 vzoriek bez vynimky presne minuty x 0,30 €/min). Ak minuty sitia nie
+  // su vyplnene, ostava cisto rucne pole (spatna kompatibilita so starymi modelmi).
+  const vypocitajRedukovanyVykonZRozpisu = (p) => {
+    if (p.minutySitia === null || p.minutySitia === undefined || p.minutySitia === '') return null;
+    return Math.round((parseFloat(p.minutySitia) || 0) * sadzbaRvMin * 100) / 100;
+  };
+
   // Ak su minuty sitia vyplnene, vyrobna cena sa DOPOCITA (minuty x sadzba sitia z Cenotvorby + rezia
   // + cena potlace + cena strihania) namiesto rucneho zadavania. Ak minuty sitia nie su vyplnene
   // (null/prazdne), sprava sa presne ako doteraz — vyrobna cena ostava cisto rucne pole (spatna
@@ -3496,7 +3509,8 @@ export default function App() {
     if (editingProduct) {
       const vypocitana = vypocitajVyrobnuCenuZRozpisu(editingProduct);
       const cenaPotlacEfektivna = vypocitajCenuPotlaceZRozpisu(editingProduct);
-      const toSave = vypocitana !== null ? { ...editingProduct, productionCost: vypocitana, cenaPotlaceKs: cenaPotlacEfektivna ?? editingProduct.cenaPotlaceKs } : editingProduct;
+      const vypocitanyRv = vypocitajRedukovanyVykonZRozpisu(editingProduct);
+      const toSave = vypocitana !== null ? { ...editingProduct, productionCost: vypocitana, cenaPotlaceKs: cenaPotlacEfektivna ?? editingProduct.cenaPotlaceKs, redukovanyVykon: vypocitanyRv ?? editingProduct.redukovanyVykon } : editingProduct;
       const { error } = await supabase.from('products').update(mapProductToDb(toSave)).eq('id', editingProduct.id);
       if (error) { triggerNotification('error', error.message); return; }
       setEditingProduct(null);
@@ -3519,13 +3533,14 @@ export default function App() {
       };
       const vypocitana = vypocitajVyrobnuCenuZRozpisu(noveModel);
       const cenaPotlacEfektivna = vypocitajCenuPotlaceZRozpisu(noveModel);
+      const vypocitanyRv = vypocitajRedukovanyVykonZRozpisu(noveModel);
       const created = {
         id: `prod-${Date.now()}`, customCode: newModelCode, name: newModelName, sports: newModelSports,
         layer1, layer2, layer3,
         womenRatioPercent: parseFloat(newModelWomenRatio) || 90,
         childrenRatioPercent: parseFloat(newModelChildrenRatio) || 65,
         productionCost: vypocitana !== null ? vypocitana : (newModelProductionCost === '' ? null : parseFloat(newModelProductionCost) || 0),
-        redukovanyVykon: newModelRedukovanyVykon === '' ? null : parseFloat(newModelRedukovanyVykon) || 0,
+        redukovanyVykon: vypocitanyRv !== null ? vypocitanyRv : (newModelRedukovanyVykon === '' ? null : parseFloat(newModelRedukovanyVykon) || 0),
         minutySitia: minutySitiaVal, reziaKs: reziaKsVal, cenaPotlaceKs: cenaPotlacEfektivna ?? cenaPotlaceKsVal,
         tlacSublimacia: newModelTlacSublimacia, tlacDtf: newModelTlacDtf, cenaPotlaceDtfKs: newModelCenaPotlaceDtfKs,
         tlacSietotlac: newModelTlacSietotlac, cenaPotlaceSietotlacKs: newModelCenaPotlaceSietotlacKs,
@@ -7019,9 +7034,15 @@ export default function App() {
                         <p className="text-[10px] text-slate-500 mt-0.5">{vypocitajVyrobnuCenuZRozpisu(aktualnyFormularProdukt) !== null ? 'Dopočítané automaticky z minút šitia + réžie + potlače + strihania (vyplň minúty šitia vyššie, ak chceš zadávať ručne).' : 'Rovnaké pole ako v Cenotvorbe (PrintStudio Pro) — materiál + šitie + režia + potlač na 1ks. Vyplň "Minúty šitia" vyššie, ak chceš, aby sa počítalo automaticky.'}</p>
                       </div>
                       <div>
-                        <label className="block text-slate-400 font-semibold mb-1">Redukovaný výkon (jednotky/ks)</label>
-                        <input type="number" step="0.01" placeholder="nezadané" value={editingProduct ? (editingProduct.redukovanyVykon ?? '') : newModelRedukovanyVykon} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, redukovanyVykon: e.target.value === '' ? null : parseFloat(e.target.value) || 0 }) : setNewModelRedukovanyVykon(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" />
-                        <p className="text-[10px] text-slate-500 mt-0.5">Koľko redukovaných jednotiek kapacity konfekcie spotrebuje 1 kus (pre Plánovaciu Maticu).</p>
+                        <label className="block text-slate-400 font-semibold mb-1">Redukovaný výkon (€/ks)</label>
+                        {(() => {
+                          const vypocitanyRv = vypocitajRedukovanyVykonZRozpisu(aktualnyFormularProdukt);
+                          if (vypocitanyRv !== null) {
+                            return <input type="number" disabled value={vypocitanyRv} className="w-full bg-slate-900/60 border border-emerald-900/40 rounded p-2 text-emerald-400 font-bold cursor-not-allowed" />;
+                          }
+                          return <input type="number" step="0.01" placeholder="nezadané" value={editingProduct ? (editingProduct.redukovanyVykon ?? '') : newModelRedukovanyVykon} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, redukovanyVykon: e.target.value === '' ? null : parseFloat(e.target.value) || 0 }) : setNewModelRedukovanyVykon(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" />;
+                        })()}
+                        <p className="text-[10px] text-slate-500 mt-0.5">{vypocitajRedukovanyVykonZRozpisu(aktualnyFormularProdukt) !== null ? `Dopočítané automaticky: minúty šitia × ${sadzbaRvMin.toFixed(2)} €/min (sadzba RV, Cenotvorba).` : 'Koľko redukovaných jednotiek kapacity konfekcie spotrebuje 1 kus (pre Plánovaciu Maticu). Vyplň "Minúty šitia" vyššie, ak chceš, aby sa počítalo automaticky.'}</p>
                       </div>
                     </div>
                     {editingProduct && (
