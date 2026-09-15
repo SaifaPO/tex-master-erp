@@ -1203,6 +1203,12 @@ export default function App() {
   const [staffingPickerCell, setStaffingPickerCell] = useState(null); // { date, stationId } | null
   const [recentlyMovedItemId, setRecentlyMovedItemId] = useState(null);
   const [reportPeriod, setReportPeriod] = useState('month');
+  const [ziskovostSortField, setZiskovostSortField] = useState('deliveryDate');
+  const [ziskovostSortDir, setZiskovostSortDir] = useState('desc');
+  const [ziskovostSearch, setZiskovostSearch] = useState('');
+  const [stanicCasSortField, setStanicCasSortField] = useState('deliveryDate');
+  const [stanicCasSortDir, setStanicCasSortDir] = useState('desc');
+  const [stanicCasSearch, setStanicCasSearch] = useState('');
   const [vatSummaryYear, setVatSummaryYear] = useState(new Date().getFullYear());
   const [activeWarehouseId, setActiveWarehouseId] = useState('');
   const [matSortField, setMatSortField] = useState('name');
@@ -3180,6 +3186,21 @@ export default function App() {
     if (matSortField === field) setMatSortDir(prev => prev === 'asc' ? 'desc' : 'asc');
     else { setMatSortField(field); setMatSortDir('asc'); }
   };
+
+  const handleSortZiskovost = (field) => {
+    if (ziskovostSortField === field) setZiskovostSortDir(prev => prev === 'asc' ? 'desc' : 'asc');
+    else { setZiskovostSortField(field); setZiskovostSortDir('asc'); }
+  };
+  const handleSortStanicCas = (field) => {
+    if (stanicCasSortField === field) setStanicCasSortDir(prev => prev === 'asc' ? 'desc' : 'asc');
+    else { setStanicCasSortField(field); setStanicCasSortDir('asc'); }
+  };
+  const sortGeneric = (arr, field, dir) => [...arr].sort((a, b) => {
+    const av = a[field], bv = b[field];
+    const d = dir === 'asc' ? 1 : -1;
+    if (typeof av === 'string' || typeof bv === 'string') return String(av || '').localeCompare(String(bv || '')) * d;
+    return ((av ?? -Infinity) - (bv ?? -Infinity)) * d;
+  });
 
   const handleMoveMaterialToWarehouse = async (materialId, newWarehouseId) => {
     if (!hasPermission('edit_stock')) { triggerNotification('error', 'Nemáte prístup ku správe skladu.'); return; }
@@ -5484,8 +5505,8 @@ export default function App() {
       const revenue = relatedInvoices.length > 0 ? parseFloat(relatedInvoices.reduce((s, inv) => s + inv.total, 0).toFixed(2)) : null;
       const profit = revenue !== null ? parseFloat((revenue - totalCost).toFixed(2)) : null;
       const marginPercent = revenue ? parseFloat(((profit / revenue) * 100).toFixed(1)) : null;
-      return { orderId: order.id, orderNumber: order.orderNumber || order.id, customer: order.customer, materialCost: parseFloat(materialCost.toFixed(2)), stationCost: parseFloat(stationCost.toFixed(2)), totalCost, revenue, profit, marginPercent };
-    }).sort((a, b) => (a.profit ?? Infinity) - (b.profit ?? Infinity));
+      return { orderId: order.id, orderNumber: order.orderNumber || order.id, customer: order.customer, deliveryDate: order.deliveryDate || '', materialCost: parseFloat(materialCost.toFixed(2)), stationCost: parseFloat(stationCost.toFixed(2)), totalCost, revenue, profit, marginPercent };
+    });
   };
   const orderProfitability = getOrderProfitability();
 
@@ -5561,6 +5582,19 @@ export default function App() {
   });
 
   const catalogFilteredProducts = products.filter(p => catalogSportFilter === 'vsetko' ? true : p.sports?.includes(catalogSportFilter));
+  // Ziskovosť podľa zákazky — vyhľadávanie podľa názvu (zákazka/odberateľ) + zoradenie podľa
+  // ľubovoľného stĺpca (klik na hlavičku, rovnaky vzor ako triedenie skladu).
+  const ziskovostFilteredSorted = sortGeneric(
+    orderProfitability.filter(p => `${p.orderNumber} ${p.customer}`.toLowerCase().includes(ziskovostSearch.toLowerCase())),
+    ziskovostSortField, ziskovostSortDir
+  );
+  // Cas straveny na staniciach — to iste, plus predpocitane celkove minuty a kusy nato, aby sa dalo
+  // zoradit aj podla "casu" a "objemu" (nie su to priamo polia na iteme).
+  const stanicCasFilteredSorted = sortGeneric(
+    allItems.map(item => ({ ...item, totalMinutes: STATION_ORDER.reduce((sum, sid) => sum + (item.stationMeta?.[sid]?.durationMinutes || 0), 0) }))
+      .filter(item => `${item.itemId} ${item.customer} ${item.productName}`.toLowerCase().includes(stanicCasSearch.toLowerCase())),
+    stanicCasSortField, stanicCasSortDir
+  );
   // Zjednotene "aktualne editovany produkt" (bud realny editingProduct, alebo poskladany z
   // newModel* poli formulara pre novy model) — pouziva sa na ziveho nahladu Vyrobnej ceny nizsie.
   const aktualnyFormularProdukt = editingProduct || {
@@ -9118,27 +9152,39 @@ export default function App() {
 
             <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 shadow-xl">
               <h2 className="text-xl font-bold text-white flex items-center gap-2 mb-2"><BarChart3 className="text-indigo-400 h-5 w-5" /> Ziskovosť podľa zákazky</h2>
-              <p className="text-xs text-slate-400 mb-4">Náklad = materiál (aktuálna cena zo skladu) + práca (sadzba za stanicu × počet kusov, nastav nižšie v "Sadzby za jednotku práce"). Zisk sa počíta len pri zákazkách s vystavenou faktúrou — orientačný prepočet, nie presné účtovanie.</p>
-              <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
+              <p className="text-xs text-slate-400 mb-2">Náklad = materiál (aktuálna cena zo skladu) + práca (sadzba za stanicu × počet kusov, nastav nižšie v "Sadzby za jednotku práce"). Zisk sa počíta len pri zákazkách s vystavenou faktúrou — orientačný prepočet, nie presné účtovanie.</p>
+              <div className="relative w-full sm:w-64 mb-3">
+                <Search className="h-3.5 w-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                <input type="text" placeholder="Hľadať podľa zákazky/odberateľa..." value={ziskovostSearch} onChange={(e) => setZiskovostSearch(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white" />
+              </div>
+              <div className="overflow-auto rounded-xl border border-slate-800 bg-slate-900/40 max-h-[420px]">
                 <table className="w-full text-left text-xs text-slate-300">
-                  <thead className="bg-slate-900 text-slate-400 uppercase tracking-wider">
+                  <thead className="bg-slate-900 text-slate-400 uppercase tracking-wider sticky top-0 z-10">
                     <tr>
-                      <th className="px-3 py-3">Zákazka</th>
-                      <th className="px-3 py-3 text-center">Materiál</th>
-                      <th className="px-3 py-3 text-center">Práca</th>
-                      <th className="px-3 py-3 text-center">Náklady spolu</th>
-                      <th className="px-3 py-3 text-center">Fakturované</th>
-                      <th className="px-3 py-3 text-center">Zisk</th>
-                      <th className="px-3 py-3 text-center">Marža</th>
+                      {[
+                        ['customer', 'Zákazka', 'px-3 py-3 text-left'],
+                        ['deliveryDate', 'Dátum', 'px-3 py-3 text-center'],
+                        ['materialCost', 'Materiál', 'px-3 py-3 text-center'],
+                        ['stationCost', 'Práca', 'px-3 py-3 text-center'],
+                        ['totalCost', 'Náklady spolu', 'px-3 py-3 text-center'],
+                        ['revenue', 'Fakturované', 'px-3 py-3 text-center'],
+                        ['profit', 'Zisk', 'px-3 py-3 text-center'],
+                        ['marginPercent', 'Marža', 'px-3 py-3 text-center'],
+                      ].map(([field, label, cls]) => (
+                        <th key={field} className={`${cls} cursor-pointer select-none hover:text-white whitespace-nowrap`} onClick={() => handleSortZiskovost(field)}>
+                          {label}{ziskovostSortField === field ? (ziskovostSortDir === 'asc' ? ' ▲' : ' ▼') : ''}
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800">
-                    {orderProfitability.length === 0 && (
-                      <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-500 italic">Za toto obdobie zatiaľ nie sú žiadne zákazky.</td></tr>
+                    {ziskovostFilteredSorted.length === 0 && (
+                      <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-500 italic">{ziskovostSearch ? 'Žiadna zákazka nezodpovedá hľadaniu.' : 'Za toto obdobie zatiaľ nie sú žiadne zákazky.'}</td></tr>
                     )}
-                    {orderProfitability.map(p => (
+                    {ziskovostFilteredSorted.map(p => (
                       <tr key={p.orderId} className="hover:bg-slate-800/40">
                         <td className="px-3 py-3"><span className="font-mono font-bold text-indigo-400">{p.orderNumber}</span><span className="text-slate-500 block">{p.customer}</span></td>
+                        <td className="px-3 py-3 text-center whitespace-nowrap">{p.deliveryDate || '—'}</td>
                         <td className="px-3 py-3 text-center">{p.materialCost.toFixed(2)} €</td>
                         <td className="px-3 py-3 text-center">{p.stationCost.toFixed(2)} €</td>
                         <td className="px-3 py-3 text-center font-bold">{p.totalCost.toFixed(2)} €</td>
@@ -9154,27 +9200,35 @@ export default function App() {
 
             <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 shadow-xl">
               <h2 className="text-xl font-bold text-white flex items-center gap-2 mb-2"><BarChart3 className="text-indigo-400 h-5 w-5" /> Prehľady — čas strávený na jednotlivých staniciach</h2>
-              <p className="text-xs text-slate-400 mb-4">Sleduje sa od kliknutia na "Príprava" po "Hotové" na danej stanici. Viditeľné len pre Master/Supervisor.</p>
-              <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
+              <p className="text-xs text-slate-400 mb-2">Sleduje sa od kliknutia na "Príprava" po "Hotové" na danej stanici. Viditeľné len pre Master/Supervisor.</p>
+              <div className="relative w-full sm:w-64 mb-3">
+                <Search className="h-3.5 w-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                <input type="text" placeholder="Hľadať podľa názvu/odberateľa..." value={stanicCasSearch} onChange={(e) => setStanicCasSearch(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white" />
+              </div>
+              <div className="overflow-auto rounded-xl border border-slate-800 bg-slate-900/40 max-h-[420px]">
                 <table className="w-full text-left text-xs text-slate-300">
-                  <thead className="bg-slate-900 text-slate-400 uppercase tracking-wider">
+                  <thead className="bg-slate-900 text-slate-400 uppercase tracking-wider sticky top-0 z-10">
                     <tr>
-                      <th className="px-3 py-3">Položka</th>
-                      <th className="px-3 py-3">Odberateľ / Produkt</th>
-                      {STATION_ORDER.map(sid => <th key={sid} className="px-3 py-3 text-center">{STATION_CONFIGS[sid].name}</th>)}
-                      <th className="px-3 py-3 text-center">Spolu</th>
+                      <th className="px-3 py-3 cursor-pointer select-none hover:text-white whitespace-nowrap" onClick={() => handleSortStanicCas('itemId')}>Položka{stanicCasSortField === 'itemId' ? (stanicCasSortDir === 'asc' ? ' ▲' : ' ▼') : ''}</th>
+                      <th className="px-3 py-3 cursor-pointer select-none hover:text-white whitespace-nowrap" onClick={() => handleSortStanicCas('customer')}>Odberateľ / Produkt{stanicCasSortField === 'customer' ? (stanicCasSortDir === 'asc' ? ' ▲' : ' ▼') : ''}</th>
+                      <th className="px-3 py-3 text-center cursor-pointer select-none hover:text-white whitespace-nowrap" onClick={() => handleSortStanicCas('deliveryDate')}>Dátum{stanicCasSortField === 'deliveryDate' ? (stanicCasSortDir === 'asc' ? ' ▲' : ' ▼') : ''}</th>
+                      <th className="px-3 py-3 text-center cursor-pointer select-none hover:text-white whitespace-nowrap" onClick={() => handleSortStanicCas('qty')}>Objem (ks){stanicCasSortField === 'qty' ? (stanicCasSortDir === 'asc' ? ' ▲' : ' ▼') : ''}</th>
+                      {STATION_ORDER.map(sid => <th key={sid} className="px-3 py-3 text-center whitespace-nowrap">{STATION_CONFIGS[sid].name}</th>)}
+                      <th className="px-3 py-3 text-center cursor-pointer select-none hover:text-white whitespace-nowrap" onClick={() => handleSortStanicCas('totalMinutes')}>Spolu{stanicCasSortField === 'totalMinutes' ? (stanicCasSortDir === 'asc' ? ' ▲' : ' ▼') : ''}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800">
-                    {allItems.length === 0 && (
-                      <tr><td colSpan={STATION_ORDER.length + 3} className="px-4 py-8 text-center text-slate-500 italic">Zatiaľ žiadne zákazky.</td></tr>
+                    {stanicCasFilteredSorted.length === 0 && (
+                      <tr><td colSpan={STATION_ORDER.length + 5} className="px-4 py-8 text-center text-slate-500 italic">{stanicCasSearch ? 'Žiadna položka nezodpovedá hľadaniu.' : 'Zatiaľ žiadne zákazky.'}</td></tr>
                     )}
-                    {allItems.map(item => {
-                      const totalMinutes = STATION_ORDER.reduce((sum, sid) => sum + (item.stationMeta?.[sid]?.durationMinutes || 0), 0);
+                    {stanicCasFilteredSorted.map(item => {
+                      const totalMinutes = item.totalMinutes;
                       return (
                         <tr key={item.itemId} className="hover:bg-slate-800/40">
                           <td className="px-3 py-3 font-mono font-bold text-indigo-400">{item.itemId}</td>
                           <td className="px-3 py-3"><span className="font-bold text-white block">{item.customer}</span><span className="text-slate-400">{item.productName}</span></td>
+                          <td className="px-3 py-3 text-center whitespace-nowrap">{item.deliveryDate || '—'}</td>
+                          <td className="px-3 py-3 text-center">{item.qty ?? '—'}</td>
                           {STATION_ORDER.map(sid => {
                             const meta = item.stationMeta?.[sid];
                             if (!meta || (!meta.startedAt && !meta.durationMinutes)) return <td key={sid} className="px-3 py-3 text-center text-slate-600">—</td>;
