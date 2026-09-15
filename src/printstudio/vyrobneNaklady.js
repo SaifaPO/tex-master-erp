@@ -42,6 +42,30 @@ export function vcSublimaciaGarment(kostra, plochaCm2) {
   return zaklad * (1 + (parseFloat(sublimaciaGarment.koeficient_rizika_percent) || 0) / 100);
 }
 
+// Sublimacia — podrobny rozpis (papier/atrament/protekcny papier v €, spotreba v bm/ml, cas tlace
+// v sekundach podla rychlosti valca). Rovnaky vysledok (spolu) ako vcSublimaciaGarment, len rozpisany
+// na jednotlive polozky pre zobrazenie v Katalogu produktov ("Rozpis spotreby a nakladov"). Cas tlace
+// (papierBm / rychlost valca) je len INFORMATIVNY (kolko trva vytlacenie na papier) — do ceny sa
+// pocita cas nazehlovania/lisu z cennik_sublimacia_naklady (samostatny krok, uz v povodnom vzorci).
+export function vcSublimaciaGarmentRozpis(kostra, plochaCm2) {
+  const { textilSub, sublimaciaGarment } = kostra;
+  if (!textilSub || !sublimaciaGarment) return null;
+  const papierBm = plochaCm2 / 16000; // plocha (cm2) na 160cm sirokej rolke -> bezne metre
+  const papierCena = papierBm * (parseFloat(textilSub.cena_papier_bm) || 0);
+  const atramentMl = (plochaCm2 / 10000) * (parseFloat(textilSub.spotreba_atrament_ml_m2) || 0);
+  const atramentCena = (atramentMl / 1000) * (parseFloat(textilSub.cena_atrament_l) || 0);
+  const protekcnyPapierCena = parseFloat(sublimaciaGarment.naklady_ochranny_papier) || 0;
+  const manipulacia = parseFloat(sublimaciaGarment.naklady_manipulacia) || 0;
+  const casNazehlovaniaMin = parseFloat(sublimaciaGarment.cas_nazehlovania_min) || 0;
+  const praca = (casNazehlovaniaMin / 60) * (parseFloat(textilSub.cena_prace_hod) || 0);
+  const rychlostMHod = parseFloat(textilSub.rychlost_m_hod) || 0;
+  const casTlaceSekund = rychlostMHod > 0 ? (papierBm / rychlostMHod) * 3600 : 0;
+  const zaklad = papierCena + atramentCena + protekcnyPapierCena + manipulacia + praca;
+  const koeficientPercent = parseFloat(sublimaciaGarment.koeficient_rizika_percent) || 0;
+  const spolu = zaklad * (1 + koeficientPercent / 100);
+  return { papierBm, papierCena, atramentMl, atramentCena, protekcnyPapierCena, manipulacia, casNazehlovaniaMin, praca, casTlaceSekund, koeficientPercent, spolu };
+}
+
 // DTF — potlac textilu.
 export function vcDtfGarment(kostra, plochaCm2) {
   const n = kostra.dtf;
