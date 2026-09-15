@@ -2836,6 +2836,7 @@ export default function App() {
     };
     const { error } = await supabase.from('cost_metrics').insert(mapCostMetricToDb(created));
     if (error) { triggerNotification('error', error.message); return; }
+    setCostMetrics(prev => prev.some(m => m.id === created.id) ? prev : [...prev, created]);
     setNewMetricName(''); setNewMetricValue(''); setNewMetricUnit(''); setNewMetricDescription(''); setNewMetricCategory('vseobecne'); setNewMetricCostType('fixny'); setNewMetricPowerKw(''); setNewMetricHoursPerMonth(''); setNewMetricVykonZaHodinu(''); setNewMetricVykonJednotka(''); setNewMetricCompany('');
     triggerNotification('success', `Metrika "${created.name}" bola pridaná.`);
   };
@@ -2847,14 +2848,17 @@ export default function App() {
     else if (field === 'power_kw' || field === 'hours_per_month' || field === 'vykon_za_hodinu') parsedValue = value.trim() === '' ? null : (parseFloat(value) || 0);
     else if (field === 'company') parsedValue = value === '' ? null : value;
     const { error } = await supabase.from('cost_metrics').update({ [field]: parsedValue }).eq('id', id);
-    if (error) triggerNotification('error', error.message);
+    if (error) { triggerNotification('error', error.message); return; }
+    const camelField = field.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+    setCostMetrics(prev => prev.map(m => m.id === id ? { ...m, [camelField]: parsedValue } : m));
   };
 
   const handleDeleteCostMetric = async (metric) => {
     if (!hasPermission('create_order')) { triggerNotification('error', 'Nemáte prístup do správy nákladov.'); return; }
     if (!confirm(`Zmazať metriku "${metric.name}"?`)) return;
     const { error } = await supabase.from('cost_metrics').delete().eq('id', metric.id);
-    if (error) triggerNotification('error', error.message);
+    if (error) { triggerNotification('error', error.message); return; }
+    setCostMetrics(prev => prev.filter(m => m.id !== metric.id));
   };
 
   // Rychle pridanie jednoduchej mesacnej polozky (najom/splatky/uver/material) v karte Rezia firiem —
@@ -2865,6 +2869,7 @@ export default function App() {
     const created = { id: `metric-${Date.now()}`, name: nazov.trim(), value: parseFloat(hodnota) || 0, unit: '€/mesiac', description: '', category: kategoria, costType: 'fixny', powerKw: null, hoursPerMonth: null, company: overheadCompany };
     const { error } = await supabase.from('cost_metrics').insert(mapCostMetricToDb(created));
     if (error) { triggerNotification('error', error.message); return; }
+    setCostMetrics(prev => prev.some(m => m.id === created.id) ? prev : [...prev, created]);
     resetFn();
     triggerNotification('success', `"${created.name}" bola pridaná.`);
   };
