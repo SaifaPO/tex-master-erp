@@ -1224,7 +1224,9 @@ export default function App() {
   const [employees, setEmployees] = useState([]);
   const [acl, setAcl] = useState(FALLBACK_ACL);
 
-  const [activeTab, setActiveTab] = useState('planner'); 
+  const [activeTab, setActiveTab] = useState(() => {
+    try { return localStorage.getItem('erp_last_active_tab') || 'planner'; } catch { return 'planner'; }
+  });
   const [activeStationFilter, setActiveStationFilter] = useState('grafik'); 
   const [addMissingSearch, setAddMissingSearch] = useState('');
   const [addMissingSelectedIds, setAddMissingSelectedIds] = useState(() => new Set());
@@ -1720,6 +1722,7 @@ export default function App() {
   const employeesRef = useRef(employees);
   const ordersRef = useRef(orders);
   useEffect(() => { ordersRef.current = orders; }, [orders]);
+  useEffect(() => { try { localStorage.setItem('erp_last_active_tab', activeTab); } catch {} }, [activeTab]);
 
   useEffect(() => {
     if (plannerViewMode === 'staffing' && isAuthenticated && hasPermission('manage_profiles')) {
@@ -3131,6 +3134,7 @@ export default function App() {
     const id = `sklad-${Date.now()}`;
     const { error } = await supabase.from('warehouses').insert({ id, name });
     if (error) { triggerNotification('error', error.message); return; }
+    setWarehouses(prev => prev.some(w => w.id === id) ? prev : [...prev, { id, name, company: '' }]);
     setNewWarehouseName('');
     setActiveWarehouseId(id);
     triggerNotification('success', `Sklad "${name}" bol vytvorený.`);
@@ -3657,6 +3661,7 @@ export default function App() {
       };
       const { error } = await supabase.from('products').insert(mapProductToDb(created));
       if (error) { triggerNotification('error', error.message); return; }
+      setProducts(prev => prev.some(p => p.id === created.id) ? prev : [...prev, created]);
       setNewModelCode(''); setNewModelName('');
       setNewModelLayer1Lt5(''); setNewModelLayer1Ge5(''); setNewModelLayer2Lt5(''); setNewModelLayer2Ge5(''); setNewModelLayer3Lt5(''); setNewModelLayer3Ge5('');
       setNewModelWomenRatio(90); setNewModelChildrenRatio(65);
