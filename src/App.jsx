@@ -6,7 +6,7 @@ import { encode as encodeBySquare, CurrencyCode, PaymentOptions } from 'bysquare
 import { Html5Qrcode } from 'html5-qrcode';
 import CenovePonukyTab from './CenovePonukyTab';
 import PrintStudioAdmin from './printstudio/PrintStudioAdmin';
-import { nacitajKostru, vcSublimaciaGarment } from './printstudio/vyrobneNaklady';
+import { nacitajKostru, vcSublimaciaGarment, vcLaserCm2 } from './printstudio/vyrobneNaklady';
 import {
   ClipboardList, Package, Cpu, QrCode, Plus, User, Clock, Layers, Search, Check, X, Calendar,
   Palette, Scissors, Printer, Sliders, Sparkles, ZoomIn, ZoomOut, FileText, PlusCircle, Table,
@@ -231,11 +231,11 @@ const FALLBACK_ACL = {
   view_finance: { master: true, supervisor: true, sales: true, employee: false, uctovnik: true, sofer: false, predajna: false }
 };
 
-const mapMaterialFromDb = (r) => ({ id: r.id, name: r.name, color: r.color, colorHex: r.color_hex || '', width: r.width, weight: r.weight, pricePerM: r.price_per_m, qty: r.qty, unit: r.unit, minQty: r.min_qty, warehouseId: r.warehouse_id || 'sklad-1', manufacturer: r.manufacturer || '', productType: r.product_type || '', deliveryNoteNumber: r.delivery_note_number || '', deliveryNoteDate: r.delivery_note_date || '', history: r.history || [] });
-const mapMaterialToDb = (m) => ({ id: m.id, name: m.name, color: m.color, color_hex: m.colorHex || null, width: m.width, weight: m.weight, price_per_m: m.pricePerM, qty: m.qty, unit: m.unit, min_qty: m.minQty, warehouse_id: m.warehouseId, manufacturer: m.manufacturer || null, product_type: m.productType || null, delivery_note_number: m.deliveryNoteNumber || null, delivery_note_date: m.deliveryNoteDate || null, history: m.history });
+const mapMaterialFromDb = (r) => ({ id: r.id, name: r.name, color: r.color, colorHex: r.color_hex || '', width: r.width, weight: r.weight, pricePerM: r.price_per_m, qty: r.qty, unit: r.unit, minQty: r.min_qty, warehouseId: r.warehouse_id || 'sklad-1', manufacturer: r.manufacturer || '', productType: r.product_type || '', deliveryNoteNumber: r.delivery_note_number || '', deliveryNoteDate: r.delivery_note_date || '', zakazkaOdberatel: r.zakazka_odberatel || '', history: r.history || [] });
+const mapMaterialToDb = (m) => ({ id: m.id, name: m.name, color: m.color, color_hex: m.colorHex || null, width: m.width, weight: m.weight, price_per_m: m.pricePerM, qty: m.qty, unit: m.unit, min_qty: m.minQty, warehouse_id: m.warehouseId, manufacturer: m.manufacturer || null, product_type: m.productType || null, delivery_note_number: m.deliveryNoteNumber || null, delivery_note_date: m.deliveryNoteDate || null, zakazka_odberatel: m.zakazkaOdberatel || null, history: m.history });
 
-const mapProductFromDb = (r) => ({ id: r.id, customCode: r.custom_code, name: r.name, sports: r.sports || [], layer1: r.layer1, layer2: r.layer2, layer3: r.layer3, threadM: r.thread_m, womenRatioPercent: r.women_ratio_percent ?? 90, childrenRatioPercent: r.children_ratio_percent ?? 65, productionCost: r.production_cost ?? null, priceGroup: r.price_group || '', redukovanyVykon: r.redukovany_vykon ?? null, attachments: r.attachments || [], minutySitia: r.minuty_sitia ?? null, reziaKs: r.rezia_ks ?? null, reziaPoznamka: r.rezia_poznamka || '', cenaPotlaceKs: r.cena_potlace_ks ?? null, tlacSublimacia: !!r.tlac_sublimacia, tlacDtf: !!r.tlac_dtf, cenaPotlaceDtfKs: r.cena_potlace_dtf_ks ?? null, tlacSietotlac: !!r.tlac_sietotlac, cenaPotlaceSietotlacKs: r.cena_potlace_sietotlac_ks ?? null, tlacRezanyTransfer: !!r.tlac_rezany_transfer, cenaPotlaceRezanyTransferKs: r.cena_potlace_rezany_transfer_ks ?? null, tlacVysivka: !!r.tlac_vysivka, cenaPotlaceVysivkaKs: r.cena_potlace_vysivka_ks ?? null, strihaSaRezeVyseka: !!r.striha_sa_reze_vyseka });
-const mapProductToDb = (p) => ({ id: p.id, custom_code: p.customCode, name: p.name, sports: p.sports, layer1: p.layer1, layer2: p.layer2, layer3: p.layer3, thread_m: p.threadM, women_ratio_percent: p.womenRatioPercent, children_ratio_percent: p.childrenRatioPercent, production_cost: p.productionCost ?? null, price_group: p.priceGroup || null, redukovany_vykon: p.redukovanyVykon ?? null, attachments: p.attachments || [], minuty_sitia: p.minutySitia ?? null, rezia_ks: p.reziaKs ?? null, rezia_poznamka: p.reziaPoznamka || null, cena_potlace_ks: p.cenaPotlaceKs ?? null, tlac_sublimacia: !!p.tlacSublimacia, tlac_dtf: !!p.tlacDtf, cena_potlace_dtf_ks: p.cenaPotlaceDtfKs ?? null, tlac_sietotlac: !!p.tlacSietotlac, cena_potlace_sietotlac_ks: p.cenaPotlaceSietotlacKs ?? null, tlac_rezany_transfer: !!p.tlacRezanyTransfer, cena_potlace_rezany_transfer_ks: p.cenaPotlaceRezanyTransferKs ?? null, tlac_vysivka: !!p.tlacVysivka, cena_potlace_vysivka_ks: p.cenaPotlaceVysivkaKs ?? null, striha_sa_reze_vyseka: !!p.strihaSaRezeVyseka });
+const mapProductFromDb = (r) => ({ id: r.id, customCode: r.custom_code, name: r.name, sports: r.sports || [], layer1: r.layer1, layer2: r.layer2, layer3: r.layer3, threadM: r.thread_m, womenRatioPercent: r.women_ratio_percent ?? 90, childrenRatioPercent: r.children_ratio_percent ?? 65, productionCost: r.production_cost ?? null, priceGroup: r.price_group || '', redukovanyVykon: r.redukovany_vykon ?? null, attachments: r.attachments || [], minutySitia: r.minuty_sitia ?? null, reziaKs: r.rezia_ks ?? null, reziaPoznamka: r.rezia_poznamka || '', cenaPotlaceKs: r.cena_potlace_ks ?? null, tlacSublimacia: !!r.tlac_sublimacia, tlacDtf: !!r.tlac_dtf, cenaPotlaceDtfKs: r.cena_potlace_dtf_ks ?? null, tlacSietotlac: !!r.tlac_sietotlac, cenaPotlaceSietotlacKs: r.cena_potlace_sietotlac_ks ?? null, tlacRezanyTransfer: !!r.tlac_rezany_transfer, cenaPotlaceRezanyTransferKs: r.cena_potlace_rezany_transfer_ks ?? null, tlacVysivka: !!r.tlac_vysivka, cenaPotlaceVysivkaKs: r.cena_potlace_vysivka_ks ?? null, strihaSaRezeVyseka: !!r.striha_sa_reze_vyseka, laserSaReze: !!r.laser_sa_reze });
+const mapProductToDb = (p) => ({ id: p.id, custom_code: p.customCode, name: p.name, sports: p.sports, layer1: p.layer1, layer2: p.layer2, layer3: p.layer3, thread_m: p.threadM, women_ratio_percent: p.womenRatioPercent, children_ratio_percent: p.childrenRatioPercent, production_cost: p.productionCost ?? null, price_group: p.priceGroup || null, redukovany_vykon: p.redukovanyVykon ?? null, attachments: p.attachments || [], minuty_sitia: p.minutySitia ?? null, rezia_ks: p.reziaKs ?? null, rezia_poznamka: p.reziaPoznamka || null, cena_potlace_ks: p.cenaPotlaceKs ?? null, tlac_sublimacia: !!p.tlacSublimacia, tlac_dtf: !!p.tlacDtf, cena_potlace_dtf_ks: p.cenaPotlaceDtfKs ?? null, tlac_sietotlac: !!p.tlacSietotlac, cena_potlace_sietotlac_ks: p.cenaPotlaceSietotlacKs ?? null, tlac_rezany_transfer: !!p.tlacRezanyTransfer, cena_potlace_rezany_transfer_ks: p.cenaPotlaceRezanyTransferKs ?? null, tlac_vysivka: !!p.tlacVysivka, cena_potlace_vysivka_ks: p.cenaPotlaceVysivkaKs ?? null, striha_sa_reze_vyseka: !!p.strihaSaRezeVyseka, laser_sa_reze: !!p.laserSaReze });
 
 const mapTierFromDb = (r) => ({ id: r.id, name: r.name, fit: r.fit, ventilation: r.ventilation, desc: r.description });
 const mapTierToDb = (t) => ({ id: t.id, name: t.name, fit: t.fit, ventilation: t.ventilation, description: t.desc });
@@ -1184,6 +1184,7 @@ export default function App() {
   const [newMatProductType, setNewMatProductType] = useState('');
   const [newMatDeliveryNumber, setNewMatDeliveryNumber] = useState('');
   const [newMatDeliveryDate, setNewMatDeliveryDate] = useState('');
+  const [newMatZakazkaOdberatel, setNewMatZakazkaOdberatel] = useState('');
   const [staffingWeekOffset, setStaffingWeekOffset] = useState(0);
   const [staffingPickerCell, setStaffingPickerCell] = useState(null); // { date, stationId } | null
   const [recentlyMovedItemId, setRecentlyMovedItemId] = useState(null);
@@ -1411,6 +1412,7 @@ export default function App() {
   const [newModelTlacVysivka, setNewModelTlacVysivka] = useState(false);
   const [newModelCenaPotlaceVysivkaKs, setNewModelCenaPotlaceVysivkaKs] = useState('');
   const [newModelStrihaSaRezeVyseka, setNewModelStrihaSaRezeVyseka] = useState(false);
+  const [newModelLaserSaReze, setNewModelLaserSaReze] = useState(false);
 
   const [newSportInput, setNewSportInput] = useState('');
   const [newKrajcirkaMeno, setNewKrajcirkaMeno] = useState('');
@@ -3070,7 +3072,7 @@ export default function App() {
     const created = {
       id: `tex-${Date.now()}`, name: newMatName, color: newMatColor, colorHex: newMatColorHex, width: parseInt(newMatWidth) || null, weight: parseInt(newMatWeight) || null,
       pricePerM: parseFloat(newMatPrice), qty: parseFloat(newMatQty), unit: newMatUnit, minQty: 50, warehouseId: newMatWarehouseId, manufacturer: newMatManufacturer,
-      productType: newMatProductType, deliveryNoteNumber: newMatDeliveryNumber.trim(), deliveryNoteDate: newMatDeliveryDate,
+      productType: newMatProductType, deliveryNoteNumber: newMatDeliveryNumber.trim(), deliveryNoteDate: newMatDeliveryDate, zakazkaOdberatel: newMatZakazkaOdberatel.trim(),
       history: [{ date: now, user: `${currentUser.firstName} ${currentUser.lastName}`, action: 'Pridanie na sklad', change: parseFloat(newMatQty), note: newMatDeliveryNumber.trim() ? `Dodací list č. ${newMatDeliveryNumber.trim()}` : 'Prvotný príjem novej položky' }]
     };
     const { error } = await supabase.from('materials').insert(mapMaterialToDb(created));
@@ -3080,6 +3082,7 @@ export default function App() {
     setNewMatProductType('');
     setNewMatDeliveryNumber('');
     setNewMatDeliveryDate('');
+    setNewMatZakazkaOdberatel('');
     triggerNotification('success', `Položka "${created.name}" bola naskladnená.`);
   };
 
@@ -3179,7 +3182,8 @@ export default function App() {
       manufacturer: materialEditDraft.manufacturer || null,
       product_type: materialEditDraft.productType || null,
       delivery_note_number: materialEditDraft.deliveryNoteNumber || null,
-      delivery_note_date: materialEditDraft.deliveryNoteDate || null
+      delivery_note_date: materialEditDraft.deliveryNoteDate || null,
+      zakazka_odberatel: materialEditDraft.zakazkaOdberatel || null
     }).eq('id', materialEditDraft.id);
     if (error) { triggerNotification('error', error.message); return; }
     setSelectedMaterialForDetail(materialEditDraft);
@@ -3475,12 +3479,21 @@ export default function App() {
     return Math.round(sum * 100) / 100;
   };
 
-  // Strihanie/rezanie/vysekavanie — jedna spolocna sadzba (€/100cm2), pocitana z celkovej plochy
-  // vsetkych pouzitych latok (cim vacsia spotreba, tym vacsi naklad na vystrihnutie).
+  // Strihanie/kompletaz — vykon krajcirskej dielne (ATAK), jedna sadzba (€/100cm2), pocitana z
+  // celkovej plochy vsetkych pouzitych latok (cim vacsia spotreba, tym vacsi naklad na vystrihnutie).
   const vypocitajCenuStrihania = (p) => {
     if (!p.strihaSaRezeVyseka) return 0;
     const totalPlocha = vypocitajPlochaCm2ZLatky(p.layer1) + vypocitajPlochaCm2ZLatky(p.layer2) + vypocitajPlochaCm2ZLatky(p.layer3);
     return Math.round((totalPlocha / 100) * cenaStrihania100cm2 * 100) / 100;
+  };
+
+  // Laser — vlastny stroj PBT, SAMOSTATNE od Strihania/kompletaze. Cena za cm² sa odvodi z realnej
+  // prevadzkovej ceny stroja (Kostra cien -> Laser: elektrina + obsluha + amortizacia), nie zo
+  // sadzby krajcirskej dielne.
+  const vypocitajCenuLasera = (p) => {
+    if (!p.laserSaReze || !kostra) return 0;
+    const totalPlocha = vypocitajPlochaCm2ZLatky(p.layer1) + vypocitajPlochaCm2ZLatky(p.layer2) + vypocitajPlochaCm2ZLatky(p.layer3);
+    return Math.round(totalPlocha * vcLaserCm2(kostra) * 100) / 100;
   };
 
   // Redukovany vykon (€) = minuty sitia x sadzba RV — overene z realnych historickych dat (Vydaj
@@ -3501,7 +3514,8 @@ export default function App() {
     const rezia = parseFloat(p.reziaKs) || 0;
     const cenaPotlacEfektivna = vypocitajCenuPotlaceZRozpisu(p) ?? (parseFloat(p.cenaPotlaceKs) || 0);
     const cenaStrih = vypocitajCenuStrihania(p);
-    return Math.round((ms * cenaMinutySitia + rezia + cenaPotlacEfektivna + cenaStrih) * 100) / 100;
+    const cenaLaser = vypocitajCenuLasera(p);
+    return Math.round((ms * cenaMinutySitia + rezia + cenaPotlacEfektivna + cenaStrih + cenaLaser) * 100) / 100;
   };
 
   const handleSaveModel = async (e) => {
@@ -3530,7 +3544,7 @@ export default function App() {
         tlacSietotlac: newModelTlacSietotlac, cenaPotlaceSietotlacKs: newModelCenaPotlaceSietotlacKs,
         tlacRezanyTransfer: newModelTlacRezanyTransfer, cenaPotlaceRezanyTransferKs: newModelCenaPotlaceRezanyTransferKs,
         tlacVysivka: newModelTlacVysivka, cenaPotlaceVysivkaKs: newModelCenaPotlaceVysivkaKs,
-        strihaSaRezeVyseka: newModelStrihaSaRezeVyseka,
+        strihaSaRezeVyseka: newModelStrihaSaRezeVyseka, laserSaReze: newModelLaserSaReze,
       };
       const vypocitana = vypocitajVyrobnuCenuZRozpisu(noveModel);
       const cenaPotlacEfektivna = vypocitajCenuPotlaceZRozpisu(noveModel);
@@ -3547,7 +3561,7 @@ export default function App() {
         tlacSietotlac: newModelTlacSietotlac, cenaPotlaceSietotlacKs: newModelCenaPotlaceSietotlacKs,
         tlacRezanyTransfer: newModelTlacRezanyTransfer, cenaPotlaceRezanyTransferKs: newModelCenaPotlaceRezanyTransferKs,
         tlacVysivka: newModelTlacVysivka, cenaPotlaceVysivkaKs: newModelCenaPotlaceVysivkaKs,
-        strihaSaRezeVyseka: newModelStrihaSaRezeVyseka,
+        strihaSaRezeVyseka: newModelStrihaSaRezeVyseka, laserSaReze: newModelLaserSaReze,
         attachments: [],
         threadM: 15
       };
@@ -3562,7 +3576,7 @@ export default function App() {
       setNewModelTlacSietotlac(false); setNewModelCenaPotlaceSietotlacKs('');
       setNewModelTlacRezanyTransfer(false); setNewModelCenaPotlaceRezanyTransferKs('');
       setNewModelTlacVysivka(false); setNewModelCenaPotlaceVysivkaKs('');
-      setNewModelStrihaSaRezeVyseka(false);
+      setNewModelStrihaSaRezeVyseka(false); setNewModelLaserSaReze(false);
       setNewModelLayer1Alt([]); setNewModelLayer2Alt([]); setNewModelLayer3Alt([]);
       triggerNotification('success', `Model "${created.name}" pridaný do katalógu.`);
     }
@@ -5486,7 +5500,7 @@ export default function App() {
     tlacSietotlac: newModelTlacSietotlac, cenaPotlaceSietotlacKs: newModelCenaPotlaceSietotlacKs,
     tlacRezanyTransfer: newModelTlacRezanyTransfer, cenaPotlaceRezanyTransferKs: newModelCenaPotlaceRezanyTransferKs,
     tlacVysivka: newModelTlacVysivka, cenaPotlaceVysivkaKs: newModelCenaPotlaceVysivkaKs,
-    strihaSaRezeVyseka: newModelStrihaSaRezeVyseka,
+    strihaSaRezeVyseka: newModelStrihaSaRezeVyseka, laserSaReze: newModelLaserSaReze,
     layer1: newModelPrimary ? { materialId: newModelPrimary, consumption: { lt5: parseFloat(newModelLayer1Lt5) || 0, ge5: parseFloat(newModelLayer1Ge5) || 0 } } : null,
     layer2: newModelSecondary ? { materialId: newModelSecondary, consumption: { lt5: parseFloat(newModelLayer2Lt5) || 0, ge5: parseFloat(newModelLayer2Ge5) || 0 } } : null,
     layer3: newModelTertiary ? { materialId: newModelTertiary, consumption: { lt5: parseFloat(newModelLayer3Lt5) || 0, ge5: parseFloat(newModelLayer3Ge5) || 0 } } : null,
@@ -7011,16 +7025,28 @@ export default function App() {
                       )}
                     </div>
 
-                    {/* STRIHANIE/REZANIE/VYSEKAVANIE */}
-                    <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" checked={editingProduct ? !!editingProduct.strihaSaRezeVyseka : newModelStrihaSaRezeVyseka} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, strihaSaRezeVyseka: e.target.checked }) : setNewModelStrihaSaRezeVyseka(e.target.checked)} className="rounded border-slate-700 bg-slate-950" />
-                        <span className="text-slate-200 font-semibold">Strihanie / rezanie / vysekávanie</span>
-                        {(editingProduct ? editingProduct.strihaSaRezeVyseka : newModelStrihaSaRezeVyseka) && (
-                          <span className="text-emerald-400 font-mono text-[11px] ml-auto">{vypocitajCenuStrihania(aktualnyFormularProdukt).toFixed(2)} €/ks</span>
-                        )}
-                      </label>
-                      <p className="text-[10px] text-slate-500 mt-1">Cena sa počíta z celkovej plochy použitých látok × sadzba {cenaStrihania100cm2.toFixed(2)} €/100cm² (nastavuje sa v Cenotvorbe).</p>
+                    {/* STRIHANIE/KOMPLETAZ + LASER — samostatne, ide o dva rozdielne naklady/dodavatelov */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="checkbox" checked={editingProduct ? !!editingProduct.strihaSaRezeVyseka : newModelStrihaSaRezeVyseka} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, strihaSaRezeVyseka: e.target.checked }) : setNewModelStrihaSaRezeVyseka(e.target.checked)} className="rounded border-slate-700 bg-slate-950" />
+                          <span className="text-slate-200 font-semibold">Strihanie / kompletáž</span>
+                          {(editingProduct ? editingProduct.strihaSaRezeVyseka : newModelStrihaSaRezeVyseka) && (
+                            <span className="text-emerald-400 font-mono text-[11px] ml-auto">{vypocitajCenuStrihania(aktualnyFormularProdukt).toFixed(2)} €/ks</span>
+                          )}
+                        </label>
+                        <p className="text-[10px] text-slate-500 mt-1">Výkon krajčírskej dielne (ATAK). Z celkovej plochy použitých látok × sadzba {cenaStrihania100cm2.toFixed(2)} €/100cm² (Cenotvorba).</p>
+                      </div>
+                      <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="checkbox" checked={editingProduct ? !!editingProduct.laserSaReze : newModelLaserSaReze} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, laserSaReze: e.target.checked }) : setNewModelLaserSaReze(e.target.checked)} className="rounded border-slate-700 bg-slate-950" />
+                          <span className="text-slate-200 font-semibold">Laser (rezanie/vysekávanie)</span>
+                          {(editingProduct ? editingProduct.laserSaReze : newModelLaserSaReze) && (
+                            <span className="text-emerald-400 font-mono text-[11px] ml-auto">{vypocitajCenuLasera(aktualnyFormularProdukt).toFixed(2)} €/ks</span>
+                          )}
+                        </label>
+                        <p className="text-[10px] text-slate-500 mt-1">Vlastný stroj PBT. Sadzba €/cm² sa nastavuje v Kostre cien → Laser (elektrina + obsluha + amortizácia).</p>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3 bg-slate-950 p-3 rounded-lg border border-slate-800">
@@ -7033,7 +7059,7 @@ export default function App() {
                           }
                           return <input type="number" step="0.01" placeholder="nezadané" value={editingProduct ? (editingProduct.productionCost ?? '') : newModelProductionCost} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, productionCost: e.target.value === '' ? null : parseFloat(e.target.value) || 0 }) : setNewModelProductionCost(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" />;
                         })()}
-                        <p className="text-[10px] text-slate-500 mt-0.5">{vypocitajVyrobnuCenuZRozpisu(aktualnyFormularProdukt) !== null ? 'Dopočítané automaticky z minút šitia + réžie + potlače + strihania (vyplň minúty šitia vyššie, ak chceš zadávať ručne).' : 'Rovnaké pole ako v Cenotvorbe (PrintStudio Pro) — materiál + šitie + režia + potlač na 1ks. Vyplň "Minúty šitia" vyššie, ak chceš, aby sa počítalo automaticky.'}</p>
+                        <p className="text-[10px] text-slate-500 mt-0.5">{vypocitajVyrobnuCenuZRozpisu(aktualnyFormularProdukt) !== null ? 'Dopočítané automaticky z minút šitia + réžie + potlače + strihania + lasera (vyplň minúty šitia vyššie, ak chceš zadávať ručne).' : 'Rovnaké pole ako v Cenotvorbe (PrintStudio Pro) — materiál + šitie + režia + potlač na 1ks. Vyplň "Minúty šitia" vyššie, ak chceš, aby sa počítalo automaticky.'}</p>
                       </div>
                       <div>
                         <label className="block text-slate-400 font-semibold mb-1">Redukovaný výkon (€/ks)</label>
@@ -7664,7 +7690,7 @@ export default function App() {
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
                                 <span className="inline-block w-4 h-4 rounded-full border border-slate-600 shrink-0" style={{ backgroundColor: item.colorHex || '#475569' }} title={item.color}></span>
-                                <div><span className="font-bold text-white block">{item.name}{item.productType ? <span className="ml-1.5 bg-purple-950/40 text-purple-300 text-[9px] px-1.5 py-0.5 rounded-full border border-purple-800/40">{item.productType}</span> : ''}</span><span className="text-[10px] text-slate-400 font-mono">#{item.id} • {item.color}{item.manufacturer ? ` • ${item.manufacturer}` : ''}{item.deliveryNoteNumber ? ` • DL č. ${item.deliveryNoteNumber}` : ''}</span></div>
+                                <div><span className="font-bold text-white block">{item.name}{item.productType ? <span className="ml-1.5 bg-purple-950/40 text-purple-300 text-[9px] px-1.5 py-0.5 rounded-full border border-purple-800/40">{item.productType}</span> : ''}</span><span className="text-[10px] text-slate-400 font-mono">#{item.id} • {item.color}{item.manufacturer ? ` • ${item.manufacturer}` : ''}{item.deliveryNoteNumber ? ` • DL č. ${item.deliveryNoteNumber}` : ''}{item.zakazkaOdberatel ? ` • ${item.zakazkaOdberatel}` : ''}</span></div>
                               </div>
                             </td>
                             <td className="px-3 py-3 text-center font-bold">{item.width ? `${item.width} cm` : '—'}</td>
@@ -7699,6 +7725,10 @@ export default function App() {
                   <div className="grid grid-cols-2 gap-2">
                     <div><label className="text-slate-400 block mb-0.5">Číslo dodacieho listu (voliteľné)</label><input type="text" value={newMatDeliveryNumber} onChange={(e) => setNewMatDeliveryNumber(e.target.value)} placeholder="napr. DL-2026-045" className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" /></div>
                     <div><label className="text-slate-400 block mb-0.5">Dátum dodacieho listu</label><input type="date" value={newMatDeliveryDate} onChange={(e) => setNewMatDeliveryDate(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" /></div>
+                  </div>
+                  <div>
+                    <label className="text-slate-400 block mb-0.5">Zákazka / Odberateľ (voliteľné — podľa dodacieho listu, ku ktorej zákazke bol tovar objednaný)</label>
+                    <input type="text" value={newMatZakazkaOdberatel} onChange={(e) => setNewMatZakazkaOdberatel(e.target.value)} placeholder="napr. 425 / MŠK Pov.Bystrica" className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" />
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
@@ -8343,6 +8373,10 @@ export default function App() {
                       <label className="text-[10px] text-slate-500 block mb-0.5">Dátum dodacieho listu</label>
                       <input type="date" value={materialEditDraft.deliveryNoteDate || ''} onChange={(e) => setMaterialEditDraft({ ...materialEditDraft, deliveryNoteDate: e.target.value })} className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" />
                     </div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-500 block mb-0.5">Zákazka / Odberateľ</label>
+                    <input type="text" value={materialEditDraft.zakazkaOdberatel || ''} onChange={(e) => setMaterialEditDraft({ ...materialEditDraft, zakazkaOdberatel: e.target.value })} placeholder="napr. 425 / MŠK Pov.Bystrica" className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" />
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>

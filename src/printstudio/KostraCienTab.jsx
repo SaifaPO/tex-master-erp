@@ -53,10 +53,11 @@ export default function KostraCienTab({ supabase }) {
   const [sietotlac, setSietotlac] = useState(null);
   const [sietotlacVelkosti, setSietotlacVelkosti] = useState([]);
   const [vysivka, setVysivka] = useState(null);
+  const [laser, setLaser] = useState(null);
 
   const nacitaj = async () => {
     setIsLoading(true);
-    const [{ data: tn }, { data: sg }, { data: rez }, { data: fol }, { data: dtfN }, { data: siet }, { data: sietVel }, { data: vys }] = await Promise.all([
+    const [{ data: tn }, { data: sg }, { data: rez }, { data: fol }, { data: dtfN }, { data: siet }, { data: sietVel }, { data: vys }, { data: lasN }] = await Promise.all([
       supabase.from('textil_naklady').select('*').eq('technologia', 'sublimacia').maybeSingle(),
       supabase.from('cennik_sublimacia_naklady').select('*').eq('id', 1).maybeSingle(),
       supabase.from('cennik_rezany_transfer').select('*').eq('id', 1).maybeSingle(),
@@ -65,6 +66,7 @@ export default function KostraCienTab({ supabase }) {
       supabase.from('cennik_sietotlac').select('*').eq('id', 1).maybeSingle(),
       supabase.from('cennik_sietotlac_velkosti').select('*').order('poradie'),
       supabase.from('kostra_vysivka').select('*').eq('id', 1).maybeSingle(),
+      supabase.from('laser_naklady').select('*').eq('id', 1).maybeSingle(),
     ]);
     setTextilSub(tn || { technologia: 'sublimacia', cena_papier_bm: 0, cena_ochranny_papier_bm: 0, cena_atrament_l: 0, spotreba_atrament_ml_m2: 0, cena_prace_hod: 0, rychlost_m_hod: 1 });
     setSublimaciaGarment(sg || { id: 1, sirka_papiera_cm: 160, naklady_manipulacia: 0, naklady_ochranny_papier: 0, cas_nazehlovania_min: 0, koeficient_rizika_percent: 0 });
@@ -74,6 +76,7 @@ export default function KostraCienTab({ supabase }) {
     setSietotlac(siet || { id: 1, cena_farba_kg: 0, naklady_manipulacia: 0, naklad_sito_zakazka: 0, naklad_cistenie_zakazka: 0, odporucany_min_ks: 30 });
     setSietotlacVelkosti(sietVel || []);
     setVysivka(vys || { id: 1, cena_digitalizacia: 0, cena_vysivky_cm2: 0 });
+    setLaser(lasN || { id: 1, cena_elektriny_kwh: 0, vykon_kw: 0, rychlost_cm2_hod: 1, cena_prace_hod: 0, amortizacia_hod: 0 });
     setIsLoading(false);
   };
 
@@ -103,6 +106,11 @@ export default function KostraCienTab({ supabase }) {
     const next = { ...sietotlac, ...patch };
     setSietotlac(next);
     await supabase.from('cennik_sietotlac').upsert({ id: 1, ...next });
+  };
+  const ulozLaser = async (patch) => {
+    const next = { ...laser, ...patch };
+    setLaser(next);
+    await supabase.from('laser_naklady').upsert({ id: 1, ...next });
   };
   const ulozVysivka = async (patch) => {
     const next = { ...vysivka, ...patch };
@@ -138,7 +146,7 @@ export default function KostraCienTab({ supabase }) {
     await supabase.from('cennik_sietotlac_velkosti').delete().eq('id', id);
   };
 
-  if (isLoading || !textilSub || !sublimaciaGarment || !rezany || !dtf || !sietotlac || !vysivka) {
+  if (isLoading || !textilSub || !sublimaciaGarment || !rezany || !dtf || !sietotlac || !vysivka || !laser) {
     return <p className="text-sm text-slate-500">Načítavam…</p>;
   }
 
@@ -188,6 +196,11 @@ export default function KostraCienTab({ supabase }) {
   // Vysivka
   const vysivkaRefKs = 10;
   const vcVysivka = (vysivka.cena_digitalizacia || 0) / vysivkaRefKs + (vysivka.cena_vysivky_cm2 || 0) * REF_PLOCHA_CM2;
+
+  // Laser — vlastny stroj PBT, cena za cm² sa odvodi od realnej prevadzkovej ceny (elektrina +
+  // obsluha + amortizacia/fond opray), nie od spotreby materialu ako pri potlaci.
+  const laserNakladHod = (laser.vykon_kw || 0) * (laser.cena_elektriny_kwh || 0) + (laser.cena_prace_hod || 0) + (laser.amortizacia_hod || 0);
+  const vcLaserCm2 = laserNakladHod / Math.max(0.01, laser.rychlost_cm2_hod || 1);
 
   return (
     <div className="space-y-6">
@@ -354,6 +367,21 @@ export default function KostraCienTab({ supabase }) {
         <p className="text-[11px] text-slate-500 mt-2">Náhľad pri {REF_PLOCHA_CM2}cm² motíve (10×10cm) a zákazke {vysivkaRefKs}ks (digitalizácia sa rozpočíta na počet kusov):</p>
         <VysledokVC label={`VC pri ${vysivkaRefKs}ks`} value={vcVysivka} unit="€/ks" />
         <p className="text-[11px] text-slate-500 -mt-2">≈ {(vcVysivka / REF_PLOCHA_CM2).toFixed(4)} €/cm² priemerne pri tejto ploche</p>
+      </div>
+
+      {/* LASER */}
+      <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-5">
+        <h3 className="font-bold text-sm text-white mb-3">6. Laser (rezanie/vysekávanie)</h3>
+        <p className="text-[11px] text-slate-500 mb-2">Vlastný stroj PBT — samostatné od Strihania/kompletáže (to je výkon krajčírskej dielne ATAK, účtuje sa osobitne). Cena za cm² sa odvodí od reálnej prevádzkovej ceny stroja (elektrina + obsluha + amortizácia) a rýchlosti rezania — tieto hodnoty treba odmerať.</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3 bg-slate-950 rounded-xl border border-slate-800 mb-3 max-w-2xl">
+          <Field label="Cena elektriny (€/kWh)" value={laser.cena_elektriny_kwh} step="0.01" onChange={(v) => ulozLaser({ cena_elektriny_kwh: v })} />
+          <Field label="Príkon stroja (kW)" value={laser.vykon_kw} step="0.1" onChange={(v) => ulozLaser({ vykon_kw: v })} />
+          <Field label="Rýchlosť rezania (cm²/hod)" value={laser.rychlost_cm2_hod} step="10" onChange={(v) => ulozLaser({ rychlost_cm2_hod: v })} />
+          <Field label="Práca obsluhy (€/hod)" value={laser.cena_prace_hod} step="0.5" onChange={(v) => ulozLaser({ cena_prace_hod: v })} />
+          <Field label="Amortizácia / fond opráv (€/hod)" value={laser.amortizacia_hod} step="0.1" onChange={(v) => ulozLaser({ amortizacia_hod: v })} hint="Rezerva na budúce opravy/servis stroja, rozpočítaná na hodinu prevádzky." />
+        </div>
+        <VysledokVC label="VC" value={vcLaserCm2} unit="€/cm²" />
+        <p className="text-[11px] text-slate-500 mt-1">Náklad na hodinu prevádzky: {laserNakladHod.toFixed(2)} €/hod ÷ rýchlosť rezania {laser.rychlost_cm2_hod} cm²/hod.</p>
       </div>
     </div>
   );

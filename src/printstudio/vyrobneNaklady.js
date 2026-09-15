@@ -7,7 +7,7 @@ import { mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 
 // Jeden spolocny fetch vsetkych Kostra cien tabuliek + pricing_config.
 export async function nacitajKostru(supabase) {
-  const [{ data: tSub }, { data: sGarment }, { data: dtfNak }, { data: sieto }, { data: sietoVel }, { data: rez }, { data: fol }, { data: vysNak }, { data: cfg }] = await Promise.all([
+  const [{ data: tSub }, { data: sGarment }, { data: dtfNak }, { data: sieto }, { data: sietoVel }, { data: rez }, { data: fol }, { data: vysNak }, { data: cfg }, { data: lasNak }] = await Promise.all([
     supabase.from('textil_naklady').select('*').eq('technologia', 'sublimacia').maybeSingle(),
     supabase.from('cennik_sublimacia_naklady').select('*').eq('id', 1).maybeSingle(),
     supabase.from('dtf_naklady').select('*').eq('id', 1).maybeSingle(),
@@ -17,6 +17,7 @@ export async function nacitajKostru(supabase) {
     supabase.from('cennik_folie').select('*').order('id'),
     supabase.from('kostra_vysivka').select('*').eq('id', 1).maybeSingle(),
     supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
+    supabase.from('laser_naklady').select('*').eq('id', 1).maybeSingle(),
   ]);
   return {
     textilSub: tSub || null,
@@ -27,8 +28,19 @@ export async function nacitajKostru(supabase) {
     rezany: rez || null,
     folie: fol || [],
     vysivkaNaklady: vysNak || null,
+    laser: lasNak || null,
     pricingConfig: cfg ? mapConfigFromDb(cfg) : DEFAULT_PRICING_CONFIG,
   };
+}
+
+// Laser — vlastny stroj PBT, cena za cm² z realnej prevadzkovej ceny (elektrina + obsluha +
+// amortizacia/fond opray) delenej rychlostou rezania — nezavisi od spotreby materialu (na rozdiel
+// od potlace), samostatne od Strihania/kompletaze (to je vykon krajcirskej dielne, uctuje sa zvlast).
+export function vcLaserCm2(kostra) {
+  const { laser } = kostra;
+  if (!laser) return 0;
+  const nakladHod = (parseFloat(laser.vykon_kw) || 0) * (parseFloat(laser.cena_elektriny_kwh) || 0) + (parseFloat(laser.cena_prace_hod) || 0) + (parseFloat(laser.amortizacia_hod) || 0);
+  return nakladHod / Math.max(0.01, parseFloat(laser.rychlost_cm2_hod) || 1);
 }
 
 // Sublimacia — potlac na tricka. Papier sa reze z 160cm rolky podla plochy motivu.
