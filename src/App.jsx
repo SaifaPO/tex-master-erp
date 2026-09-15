@@ -2431,7 +2431,9 @@ export default function App() {
     if (stockCorrectionPendingPrice != null) updatePayload.price_per_m = stockCorrectionPendingPrice;
     const { error } = await supabase.from('materials').update(updatePayload).eq('id', selectedMaterialForDetail.id);
     if (error) { triggerNotification('error', `Chyba: ${error.message}`); return; }
-    setSelectedMaterialForDetail({ ...selectedMaterialForDetail, qty: newQty, history: newHistory, ...(stockCorrectionPendingPrice != null ? { pricePerM: stockCorrectionPendingPrice } : {}) });
+    const patch = { qty: newQty, history: newHistory, ...(stockCorrectionPendingPrice != null ? { pricePerM: stockCorrectionPendingPrice } : {}) };
+    setSelectedMaterialForDetail({ ...selectedMaterialForDetail, ...patch });
+    setMaterials(prev => prev.map(m => m.id === selectedMaterialForDetail.id ? { ...m, ...patch } : m));
     setStockCorrectionQty('');
     setStockCorrectionNote('');
     setStockCorrectionPendingPrice(null);
@@ -2478,6 +2480,7 @@ export default function App() {
     const { error } = await supabase.from('materials').update({ qty: newQty, history: newHistory }).eq('id', selectedMaterialForDetail.id);
     if (error) { triggerNotification('error', `Chyba: ${error.message}`); return; }
     setSelectedMaterialForDetail({ ...selectedMaterialForDetail, qty: newQty, history: newHistory });
+    setMaterials(prev => prev.map(m => m.id === selectedMaterialForDetail.id ? { ...m, qty: newQty, history: newHistory } : m));
     handleCancelEditHistory();
     triggerNotification('success', 'Záznam v histórii bol opravený.');
   };
@@ -3122,6 +3125,7 @@ export default function App() {
     };
     const { error } = await supabase.from('materials').insert(mapMaterialToDb(created));
     if (error) { triggerNotification('error', `Chyba: ${error.message}`); return; }
+    setMaterials(prev => prev.some(m => m.id === created.id) ? prev : [...prev, created]);
     setNewMatName('');
     setNewMatManufacturer('');
     setNewMatProductType('');
@@ -3152,6 +3156,7 @@ export default function App() {
     if (!name) { setEditingWarehouseId(null); return; }
     const { error } = await supabase.from('warehouses').update({ name }).eq('id', editingWarehouseId);
     if (error) { triggerNotification('error', error.message); return; }
+    setWarehouses(prev => prev.map(w => w.id === editingWarehouseId ? { ...w, name } : w));
     setEditingWarehouseId(null);
     setEditingWarehouseName('');
   };
@@ -3166,6 +3171,7 @@ export default function App() {
     if (!window.confirm(`Naozaj vymazať sklad "${wh.name}"?`)) return;
     const { error } = await supabase.from('warehouses').delete().eq('id', wh.id);
     if (error) { triggerNotification('error', error.message); return; }
+    setWarehouses(prev => prev.filter(w => w.id !== wh.id));
     if (activeWarehouseId === wh.id && warehouses.length > 1) {
       setActiveWarehouseId(warehouses.find(w => w.id !== wh.id)?.id || '');
     }
@@ -3179,6 +3185,7 @@ export default function App() {
     if (!window.confirm(`Naozaj vymazať VŠETKÝCH ${itemsInside.length} položiek zo skladu "${wh.name}"? Hneď potom budeš mať možnosť vrátiť to späť.`)) return;
     const { error } = await supabase.from('materials').delete().eq('warehouse_id', wh.id);
     if (error) { triggerNotification('error', error.message); return; }
+    setMaterials(prev => prev.filter(m => m.warehouseId !== wh.id));
     setWarehouseDeleteUndo({ warehouseId: wh.id, warehouseName: wh.name, materials: itemsInside });
     triggerNotification('success', `Sklad "${wh.name}" bol vyprázdnený (${itemsInside.length} položiek).`);
   };
@@ -3187,6 +3194,7 @@ export default function App() {
     if (!warehouseDeleteUndo) return;
     const { error } = await supabase.from('materials').insert(warehouseDeleteUndo.materials.map(mapMaterialToDb));
     if (error) { triggerNotification('error', error.message); return; }
+    setMaterials(prev => [...prev, ...warehouseDeleteUndo.materials]);
     triggerNotification('success', `Obnovených ${warehouseDeleteUndo.materials.length} položiek do skladu "${warehouseDeleteUndo.warehouseName}".`);
     setWarehouseDeleteUndo(null);
   };
@@ -3215,6 +3223,7 @@ export default function App() {
     if (!hasPermission('edit_stock')) { triggerNotification('error', 'Nemáte prístup ku správe skladu.'); return; }
     const { error } = await supabase.from('materials').update({ warehouse_id: newWarehouseId }).eq('id', materialId);
     if (error) { triggerNotification('error', error.message); return; }
+    setMaterials(prev => prev.map(m => m.id === materialId ? { ...m, warehouseId: newWarehouseId } : m));
     triggerNotification('success', 'Položka bola presunutá do iného skladu.');
   };
 
@@ -3247,6 +3256,7 @@ export default function App() {
       zakazka_odberatel: materialEditDraft.zakazkaOdberatel || null
     }).eq('id', materialEditDraft.id);
     if (error) { triggerNotification('error', error.message); return; }
+    setMaterials(prev => prev.map(m => m.id === materialEditDraft.id ? materialEditDraft : m));
     setSelectedMaterialForDetail(materialEditDraft);
     setIsEditingMaterialDetails(false);
     setMaterialEditDraft(null);
@@ -3258,6 +3268,7 @@ export default function App() {
     if (!window.confirm(`Naozaj natrvalo vymazať položku "${selectedMaterialForDetail.name}" zo skladu? Táto akcia zmaže aj celú jej históriu pohybov a nedá sa vrátiť späť.`)) return;
     const { error } = await supabase.from('materials').delete().eq('id', selectedMaterialForDetail.id);
     if (error) { triggerNotification('error', error.message); return; }
+    setMaterials(prev => prev.filter(m => m.id !== selectedMaterialForDetail.id));
     setSelectedMaterialForDetail(null);
     setIsEditingMaterialDetails(false);
     setMaterialEditDraft(null);
@@ -3624,6 +3635,7 @@ export default function App() {
       const toSave = vypocitana !== null ? { ...editingProduct, productionCost: vypocitana, cenaPotlaceKs: cenaPotlacEfektivna ?? editingProduct.cenaPotlaceKs, reziaKs: cenaRezieEfektivna ?? editingProduct.reziaKs, redukovanyVykon: vypocitanyRv ?? editingProduct.redukovanyVykon } : editingProduct;
       const { error } = await supabase.from('products').update(mapProductToDb(toSave)).eq('id', editingProduct.id);
       if (error) { triggerNotification('error', error.message); return; }
+      setProducts(prev => prev.map(p => p.id === toSave.id ? toSave : p));
       setEditingProduct(null);
       triggerNotification('success', 'Model bol úspešne upravený.');
     } else {
@@ -3686,7 +3698,8 @@ export default function App() {
     if (!hasPermission('manage_catalog')) return;
     if (!window.confirm('Naozaj vymazať tento model z katalógu?')) return;
     const { error } = await supabase.from('products').delete().eq('id', id);
-    if (error) triggerNotification('error', error.message);
+    if (error) { triggerNotification('error', error.message); return; }
+    setProducts(prev => prev.filter(p => p.id !== id));
   };
 
   // Prílohy k modelu (napr. rozmerové tabuľky vo formáte PDF) — rovnaký úložný bucket ako
