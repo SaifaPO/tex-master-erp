@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Wind, Download, Settings, ExternalLink, Trash2, AlertTriangle } from 'lucide-react';
+import { Wind, Download, Settings, Trash2, AlertTriangle } from 'lucide-react';
 import { priceAt, marginAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 
-const PRINTSTUDIO_BASE_URL = 'https://printstudio-pro.vercel.app';
 const BUCKET = 'print-designs';
 // Referencne urovne (ks) len na nahlad v tabulke nizsie — realny vypocet funguje pre lubovolny pocet.
 const KS_PREVIEW_LEVELS = [1, 5, 10, 25, 50, 100];
@@ -93,9 +92,6 @@ export default function BuffkyTab({ supabase }) {
           <h2 className="text-xl font-bold text-white flex items-center gap-2"><Wind className="text-indigo-400 h-5 w-5" /> Buffky — multifunkčné šatky (50×50cm)</h2>
           <p className="text-xs text-slate-400 mt-1">Vlastný dizajn tunelovej šatky s 3D náhľadom — 2 typy (Tubular Basic / Premium), pevný výrobný formát, tlač 300 DPI.</p>
         </div>
-        <a href={`${PRINTSTUDIO_BASE_URL}/?typ=buffka`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors shrink-0">
-          <ExternalLink className="h-3.5 w-3.5" /> Otvoriť appku v novej karte
-        </a>
       </div>
 
       {/* SHOPIFY PREPOJENIE */}
