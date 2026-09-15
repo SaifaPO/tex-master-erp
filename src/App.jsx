@@ -1207,6 +1207,7 @@ export default function App() {
   const [activeWarehouseId, setActiveWarehouseId] = useState('');
   const [matSortField, setMatSortField] = useState('name');
   const [matSortDir, setMatSortDir] = useState('asc');
+  const [matNameSearch, setMatNameSearch] = useState('');
   const [warehouseDeleteUndo, setWarehouseDeleteUndo] = useState(null); // { warehouseId, warehouseName, materials } | null
   const [editingWarehouseId, setEditingWarehouseId] = useState(null);
   const [editingWarehouseName, setEditingWarehouseName] = useState('');
@@ -7773,6 +7774,13 @@ export default function App() {
               <div className="lg:col-span-2 bg-slate-950 p-6 rounded-2xl border border-slate-800 shadow-xl space-y-4">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                   <h2 className="text-lg font-bold text-white flex items-center gap-2"><Package className="text-indigo-400 h-5 w-5" /> Skladové zásoby — {warehouses.find(w => w.id === activeWarehouseId)?.name || ''}</h2>
+                  <div className="relative w-full sm:w-56">
+                    <Search className="h-3.5 w-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                    <input type="text" placeholder="Hľadať podľa názvu..." value={matNameSearch} onChange={(e) => setMatNameSearch(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-lg pl-8 pr-7 py-1.5 text-xs text-white" />
+                    {matNameSearch && (
+                      <button onClick={() => setMatNameSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"><X className="h-3.5 w-3.5" /></button>
+                    )}
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     <button onClick={handleExportActiveWarehouse} className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[11px] px-3 py-1.5 rounded-lg flex items-center gap-1.5"><Download className="h-3.5 w-3.5" /> Export tohto skladu</button>
                     <button onClick={handleExportAllWarehouses} className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-[11px] px-3 py-1.5 rounded-lg flex items-center gap-1.5"><Download className="h-3.5 w-3.5" /> Export všetkých skladov</button>
@@ -7817,10 +7825,10 @@ export default function App() {
                         <th className="px-3 py-3 text-center">Presunúť do</th><th className="px-4 py-3 text-center">Karta</th></tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800">
-                      {materials.filter(m => m.warehouseId === activeWarehouseId).length === 0 && (
-                        <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-500 italic">V tomto sklade zatiaľ nie sú žiadne položky.</td></tr>
+                      {materials.filter(m => m.warehouseId === activeWarehouseId && m.name.toLowerCase().includes(matNameSearch.toLowerCase())).length === 0 && (
+                        <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-500 italic">{matNameSearch ? `Žiadna položka nezodpovedá hľadaniu "${matNameSearch}".` : 'V tomto sklade zatiaľ nie sú žiadne položky.'}</td></tr>
                       )}
-                      {materials.filter(m => m.warehouseId === activeWarehouseId).sort((a, b) => {
+                      {materials.filter(m => m.warehouseId === activeWarehouseId && m.name.toLowerCase().includes(matNameSearch.toLowerCase())).sort((a, b) => {
                         const av = a[matSortField], bv = b[matSortField];
                         const dir = matSortDir === 'asc' ? 1 : -1;
                         if (typeof av === 'string' || typeof bv === 'string') return String(av || '').localeCompare(String(bv || '')) * dir;
