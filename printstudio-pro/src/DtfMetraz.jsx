@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Scroll, UploadCloud, Truck, Eye, ShoppingCart, TriangleAlert, CreditCard, Gift } from 'lucide-react';
+import { Scroll, UploadCloud, Truck, Eye, ShoppingCart, TriangleAlert, CreditCard, Gift, Palette, Wand2 } from 'lucide-react';
 import { priceAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 
 const BUCKET = 'print-designs';
@@ -25,13 +25,14 @@ export default function DtfMetraz({ supabase, onSpat }) {
   const [pricingConfig, setPricingConfig] = useState(DEFAULT_PRICING_CONFIG);
   const [nastavenia, setNastavenia] = useState(null);
 
-  const [mode, setMode] = useState('auto'); // 'auto' | 'subor' | 'vzorky'
+  const [mode, setMode] = useState('auto'); // 'auto' | 'subor' | 'vzorky' | 'paleta'
   const [widthCm, setWidthCm] = useState(10);
   const [heightCm, setHeightCm] = useState(10);
   const [qty, setQty] = useState(30);
   const [directLengthBm, setDirectLengthBm] = useState(1.0);
   const [deliverySpeed, setDeliverySpeed] = useState('standard');
   const [scheduleOption, setScheduleOption] = useState(null);
+  const [grafickaPriprava, setGrafickaPriprava] = useState(false);
 
   const [rawFile, setRawFile] = useState(null);
   const [logoImage, setLogoImage] = useState(null);
@@ -78,7 +79,7 @@ export default function DtfMetraz({ supabase, onSpat }) {
     subtotal = Math.max(totalLengthBm * baseRate, Number(nastavenia.minimalna_cena_objednavky));
     expressFee = deliverySpeed === 'express' ? subtotal * (Number(nastavenia.priplatok_expres_percent) / 100) : 0;
     shippingFee = Number(nastavenia.cena_doprava);
-    grandTotalBezDph = subtotal + expressFee + shippingFee;
+    grandTotalBezDph = subtotal + expressFee + shippingFee + (grafickaPriprava ? 10 : 0);
     // Slovensky B2C zakaznik vzdy plati s DPH — cena v kosiku aj cele vyuctovanie musi byt s DPH,
     // nie len zobrazena orientacne bez nej.
     dphSuma = grandTotalBezDph * (Number(pricingConfig.dphPercent || 0) / 100);
@@ -198,6 +199,7 @@ export default function DtfMetraz({ supabase, onSpat }) {
           mode, widthCm, heightCm, qty, directLengthBm,
           deliverySpeed, harmonogram: aktualnyHarmonogram,
           suborNazov: rawFile?.name || null, suborCesta,
+          grafickaPriprava: mode === 'auto' || mode === 'subor' ? grafickaPriprava : false,
         },
       });
       if (error) throw error;
@@ -227,13 +229,46 @@ export default function DtfMetraz({ supabase, onSpat }) {
         {onSpat && <button onClick={onSpat} className="text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 px-3 py-2 rounded-lg text-sm font-medium transition self-start">← Katalóg</button>}
       </div>
 
-      <div className="bg-white p-1.5 rounded-xl border border-slate-200 grid grid-cols-3 gap-1 shadow-sm max-w-2xl">
+      <div className="bg-white p-1.5 rounded-xl border border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-1 shadow-sm max-w-3xl">
         <button onClick={() => setMode('auto')} className={`py-2.5 px-2 rounded-lg text-[11px] sm:text-sm font-semibold transition ${mode === 'auto' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>1. Skladanie z loga</button>
         <button onClick={() => setMode('subor')} className={`py-2.5 px-2 rounded-lg text-[11px] sm:text-sm font-semibold transition ${mode === 'subor' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>2. Nahrať hotovú rolku</button>
         <button onClick={() => setMode('vzorky')} className={`py-2.5 px-2 rounded-lg text-[11px] sm:text-sm font-semibold transition flex items-center justify-center gap-1 ${mode === 'vzorky' ? 'bg-emerald-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}><Gift className="w-3.5 h-3.5" /> Vzorky (A4)</button>
+        <button onClick={() => setMode('paleta')} className={`py-2.5 px-2 rounded-lg text-[11px] sm:text-sm font-semibold transition flex items-center justify-center gap-1 ${mode === 'paleta' ? 'bg-emerald-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}><Palette className="w-3.5 h-3.5" /> Paleta farieb</button>
       </div>
 
-      {mode === 'vzorky' ? (
+      {mode !== 'auto' && mode !== 'subor' && (
+        <div className="max-w-xl bg-indigo-50/60 border border-indigo-100 rounded-2xl p-4 sm:p-5 space-y-2">
+          <h3 className="text-sm font-bold text-slate-900">Ako pripraviť logá na tlač DTF</h3>
+          <ul className="text-xs text-slate-600 list-disc pl-4 space-y-1">
+            <li>Grafika musí byť <strong>bez pozadia</strong></li>
+            <li>V mierke <strong>1:1</strong></li>
+            <li>Ideálne <strong>300 DPI</strong> (tlačíme aj v nižšej kvalite, ale výsledok tomu bude zodpovedať)</li>
+            <li>Ideálne súbor uložený v <strong>CMYK</strong></li>
+            <li>Formát súboru ideálne <strong>TIFF alebo PSD</strong></li>
+          </ul>
+          <p className="text-[11px] text-indigo-700 font-medium">Uvedené ceny platia len pre grafiku pripravenú presne podľa týchto požiadaviek.</p>
+        </div>
+      )}
+
+      {mode === 'paleta' ? (
+        <div className="max-w-xl bg-white p-5 sm:p-6 rounded-2xl border border-emerald-200 shadow-sm space-y-4">
+          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Palette className="w-4 h-4 text-emerald-600" /> Paleta farieb DTF</h3>
+          <p className="text-sm text-slate-600">Nie ste si istí, aké farby a odtiene vieme reálne vytlačiť? Pošleme vám fyzickú paletu vzoriek priamo z našej tlačiarne, aby ste si mohli vybrať presne podľa skutočnej tlače.</p>
+          <ul className="text-xs text-slate-500 list-disc pl-4 space-y-1">
+            <li>Cena zahŕňa aj poštovné</li>
+            <li>Cena je s DPH {pricingConfig.dphPercent}%</li>
+          </ul>
+          <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+            <span className="text-xs text-slate-500">Cena palety s DPH</span>
+            <span className="text-2xl font-extrabold font-mono text-slate-900">5,00 €</span>
+          </div>
+          <button onClick={odoslatObjednavku} disabled={isSubmitting} className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white font-bold text-sm flex items-center justify-center gap-2 transition">
+            <ShoppingCart className="w-4 h-4" /> {isSubmitting ? 'Vytváram objednávku…' : 'Objednať paletu a zaplatiť'}
+          </button>
+          {confirmation && <p className="text-xs text-emerald-600">{confirmation}</p>}
+          {submitError && <p className="text-xs text-rose-600">{submitError}</p>}
+        </div>
+      ) : mode === 'vzorky' ? (
         <div className="max-w-xl bg-white p-5 sm:p-6 rounded-2xl border border-emerald-200 shadow-sm space-y-4">
           <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Gift className="w-4 h-4 text-emerald-600" /> Vzorka vlastnej grafiky (A4)</h3>
           <p className="text-sm text-slate-600">Nie ste si istí kvalitou? Nahrajte svoje logo/grafiku, vyskladáme ju na jeden list <strong>A4 (1 ks)</strong> a pošleme vám vytlačenú ukážku ešte pred väčšou objednávkou.</p>
@@ -299,6 +334,14 @@ export default function DtfMetraz({ supabase, onSpat }) {
             </div>
           )}
 
+          <label className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-start gap-3 cursor-pointer">
+            <input type="checkbox" checked={grafickaPriprava} onChange={(e) => setGrafickaPriprava(e.target.checked)} className="mt-0.5" />
+            <div>
+              <span className="text-sm font-bold text-slate-900 flex items-center gap-1.5"><Wand2 className="w-4 h-4 text-indigo-500" /> Pripravte mi grafiku na tlač (+10 €)</span>
+              <p className="text-xs text-slate-500 mt-0.5">Vaša grafika nespĺňa požiadavky vyššie, alebo si nie ste istí? Pripravíme ju za vás na tlač.</p>
+            </div>
+          </label>
+
           <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-3">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-2"><Truck className="w-4 h-4 text-indigo-500" /> Rýchlosť doručenia</h3>
             <div className="grid grid-cols-2 gap-3">
@@ -358,6 +401,7 @@ export default function DtfMetraz({ supabase, onSpat }) {
               <Row label="Potrebná dĺžka rolky" value={`${totalLengthBm.toFixed(2)} bm`} highlight />
               <Row label="Tlačová plocha" value={`${totalM2.toFixed(2)} m²`} />
               <Row label="Príplatok za expres" value={`${expressFee.toFixed(2)} €`} />
+              {grafickaPriprava && <Row label="Príprava grafiky na tlač" value="10.00 €" />}
               <Row label="Doprava" value={`${shippingFee.toFixed(2)} €`} />
               <Row label="Harmonogram dodania" value={aktualnyHarmonogram} small />
               <Row label="Cena bez DPH" value={`${grandTotalBezDph.toFixed(2)} €`} />
@@ -380,7 +424,7 @@ export default function DtfMetraz({ supabase, onSpat }) {
       </div>
       )}
 
-      {mode !== 'vzorky' && (
+      {(mode === 'auto' || mode === 'subor') && (
       <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm">
         <h3 className="text-sm font-bold text-slate-900 mb-3">Prehľad množstevných zliav (šírka 56 cm)</h3>
         <div className="overflow-x-auto">

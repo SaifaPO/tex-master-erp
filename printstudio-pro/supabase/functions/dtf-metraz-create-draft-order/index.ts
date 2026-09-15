@@ -79,9 +79,10 @@ Deno.serve(async (req) => {
       mode, widthCm, heightCm, qty, directLengthBm,
       deliverySpeed = 'standard', harmonogram = '',
       suborNazov = null, suborCesta = null,
+      grafickaPriprava = false,
     } = body;
 
-    if (mode !== 'auto' && mode !== 'subor' && mode !== 'vzorky') throw new Error('Neplatný režim objednávky.');
+    if (mode !== 'auto' && mode !== 'subor' && mode !== 'vzorky' && mode !== 'paleta') throw new Error('Neplatný režim objednávky.');
     if (mode === 'vzorky' && !suborCesta) throw new Error('Pre vzorku je potrebné nahrať súbor s grafikou.');
 
     const [{ data: nak }, { data: cfg }, { data: nastavenia }] = await Promise.all([
@@ -96,12 +97,15 @@ Deno.serve(async (req) => {
       ? { coefA: Number(cfg.coef_a), coefB: Number(cfg.coef_b), marginFloor: Number(cfg.margin_floor), coefP: Number(cfg.coef_p), qtyAtFloor: Number(cfg.qty_at_floor), dphPercent: Number(cfg.dph_percent ?? 23) }
       : { coefA: 300, coefB: 54, marginFloor: 30, coefP: 1.3, qtyAtFloor: 1000, dphPercent: 23 };
 
-    // Vzorka (A4, 1 ks) ma pevnu cenu 5€ s DPH (vratane postovneho), nepocita sa podla bm ako
-    // zvysok appky — zakaznik len nahra vlastnu grafiku, tu sa vyskladane na jeden list A4.
+    // Vzorka (A4, 1 ks) a paleta farieb maju pevnu cenu 5€ s DPH (vratane postovneho), nepocitaju
+    // sa podla bm ako zvysok appky — vzorka: zakaznik nahra vlastnu grafiku, vyskladane na A4;
+    // paleta: PBT posiela zakaznikovi fyzicku paletu vzoriek, ziadny subor sa nenahrava.
     const VZORKA_CENA_S_DPH = 5;
+    const PALETA_CENA_S_DPH = 5;
+    const PRIPRAVA_GRAFIKY_EUR = 10;
 
-    let totalLengthBm = 0, totalM2 = 0, baseRate = 0, grandTotal = VZORKA_CENA_S_DPH;
-    if (mode !== 'vzorky') {
+    let totalLengthBm = 0, totalM2 = 0, baseRate = 0, grandTotal = mode === 'paleta' ? PALETA_CENA_S_DPH : VZORKA_CENA_S_DPH;
+    if (mode === 'auto' || mode === 'subor') {
       if (mode === 'auto') {
         const w = Number(widthCm) || 0, h = Number(heightCm) || 0, q = Math.max(1, Math.round(Number(qty)) || 1);
         if (w <= 0 || h <= 0) throw new Error('Neplatný rozmer loga.');
@@ -116,7 +120,7 @@ Deno.serve(async (req) => {
       const subtotal = Math.max(totalLengthBm * baseRate, Number(nastavenia.minimalna_cena_objednavky) || 0);
       const expressFee = deliverySpeed === 'express' ? subtotal * ((Number(nastavenia.priplatok_expres_percent) || 0) / 100) : 0;
       const shippingFee = Number(nastavenia.cena_doprava) || 0;
-      const grandTotalBezDph = subtotal + expressFee + shippingFee;
+      const grandTotalBezDph = subtotal + expressFee + shippingFee + (grafickaPriprava ? PRIPRAVA_GRAFIKY_EUR : 0);
       const dphPercent = Number(pricingConfig.dphPercent) || 0;
       const dphSuma = grandTotalBezDph * (dphPercent / 100);
       grandTotal = grandTotalBezDph + dphSuma;
@@ -129,14 +133,15 @@ Deno.serve(async (req) => {
       sirka_cm: mode === 'auto' ? Number(widthCm) : null,
       vyska_cm: mode === 'auto' ? Number(heightCm) : null,
       pocet_ks: mode === 'auto' ? Math.max(1, Math.round(Number(qty)) || 1) : null,
-      dlzka_bm: mode === 'vzorky' ? 0 : Math.round(totalLengthBm * 100) / 100,
-      plocha_m2: mode === 'vzorky' ? null : Math.round(totalM2 * 100) / 100,
-      cena_hladina: mode === 'vzorky' ? 'A4 vzorka — pevná cena' : `${baseRate.toFixed(2)} €/bm`,
+      dlzka_bm: mode === 'auto' || mode === 'subor' ? Math.round(totalLengthBm * 100) / 100 : 0,
+      plocha_m2: mode === 'auto' || mode === 'subor' ? Math.round(totalM2 * 100) / 100 : null,
+      cena_hladina: mode === 'vzorky' ? 'A4 vzorka — pevná cena' : mode === 'paleta' ? 'Paleta farieb — pevná cena' : `${baseRate.toFixed(2)} €/bm`,
       cena_spolu: Math.round(grandTotal * 100) / 100,
-      doprava_rychlost: mode === 'vzorky' ? 'standard' : deliverySpeed,
-      harmonogram: mode === 'vzorky' ? 'A4 vzorka' : (harmonogram || null),
+      doprava_rychlost: mode === 'auto' || mode === 'subor' ? deliverySpeed : 'standard',
+      harmonogram: mode === 'vzorky' ? 'A4 vzorka' : mode === 'paleta' ? 'Paleta farieb' : (harmonogram || null),
       subor_nazov: suborNazov,
       subor_cesta: suborCesta,
+      graficka_priprava: (mode === 'auto' || mode === 'subor') && !!grafickaPriprava,
     });
     if (insertErr) throw insertErr;
 
@@ -147,10 +152,12 @@ Deno.serve(async (req) => {
     const token = await ziskajAdminToken(domain, clientId, clientSecret);
 
     const nazovPolozky = mode === 'auto'
-      ? `DTF transfer — metráž ${totalLengthBm.toFixed(2)}bm (${qty}× ${widthCm}×${heightCm}cm)`
+      ? `DTF transfer — metráž ${totalLengthBm.toFixed(2)}bm (${qty}× ${widthCm}×${heightCm}cm)` + (grafickaPriprava ? ' + príprava grafiky' : '')
       : mode === 'vzorky'
       ? 'DTF transfer — vzorka vlastnej grafiky (A4, 1 ks)'
-      : `DTF transfer — hotová rolka ${totalLengthBm.toFixed(2)}bm`;
+      : mode === 'paleta'
+      ? 'DTF transfer — paleta farieb'
+      : `DTF transfer — hotová rolka ${totalLengthBm.toFixed(2)}bm` + (grafickaPriprava ? ' + príprava grafiky' : '');
 
     const draftPayload = {
       draft_order: {
@@ -163,9 +170,10 @@ Deno.serve(async (req) => {
             requires_shipping: true,
             properties: [
               { name: '_objednavka_id', value: objednavkaId },
-              { name: '_dlzka_bm', value: mode === 'vzorky' ? 'A4' : totalLengthBm.toFixed(2) },
-              { name: '_harmonogram', value: mode === 'vzorky' ? '' : (harmonogram || '') },
+              { name: '_dlzka_bm', value: mode === 'auto' || mode === 'subor' ? totalLengthBm.toFixed(2) : mode === 'vzorky' ? 'A4' : '—' },
+              { name: '_harmonogram', value: mode === 'auto' || mode === 'subor' ? (harmonogram || '') : '' },
               { name: '_subor', value: suborNazov || '' },
+              { name: '_priprava_grafiky', value: grafickaPriprava ? 'áno (+10€)' : 'nie' },
             ],
           },
         ],
