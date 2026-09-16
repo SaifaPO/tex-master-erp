@@ -7306,9 +7306,9 @@ export default function App() {
                                 <p className="text-emerald-400 font-mono">{rozpis.elektrinaTlaciarenCena.toFixed(4)} €</p>
                               </div>
                             )}
-                            {kostra.textilSub?.kalander_zariadenie_id && (
+                            {kostra.textilSub?.lis_zariadenie_id && (
                               <div className="bg-slate-900 rounded p-2">
-                                <p className="text-slate-500">Elektrina lisu/kalandra</p>
+                                <p className="text-slate-500">Elektrina lisu</p>
                                 <p className="text-white font-mono">{rozpis.casNazehlovaniaMin} min</p>
                                 <p className="text-emerald-400 font-mono">{rozpis.elektrinaLisCena.toFixed(4)} €</p>
                               </div>

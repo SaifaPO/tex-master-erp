@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Layers3, Plus, Trash2 } from 'lucide-react';
+import { elektrinaZariadeniaEurZaHod } from './vyrobneNaklady';
 
 const inputCls = 'w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white';
 const labelCls = 'text-xs text-slate-400 font-medium';
@@ -54,11 +55,11 @@ export default function KostraCienTab({ supabase }) {
   const [sietotlacVelkosti, setSietotlacVelkosti] = useState([]);
   const [vysivka, setVysivka] = useState(null);
   const [materials, setMaterials] = useState([]);
-  const [zariadenia, setZariadenia] = useState([]);
+  const [costMetrics, setCostMetrics] = useState([]);
 
   const nacitaj = async () => {
     setIsLoading(true);
-    const [{ data: tn }, { data: sg }, { data: rez }, { data: fol }, { data: dtfN }, { data: siet }, { data: sietVel }, { data: vys }, { data: mats }, { data: zar }] = await Promise.all([
+    const [{ data: tn }, { data: sg }, { data: rez }, { data: fol }, { data: dtfN }, { data: siet }, { data: sietVel }, { data: vys }, { data: mats }, { data: metriky }] = await Promise.all([
       supabase.from('textil_naklady').select('*').eq('technologia', 'sublimacia').maybeSingle(),
       supabase.from('cennik_sublimacia_naklady').select('*').eq('id', 1).maybeSingle(),
       supabase.from('cennik_rezany_transfer').select('*').eq('id', 1).maybeSingle(),
@@ -68,11 +69,11 @@ export default function KostraCienTab({ supabase }) {
       supabase.from('cennik_sietotlac_velkosti').select('*').order('poradie'),
       supabase.from('kostra_vysivka').select('*').eq('id', 1).maybeSingle(),
       supabase.from('materials').select('id, name, unit').order('name'),
-      supabase.from('cost_metrics').select('id, name, category, power_kw, vykon_za_hodinu').eq('category', 'zariadenie').order('name'),
+      supabase.from('cost_metrics').select('id, name, category, value, power_kw, vykon_za_hodinu').order('name'),
     ]);
     setTextilSub(tn || { technologia: 'sublimacia', cena_papier_bm: 0, cena_ochranny_papier_bm: 0, cena_atrament_l: 0, spotreba_atrament_ml_m2: 0, cena_prace_hod: 0, rychlost_m_hod: 1 });
     setMaterials(mats || []);
-    setZariadenia(zar || []);
+    setCostMetrics(metriky || []);
     setSublimaciaGarment(sg || { id: 1, sirka_papiera_cm: 160, naklady_manipulacia: 0, naklady_ochranny_papier: 0, cas_nazehlovania_min: 0, koeficient_rizika_percent: 0 });
     setRezany(rez || { id: 1, cena_prace_hod: 0, cas_rezania_min: 0, cas_vylupovania_min: 0, cas_nazehlovania_min: 0, naklady_manipulacia: 0, sirka_folie_cm: 50, sirka_vyuzitelna_cm: 49 });
     setFolie(fol || []);
@@ -155,22 +156,36 @@ export default function KostraCienTab({ supabase }) {
   // vyrezy z rovnakej 160cm rolky, nie na celu sirku rolky)
   const MAX_FORMAT_CM2 = 38 * 48;
 
-  // Sublimacia — metraz (presne rovnaky vzorec ako vypocitajNakladBm v TextilMetrazTab.jsx)
+  // Registre zariadeni pre vyber v dropdownoch (len kategoria "zariadenie") — cely costMetrics
+  // (vratane "Cena elektriny") sa pouziva na dopocet sadzby cez elektrinaZariadeniaEurZaHod.
+  const zariadenia = costMetrics.filter(m => m.category === 'zariadenie');
+  const tlaciarenEurHod = elektrinaZariadeniaEurZaHod(costMetrics, textilSub.tlaciaren_zariadenie_id);
+  const kalanderEurHod = elektrinaZariadeniaEurZaHod(costMetrics, textilSub.kalander_zariadenie_id);
+  const lisEurHod = elektrinaZariadeniaEurZaHod(costMetrics, textilSub.lis_zariadenie_id);
+
+  // Sublimacia — metraz (presne rovnaky vzorec ako vypocitajNakladBm v TextilMetrazTab.jsx). Tlaciaren
+  // aj kalander bezia POCAS CELEHO PRECHODU rolky pri rychlosti rychlost_m_hod — elektrina oboch sa
+  // teda ratatuje rovnako (€/hod stroja / bm/hod rychlosti = €/bm).
   const ROLL_WIDTH_CM = 160;
   const ROLL_WIDTH_M = ROLL_WIDTH_CM / 100;
   const subInkM2 = ((textilSub.cena_atrament_l || 0) * (textilSub.spotreba_atrament_ml_m2 || 0) / 1000) * ROLL_WIDTH_M;
   const subLaborBm = (textilSub.cena_prace_hod || 0) / Math.max(0.01, textilSub.rychlost_m_hod || 1);
-  const vcSublimaciaMetrazBm = (textilSub.cena_papier_bm || 0) + (textilSub.cena_ochranny_papier_bm || 0) + subInkM2 + subLaborBm;
+  const subElektrinaMetrazBm = (tlaciarenEurHod + kalanderEurHod) / Math.max(0.01, textilSub.rychlost_m_hod || 1);
+  const vcSublimaciaMetrazBm = (textilSub.cena_papier_bm || 0) + (textilSub.cena_ochranny_papier_bm || 0) + subInkM2 + subLaborBm + subElektrinaMetrazBm;
 
   // Sublimacia — potlac na tricka: papier sa reze z tej istej 160cm rolky (nie samostatna sirka),
-  // cena sa pocita proporcionalne podla plochy vyrezaneho kusa (max. format 38x48cm, vsetko mensie rovnako)
+  // cena sa pocita proporcionalne podla plochy vyrezaneho kusa (max. format 38x48cm, vsetko mensie rovnako).
+  // Tu uz NIE kalander ale samostatny LIS (jednotlive kusy, nie kontinualna rolka) — tlaciaren bezi
+  // proporcionalne k ploche (rovnaky pomer ako papier/atrament), lis bezi flat cas na kus (nazehlenie).
   const subCenaPapierCm2 = ((textilSub.cena_papier_bm || 0) / ROLL_WIDTH_CM) / 100;
   const subCenaAtramentCm2 = (((textilSub.cena_atrament_l || 0) / 1000) * (textilSub.spotreba_atrament_ml_m2 || 0)) / 10000;
+  const subElektrinaTlaciarenCm2 = tlaciarenEurHod / Math.max(0.01, textilSub.rychlost_m_hod || 1) / 16000;
   const subGarmentPraca = ((sublimaciaGarment.cas_nazehlovania_min || 0) / 60) * (textilSub.cena_prace_hod || 0);
-  const subGarmentFlat = (sublimaciaGarment.naklady_manipulacia || 0) + (sublimaciaGarment.naklady_ochranny_papier || 0) + subGarmentPraca;
+  const subElektrinaLisFlat = lisEurHod * ((sublimaciaGarment.cas_nazehlovania_min || 0) / 60);
+  const subGarmentFlat = (sublimaciaGarment.naklady_manipulacia || 0) + (sublimaciaGarment.naklady_ochranny_papier || 0) + subGarmentPraca + subElektrinaLisFlat;
   const subRizikoNasobok = 1 + (sublimaciaGarment.koeficient_rizika_percent || 0) / 100;
-  const vcSublimaciaGarment = (REF_PLOCHA_CM2 * (subCenaPapierCm2 + subCenaAtramentCm2) + subGarmentFlat) * subRizikoNasobok;
-  const vcSublimaciaGarmentMax = (MAX_FORMAT_CM2 * (subCenaPapierCm2 + subCenaAtramentCm2) + subGarmentFlat) * subRizikoNasobok;
+  const vcSublimaciaGarment = (REF_PLOCHA_CM2 * (subCenaPapierCm2 + subCenaAtramentCm2 + subElektrinaTlaciarenCm2) + subGarmentFlat) * subRizikoNasobok;
+  const vcSublimaciaGarmentMax = (MAX_FORMAT_CM2 * (subCenaPapierCm2 + subCenaAtramentCm2 + subElektrinaTlaciarenCm2) + subGarmentFlat) * subRizikoNasobok;
 
   // Rezany transfer — cas rezania a vylupovania zavisi od grafiky, zadava sa ako min/cm² (nie flat
   // na zakazku) — nazehlovanie ostava flat na kus. Naklad materialu per-folia (viz zoznam folii nizsie).
@@ -245,18 +260,25 @@ export default function KostraCienTab({ supabase }) {
           </div>
           <div>
             <span className="text-xs font-bold text-slate-300 uppercase tracking-wide block mb-2">Prepojenie na stroje (elektrina v cene potlače)</span>
-            <p className="text-[11px] text-slate-500 mb-2">Priraď konkrétnu tlačiareň (Mimaki/Epson/Roland) a lis/kalander (Kalander/Karusel/Fixak) z registra zariadení (Prehľady → Všeobecná tabuľka nákladov, kategória "Zariadenie") — ich elektrina (kW × cena elektriny × reálny čas behu) sa pripočíta ako samostatná položka do ceny potlače. Bez priradenia sa nič nemení.</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-950 rounded-xl border border-slate-800">
+            <p className="text-[11px] text-slate-500 mb-2">Priraď konkrétny stroj z registra zariadení (Prehľady → Všeobecná tabuľka nákladov, kategória "Zariadenie") ku každému kroku — tlačiareň (Mimaki/Epson/Roland) tlačí motív pre OBA varianty (metráž aj tričká), kalander beží LEN pri metráži (kontinuálna rolka), lis beží LEN pri tričkách (jednotlivé kusy). Ich elektrina (kW × cena elektriny × reálny čas behu) sa pripočíta ako samostatná položka do ceny. Bez priradenia sa nič nemení.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-slate-950 rounded-xl border border-slate-800">
               <div>
-                <label className={labelCls}>Tlačiareň (podľa času tlače)</label>
+                <label className={labelCls}>Tlačiareň (metráž aj tričká)</label>
                 <select value={textilSub.tlaciaren_zariadenie_id || ''} onChange={(e) => ulozTextilSub({ tlaciaren_zariadenie_id: e.target.value || null })} className={inputCls}>
                   <option value="">— nepriradené —</option>
                   {zariadenia.map(z => (<option key={z.id} value={z.id}>{z.name}{z.power_kw ? ` (${z.power_kw}kW)` : ''}</option>))}
                 </select>
               </div>
               <div>
-                <label className={labelCls}>Lis / kalander (podľa času nažehlenia)</label>
+                <label className={labelCls}>Kalander (len metráž)</label>
                 <select value={textilSub.kalander_zariadenie_id || ''} onChange={(e) => ulozTextilSub({ kalander_zariadenie_id: e.target.value || null })} className={inputCls}>
+                  <option value="">— nepriradené —</option>
+                  {zariadenia.map(z => (<option key={z.id} value={z.id}>{z.name}{z.power_kw ? ` (${z.power_kw}kW)` : ''}</option>))}
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>Lis (len tričká)</label>
+                <select value={textilSub.lis_zariadenie_id || ''} onChange={(e) => ulozTextilSub({ lis_zariadenie_id: e.target.value || null })} className={inputCls}>
                   <option value="">— nepriradené —</option>
                   {zariadenia.map(z => (<option key={z.id} value={z.id}>{z.name}{z.power_kw ? ` (${z.power_kw}kW)` : ''}</option>))}
                 </select>
@@ -267,6 +289,9 @@ export default function KostraCienTab({ supabase }) {
             <div className="p-3 bg-slate-950 rounded-xl border border-teal-900/40">
               <span className="text-xs font-bold text-teal-400 block mb-2">Variant: Metráž (rolka)</span>
               <Field label="Rýchlosť tlače+fixácie (bm/hod)" value={textilSub.rychlost_m_hod} step="1" onChange={(v) => ulozTextilSub({ rychlost_m_hod: v })} />
+              {(textilSub.tlaciaren_zariadenie_id || textilSub.kalander_zariadenie_id) && (
+                <VysledokVC label="Elektrina tlačiareň+kalander" value={subElektrinaMetrazBm} unit="€/bm" />
+              )}
               <VysledokVC label="VC metráž" value={vcSublimaciaMetrazBm} unit="€/bm" />
             </div>
             <div className="p-3 bg-slate-950 rounded-xl border border-amber-900/40">
@@ -279,7 +304,13 @@ export default function KostraCienTab({ supabase }) {
                 <Field label="Koeficient rizika (%, pokazené kusy)" value={sublimaciaGarment.koeficient_rizika_percent} step="1" onChange={(v) => ulozSublimaciaGarment({ koeficient_rizika_percent: v })} />
               </div>
               <VysledokVC label="Materiál (papier+atrament)" value={subCenaPapierCm2 + subCenaAtramentCm2} unit="€/cm²" />
-              <VysledokVC label="Fixné náklady na kus (manipulácia+papier+nažehlenie)" value={subGarmentFlat} unit="€/ks" />
+              {textilSub.tlaciaren_zariadenie_id && (
+                <VysledokVC label="Elektrina tlačiarne" value={subElektrinaTlaciarenCm2} unit="€/cm²" />
+              )}
+              <VysledokVC label="Fixné náklady na kus (manipulácia+papier+nažehlenie+lis)" value={subGarmentFlat} unit="€/ks" />
+              {textilSub.lis_zariadenie_id && (
+                <p className="text-[11px] text-slate-500 -mt-2">z toho elektrina lisu: {subElektrinaLisFlat.toFixed(4)} €/ks</p>
+              )}
               <p className="text-[11px] text-slate-500 mt-2 mb-1">↓ Materiál×plocha + fixné náklady, × (1+riziko) — preto cena nerastie lineárne s plochou, kým fixné náklady dominujú:</p>
               <VysledokVC label={`VC pri malom logu (${REF_PLOCHA_CM2}cm² = 10×10cm)`} value={vcSublimaciaGarment} unit="€/ks" />
               <p className="text-[11px] text-slate-500 -mt-2">≈ {(vcSublimaciaGarment / REF_PLOCHA_CM2).toFixed(4)} €/cm² priemerne pri tejto ploche</p>

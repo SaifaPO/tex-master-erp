@@ -35,10 +35,12 @@ export async function nacitajKostru(supabase) {
 
 // €/hod prevadzky konkretneho zariadenia z registra (Financie -> Rezia firiem), na zaklade jeho
 // prikonu (kW) a aktualnej ceny elektriny (riadok "Cena elektriny" v cost_metrics). Ak zariadenie
-// nie je priradene alebo cena elektriny nie je nastavena, vracia 0 (spatna kompatibilita).
-function elektrinaZariadeniaEurZaHod(kostra, zariadenieId) {
+// nie je priradene alebo cena elektriny nie je nastavena, vracia 0 (spatna kompatibilita). Berie
+// priamo pole cost_metrics riadkov (nie cely "kostra" objekt), aby sa dal pouzit aj mimo Kostry cien
+// (napr. v KostraCienTab.jsx pri prepocte VC metraze, kde sa nacitava vlastny zoznam zariadeni).
+export function elektrinaZariadeniaEurZaHod(costMetricsRiadky, zariadenieId) {
   if (!zariadenieId) return 0;
-  const metriky = kostra.costMetrics || [];
+  const metriky = costMetricsRiadky || [];
   const zariadenie = metriky.find(m => m.id === zariadenieId);
   const cenaElektriny = metriky.find(m => m.name === 'Cena elektriny');
   if (!zariadenie || !cenaElektriny) return 0;
@@ -52,9 +54,12 @@ export function vcSublimaciaGarment(kostra, plochaCm2) {
 }
 
 // Sublimacia — podrobny rozpis (papier/atrament/protekcny papier v €, spotreba v bm/ml, cas tlace
-// v sekundach podla rychlosti valca, elektrina konkretnej tlaciarne a lisu/kalandra ak su priradene
-// v Kostre cien). Cas tlace (papierBm / rychlost valca) urcuje elektrinu TLACIARNE, cas nazehlovania
-// (cennik_sublimacia_naklady) urcuje elektrinu LISU/KALANDRA — kazdy stroj bezi inu cast procesu.
+// v sekundach podla rychlosti valca, elektrina konkretnej tlaciarne a lisu ak su priradene v Kostre
+// cien). POZOR na rozdiel oproti variantu Metraz: pri potlaci na tricka bezi tlaciaren (rovnaky
+// stroj ako pri metrazi) POCAS tlace motivu na papier, ale namiesto valcoveho kalandra (ten bezi
+// LEN pri metrazi — kontinualna rolka) sa jednotlive kusy nazehluju na samostatnom LISE — preto
+// textilSub.lis_zariadenie_id (nie kalander_zariadenie_id), viazane na cas nazehlovania z
+// cennik_sublimacia_naklady.
 export function vcSublimaciaGarmentRozpis(kostra, plochaCm2) {
   const { textilSub, sublimaciaGarment } = kostra;
   if (!textilSub || !sublimaciaGarment) return null;
@@ -68,8 +73,8 @@ export function vcSublimaciaGarmentRozpis(kostra, plochaCm2) {
   const praca = (casNazehlovaniaMin / 60) * (parseFloat(textilSub.cena_prace_hod) || 0);
   const rychlostMHod = parseFloat(textilSub.rychlost_m_hod) || 0;
   const casTlaceSekund = rychlostMHod > 0 ? (papierBm / rychlostMHod) * 3600 : 0;
-  const elektrinaTlaciarenCena = elektrinaZariadeniaEurZaHod(kostra, textilSub.tlaciaren_zariadenie_id) * (casTlaceSekund / 3600);
-  const elektrinaLisCena = elektrinaZariadeniaEurZaHod(kostra, textilSub.kalander_zariadenie_id) * (casNazehlovaniaMin / 60);
+  const elektrinaTlaciarenCena = elektrinaZariadeniaEurZaHod(kostra.costMetrics, textilSub.tlaciaren_zariadenie_id) * (casTlaceSekund / 3600);
+  const elektrinaLisCena = elektrinaZariadeniaEurZaHod(kostra.costMetrics, textilSub.lis_zariadenie_id) * (casNazehlovaniaMin / 60);
   const zaklad = papierCena + atramentCena + protekcnyPapierCena + manipulacia + praca + elektrinaTlaciarenCena + elektrinaLisCena;
   const koeficientPercent = parseFloat(sublimaciaGarment.koeficient_rizika_percent) || 0;
   const spolu = zaklad * (1 + koeficientPercent / 100);
