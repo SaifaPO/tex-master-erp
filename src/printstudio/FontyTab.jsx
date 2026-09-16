@@ -101,7 +101,7 @@ export default function FontyTab({ supabase }) {
         </div>
       )}
 
-      <div className="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-hidden">
+      <div className="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-slate-950/60 text-slate-500 text-xs uppercase tracking-wide">
             <tr><th className="text-left px-4 py-3">Ukážka</th><th className="text-left px-4 py-3">Názov</th><th className="text-left px-4 py-3">Použitie</th><th className="text-right px-4 py-3">Akcie</th></tr>

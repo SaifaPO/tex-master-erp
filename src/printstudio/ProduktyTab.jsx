@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, Edit2, Trash2, Box, Loader2, Tag, Check, X } from 'lucide-react';
 
-const ZONE_KEYS = ['predok', 'chrbat', 'lavy_rukav', 'pravy_rukav', 'stitok_golier'];
-const NAZVY_ZON = { predok: 'Predok', chrbat: 'Chrbát', lavy_rukav: 'Ľ. rukáv', pravy_rukav: 'P. rukáv', stitok_golier: 'Štítok (golier)' };
+const ZONE_KEYS = ['predok', 'chrbat', 'lavy_rukav', 'pravy_rukav', 'stitok_golier', 'dlhy_rukav_zapastie_prave', 'dlhy_rukav_zapastie_lave'];
+const NAZVY_ZON = { predok: 'Predok', chrbat: 'Chrbát', lavy_rukav: 'Ľ. rukáv', pravy_rukav: 'P. rukáv', stitok_golier: 'Štítok (golier)', dlhy_rukav_zapastie_prave: 'Dlhý rukáv – zápästie (P)', dlhy_rukav_zapastie_lave: 'Dlhý rukáv – zápästie (Ľ)' };
 const NAZVY_POHLAVIA = { muz: 'Muž', zena: 'Žena', dieta: 'Dieťa', unisex: 'Unisex' };
 const TECHNOLOGIE = [
   { value: 'sublimacia', label: 'Sublimácia' },
@@ -511,7 +511,7 @@ export default function ProduktyTab({ supabase }) {
         </div>
       )}
 
-      <div className="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-hidden">
+      <div className="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-slate-950/60 text-slate-500 text-xs uppercase tracking-wide">
             <tr>

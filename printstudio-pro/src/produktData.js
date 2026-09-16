@@ -1,4 +1,4 @@
-const ZONE_KEYS = ['predok', 'chrbat', 'lavy_rukav', 'pravy_rukav', 'stitok_golier'];
+const ZONE_KEYS = ['predok', 'chrbat', 'lavy_rukav', 'pravy_rukav', 'stitok_golier', 'dlhy_rukav_zapastie_prave', 'dlhy_rukav_zapastie_lave'];
 const TECHNOLOGIA_PORADIE = ['sublimacia', 'dtf', 'sietotlac', 'rezany'];
 
 export async function nacitajKategorieAProdukty(supabase) {

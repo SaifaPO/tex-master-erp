@@ -60,7 +60,7 @@ function PersonalizaciaSekcia({ supabase }) {
     <div>
       <h3 className="font-bold text-sm text-white mb-1">Personalizácia potlače — cenové stupne</h3>
       <p className="text-xs text-slate-400 mb-3">Vytvor v Shopify Admin produkt "Personalizácia potlače" a k nemu jeden variant pre každý cenový stupeň (0,50 €, 1,00 €, 1,50 € ...). Cena potlače vypočítaná v konfigurátore sa zaokrúhli na najbližší stupeň, ktorý tu máš nastavený — čím viac stupňov pridáš, tým presnejšie to sedí.</p>
-      <div className="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-hidden">
+      <div className="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-slate-950/60 text-slate-500 text-xs uppercase tracking-wide">
             <tr><th className="text-left px-4 py-2.5">Cena (€)</th><th className="text-left px-4 py-2.5">Shopify Variant ID</th><th className="px-4 py-2.5"></th></tr>

@@ -57,7 +57,7 @@ function JednoduchaSekcia({ supabase, tabulka, nazovSekcie, popisSekcie, maMaxMn
       {isLoading ? (
         <p className="text-sm text-slate-500">Načítavam…</p>
       ) : (
-        <div className="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-hidden">
+        <div className="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-950/60 text-slate-500 text-xs uppercase tracking-wide">
               <tr>

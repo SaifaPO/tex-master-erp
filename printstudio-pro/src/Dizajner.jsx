@@ -6,8 +6,8 @@ import { nacitajCennik, vypocitajCenuPotlace } from './cenotvorba';
 import { getSessionId } from './supabaseClient';
 import { nacitajGoogleFonty } from './loadGoogleFonts';
 
-const ZONE_KEYS = ['predok', 'chrbat', 'lavy_rukav', 'pravy_rukav', 'stitok_golier'];
-const NAZVY_ZON = { predok: 'Predná strana', chrbat: 'Chrbát', lavy_rukav: 'Ľavý rukáv', pravy_rukav: 'Pravý rukáv', stitok_golier: 'Štítok (golier)' };
+const ZONE_KEYS = ['predok', 'chrbat', 'lavy_rukav', 'pravy_rukav', 'stitok_golier', 'dlhy_rukav_zapastie_prave', 'dlhy_rukav_zapastie_lave'];
+const NAZVY_ZON = { predok: 'Predná strana', chrbat: 'Chrbát', lavy_rukav: 'Ľavý rukáv', pravy_rukav: 'Pravý rukáv', stitok_golier: 'Štítok (golier)', dlhy_rukav_zapastie_prave: 'Dlhý rukáv – zápästie (P)', dlhy_rukav_zapastie_lave: 'Dlhý rukáv – zápästie (Ľ)' };
 const NAZVY_TECHNOLOGIE = { sublimacia: 'Sublimácia', dtf: 'Digitálny transfer (DTF)', sietotlac: 'Sieťotlač', rezany: 'Rezaný transfer' };
 const CANVAS_PX_W = 240;
 const CANVAS_PX_H = 340;

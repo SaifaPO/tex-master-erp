@@ -68,7 +68,7 @@ export default function VlajkaVelkostiTab({ supabase }) {
         <p className="text-xs text-slate-400 mt-1">Cena veľkosti sa už nezadáva ručne — počíta sa z materiálu (spotreba m² × náklad materiálu, záložka "Materiály" a "Tvary") cez jednotný maržový vzorec. Tu nastavuješ len fyzické rozmery a k tomu sa v konfigurátore pripočíta materiál, opracovanie, prút a doplnky.</p>
       </div>
 
-      <div className="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-hidden">
+      <div className="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-slate-950/60 text-slate-500 text-xs uppercase tracking-wide">
             <tr>

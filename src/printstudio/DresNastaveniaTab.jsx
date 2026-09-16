@@ -165,7 +165,7 @@ export default function DresNastaveniaTab({ supabase }) {
               <button onClick={pridajMaterial} className="text-xs text-indigo-400 font-semibold hover:text-indigo-300 flex items-center gap-1"><Plus className="w-3.5 h-3.5" /> Pridať materiál</button>
             </div>
             <p className="text-xs text-slate-400 mb-3">Prvý materiál (najnižšie poradie) sa v konfigurátore ponúka ako štandard — príplatok 0 €.</p>
-            <div className="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-hidden">
+            <div className="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-slate-950/60 text-slate-500 text-xs uppercase tracking-wide">
                   <tr>
