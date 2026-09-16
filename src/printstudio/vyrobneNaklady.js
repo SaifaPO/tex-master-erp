@@ -81,7 +81,10 @@ export function vcSublimaciaGarmentRozpis(kostra, plochaCm2) {
   return { papierBm, papierCena, atramentMl, atramentCena, protekcnyPapierCena, manipulacia, casNazehlovaniaMin, praca, casTlaceSekund, elektrinaTlaciarenCena, elektrinaLisCena, koeficientPercent, spolu };
 }
 
-// DTF — potlac textilu.
+// DTF — potlac textilu. Elektrina: TLACIAREN a FIXACNY TUNEL bezia obe proporcionalne k ploche
+// (56cm siroky pas, rovnaky rolkovy princip ako pri sublimacii), kazda svojou vlastnou rychlostou.
+// TRANSFEROVY LIS (nazehlenie na textil) bezi flat cas na kus (cas_nazehlovania_min).
+const DTF_ROLL_WIDTH_CM = 56;
 export function vcDtfGarment(kostra, plochaCm2) {
   const n = kostra.dtf;
   if (!n) return 0;
@@ -92,7 +95,14 @@ export function vcDtfGarment(kostra, plochaCm2) {
     (parseFloat(n.cena_lepidlo_kg) || 0) * (parseFloat(n.spotreba_lepidlo_m2) || 0)
   );
   const praca = ((parseFloat(n.cas_nazehlovania_min) || 0) / 60) * (parseFloat(n.cena_prace_hod) || 0);
-  return material + (parseFloat(n.naklady_manipulacia) || 0) + praca;
+  const dlzkaBmDtf = plochaCm2 / (DTF_ROLL_WIDTH_CM * 100); // plocha (cm2) na 56cm sirokom pase -> bezne metre
+  const tlaciarenEurHod = elektrinaZariadeniaEurZaHod(kostra.costMetrics, n.tlaciaren_zariadenie_id);
+  const elektrinaTlaciaren = tlaciarenEurHod * (dlzkaBmDtf / Math.max(0.01, parseFloat(n.rychlost_tlace_m_hod) || 1));
+  const tunelEurHod = elektrinaZariadeniaEurZaHod(kostra.costMetrics, n.fixacny_tunel_zariadenie_id);
+  const elektrinaTunel = tunelEurHod * (dlzkaBmDtf / Math.max(0.01, parseFloat(n.rychlost_tunela_m_hod) || 1));
+  const lisEurHod = elektrinaZariadeniaEurZaHod(kostra.costMetrics, n.transferovy_lis_zariadenie_id);
+  const elektrinaLis = lisEurHod * ((parseFloat(n.cas_nazehlovania_min) || 0) / 60);
+  return material + (parseFloat(n.naklady_manipulacia) || 0) + praca + elektrinaTlaciaren + elektrinaTunel + elektrinaLis;
 }
 
 // Vysivka — digitalizacia rozpocitana na pocet kusov + cena od vysivaca na plochu.
@@ -118,17 +128,27 @@ export function vcSietotlacRozpad(kostra, velkostId, jeTmavy, pocetFarieb) {
   const n = Math.max(1, pocetFarieb || 1);
   return Array.from({ length: n }, (_, i) => nakladFarbySietotlac(kostra, velkostId, jeTmavy, i + 1));
 }
-// Celkova VC za CELU zakazku (vsetky farby + manipulacia/cistenie raz).
+// Elektrina karuselu (tlac cez sita) + fixacneho tunela (fixacia farby), oba flat cas na kus —
+// sietotlac (na rozdiel od ostatnych technologii) nema ziadny casovy rozmer v povodnom vzorci,
+// preto su cas_tlace_min/cas_fixacie_min NOVE polia (default 0 = spatna kompatibilita).
+function elektrinaSietotlacFlat(kostra) {
+  const sietotlac = kostra.sietotlac;
+  if (!sietotlac) return 0;
+  const karuselEurHod = elektrinaZariadeniaEurZaHod(kostra.costMetrics, sietotlac.karusel_zariadenie_id);
+  const tunelEurHod = elektrinaZariadeniaEurZaHod(kostra.costMetrics, sietotlac.fixacny_tunel_zariadenie_id);
+  return karuselEurHod * ((parseFloat(sietotlac.cas_tlace_min) || 0) / 60) + tunelEurHod * ((parseFloat(sietotlac.cas_fixacie_min) || 0) / 60);
+}
+// Celkova VC za CELU zakazku (vsetky farby + manipulacia/cistenie + elektrina strojov raz).
 export function vcSietotlacCelkom(kostra, velkostId, jeTmavy, pocetFarieb) {
   const sietotlac = kostra.sietotlac;
   const rozpad = vcSietotlacRozpad(kostra, velkostId, jeTmavy, pocetFarieb);
-  return rozpad.reduce((s, r) => s + r.spolu, 0) + (parseFloat(sietotlac?.naklady_manipulacia) || 0) + (parseFloat(sietotlac?.naklad_cistenie_zakazka) || 0);
+  return rozpad.reduce((s, r) => s + r.spolu, 0) + (parseFloat(sietotlac?.naklady_manipulacia) || 0) + (parseFloat(sietotlac?.naklad_cistenie_zakazka) || 0) + elektrinaSietotlacFlat(kostra);
 }
 // VC len za 1. farbu (zakladna predajna sadzba, bez dalsich farieb — tie sa predavaju cez priplatok).
 export function vcSietotlacZaklad(kostra, velkostId, jeTmavy) {
   const sietotlac = kostra.sietotlac;
   const prva = nakladFarbySietotlac(kostra, velkostId, jeTmavy, 1);
-  return prva.spolu + (parseFloat(sietotlac?.naklady_manipulacia) || 0) + (parseFloat(sietotlac?.naklad_cistenie_zakazka) || 0);
+  return prva.spolu + (parseFloat(sietotlac?.naklady_manipulacia) || 0) + (parseFloat(sietotlac?.naklad_cistenie_zakazka) || 0) + elektrinaSietotlacFlat(kostra);
 }
 export function plochaFormatuSietotlac(kostra, velkostId) {
   const velkost = (kostra.sietotlacVelkosti || []).find(v => v.id === velkostId);
@@ -137,6 +157,8 @@ export function plochaFormatuSietotlac(kostra, velkostId) {
 
 // Rezany transfer — naklad materialu je per-folia (€/bm prepocitane cez efektivnu sirku rolky),
 // cas rezania/vylupovania zavisi od plochy motivu, nazehlovanie a manipulacia su fixne na kus.
+// Elektrina: PLOTTER bezi pocas rezania (cas_rezania_min je uz min/cm², vylupovanie je rucna
+// praca, nie strojovy cas), TRANSFEROVY LIS bezi pocas flat casu nazehlovania.
 export function vcRezanyTransfer(kostra, foliaId, plochaCm2) {
   const rezany = kostra.rezany;
   const folia = (kostra.folie || []).find(f => f.id === foliaId);
@@ -145,5 +167,9 @@ export function vcRezanyTransfer(kostra, foliaId, plochaCm2) {
   const material = plochaCm2 * naklad_cm2;
   const pracaCm2 = ((parseFloat(rezany?.cas_rezania_min) || 0) + (parseFloat(rezany?.cas_vylupovania_min) || 0)) / 60 * (parseFloat(rezany?.cena_prace_hod) || 0) * plochaCm2;
   const pracaFlat = ((parseFloat(rezany?.cas_nazehlovania_min) || 0) / 60) * (parseFloat(rezany?.cena_prace_hod) || 0);
-  return material + (parseFloat(rezany?.naklady_manipulacia) || 0) + pracaFlat + pracaCm2;
+  const ploterEurHod = elektrinaZariadeniaEurZaHod(kostra.costMetrics, rezany?.ploter_zariadenie_id);
+  const elektrinaPloterCm2 = ploterEurHod * ((parseFloat(rezany?.cas_rezania_min) || 0) / 60) * plochaCm2;
+  const lisEurHod = elektrinaZariadeniaEurZaHod(kostra.costMetrics, rezany?.transferovy_lis_zariadenie_id);
+  const elektrinaLisFlat = lisEurHod * ((parseFloat(rezany?.cas_nazehlovania_min) || 0) / 60);
+  return material + (parseFloat(rezany?.naklady_manipulacia) || 0) + pracaFlat + pracaCm2 + elektrinaPloterCm2 + elektrinaLisFlat;
 }

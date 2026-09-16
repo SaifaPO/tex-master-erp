@@ -189,9 +189,22 @@ export default function KostraCienTab({ supabase }) {
 
   // Rezany transfer — cas rezania a vylupovania zavisi od grafiky, zadava sa ako min/cm² (nie flat
   // na zakazku) — nazehlovanie ostava flat na kus. Naklad materialu per-folia (viz zoznam folii nizsie).
-  const rezanyPracaFlat = ((rezany.cas_nazehlovania_min || 0) / 60) * (rezany.cena_prace_hod || 0) + (rezany.naklady_manipulacia || 0);
-  const rezanyPracaCm2 = ((rezany.cas_rezania_min || 0) + (rezany.cas_vylupovania_min || 0)) / 60 * (rezany.cena_prace_hod || 0);
+  const ploterEurHod = elektrinaZariadeniaEurZaHod(costMetrics, rezany.ploter_zariadenie_id);
+  const rezanyLisEurHod = elektrinaZariadeniaEurZaHod(costMetrics, rezany.transferovy_lis_zariadenie_id);
+  const rezanyPracaFlat = ((rezany.cas_nazehlovania_min || 0) / 60) * (rezany.cena_prace_hod || 0) + (rezany.naklady_manipulacia || 0) + rezanyLisEurHod * ((rezany.cas_nazehlovania_min || 0) / 60);
+  const rezanyPracaCm2 = ((rezany.cas_rezania_min || 0) + (rezany.cas_vylupovania_min || 0)) / 60 * (rezany.cena_prace_hod || 0) + ploterEurHod * ((rezany.cas_rezania_min || 0) / 60);
   const rezanyPraca = rezanyPracaFlat + rezanyPracaCm2 * REF_PLOCHA_CM2;
+
+  // Sietotlac — karusel (tlac cez sita) + fixacny tunel (fixacia farby), oba flat cas na kus.
+  const karuselEurHod = elektrinaZariadeniaEurZaHod(costMetrics, sietotlac.karusel_zariadenie_id);
+  const sietotlacTunelEurHod = elektrinaZariadeniaEurZaHod(costMetrics, sietotlac.fixacny_tunel_zariadenie_id);
+  const sietotlacElektrinaFlat = karuselEurHod * ((sietotlac.cas_tlace_min || 0) / 60) + sietotlacTunelEurHod * ((sietotlac.cas_fixacie_min || 0) / 60);
+
+  // DTF — elektrina stroja (tlaciaren aj fixacny tunel) pri metrazi bezia obe pocas celeho prechodu
+  // pasu, kazdy svojou rychlostou — tlaciaren pri rychlost_tlace_m_hod, tunel pri rychlost_tunela_m_hod.
+  const dtfTlaciarenEurHod = elektrinaZariadeniaEurZaHod(costMetrics, dtf.tlaciaren_zariadenie_id);
+  const dtfTunelEurHod = elektrinaZariadeniaEurZaHod(costMetrics, dtf.fixacny_tunel_zariadenie_id);
+  const dtfLisEurHod = elektrinaZariadeniaEurZaHod(costMetrics, dtf.transferovy_lis_zariadenie_id);
 
   // DTF — metraz (presne rovnaky vzorec ako v DtfMetrazTab.jsx, sirka role 56cm)
   const dtfFilmM2 = (dtf.cena_folie_bm || 0) / 0.56;
@@ -199,12 +212,16 @@ export default function KostraCienTab({ supabase }) {
   const dtfCmykM2 = (dtf.cena_cmyk_kg || 0) * (dtf.spotreba_cmyk_m2 || 0);
   const dtfWhiteM2 = (dtf.cena_biela_kg || 0) * (dtf.spotreba_biela_m2 || 0);
   const dtfLaborM2 = (dtf.cena_prace_hod || 0) / ((dtf.rychlost_tlace_m_hod || 1) * 0.56);
-  const vcDtfMetrazBm = (dtfFilmM2 + dtfGlueM2 + dtfCmykM2 + dtfWhiteM2 + dtfLaborM2) * 0.56;
+  const dtfElektrinaMetrazBm = dtfTlaciarenEurHod / Math.max(0.01, dtf.rychlost_tlace_m_hod || 1) + dtfTunelEurHod / Math.max(0.01, dtf.rychlost_tunela_m_hod || 1);
+  const vcDtfMetrazBm = (dtfFilmM2 + dtfGlueM2 + dtfCmykM2 + dtfWhiteM2 + dtfLaborM2) * 0.56 + dtfElektrinaMetrazBm;
 
   // DTF — potlac textilu (presne rovnaky vzorec ako vcDtf v CennikTab.jsx)
   const dtfMaterialM2 = dtfCmykM2 + dtfWhiteM2 + dtfGlueM2;
   const dtfGarmentPraca = ((dtf.cas_nazehlovania_min || 0) / 60) * (dtf.cena_prace_hod || 0);
-  const vcDtfGarment = REF_PLOCHA_M2 * dtfMaterialM2 + (dtf.naklady_manipulacia || 0) + dtfGarmentPraca;
+  const dtfDlzkaBmGarment = REF_PLOCHA_CM2 / (56 * 100);
+  const dtfElektrinaGarmentTlacTunel = dtfDlzkaBmGarment * (dtfTlaciarenEurHod / Math.max(0.01, dtf.rychlost_tlace_m_hod || 1) + dtfTunelEurHod / Math.max(0.01, dtf.rychlost_tunela_m_hod || 1));
+  const dtfElektrinaGarmentLis = dtfLisEurHod * ((dtf.cas_nazehlovania_min || 0) / 60);
+  const vcDtfGarment = REF_PLOCHA_M2 * dtfMaterialM2 + (dtf.naklady_manipulacia || 0) + dtfGarmentPraca + dtfElektrinaGarmentTlacTunel + dtfElektrinaGarmentLis;
 
   // Vysivka
   const vysivkaRefKs = 10;
@@ -334,6 +351,22 @@ export default function KostraCienTab({ supabase }) {
         </div>
         <VysledokVC label={`Práca + manipulácia pri ${REF_PLOCHA_CM2}cm² (10×10cm)`} value={rezanyPraca} unit="€/ks" />
         <p className="text-[11px] text-slate-500 -mt-2">≈ {(rezanyPraca / REF_PLOCHA_CM2).toFixed(4)} €/cm² priemerne pri tejto ploche</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-950 rounded-xl border border-slate-800 mt-3">
+          <div>
+            <label className={labelCls}>Plotter (podľa času rezania)</label>
+            <select value={rezany.ploter_zariadenie_id || ''} onChange={(e) => ulozRezany({ ploter_zariadenie_id: e.target.value || null })} className={inputCls}>
+              <option value="">— nepriradené —</option>
+              {zariadenia.map(z => (<option key={z.id} value={z.id}>{z.name}{z.power_kw ? ` (${z.power_kw}kW)` : ''}</option>))}
+            </select>
+          </div>
+          <div>
+            <label className={labelCls}>Transferový lis (podľa času nažehlenia)</label>
+            <select value={rezany.transferovy_lis_zariadenie_id || ''} onChange={(e) => ulozRezany({ transferovy_lis_zariadenie_id: e.target.value || null })} className={inputCls}>
+              <option value="">— nepriradené —</option>
+              {zariadenia.map(z => (<option key={z.id} value={z.id}>{z.name}{z.power_kw ? ` (${z.power_kw}kW)` : ''}</option>))}
+            </select>
+          </div>
+        </div>
         <div className="grid grid-cols-2 gap-3 p-3 bg-slate-950 rounded-xl border border-slate-800 mt-4 mb-3 max-w-md">
           <Field label="Nominálna šírka fólie (cm)" value={rezany.sirka_folie_cm} step="1" onChange={(v) => ulozRezany({ sirka_folie_cm: v })} />
           <Field label="Efektívne využiteľná šírka (cm)" value={rezany.sirka_vyuzitelna_cm} step="1" onChange={(v) => ulozRezany({ sirka_vyuzitelna_cm: v })} />
@@ -373,12 +406,40 @@ export default function KostraCienTab({ supabase }) {
           <Field label="Spotreba lepidla (kg/m²)" value={dtf.spotreba_lepidlo_m2} step="0.005" onChange={(v) => ulozDtf({ spotreba_lepidlo_m2: v })} />
           <Field label="Práca + energie (€/hod)" value={dtf.cena_prace_hod} step="1" onChange={(v) => ulozDtf({ cena_prace_hod: v })} />
         </div>
+        <div>
+          <span className="text-xs font-bold text-slate-300 uppercase tracking-wide block mb-2">Prepojenie na stroje (elektrina v cene potlače)</span>
+          <p className="text-[11px] text-slate-500 mb-2">Tlačiareň tlačí pre OBA varianty (metráž aj potlač textilu), fixačný tunel tiež (má vlastnú rýchlosť pása), transferový lis len pri potlači textilu (nažehlenie na kus).</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-slate-950 rounded-xl border border-slate-800">
+            <div>
+              <label className={labelCls}>Tlačiareň (metráž aj textil)</label>
+              <select value={dtf.tlaciaren_zariadenie_id || ''} onChange={(e) => ulozDtf({ tlaciaren_zariadenie_id: e.target.value || null })} className={inputCls}>
+                <option value="">— nepriradené —</option>
+                {zariadenia.map(z => (<option key={z.id} value={z.id}>{z.name}{z.power_kw ? ` (${z.power_kw}kW)` : ''}</option>))}
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Fixačný tunel (metráž aj textil)</label>
+              <select value={dtf.fixacny_tunel_zariadenie_id || ''} onChange={(e) => ulozDtf({ fixacny_tunel_zariadenie_id: e.target.value || null })} className={inputCls}>
+                <option value="">— nepriradené —</option>
+                {zariadenia.map(z => (<option key={z.id} value={z.id}>{z.name}{z.power_kw ? ` (${z.power_kw}kW)` : ''}</option>))}
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Transferový lis (len textil)</label>
+              <select value={dtf.transferovy_lis_zariadenie_id || ''} onChange={(e) => ulozDtf({ transferovy_lis_zariadenie_id: e.target.value || null })} className={inputCls}>
+                <option value="">— nepriradené —</option>
+                {zariadenia.map(z => (<option key={z.id} value={z.id}>{z.name}{z.power_kw ? ` (${z.power_kw}kW)` : ''}</option>))}
+              </select>
+            </div>
+          </div>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="p-3 bg-slate-950 rounded-xl border border-teal-900/40">
             <span className="text-xs font-bold text-teal-400 block mb-2">Variant: Metráž (rolka, 56cm)</span>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Cena PET fólie (€/bm)" value={dtf.cena_folie_bm} step="0.1" onChange={(v) => ulozDtf({ cena_folie_bm: v })} />
               <Field label="Rýchlosť tlače (m/hod)" value={dtf.rychlost_tlace_m_hod} step="0.5" onChange={(v) => ulozDtf({ rychlost_tlace_m_hod: v })} />
+              <Field label="Rýchlosť fixačného tunela (m/hod)" value={dtf.rychlost_tunela_m_hod} step="0.5" onChange={(v) => ulozDtf({ rychlost_tunela_m_hod: v })} />
             </div>
             <VysledokVC label="VC metráž" value={vcDtfMetrazBm} unit="€/bm" />
           </div>
@@ -404,6 +465,31 @@ export default function KostraCienTab({ supabase }) {
           <Field label="Sito — náklad na 1 farbu/sito (€)" value={sietotlac.naklad_sito_zakazka} step="0.5" onChange={(v) => ulozSietotlac({ naklad_sito_zakazka: v })} hint="Pri 3 farbách sa počíta 3× (3 sitá)." />
           <Field label="Čistiace prípravky (€/zákazku)" value={sietotlac.naklad_cistenie_zakazka} step="0.1" onChange={(v) => ulozSietotlac({ naklad_cistenie_zakazka: v })} />
           <Field label="Odporúčaný min. počet ks" value={sietotlac.odporucany_min_ks} step="1" onChange={(v) => ulozSietotlac({ odporucany_min_ks: v })} hint="Informačne — menšie zákazky sú možné, len drahšie na kus." />
+        </div>
+        <div className="mb-4">
+          <span className="text-xs font-bold text-slate-300 uppercase tracking-wide block mb-2">Prepojenie na stroje (elektrina v cene potlače)</span>
+          <p className="text-[11px] text-slate-500 mb-2">Karusel (tlač cez sitá) a fixačný tunel (fixácia farby) bežia flat čas na kus — zadaj minúty aj priraď stroj z registra zariadení.</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 bg-slate-950 rounded-xl border border-slate-800">
+            <div>
+              <label className={labelCls}>Karusel</label>
+              <select value={sietotlac.karusel_zariadenie_id || ''} onChange={(e) => ulozSietotlac({ karusel_zariadenie_id: e.target.value || null })} className={inputCls}>
+                <option value="">— nepriradené —</option>
+                {zariadenia.map(z => (<option key={z.id} value={z.id}>{z.name}{z.power_kw ? ` (${z.power_kw}kW)` : ''}</option>))}
+              </select>
+            </div>
+            <Field label="Čas tlače (min/ks)" value={sietotlac.cas_tlace_min} step="0.1" onChange={(v) => ulozSietotlac({ cas_tlace_min: v })} hint={casFlatHint(sietotlac.cas_tlace_min)} />
+            <div>
+              <label className={labelCls}>Fixačný tunel</label>
+              <select value={sietotlac.fixacny_tunel_zariadenie_id || ''} onChange={(e) => ulozSietotlac({ fixacny_tunel_zariadenie_id: e.target.value || null })} className={inputCls}>
+                <option value="">— nepriradené —</option>
+                {zariadenia.map(z => (<option key={z.id} value={z.id}>{z.name}{z.power_kw ? ` (${z.power_kw}kW)` : ''}</option>))}
+              </select>
+            </div>
+            <Field label="Čas fixácie (min/ks)" value={sietotlac.cas_fixacie_min} step="0.1" onChange={(v) => ulozSietotlac({ cas_fixacie_min: v })} hint={casFlatHint(sietotlac.cas_fixacie_min)} />
+          </div>
+          {(sietotlac.karusel_zariadenie_id || sietotlac.fixacny_tunel_zariadenie_id) && (
+            <VysledokVC label="Elektrina karusel+tunel" value={sietotlacElektrinaFlat} unit="€/ks" />
+          )}
         </div>
         <div className="flex items-center justify-between mb-2">
           <label className={labelCls}>Formáty a spotreba farby pre 1. farbu (svetlý / tmavý textil = 1 vrstva / 2 vrstvy)</label>

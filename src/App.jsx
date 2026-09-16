@@ -7335,7 +7335,7 @@ export default function App() {
                               </div>
                             ))}
                           </div>
-                          <p className="text-[10px] text-slate-500 mt-2">Spolu (vrátane manipulácie/čistenia): <span className="text-emerald-400 font-semibold">{vypocitajCenuSietotlace(p)?.toFixed(2)} €/ks</span></p>
+                          <p className="text-[10px] text-slate-500 mt-2">Spolu (vrátane manipulácie/čistenia{(kostra.sietotlac?.karusel_zariadenie_id || kostra.sietotlac?.fixacny_tunel_zariadenie_id) ? ' + elektriny karuselu/tunela' : ''}): <span className="text-emerald-400 font-semibold">{vypocitajCenuSietotlace(p)?.toFixed(2)} €/ks</span></p>
                         </div>
                       );
                     })()}
