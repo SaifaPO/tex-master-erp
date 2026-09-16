@@ -138,17 +138,24 @@ function elektrinaSietotlacFlat(kostra) {
   const tunelEurHod = elektrinaZariadeniaEurZaHod(kostra.costMetrics, sietotlac.fixacny_tunel_zariadenie_id);
   return karuselEurHod * ((parseFloat(sietotlac.cas_tlace_min) || 0) / 60) + tunelEurHod * ((parseFloat(sietotlac.cas_fixacie_min) || 0) / 60);
 }
-// Celkova VC za CELU zakazku (vsetky farby + manipulacia/cistenie + elektrina strojov raz).
+// Praca operatora (obsluha karuselu + tunela), flat cas na kus — samostatne od elektriny strojov.
+function pracaSietotlacFlat(kostra) {
+  const sietotlac = kostra.sietotlac;
+  if (!sietotlac) return 0;
+  const celkovyCasMin = (parseFloat(sietotlac.cas_tlace_min) || 0) + (parseFloat(sietotlac.cas_fixacie_min) || 0);
+  return (celkovyCasMin / 60) * (parseFloat(sietotlac.cena_prace_hod) || 0);
+}
+// Celkova VC za CELU zakazku (vsetky farby + manipulacia/cistenie + praca + elektrina strojov raz).
 export function vcSietotlacCelkom(kostra, velkostId, jeTmavy, pocetFarieb) {
   const sietotlac = kostra.sietotlac;
   const rozpad = vcSietotlacRozpad(kostra, velkostId, jeTmavy, pocetFarieb);
-  return rozpad.reduce((s, r) => s + r.spolu, 0) + (parseFloat(sietotlac?.naklady_manipulacia) || 0) + (parseFloat(sietotlac?.naklad_cistenie_zakazka) || 0) + elektrinaSietotlacFlat(kostra);
+  return rozpad.reduce((s, r) => s + r.spolu, 0) + (parseFloat(sietotlac?.naklady_manipulacia) || 0) + (parseFloat(sietotlac?.naklad_cistenie_zakazka) || 0) + pracaSietotlacFlat(kostra) + elektrinaSietotlacFlat(kostra);
 }
 // VC len za 1. farbu (zakladna predajna sadzba, bez dalsich farieb — tie sa predavaju cez priplatok).
 export function vcSietotlacZaklad(kostra, velkostId, jeTmavy) {
   const sietotlac = kostra.sietotlac;
   const prva = nakladFarbySietotlac(kostra, velkostId, jeTmavy, 1);
-  return prva.spolu + (parseFloat(sietotlac?.naklady_manipulacia) || 0) + (parseFloat(sietotlac?.naklad_cistenie_zakazka) || 0) + elektrinaSietotlacFlat(kostra);
+  return prva.spolu + (parseFloat(sietotlac?.naklady_manipulacia) || 0) + (parseFloat(sietotlac?.naklad_cistenie_zakazka) || 0) + pracaSietotlacFlat(kostra) + elektrinaSietotlacFlat(kostra);
 }
 export function plochaFormatuSietotlac(kostra, velkostId) {
   const velkost = (kostra.sietotlacVelkosti || []).find(v => v.id === velkostId);

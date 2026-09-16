@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Layers3, Plus, Trash2 } from 'lucide-react';
-import { elektrinaZariadeniaEurZaHod } from './vyrobneNaklady';
+import { elektrinaZariadeniaEurZaHod, vcSietotlacCelkom } from './vyrobneNaklady';
 
 const inputCls = 'w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white';
 const labelCls = 'text-xs text-slate-400 font-medium';
@@ -32,10 +32,11 @@ function casFlatHint(minPerKs) {
 
 function VysledokVC({ label, value, unit, decimals }) {
   const d = decimals ?? (unit === '€/cm²' ? 6 : 4);
+  const zobrazenaJednotka = unit && unit.includes('€') ? `${unit} bez DPH` : unit;
   return (
     <div className="mt-3 pt-3 border-t border-slate-800 flex items-center justify-between">
       <span className="text-xs font-semibold text-slate-300">{label}</span>
-      <span className="text-sm font-mono font-bold text-emerald-400">{value.toFixed(d)} {unit}</span>
+      <span className="text-sm font-mono font-bold text-emerald-400">{value.toFixed(d)} {zobrazenaJednotka}</span>
     </div>
   );
 }
@@ -78,7 +79,7 @@ export default function KostraCienTab({ supabase }) {
     setRezany(rez || { id: 1, cena_prace_hod: 0, cas_rezania_min: 0, cas_vylupovania_min: 0, cas_nazehlovania_min: 0, naklady_manipulacia: 0, sirka_folie_cm: 50, sirka_vyuzitelna_cm: 49 });
     setFolie(fol || []);
     setDtf(dtfN || { id: 1, cena_cmyk_kg: 0, spotreba_cmyk_m2: 0, cena_biela_kg: 0, spotreba_biela_m2: 0, cena_lepidlo_kg: 0, spotreba_lepidlo_m2: 0, cena_prace_hod: 0, cena_folie_bm: 0, rychlost_tlace_m_hod: 1, naklady_manipulacia: 0, cas_nazehlovania_min: 0 });
-    setSietotlac(siet || { id: 1, cena_farba_kg: 0, naklady_manipulacia: 0, naklad_sito_zakazka: 0, naklad_cistenie_zakazka: 0, odporucany_min_ks: 30 });
+    setSietotlac(siet || { id: 1, cena_farba_kg: 0, naklady_manipulacia: 0, naklad_sito_zakazka: 0, naklad_cistenie_zakazka: 0, odporucany_min_ks: 30, cena_prace_hod: 0 });
     setSietotlacVelkosti(sietVel || []);
     setVysivka(vys || { id: 1, cena_digitalizacia: 0, cena_vysivky_cm2: 0 });
     setIsLoading(false);
@@ -232,6 +233,7 @@ export default function KostraCienTab({ supabase }) {
       <div>
         <h2 className="text-xl font-bold text-white flex items-center gap-2"><Layers3 className="text-indigo-400 h-5 w-5" /> Kostra cien — výrobné náklady</h2>
         <p className="text-xs text-slate-400 mt-1">Jediné miesto na zadanie surových výrobných nákladov (materiál, farby, fólie, práca) pre všetky technológie. Karty <strong className="text-slate-200">Metráže</strong> a <strong className="text-slate-200">Potlače</strong> odtiaľto živo ťahajú výrobnú cenu (VC) — nič sa tam už neduplikuje.</p>
+        <p className="text-[11px] text-amber-400/90 mt-2 bg-amber-950/20 border border-amber-900/40 rounded-lg px-3 py-2 inline-block">⚠️ Všetky ceny na tejto stránke (aj vstupy, aj vypočítané "VC" náhľady) sú <strong>BEZ DPH</strong> — je to interný náklad, nie predajná cena. DPH sa pripočíta až v Potlačiach/Metrážach (predajné sadzby) a v appkách, ktoré vidí zákazník.</p>
       </div>
 
       {/* SUBLIMACIA */}
@@ -379,13 +381,13 @@ export default function KostraCienTab({ supabase }) {
           {folie.map(f => {
             const nakladCm2 = (rezany.sirka_vyuzitelna_cm || 0) > 0 ? ((parseFloat(f.naklad_bm) || 0) / rezany.sirka_vyuzitelna_cm) / 100 : 0;
             return (
-              <div key={f.id} className="flex items-center gap-2">
-                <input type="text" value={f.nazov} onChange={(e) => upravFoliu(f.id, { nazov: e.target.value })} className="flex-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" />
+              <div key={f.id} className="flex flex-wrap items-center gap-2 bg-slate-950/40 rounded-lg p-2">
+                <input type="text" value={f.nazov} onChange={(e) => upravFoliu(f.id, { nazov: e.target.value })} className="flex-1 min-w-[100px] px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" />
                 <div className="flex items-center gap-1 text-xs text-slate-400 shrink-0">
-                  <input type="number" step="0.05" value={f.naklad_bm || 0} onChange={(e) => upravFoliu(f.id, { naklad_bm: parseFloat(e.target.value) || 0 })} className="w-20 px-2 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /> €/bm
+                  <input type="number" step="0.05" value={f.naklad_bm || 0} onChange={(e) => upravFoliu(f.id, { naklad_bm: parseFloat(e.target.value) || 0 })} className="w-20 px-2 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /> €/bm (bez DPH)
                 </div>
-                <span className="text-[11px] text-slate-500 shrink-0">= {nakladCm2.toFixed(6)} €/cm² • {(nakladCm2 * 100).toFixed(4)} € pri 10×10cm</span>
-                <button onClick={() => zmazFoliu(f.id)} className="text-slate-400 hover:text-rose-400 p-1.5 shrink-0"><Trash2 className="w-4 h-4" /></button>
+                <button onClick={() => zmazFoliu(f.id)} className="text-slate-400 hover:text-rose-400 p-1.5 shrink-0 ml-auto"><Trash2 className="w-4 h-4" /></button>
+                <span className="text-[11px] text-slate-500 w-full">= {nakladCm2.toFixed(6)} €/cm² • {(nakladCm2 * 100).toFixed(4)} € pri 10×10cm (bez DPH)</span>
               </div>
             );
           })}
@@ -464,7 +466,8 @@ export default function KostraCienTab({ supabase }) {
           <Field label="Manipulácia (€/ks)" value={sietotlac.naklady_manipulacia} step="0.01" onChange={(v) => ulozSietotlac({ naklady_manipulacia: v })} />
           <Field label="Sito — náklad na 1 farbu/sito (€)" value={sietotlac.naklad_sito_zakazka} step="0.5" onChange={(v) => ulozSietotlac({ naklad_sito_zakazka: v })} hint="Pri 3 farbách sa počíta 3× (3 sitá)." />
           <Field label="Čistiace prípravky (€/zákazku)" value={sietotlac.naklad_cistenie_zakazka} step="0.1" onChange={(v) => ulozSietotlac({ naklad_cistenie_zakazka: v })} />
-          <Field label="Odporúčaný min. počet ks" value={sietotlac.odporucany_min_ks} step="1" onChange={(v) => ulozSietotlac({ odporucany_min_ks: v })} hint="Informačne — menšie zákazky sú možné, len drahšie na kus." />
+          <Field label="Odporúčaný min. počet ks" value={sietotlac.odporucany_min_ks} step="1" onChange={(v) => ulozSietotlac({ odporucany_min_ks: v })} hint="Informačne — toto je len ODPORÚČANIE, menšie zákazky sú možné, len drahšie na kus." />
+          <Field label="Práca operátora (€/hod)" value={sietotlac.cena_prace_hod} step="1" onChange={(v) => ulozSietotlac({ cena_prace_hod: v })} hint="Obsluha karuselu + tunela, za čas tlače+fixácie zadaný nižšie." />
         </div>
         <div className="mb-4">
           <span className="text-xs font-bold text-slate-300 uppercase tracking-wide block mb-2">Prepojenie na stroje (elektrina v cene potlače)</span>
@@ -512,6 +515,19 @@ export default function KostraCienTab({ supabase }) {
           ))}
           {sietotlacVelkosti.length === 0 && <p className="text-xs text-slate-500">Zatiaľ žiadne formáty.</p>}
         </div>
+        {sietotlacVelkosti.length > 0 && (() => {
+          const kostraPreview = { sietotlac, sietotlacVelkosti, costMetrics };
+          const prvyFormat = sietotlacVelkosti[0];
+          const vc1 = vcSietotlacCelkom(kostraPreview, prvyFormat.id, false, 1);
+          const vc3 = vcSietotlacCelkom(kostraPreview, prvyFormat.id, false, 3);
+          return (
+            <div className="mt-3">
+              <p className="text-[11px] text-slate-500 mb-1">Náhľad pri formáte "{prvyFormat.label}", svetlý textil:</p>
+              <VysledokVC label="VC pri 1 farbe" value={vc1} unit="€/ks" />
+              <VysledokVC label="VC pri 3 farbách" value={vc3} unit="€/ks" />
+            </div>
+          );
+        })()}
       </div>
 
       {/* VYSIVKA */}
