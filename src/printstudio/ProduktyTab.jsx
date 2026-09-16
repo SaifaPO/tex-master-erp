@@ -41,19 +41,26 @@ export default function ProduktyTab({ supabase }) {
   const [farbyIds, setFarbyIds] = useState([]);
   const [formZony, setFormZony] = useState({ predok: true, chrbat: true, lavy_rukav: false, pravy_rukav: false });
   const [formVelkosti, setFormVelkosti] = useState([]);
+  const [materials, setMaterials] = useState([]);
+  const [warehouses, setWarehouses] = useState([]);
+  const [skladMapovanie, setSkladMapovanie] = useState({}); // { `${farbaId}|${velkost}`: materialId }
 
   const nacitajZoznam = async () => {
     setIsLoading(true);
-    const [{ data: prod }, { data: kats }, { data: fb }, { data: pf }, { data: zony }, { data: tech }] = await Promise.all([
+    const [{ data: prod }, { data: kats }, { data: fb }, { data: pf }, { data: zony }, { data: tech }, { data: mats }, { data: whs }] = await Promise.all([
       supabase.from('produkty').select('*').order('id'),
       supabase.from('kategorie').select('*').order('poradie').order('id'),
       supabase.from('farby').select('*').order('id'),
       supabase.from('produkt_farby').select('produkt_id, farba_id'),
       supabase.from('produkt_velkost_zony').select('zona, produkt_velkosti!inner(produkt_id)'),
       supabase.from('produkt_technologie').select('produkt_id, technologia'),
+      supabase.from('materials').select('id, name, qty, unit, warehouse_id').order('name'),
+      supabase.from('warehouses').select('id, name'),
     ]);
     setKategorie(kats || []);
     setFarby(fb || []);
+    setMaterials(mats || []);
+    setWarehouses(whs || []);
     const farbyMap = {};
     (pf || []).forEach(r => { (farbyMap[r.produkt_id] = farbyMap[r.produkt_id] || []).push(r.farba_id); });
     setProdukty((prod || []).map(p => ({ ...p, farbyIds: farbyMap[p.id] || [] })));
@@ -102,6 +109,7 @@ export default function ProduktyTab({ supabase }) {
     setTechnologie(['sublimacia']); setDodavatel(''); setAktivny(true); setFarbyIds([]);
     setFormZony({ predok: true, chrbat: true, lavy_rukav: false, pravy_rukav: false });
     setFormVelkosti([]);
+    setSkladMapovanie({});
     setError('');
   };
 
@@ -135,6 +143,11 @@ export default function ProduktyTab({ supabase }) {
       (v.produkt_velkost_zony || []).forEach(z => { zonyObj[z.zona] = { w: z.max_sirka_cm, h: z.max_vyska_cm }; });
       return { velkost: v.velkost, zony: zonyObj };
     }));
+
+    const { data: mapovanie } = await supabase.from('produkt_sklad_mapovanie').select('farba_id, velkost, material_id').eq('produkt_id', p.id);
+    const mapObj = {};
+    (mapovanie || []).forEach(m => { mapObj[`${m.farba_id}|${m.velkost}`] = m.material_id || ''; });
+    setSkladMapovanie(mapObj);
     setFormOpen(true);
   };
 
@@ -238,6 +251,21 @@ export default function ProduktyTab({ supabase }) {
       if (zonyRiadky.length > 0) {
         await supabase.from('produkt_velkost_zony').insert(zonyRiadky);
       }
+    }
+
+    // Prepojenie na Sklad (produkt+farba+velkost -> konkretna polozka) — plne prepisanie. Velkost sa
+    // uklada ako text (nie FK na produkt_velkosti.id), lebo tie sa vyssie kazdy krat premazu a znova
+    // vytvoria s novymi id — takto väzba prezije aj upravu inych casti produktu.
+    await supabase.from('produkt_sklad_mapovanie').delete().eq('produkt_id', produktId);
+    const mapovanieRiadky = [];
+    farbyIds.forEach(farbaId => {
+      formVelkosti.forEach(v => {
+        const materialId = skladMapovanie[`${farbaId}|${v.velkost}`];
+        if (materialId) mapovanieRiadky.push({ produkt_id: produktId, farba_id: farbaId, velkost: v.velkost.trim(), material_id: materialId });
+      });
+    });
+    if (mapovanieRiadky.length > 0) {
+      await supabase.from('produkt_sklad_mapovanie').insert(mapovanieRiadky);
     }
 
     setIsSaving(false);
@@ -430,6 +458,43 @@ export default function ProduktyTab({ supabase }) {
               ))}
             </div>
           </div>
+
+          {farbyIds.length > 0 && formVelkosti.length > 0 && (
+            <div>
+              <label className="text-xs text-slate-400 font-medium block mb-1">Prepojenie na Sklad (farba × veľkosť)</label>
+              <p className="text-[11px] text-slate-500 mb-1.5">Priraď ku každej kombinácii farby a veľkosti konkrétnu položku zo Skladu (typicky Vzorkový sklad), aby sa dala overiť reálna dostupnosť pri objednávke. Bez priradenia sa dostupnosť neoverí.</p>
+              <div className="overflow-x-auto rounded-xl border border-slate-800">
+                <table className="w-full text-xs">
+                  <thead className="bg-slate-950/60 text-slate-500 uppercase tracking-wide">
+                    <tr>
+                      <th className="text-left px-2 py-2">Farba</th>
+                      {formVelkosti.map((v, idx) => <th key={idx} className="text-left px-2 py-2">{v.velkost || '—'}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {farby.filter(f => farbyIds.includes(f.id)).map(f => (
+                      <tr key={f.id} className="border-t border-slate-800">
+                        <td className="px-2 py-1.5 whitespace-nowrap"><span className="w-3 h-3 rounded-full inline-block mr-1" style={{ background: f.hex }}></span>{f.nazov}</td>
+                        {formVelkosti.map((v, idx) => {
+                          const key = `${f.id}|${v.velkost}`;
+                          const mat = materials.find(m => m.id === skladMapovanie[key]);
+                          return (
+                            <td key={idx} className="px-2 py-1.5">
+                              <select value={skladMapovanie[key] || ''} onChange={(e) => setSkladMapovanie(prev => ({ ...prev, [key]: e.target.value }))} className="w-40 px-2 py-1 bg-slate-950 border border-slate-800 rounded-md text-xs text-white">
+                                <option value="">— nepriradené —</option>
+                                {materials.map(m => (<option key={m.id} value={m.id}>{m.name} — {warehouses.find(w => w.id === m.warehouse_id)?.name || '?'}</option>))}
+                              </select>
+                              {mat && <p className="text-[10px] text-slate-500 mt-0.5">skladom: {mat.qty} {mat.unit}</p>}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           <label className="flex items-center gap-2 text-sm text-slate-300">
             <input type="checkbox" checked={aktivny} onChange={(e) => setAktivny(e.target.checked)} className="rounded bg-slate-950 border-slate-700" /> Produkt je aktívny (viditeľný v konfigurátore)
