@@ -7299,6 +7299,20 @@ export default function App() {
                               <p className="text-white font-mono">{rozpis.casTlaceSekund.toFixed(1)} sek</p>
                               <p className="text-slate-500 font-mono">(pri {kostra.textilSub?.rychlost_m_hod || 0} bm/hod)</p>
                             </div>
+                            {kostra.textilSub?.tlaciaren_zariadenie_id && (
+                              <div className="bg-slate-900 rounded p-2">
+                                <p className="text-slate-500">Elektrina tlačiarne</p>
+                                <p className="text-white font-mono">{rozpis.casTlaceSekund.toFixed(1)} sek</p>
+                                <p className="text-emerald-400 font-mono">{rozpis.elektrinaTlaciarenCena.toFixed(4)} €</p>
+                              </div>
+                            )}
+                            {kostra.textilSub?.kalander_zariadenie_id && (
+                              <div className="bg-slate-900 rounded p-2">
+                                <p className="text-slate-500">Elektrina lisu/kalandra</p>
+                                <p className="text-white font-mono">{rozpis.casNazehlovaniaMin} min</p>
+                                <p className="text-emerald-400 font-mono">{rozpis.elektrinaLisCena.toFixed(4)} €</p>
+                              </div>
+                            )}
                           </div>
                           <p className="text-[10px] text-slate-500 mt-2">+ manipulácia {rozpis.manipulacia.toFixed(2)}€ + nažehlovanie/lis {rozpis.casNazehlovaniaMin} min ({rozpis.praca.toFixed(3)}€) + koeficient rizika {rozpis.koeficientPercent}% = <span className="text-emerald-400 font-semibold">{rozpis.spolu.toFixed(2)} €/ks spolu</span></p>
                         </div>

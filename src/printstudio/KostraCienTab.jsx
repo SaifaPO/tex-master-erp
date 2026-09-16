@@ -54,10 +54,11 @@ export default function KostraCienTab({ supabase }) {
   const [sietotlacVelkosti, setSietotlacVelkosti] = useState([]);
   const [vysivka, setVysivka] = useState(null);
   const [materials, setMaterials] = useState([]);
+  const [zariadenia, setZariadenia] = useState([]);
 
   const nacitaj = async () => {
     setIsLoading(true);
-    const [{ data: tn }, { data: sg }, { data: rez }, { data: fol }, { data: dtfN }, { data: siet }, { data: sietVel }, { data: vys }, { data: mats }] = await Promise.all([
+    const [{ data: tn }, { data: sg }, { data: rez }, { data: fol }, { data: dtfN }, { data: siet }, { data: sietVel }, { data: vys }, { data: mats }, { data: zar }] = await Promise.all([
       supabase.from('textil_naklady').select('*').eq('technologia', 'sublimacia').maybeSingle(),
       supabase.from('cennik_sublimacia_naklady').select('*').eq('id', 1).maybeSingle(),
       supabase.from('cennik_rezany_transfer').select('*').eq('id', 1).maybeSingle(),
@@ -67,9 +68,11 @@ export default function KostraCienTab({ supabase }) {
       supabase.from('cennik_sietotlac_velkosti').select('*').order('poradie'),
       supabase.from('kostra_vysivka').select('*').eq('id', 1).maybeSingle(),
       supabase.from('materials').select('id, name, unit').order('name'),
+      supabase.from('cost_metrics').select('id, name, category, power_kw, vykon_za_hodinu').eq('category', 'zariadenie').order('name'),
     ]);
     setTextilSub(tn || { technologia: 'sublimacia', cena_papier_bm: 0, cena_ochranny_papier_bm: 0, cena_atrament_l: 0, spotreba_atrament_ml_m2: 0, cena_prace_hod: 0, rychlost_m_hod: 1 });
     setMaterials(mats || []);
+    setZariadenia(zar || []);
     setSublimaciaGarment(sg || { id: 1, sirka_papiera_cm: 160, naklady_manipulacia: 0, naklady_ochranny_papier: 0, cas_nazehlovania_min: 0, koeficient_rizika_percent: 0 });
     setRezany(rez || { id: 1, cena_prace_hod: 0, cas_rezania_min: 0, cas_vylupovania_min: 0, cas_nazehlovania_min: 0, naklady_manipulacia: 0, sirka_folie_cm: 50, sirka_vyuzitelna_cm: 49 });
     setFolie(fol || []);
@@ -236,6 +239,26 @@ export default function KostraCienTab({ supabase }) {
                 <select value={textilSub.protekcny_papier_material_id || ''} onChange={(e) => ulozTextilSub({ protekcny_papier_material_id: e.target.value || null })} className={inputCls}>
                   <option value="">— nepriradené —</option>
                   {materials.map(m => (<option key={m.id} value={m.id}>{m.name} ({m.unit})</option>))}
+                </select>
+              </div>
+            </div>
+          </div>
+          <div>
+            <span className="text-xs font-bold text-slate-300 uppercase tracking-wide block mb-2">Prepojenie na stroje (elektrina v cene potlače)</span>
+            <p className="text-[11px] text-slate-500 mb-2">Priraď konkrétnu tlačiareň (Mimaki/Epson/Roland) a lis/kalander (Kalander/Karusel/Fixak) z registra zariadení (Prehľady → Všeobecná tabuľka nákladov, kategória "Zariadenie") — ich elektrina (kW × cena elektriny × reálny čas behu) sa pripočíta ako samostatná položka do ceny potlače. Bez priradenia sa nič nemení.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-950 rounded-xl border border-slate-800">
+              <div>
+                <label className={labelCls}>Tlačiareň (podľa času tlače)</label>
+                <select value={textilSub.tlaciaren_zariadenie_id || ''} onChange={(e) => ulozTextilSub({ tlaciaren_zariadenie_id: e.target.value || null })} className={inputCls}>
+                  <option value="">— nepriradené —</option>
+                  {zariadenia.map(z => (<option key={z.id} value={z.id}>{z.name}{z.power_kw ? ` (${z.power_kw}kW)` : ''}</option>))}
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>Lis / kalander (podľa času nažehlenia)</label>
+                <select value={textilSub.kalander_zariadenie_id || ''} onChange={(e) => ulozTextilSub({ kalander_zariadenie_id: e.target.value || null })} className={inputCls}>
+                  <option value="">— nepriradené —</option>
+                  {zariadenia.map(z => (<option key={z.id} value={z.id}>{z.name}{z.power_kw ? ` (${z.power_kw}kW)` : ''}</option>))}
                 </select>
               </div>
             </div>

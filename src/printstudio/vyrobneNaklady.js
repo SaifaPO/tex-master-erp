@@ -7,7 +7,7 @@ import { mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 
 // Jeden spolocny fetch vsetkych Kostra cien tabuliek + pricing_config.
 export async function nacitajKostru(supabase) {
-  const [{ data: tSub }, { data: sGarment }, { data: dtfNak }, { data: sieto }, { data: sietoVel }, { data: rez }, { data: fol }, { data: vysNak }, { data: cfg }] = await Promise.all([
+  const [{ data: tSub }, { data: sGarment }, { data: dtfNak }, { data: sieto }, { data: sietoVel }, { data: rez }, { data: fol }, { data: vysNak }, { data: cfg }, { data: metriky }] = await Promise.all([
     supabase.from('textil_naklady').select('*').eq('technologia', 'sublimacia').maybeSingle(),
     supabase.from('cennik_sublimacia_naklady').select('*').eq('id', 1).maybeSingle(),
     supabase.from('dtf_naklady').select('*').eq('id', 1).maybeSingle(),
@@ -17,6 +17,7 @@ export async function nacitajKostru(supabase) {
     supabase.from('cennik_folie').select('*').order('id'),
     supabase.from('kostra_vysivka').select('*').eq('id', 1).maybeSingle(),
     supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
+    supabase.from('cost_metrics').select('*'),
   ]);
   return {
     textilSub: tSub || null,
@@ -28,25 +29,32 @@ export async function nacitajKostru(supabase) {
     folie: fol || [],
     vysivkaNaklady: vysNak || null,
     pricingConfig: cfg ? mapConfigFromDb(cfg) : DEFAULT_PRICING_CONFIG,
+    costMetrics: metriky || [],
   };
 }
 
-// Sublimacia — potlac na tricka. Papier sa reze z 160cm rolky podla plochy motivu.
+// €/hod prevadzky konkretneho zariadenia z registra (Financie -> Rezia firiem), na zaklade jeho
+// prikonu (kW) a aktualnej ceny elektriny (riadok "Cena elektriny" v cost_metrics). Ak zariadenie
+// nie je priradene alebo cena elektriny nie je nastavena, vracia 0 (spatna kompatibilita).
+function elektrinaZariadeniaEurZaHod(kostra, zariadenieId) {
+  if (!zariadenieId) return 0;
+  const metriky = kostra.costMetrics || [];
+  const zariadenie = metriky.find(m => m.id === zariadenieId);
+  const cenaElektriny = metriky.find(m => m.name === 'Cena elektriny');
+  if (!zariadenie || !cenaElektriny) return 0;
+  return (parseFloat(zariadenie.power_kw) || 0) * (parseFloat(cenaElektriny.value) || 0);
+}
+
+// Sublimacia — potlac na tricka. Papier sa reze z 160cm rolky podla plochy motivu. Deleguje na
+// vcSublimaciaGarmentRozpis, aby "spolu" a rozpis nikdy nemohli vyjst rozdielne cisla.
 export function vcSublimaciaGarment(kostra, plochaCm2) {
-  const { textilSub, sublimaciaGarment } = kostra;
-  if (!textilSub || !sublimaciaGarment) return 0;
-  const cenaPapierCm2 = ((parseFloat(textilSub.cena_papier_bm) || 0) / 160) / 100;
-  const cenaAtramentCm2 = (((parseFloat(textilSub.cena_atrament_l) || 0) / 1000) * (parseFloat(textilSub.spotreba_atrament_ml_m2) || 0)) / 10000;
-  const praca = ((parseFloat(sublimaciaGarment.cas_nazehlovania_min) || 0) / 60) * (parseFloat(textilSub.cena_prace_hod) || 0);
-  const zaklad = plochaCm2 * (cenaPapierCm2 + cenaAtramentCm2) + (parseFloat(sublimaciaGarment.naklady_manipulacia) || 0) + (parseFloat(sublimaciaGarment.naklady_ochranny_papier) || 0) + praca;
-  return zaklad * (1 + (parseFloat(sublimaciaGarment.koeficient_rizika_percent) || 0) / 100);
+  return vcSublimaciaGarmentRozpis(kostra, plochaCm2)?.spolu ?? 0;
 }
 
 // Sublimacia — podrobny rozpis (papier/atrament/protekcny papier v €, spotreba v bm/ml, cas tlace
-// v sekundach podla rychlosti valca). Rovnaky vysledok (spolu) ako vcSublimaciaGarment, len rozpisany
-// na jednotlive polozky pre zobrazenie v Katalogu produktov ("Rozpis spotreby a nakladov"). Cas tlace
-// (papierBm / rychlost valca) je len INFORMATIVNY (kolko trva vytlacenie na papier) — do ceny sa
-// pocita cas nazehlovania/lisu z cennik_sublimacia_naklady (samostatny krok, uz v povodnom vzorci).
+// v sekundach podla rychlosti valca, elektrina konkretnej tlaciarne a lisu/kalandra ak su priradene
+// v Kostre cien). Cas tlace (papierBm / rychlost valca) urcuje elektrinu TLACIARNE, cas nazehlovania
+// (cennik_sublimacia_naklady) urcuje elektrinu LISU/KALANDRA — kazdy stroj bezi inu cast procesu.
 export function vcSublimaciaGarmentRozpis(kostra, plochaCm2) {
   const { textilSub, sublimaciaGarment } = kostra;
   if (!textilSub || !sublimaciaGarment) return null;
@@ -60,10 +68,12 @@ export function vcSublimaciaGarmentRozpis(kostra, plochaCm2) {
   const praca = (casNazehlovaniaMin / 60) * (parseFloat(textilSub.cena_prace_hod) || 0);
   const rychlostMHod = parseFloat(textilSub.rychlost_m_hod) || 0;
   const casTlaceSekund = rychlostMHod > 0 ? (papierBm / rychlostMHod) * 3600 : 0;
-  const zaklad = papierCena + atramentCena + protekcnyPapierCena + manipulacia + praca;
+  const elektrinaTlaciarenCena = elektrinaZariadeniaEurZaHod(kostra, textilSub.tlaciaren_zariadenie_id) * (casTlaceSekund / 3600);
+  const elektrinaLisCena = elektrinaZariadeniaEurZaHod(kostra, textilSub.kalander_zariadenie_id) * (casNazehlovaniaMin / 60);
+  const zaklad = papierCena + atramentCena + protekcnyPapierCena + manipulacia + praca + elektrinaTlaciarenCena + elektrinaLisCena;
   const koeficientPercent = parseFloat(sublimaciaGarment.koeficient_rizika_percent) || 0;
   const spolu = zaklad * (1 + koeficientPercent / 100);
-  return { papierBm, papierCena, atramentMl, atramentCena, protekcnyPapierCena, manipulacia, casNazehlovaniaMin, praca, casTlaceSekund, koeficientPercent, spolu };
+  return { papierBm, papierCena, atramentMl, atramentCena, protekcnyPapierCena, manipulacia, casNazehlovaniaMin, praca, casTlaceSekund, elektrinaTlaciarenCena, elektrinaLisCena, koeficientPercent, spolu };
 }
 
 // DTF — potlac textilu.
