@@ -5601,12 +5601,20 @@ export default function App() {
           const mat = materials.find(m => m.id === needed.materialId);
           if (mat) materialCost += (needed.qtyNeeded || 0) * (mat.pricePerM || 0);
         });
-        STATION_ORDER.forEach(sid => {
-          const status = item.stationStatuses?.[sid];
-          if (!status || status === 'neaktivne') return;
-          const rate = costRates.find(r => r.stationId === sid);
-          if (rate) stationCost += (rate.rate || 0) * item.qty;
-        });
+        // Prednostne pouzi realnu Vyrobnu cenu produktu (Katalog produktov — sitie podla skutocnej
+        // sadzby z Cenotvorby + rezia + potlac + strihanie + laser). "Sadzby za jednotku prace"
+        // (cost_rates) su len ZALOZNY odhad pre produkty, ktore este nemaju vyrobnu cenu vyplnenu.
+        const product = products.find(p => p.id === item.productId);
+        if (product?.productionCost != null) {
+          stationCost += product.productionCost * item.qty;
+        } else {
+          STATION_ORDER.forEach(sid => {
+            const status = item.stationStatuses?.[sid];
+            if (!status || status === 'neaktivne') return;
+            const rate = costRates.find(r => r.stationId === sid);
+            if (rate) stationCost += (rate.rate || 0) * item.qty;
+          });
+        }
       });
       const totalCost = parseFloat((materialCost + stationCost).toFixed(2));
       const relatedInvoices = invoices.filter(inv => inv.orderId === order.id);
@@ -9285,7 +9293,7 @@ export default function App() {
 
             <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 shadow-xl">
               <h2 className="text-xl font-bold text-white flex items-center gap-2 mb-2"><BarChart3 className="text-indigo-400 h-5 w-5" /> Ziskovosť podľa zákazky</h2>
-              <p className="text-xs text-slate-400 mb-2">Náklad = materiál (aktuálna cena zo skladu) + práca (sadzba za stanicu × počet kusov, nastav nižšie v "Sadzby za jednotku práce"). Zisk sa počíta len pri zákazkách s vystavenou faktúrou — orientačný prepočet, nie presné účtovanie.</p>
+              <p className="text-xs text-slate-400 mb-2">Náklad = materiál (aktuálna cena zo skladu) + práca. Práca sa berie z reálnej Výrobnej ceny produktu (Katalóg Produktov — šitie podľa sadzby z Cenotvorby + réžia + potlač + strihanie + laser), a len ak ju produkt nemá vyplnenú, počíta sa záložne podľa "Sadzby za jednotku práce" nižšie. Zisk sa počíta len pri zákazkách s vystavenou faktúrou — orientačný prepočet, nie presné účtovanie.</p>
               <div className="relative w-full sm:w-64 mb-3">
                 <Search className="h-3.5 w-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
                 <input type="text" placeholder="Hľadať podľa zákazky/odberateľa..." value={ziskovostSearch} onChange={(e) => setZiskovostSearch(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white" />
@@ -9389,7 +9397,7 @@ export default function App() {
 
             <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 shadow-xl">
               <h3 className="font-bold text-md text-white flex items-center gap-2 mb-2"><Banknote className="text-indigo-400 h-5 w-5" /> Sadzby za jednotku práce (náčrt)</h3>
-              <p className="text-xs text-slate-400 mb-4">Sadzba sa počíta ako € za kus, ktorý prejde danou stanicou — používa sa v prepočte "Ziskovosť podľa zákazky" vyššie.</p>
+              <p className="text-xs text-slate-400 mb-4">Sadzba sa počíta ako € za kus, ktorý prejde danou stanicou. Používa sa v "Ziskovosť podľa zákazky" vyššie už len ako ZÁLOŽNÝ odhad — ak má produkt v Katalógu Produktov vyplnenú reálnu Výrobnú cenu, počíta sa z nej priamo (presnejšie, odráža skutočné sadzby z Cenotvorby a Kostry cien). Túto tabuľku už netreba udržiavať presnú pre produkty, ktoré majú Výrobnú cenu — je dôležitá len pre tie, čo ju (ešte) nemajú.</p>
               <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
                 <table className="w-full text-left text-xs text-slate-300">
                   <thead className="bg-slate-900 text-slate-400 uppercase tracking-wider">
