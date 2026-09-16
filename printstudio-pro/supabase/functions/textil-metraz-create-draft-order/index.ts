@@ -29,6 +29,14 @@ function marginAt(cost: number, qty: number, cfg: PricingConfig) {
 function priceAt(cost: number, qty: number, cfg: PricingConfig) {
   return Math.round(cost * (1 + marginAt(cost, qty, cfg) / 100) * 100) / 100;
 }
+// Rovnake ako priceAt, len s bonusovymi percentualnymi bodmi navyse k marzi — pouzite pre "tenke"
+// urovne sluzby (len tlac na material zakaznika / len papier), kde sa nepredava latka ani nazehlenie,
+// tak nizsi obrat musi mat vyssiu maržu, inak by sa to firme neoplatilo.
+function priceAtBonus(cost: number, qty: number, cfg: PricingConfig, bonusBodov: number) {
+  return Math.round(cost * (1 + (marginAt(cost, qty, cfg) + bonusBodov) / 100) * 100) / 100;
+}
+const BONUS_LEN_TLAC = 10; // + percentualnych bodov k marzi pri "na vas material" (bez nasej latky)
+const BONUS_LEN_PAPIER = 20; // + percentualnych bodov k marzi pri "len papier" (bez tlace na akukolvek latku)
 
 const REZERVA_SPADAVKA_CM = 8; // rezerva na spadavku/okraje (4cm z kazdej strany), odpocitana zo sirky skladovej rolky
 const MAX_SIRKA_CM: Record<string, number> = { sublimacia: 160, bavlna: 180 };
@@ -96,10 +104,13 @@ Deno.serve(async (req) => {
       deliverySpeed = 'standard', harmonogram = '',
       suborNazov = null, suborCesta = null,
       materialKod = null, manualSirkaCm = null,
+      sluzbaRezim = 'na_vas_material',
     } = body;
 
     if (technologia !== 'sublimacia' && technologia !== 'bavlna') throw new Error('Neplatná technológia.');
     if (mode !== 'auto' && mode !== 'subor') throw new Error('Neplatný režim objednávky.');
+    if (!['na_vas_material', 'na_nas_material', 'len_papier'].includes(sluzbaRezim)) throw new Error('Neplatný režim služby.');
+    if (sluzbaRezim === 'len_papier' && technologia !== 'sublimacia') throw new Error('"Len sublimačný papier" je dostupné len pre sublimačnú technológiu.');
 
     const [{ data: nakRows }, { data: cfg }, { data: nastavenia }] = await Promise.all([
       supabase.from('textil_naklady_verejny').select('technologia, naklad_bm'),
@@ -117,16 +128,27 @@ Deno.serve(async (req) => {
     // (sirka/vyska pri "auto" rezime sluzia len na nahlad opakovania vzoru, nie na vypocet dlzky).
     const totalLengthBm = mode === 'auto' ? Math.max(0.5, Number(lengthBm) || 0.5) : Math.max(0.5, Number(directLengthBm) || 0.5);
 
-    const baseRate = priceAt(nakladBm, totalLengthBm, pricingConfig);
-
-    // Ak si zakaznik vybral aj nasu latku, jej cena aj sirka tlace sa zistia SAMOSTATNE (zivo zo
-    // skladu) a pripocitaju k cene potlace. Cena/sirka sa NIKDY neveri klientovi — materialKod len
-    // urcuje KTORU latku, hodnoty si funkcia zisti sama. Pri vlastnom materiali sa pouzije sirka,
-    // ktoru zadal zakaznik (orezana na strojovy max danej technologie).
+    // Marza zavisi od urovne sluzby: "na vas material" a "len papier" nepredavaju latku/nazehlenie,
+    // preto maju bonusove percentualne body navyse (inak by tenka marza na malom obrate nestala za to).
     const maxSirka = MAX_SIRKA_CM[technologia] || 160;
-    let fabricRate = 0, fabricSubtotal = 0, printWidthCm = Math.min(Number(manualSirkaCm) || maxSirka, maxSirka);
+    let baseRate = 0, fabricRate = 0, fabricSubtotal = 0, printWidthCm = Math.min(Number(manualSirkaCm) || maxSirka, maxSirka);
     let vybranyMaterial: { kod: string; nazov: string } | null = null;
-    if (materialKod) {
+
+    if (sluzbaRezim === 'len_papier') {
+      // Ziadna latka, ziadne nazehlenie — vzdy nominalna sirka sublimacneho papiera (rovnaka, na
+      // akej je pocitany naklad_bm procesu).
+      printWidthCm = maxSirka;
+      baseRate = priceAtBonus(nakladBm, totalLengthBm, pricingConfig, BONUS_LEN_PAPIER);
+    } else if (sluzbaRezim === 'na_vas_material') {
+      baseRate = priceAtBonus(nakladBm, totalLengthBm, pricingConfig, BONUS_LEN_TLAC);
+    } else {
+      baseRate = priceAt(nakladBm, totalLengthBm, pricingConfig);
+    }
+
+    // Ak si zakaznik vybral aj nasu latku (len rezim "na_nas_material"), jej cena aj sirka tlace sa
+    // zistia SAMOSTATNE (zivo zo skladu) a pripocitaju k cene potlace. Cena/sirka sa NIKDY neveri
+    // klientovi — materialKod len urcuje KTORU latku, hodnoty si funkcia zisti sama.
+    if (sluzbaRezim === 'na_nas_material' && materialKod) {
       const { data: material } = await supabase.from('textil_materialy').select('kod, nazov, naklad_m2, sklad_material_id, sirka_tlace_cm, aktivny, technologia').eq('kod', materialKod).maybeSingle();
       if (material && material.aktivny && (material.technologia === 'obe' || material.technologia === technologia)) {
         const { nakladM2, sirkaTlaceCm } = await resolveMaterialLive(supabase, material, technologia);
@@ -166,6 +188,7 @@ Deno.serve(async (req) => {
       subor_cesta: suborCesta,
       material_kod: vybranyMaterial?.kod || null,
       material_nazov: vybranyMaterial?.nazov || null,
+      sluzba_rezim: sluzbaRezim,
     });
     if (insertErr) throw insertErr;
 
@@ -176,7 +199,9 @@ Deno.serve(async (req) => {
     const token = await ziskajAdminToken(domain, clientId, clientSecret);
 
     const technikaLabel = technologia === 'sublimacia' ? 'Sublimačná potlač' : 'Digitálna potlač bavlny';
-    const nazovPolozky = `Textilná metráž — ${technikaLabel} ${totalLengthBm.toFixed(2)}bm` + (vybranyMaterial ? ` + látka: ${vybranyMaterial.nazov}` : '');
+    const nazovPolozky = sluzbaRezim === 'len_papier'
+      ? `Sublimačný papier s vlastnou grafikou — ${totalLengthBm.toFixed(2)}bm`
+      : `Textilná metráž — ${technikaLabel} ${totalLengthBm.toFixed(2)}bm` + (vybranyMaterial ? ` + látka: ${vybranyMaterial.nazov}` : '');
 
     const draftPayload = {
       draft_order: {
@@ -190,6 +215,7 @@ Deno.serve(async (req) => {
             properties: [
               { name: '_objednavka_id', value: objednavkaId },
               { name: '_technologia', value: technikaLabel },
+              { name: '_uroven_sluzby', value: sluzbaRezim === 'len_papier' ? 'Len papier s grafikou' : sluzbaRezim === 'na_nas_material' ? 'Na náš materiál' : 'Na váš materiál' },
               { name: '_dlzka_bm', value: totalLengthBm.toFixed(2) },
               { name: '_sirka_tlace_cm', value: String(Math.round(printWidthCm * 10) / 10) },
               { name: '_harmonogram', value: harmonogram || '' },

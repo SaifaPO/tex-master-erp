@@ -240,6 +240,7 @@ export default function TextilMetrazTab({ supabase }) {
                     <span className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded text-[10px]">{o.rezim === 'auto' ? `${o.sirka_cm}×${o.vyska_cm}cm` : 'Hotová rolka'}</span>
                     <span className="text-slate-500 text-[10px]">{new Date(o.created_at).toLocaleString('sk-SK')}</span>
                     {o.material_nazov && <span className="bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded text-[10px]">+ {o.material_nazov}</span>}
+                    {o.sluzba_rezim === 'len_papier' && <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded text-[10px]">📄 Len papier</span>}
                   </div>
                   <div className="text-slate-300">Metráž: <strong className="text-indigo-400 font-mono">{o.dlzka_bm} bm</strong> | Suma: <strong className="text-emerald-400 font-mono">{o.cena_spolu} €</strong> | {o.harmonogram}</div>
                 </div>

@@ -1,6 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Shirt, UploadCloud, Truck, Eye, ShoppingCart, TriangleAlert, CreditCard, Grid3x3, Rows, Shapes } from 'lucide-react';
-import { priceAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
+import { priceAt, marginAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
+
+// Bonusove percentualne body navyse k zakladnej marzi z Cenotvorby — pouzite pre urovne sluzby,
+// kde nepredavame latku ani nazehlenie (tenky obrat musi mat vyssiu maržu, inak sa neoplati).
+// Rovnake hodnoty MUSIA byt aj v textil-metraz-create-draft-order (autoritativny prepocet ceny).
+const BONUS_LEN_TLAC = 10; // "na vas material" — predavame len tlac, bez latky
+const BONUS_LEN_PAPIER = 20; // "len papier" — predavame len papier s grafikou, bez tlace na latku
+function priceAtBonus(cost, qty, cfg, bonusBodov) {
+  return Math.round(cost * (1 + (marginAt(cost, qty, cfg) + bonusBodov) / 100) * 100) / 100;
+}
 
 const BUCKET = 'print-designs';
 const ROLL_WIDTH_CM = 160; // nominalna sirka, na ktorej je pocitany naklad_bm procesu (textil_naklady_verejny) — nemeni sa podla objednavky
@@ -24,6 +33,9 @@ export default function TextilMetraz({ supabase, onSpat }) {
   const [nastavenia, setNastavenia] = useState(null);
   const [materialy, setMaterialy] = useState([]);
   const [materialKod, setMaterialKod] = useState(''); // '' = vlastny material zakaznika
+  // Uroven sluzby: 'na_vas_material' (len tlac, zakaznik dodava latku) | 'na_nas_material'
+  // (predavame aj latku aj tlac) | 'len_papier' (len sublimacny papier s grafikou, bez latky/nazehlenia).
+  const [sluzbaRezim, setSluzbaRezim] = useState('na_vas_material');
 
   const [technologia, setTechnologia] = useState('sublimacia'); // 'sublimacia' | 'bavlna'
   const [manualSirkaCm, setManualSirkaCm] = useState(160); // sirka VLASTNEHO materialu zakaznika (ked nie je vybrata nasa latka)
@@ -68,23 +80,28 @@ export default function TextilMetraz({ supabase, onSpat }) {
   let totalLengthBm = 0, totalM2 = 0, baseRate = 0, fabricRate = 0, fabricSubtotal = 0, subtotal = 0, expressFee = 0, shippingFee = 0, grandTotalBezDph = 0, dphSuma = 0, grandTotal = 0, capacityIssue = null;
   const nakladBm = nakladBmByTech[technologia] || 0;
   const dostupneMaterialy = materialy.filter(m => m.technologia === 'obe' || m.technologia === technologia);
-  const vybranyMaterial = dostupneMaterialy.find(m => m.kod === materialKod) || null;
+  const vybranyMaterial = sluzbaRezim === 'na_nas_material' ? (dostupneMaterialy.find(m => m.kod === materialKod) || null) : null;
   const maxSirka = MAX_SIRKA_CM[technologia] || 160;
-  // Sirka tlace: pri "nasej latke" sa berie automaticky zo skladu (uz zohladnena rezerva na
-  // spadavku), pri "vlastnom materiali" ju zadava zakaznik — obe su orezane na max dosiahnutelnu
-  // sirku stroja pre danu technologiu (bavlna az 180cm, sublimacia 160cm).
-  const printWidthCm = Math.min(vybranyMaterial ? (Number(vybranyMaterial.sirka_tlace_cm) || maxSirka) : manualSirkaCm, maxSirka);
+  // Sirka tlace: pri "len papier" je vzdy nominalna sirka (ziadna latka), pri "nasej latke" sa berie
+  // automaticky zo skladu (uz zohladnena rezerva na spadavku), pri "vlastnom materiali" ju zadava
+  // zakaznik — vsetky su orezane na max dosiahnutelnu sirku stroja pre danu technologiu.
+  const printWidthCm = sluzbaRezim === 'len_papier'
+    ? maxSirka
+    : Math.min(vybranyMaterial ? (Number(vybranyMaterial.sirka_tlace_cm) || maxSirka) : manualSirkaCm, maxSirka);
 
   if (nastavenia) {
     totalLengthBm = mode === 'auto' ? Math.max(0.5, lengthBm) : Math.max(0.5, directLengthBm);
     totalM2 = totalLengthBm * (printWidthCm / 100);
 
     // Sadzba (€/bm) sa dopocitava z vyrobnej ceny na meter + jednotneho marzoveho vzorca
-    // (rovnaky ako v celom PrintStudio Pro) — vacsi odber = nizsia marza = nizsia sadzba.
+    // (rovnaky ako v celom PrintStudio Pro) — vacsi odber = nizsia marza = nizsia sadzba. Urovne
+    // "na vas material" a "len papier" nepredavaju latku ani nazehlenie, preto maju bonusovu marzu.
     // Poznamka: sadzba potlace je nezavisla od zvolenej sirky (naklad_bm procesu je pocitany na
     // nominalnej sirke rolky, nie na skutocne pouzitej sirke tlace).
-    baseRate = priceAt(nakladBm, totalLengthBm, pricingConfig);
-    // Ak si zakaznik vybral aj nasu latku (nie vlastny material), jej cena sa pocita rovnakym
+    if (sluzbaRezim === 'len_papier') baseRate = priceAtBonus(nakladBm, totalLengthBm, pricingConfig, BONUS_LEN_PAPIER);
+    else if (sluzbaRezim === 'na_vas_material') baseRate = priceAtBonus(nakladBm, totalLengthBm, pricingConfig, BONUS_LEN_TLAC);
+    else baseRate = priceAt(nakladBm, totalLengthBm, pricingConfig);
+    // Ak si zakaznik vybral aj nasu latku (rezim "na_nas_material"), jej cena sa pocita rovnakym
     // vzorcom (na skutocnej sirke tlace danej latky) a PRIPOCITAVA k cene potlace.
     if (vybranyMaterial) {
       const fabricNakladBm = Number(vybranyMaterial.naklad_m2) * (printWidthCm / 100);
@@ -130,6 +147,12 @@ export default function TextilMetraz({ supabase, onSpat }) {
       setMaterialKod('');
     }
   }, [technologia, materialy]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // "Len papier" existuje len pre sublimaciu (bavlna sa tlaci priamo na latku, ziadny papierovy
+  // medzistep) — ak zakaznik prepne na bavlnu s tymto rezimom zvolenym, vrati sa na predvoleny.
+  useEffect(() => {
+    if (technologia !== 'sublimacia' && sluzbaRezim === 'len_papier') setSluzbaRezim('na_vas_material');
+  }, [technologia, sluzbaRezim]);
 
   // Ak zakaznik prepne technologiu a rucne zadana sirka presahuje novy strojovy limit, oreze sa.
   useEffect(() => {
@@ -231,8 +254,9 @@ export default function TextilMetraz({ supabase, onSpat }) {
           technologia, mode, lengthBm, directLengthBm, widthCm, heightCm, patternRepeat,
           deliverySpeed, harmonogram: aktualnyHarmonogram,
           suborNazov: rawFile?.name || null, suborCesta,
-          materialKod: materialKod || null,
-          manualSirkaCm, // pouzije sa len ak nie je vybrana nasa latka — pri latke si sirku server zisti sam
+          sluzbaRezim,
+          materialKod: sluzbaRezim === 'na_nas_material' ? (materialKod || null) : null,
+          manualSirkaCm, // pouzije sa len pri "na_vas_material" — inak si sirku server zisti/urci sam
         },
       });
       if (error) throw error;
@@ -340,20 +364,27 @@ export default function TextilMetraz({ supabase, onSpat }) {
           )}
 
           <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-3">
-            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-2"><Shirt className="w-4 h-4 text-teal-500" /> Materiál</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <label className={`p-3.5 rounded-xl border cursor-pointer transition ${!materialKod ? 'border-teal-500 bg-teal-50/60' : 'border-slate-200'}`}>
-                <input type="radio" name="material" className="hidden" checked={!materialKod} onChange={() => setMaterialKod('')} />
-                <span className="text-sm font-bold text-slate-900 block">Vlastný materiál</span>
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-2"><Shirt className="w-4 h-4 text-teal-500" /> Čo presne potrebujete?</h3>
+            <div className={`grid grid-cols-1 ${technologia === 'sublimacia' ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-3`}>
+              <label className={`p-3.5 rounded-xl border cursor-pointer transition ${sluzbaRezim === 'na_vas_material' ? 'border-teal-500 bg-teal-50/60' : 'border-slate-200'}`}>
+                <input type="radio" name="sluzba" className="hidden" checked={sluzbaRezim === 'na_vas_material'} onChange={() => setSluzbaRezim('na_vas_material')} />
+                <span className="text-sm font-bold text-slate-900 block">Potlač na váš materiál</span>
                 <span className="text-xs text-slate-500">Dodáte vlastnú látku, platíte len za potlač</span>
               </label>
-              <label className={`p-3.5 rounded-xl border cursor-pointer transition ${materialKod ? 'border-teal-500 bg-teal-50/60' : 'border-slate-200'}`}>
-                <input type="radio" name="material" className="hidden" checked={!!materialKod} onChange={() => setMaterialKod(dostupneMaterialy[0]?.kod || '')} disabled={dostupneMaterialy.length === 0} />
-                <span className="text-sm font-bold text-slate-900 block">Objednať aj látku od nás</span>
+              <label className={`p-3.5 rounded-xl border cursor-pointer transition ${sluzbaRezim === 'na_nas_material' ? 'border-teal-500 bg-teal-50/60' : 'border-slate-200'}`}>
+                <input type="radio" name="sluzba" className="hidden" checked={sluzbaRezim === 'na_nas_material'} onChange={() => { setSluzbaRezim('na_nas_material'); if (!materialKod) setMaterialKod(dostupneMaterialy[0]?.kod || ''); }} disabled={dostupneMaterialy.length === 0} />
+                <span className="text-sm font-bold text-slate-900 block">Potlač aj látka od nás</span>
                 <span className="text-xs text-slate-500">{dostupneMaterialy.length > 0 ? 'Vytlačíme priamo na náš materiál' : 'Momentálne nie je dostupné'}</span>
               </label>
+              {technologia === 'sublimacia' && (
+                <label className={`p-3.5 rounded-xl border cursor-pointer transition ${sluzbaRezim === 'len_papier' ? 'border-teal-500 bg-teal-50/60' : 'border-slate-200'}`}>
+                  <input type="radio" name="sluzba" className="hidden" checked={sluzbaRezim === 'len_papier'} onChange={() => setSluzbaRezim('len_papier')} />
+                  <span className="text-sm font-bold text-slate-900 block">Len sublimačný papier</span>
+                  <span className="text-xs text-slate-500">Vytlačíme vašu grafiku na transferový papier, nažehlíte si sami</span>
+                </label>
+              )}
             </div>
-            {materialKod ? (
+            {sluzbaRezim === 'na_nas_material' ? (
               <div className="space-y-2 pt-1">
                 <select value={materialKod} onChange={(e) => setMaterialKod(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm">
                   {dostupneMaterialy.map(m => <option key={m.kod} value={m.kod}>{m.nazov}</option>)}
@@ -367,11 +398,13 @@ export default function TextilMetraz({ supabase, onSpat }) {
                   </div>
                 )}
               </div>
-            ) : (
+            ) : sluzbaRezim === 'na_vas_material' ? (
               <div className="pt-1">
                 <label className="block text-xs font-medium text-slate-500 mb-1">Šírka vašej látky (cm) — max {maxSirka}cm pre túto technológiu</label>
                 <input type="number" min="10" max={maxSirka} step="1" value={manualSirkaCm} onChange={(e) => setManualSirkaCm(Math.min(maxSirka, Math.max(10, parseFloat(e.target.value) || maxSirka)))} className="w-full sm:w-48 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
               </div>
+            ) : (
+              <p className="text-xs text-slate-500 pt-1">Papier má vždy nominálnu šírku {printWidthCm}cm — žiadna látka sa neobjednáva, ani sa na ňu netlačí.</p>
             )}
           </div>
 
@@ -416,7 +449,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
         <div className="lg:col-span-5 space-y-6">
           <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
             <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-              <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5"><Eye className="w-4 h-4 text-teal-500" /> Náhľad látky ({printWidthCm} cm)</span>
+              <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5"><Eye className="w-4 h-4 text-teal-500" /> {sluzbaRezim === 'len_papier' ? `Náhľad papiera (${printWidthCm} cm)` : `Náhľad látky (${printWidthCm} cm)`}</span>
               <span className="text-[10px] text-slate-400 font-mono">{printWidthCm}cm × {totalLengthBm.toFixed(2)}m</span>
             </div>
             <div className="rounded-xl overflow-hidden border border-slate-100 flex items-center justify-center p-2 bg-slate-50 min-h-[200px]">
@@ -431,6 +464,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
             </h3>
             <div className="space-y-2 text-xs text-slate-300">
               <Row label="Technológia" value={technologia === 'sublimacia' ? 'Sublimácia' : 'Digitálna bavlna'} />
+              <Row label="Úroveň služby" value={sluzbaRezim === 'len_papier' ? 'Len sublimačný papier' : sluzbaRezim === 'na_nas_material' ? 'Potlač aj látka od nás' : 'Potlač na váš materiál'} small />
               <Row label="Sadzba potlače" value={`${baseRate.toFixed(2)} €/bm`} />
               {vybranyMaterial && <Row label={`Látka: ${vybranyMaterial.nazov}`} value={`${fabricRate.toFixed(2)} €/bm`} />}
               <Row label="Objednaná dĺžka metráže" value={`${totalLengthBm.toFixed(2)} bm`} highlight />
