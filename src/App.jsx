@@ -2702,7 +2702,8 @@ export default function App() {
     if (!hasPermission('create_order')) { triggerNotification('error', 'Nemáte oprávnenie na túto úpravu.'); return; }
     const amount = value.trim() === '' ? null : parseFloat(value) || 0;
     const { error } = await supabase.from('orders').update({ expected_amount: amount }).eq('id', orderId);
-    if (error) triggerNotification('error', error.message);
+    if (error) { triggerNotification('error', error.message); return; }
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, expectedAmount: amount } : o));
   };
 
   // Potvrdenie VS/sumy — QR sa zákazníkovi reálne ponúkne a automatické párovanie ho berie do úvahy
@@ -2711,6 +2712,7 @@ export default function App() {
     if (!hasPermission('create_order')) { triggerNotification('error', 'Nemáte oprávnenie na túto úpravu.'); return; }
     const { error } = await supabase.from('orders').update({ variable_symbol_confirmed: confirmed }).eq('id', orderId);
     if (error) { triggerNotification('error', error.message); return; }
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, variableSymbolConfirmed: confirmed } : o));
     triggerNotification('success', confirmed ? 'VS a suma potvrdené — QR kód je aktívny.' : 'Potvrdenie zrušené, QR kód je skrytý.');
   };
 
@@ -2720,6 +2722,7 @@ export default function App() {
     if (!window.confirm(`Prehodiť zákazku ${order.orderNumber || order.id} na platbu v hotovosti? Faktúra sa pre ňu už nebude vystavovať.`)) return;
     const { error } = await supabase.from('orders').update({ payment_type: 'hotovost', accounting_status: 'resolved_cash' }).eq('id', order.id);
     if (error) { triggerNotification('error', error.message); return; }
+    setOrders(prev => prev.map(o => o.id === order.id ? { ...o, paymentType: 'hotovost', accountingStatus: 'resolved_cash' } : o));
     triggerNotification('success', 'Zákazka bola prehodená na hotovosť.');
   };
 
@@ -2727,6 +2730,7 @@ export default function App() {
     if (!hasPermission('create_order')) { triggerNotification('error', 'Nemáte oprávnenie na túto úpravu.'); return; }
     const { error } = await supabase.from('orders').update({ accounting_status: 'resolved_other' }).eq('id', order.id);
     if (error) { triggerNotification('error', error.message); return; }
+    setOrders(prev => prev.map(o => o.id === order.id ? { ...o, accountingStatus: 'resolved_other' } : o));
   };
 
   // --- BANKOVÝ VÝPIS A AUTOMATICKÉ PÁROVANIE PLATIEB ---
@@ -4503,6 +4507,13 @@ export default function App() {
       await supabase.from('materials').update({ qty: mu.qty, history: mu.history }).eq('id', mu.id);
     }
 
+    setOrders(prev => prev.some(o => o.id === created.id) ? prev : [...prev, created]);
+    if (materialUpdates.length > 0) {
+      setMaterials(prev => prev.map(m => {
+        const mu = materialUpdates.find(x => x.id === m.id);
+        return mu ? { ...m, qty: mu.qty, history: mu.history } : m;
+      }));
+    }
     setSelectedOrderDetails(created);
     setActiveTab('planner');
     setNewOrderCustomer('');
@@ -4532,6 +4543,7 @@ export default function App() {
     const byOrder = {};
     withNewPriority.forEach(r => { (byOrder[r.orderId] = byOrder[r.orderId] || []).push(r); });
 
+    const newItemsByOrder = {};
     for (const orderId of Object.keys(byOrder)) {
       const order = orders.find(o => o.id === orderId);
       if (!order) continue;
@@ -4540,8 +4552,10 @@ export default function App() {
         const upd = updates.find(u => u.itemId === it.itemId);
         return upd ? { ...it, priority: upd.priority } : it;
       });
+      newItemsByOrder[orderId] = newItems;
       await supabase.from('orders').update({ items: newItems }).eq('id', orderId);
     }
+    setOrders(prev => prev.map(o => newItemsByOrder[o.id] ? { ...o, items: newItemsByOrder[o.id] } : o));
   };
 
   // Presun myšou (drag & drop) — funguje popri šípkach, hodí sa hlavne na počítači/myš.
@@ -4558,6 +4572,7 @@ export default function App() {
     const byOrder = {};
     withNewPriority.forEach(r => { (byOrder[r.orderId] = byOrder[r.orderId] || []).push(r); });
 
+    const newItemsByOrder = {};
     for (const orderId of Object.keys(byOrder)) {
       const order = orders.find(o => o.id === orderId);
       if (!order) continue;
@@ -4566,8 +4581,10 @@ export default function App() {
         const upd = updates.find(u => u.itemId === it.itemId);
         return upd ? { ...it, priority: upd.priority } : it;
       });
+      newItemsByOrder[orderId] = newItems;
       await supabase.from('orders').update({ items: newItems }).eq('id', orderId);
     }
+    setOrders(prev => prev.map(o => newItemsByOrder[o.id] ? { ...o, items: newItemsByOrder[o.id] } : o));
     triggerNotification('success', 'Poradie priorít bolo upravené.');
   };
 
@@ -4667,6 +4684,7 @@ export default function App() {
     const newLog = [...(order.orderLog || []), { date: now, author: `${currentUser.firstName} ${currentUser.lastName}`, text: text.trim() }];
     const { error } = await supabase.from('orders').update({ order_log: newLog }).eq('id', order.id);
     if (error) { triggerNotification('error', error.message); return; }
+    setOrders(prev => prev.map(o => o.id === order.id ? { ...o, orderLog: newLog } : o));
     if (selectedOrderDetails?.id === order.id) setSelectedOrderDetails({ ...order, orderLog: newLog });
     setNewOrderLogEntry('');
     triggerNotification('success', 'Poznámka bola pridaná do denníka zákazky.');
@@ -4690,6 +4708,7 @@ export default function App() {
     const byOrder = {};
     withNewPriority.forEach(r => { (byOrder[r.orderId] = byOrder[r.orderId] || []).push(r); });
 
+    const newItemsByOrder = {};
     for (const orderId of Object.keys(byOrder)) {
       const order = orders.find(o => o.id === orderId);
       if (!order) continue;
@@ -4703,8 +4722,10 @@ export default function App() {
         }
         return patched;
       });
+      newItemsByOrder[orderId] = newItems;
       await supabase.from('orders').update({ items: newItems }).eq('id', orderId);
     }
+    setOrders(prev => prev.map(o => newItemsByOrder[o.id] ? { ...o, items: newItemsByOrder[o.id] } : o));
   };
 
   const handleMoveProductionDate = async (orderId, itemId, stationId, newDate) => {
@@ -4731,6 +4752,7 @@ export default function App() {
     });
     const { error } = await supabase.from('orders').update({ items: updatedItems }).eq('id', orderId);
     if (error) { triggerNotification('error', error.message); return; }
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, items: updatedItems } : o));
     if (selectedOrderDetails?.id === orderId) setSelectedOrderDetails({ ...order, items: updatedItems });
   };
 
@@ -4753,6 +4775,7 @@ export default function App() {
     const updatedItems = order.items.map(item => item.itemId === itemId ? { ...item, assignedDesignerId: newDesignerId } : item);
     const { error } = await supabase.from('orders').update({ items: updatedItems }).eq('id', orderId);
     if (error) { triggerNotification('error', error.message); return; }
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, items: updatedItems } : o));
     if (selectedOrderDetails?.id === orderId) setSelectedOrderDetails({ ...order, items: updatedItems });
   };
 
@@ -4843,6 +4866,13 @@ export default function App() {
       await supabase.from('materials').update({ qty: mu.qty, history: mu.history }).eq('id', mu.id);
     }
 
+    setOrders(prev => prev.map(o => o.id === finalDraft.id ? finalDraft : o));
+    if (materialUpdates.length > 0) {
+      setMaterials(prev => prev.map(m => {
+        const mu = materialUpdates.find(x => x.id === m.id);
+        return mu ? { ...m, qty: mu.qty, history: mu.history } : m;
+      }));
+    }
     setSelectedOrderDetails(finalDraft);
     setIsEditingOrder(false);
     setOrderEditDraft(null);
@@ -4854,6 +4884,7 @@ export default function App() {
     if (!window.confirm(`Naozaj natrvalo vymazať zákazku ${selectedOrderDetails.id}? Táto akcia sa nedá vrátiť späť.`)) return;
     const { error } = await supabase.from('orders').delete().eq('id', selectedOrderDetails.id);
     if (error) { triggerNotification('error', error.message); return; }
+    setOrders(prev => prev.filter(o => o.id !== selectedOrderDetails.id));
     setSelectedOrderDetails(null);
     setIsEditingOrder(false);
     setOrderEditDraft(null);
@@ -4892,6 +4923,7 @@ export default function App() {
     });
     const { error } = await supabase.from('orders').update({ items: updatedItems }).eq('id', order.id);
     if (error) { triggerNotification('error', error.message); return; }
+    setOrders(prev => prev.map(o => o.id === order.id ? { ...o, items: updatedItems } : o));
     if (selectedOrderDetails?.id === order.id) setSelectedOrderDetails({ ...order, items: updatedItems });
     if (allDone) {
       triggerNotification('success', `Materiál "${matName}" hotový — VŠETKY materiály hotové, položka ${item.itemId} je HOTOVÁ na stanici ${STATION_CONFIGS[stationId].name}! 🎉`);
@@ -5039,6 +5071,13 @@ export default function App() {
       await supabase.from('materials').update({ qty: mu.qty, history: mu.history }).eq('id', mu.id);
     }
 
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, items: updatedItems, ...(updatePayload.accounting_status ? { accountingStatus: updatePayload.accounting_status } : {}) } : o));
+    if (materialUpdates.length > 0) {
+      setMaterials(prev => prev.map(m => {
+        const mu = materialUpdates.find(x => x.id === m.id);
+        return mu ? { ...m, qty: mu.qty, history: mu.history } : m;
+      }));
+    }
     if (selectedOrderDetails?.id === orderId) setSelectedOrderDetails({ ...order, items: updatedItems });
   };
 
@@ -5057,7 +5096,8 @@ export default function App() {
         ? { ...item, stationStatuses: { ...item.stationStatuses, [stationId]: 'caka' } }
         : item);
       const { error } = await supabase.from('orders').update({ items: updatedItems }).eq('id', order.id);
-      if (error) { errorCount++; triggerNotification('error', `Zákazka ${order.orderNumber || order.id}: ${error.message}`); }
+      if (error) { errorCount++; triggerNotification('error', `Zákazka ${order.orderNumber || order.id}: ${error.message}`); continue; }
+      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, items: updatedItems } : o));
     }
     setIsBulkAddingToStation(false);
     setAddMissingSelectedIds(new Set());
@@ -5073,6 +5113,7 @@ export default function App() {
     });
     const { error } = await supabase.from('orders').update({ items: updatedItems }).eq('id', orderId);
     if (error) { triggerNotification('error', error.message); return; }
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, items: updatedItems } : o));
     if (selectedOrderDetails?.id === orderId) setSelectedOrderDetails({ ...order, items: updatedItems });
   };
 
@@ -5324,6 +5365,7 @@ export default function App() {
     });
     const { error } = await supabase.from('orders').update({ items: updatedItems }).eq('id', order.id);
     if (error) { triggerNotification('error', error.message); return; }
+    setOrders(prev => prev.map(o => o.id === order.id ? { ...o, items: updatedItems } : o));
     if (selectedOrderDetails?.id === order.id) setSelectedOrderDetails({ ...order, items: updatedItems });
     triggerNotification('success', resolution === 'proceed' ? 'Zamestnanec môže pokračovať v tlači.' : 'Položka bola daná bokom, čaká na vyriešenie.');
   };
@@ -5342,6 +5384,7 @@ export default function App() {
     });
     const { error } = await supabase.from('orders').update({ items: updatedItems }).eq('id', orderId);
     if (error) { triggerNotification('error', error.message); return; }
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, items: updatedItems } : o));
     if (selectedOrderDetails?.id === orderId) setSelectedOrderDetails({ ...order, items: updatedItems });
     triggerNotification('success', active ? 'Ultra priorita aktivovaná.' : 'Ultra priorita vypnutá.');
   };
@@ -5356,6 +5399,7 @@ export default function App() {
     });
     const { error } = await supabase.from('orders').update({ items: updatedItems }).eq('id', orderId);
     if (error) { triggerNotification('error', error.message); return; }
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, items: updatedItems } : o));
     if (selectedOrderDetails?.id === orderId) setSelectedOrderDetails({ ...order, items: updatedItems });
     triggerNotification('success', 'Žiadosť o ultra prioritu bola odoslaná Master/Supervisorovi.');
   };
@@ -5369,6 +5413,7 @@ export default function App() {
     });
     const { error } = await supabase.from('orders').update({ items: updatedItems }).eq('id', orderId);
     if (error) { triggerNotification('error', error.message); return; }
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, items: updatedItems } : o));
     if (selectedOrderDetails?.id === orderId) setSelectedOrderDetails({ ...order, items: updatedItems });
     triggerNotification('success', approve ? 'Ultra priorita schválená.' : 'Žiadosť bola zamietnutá.');
   };
