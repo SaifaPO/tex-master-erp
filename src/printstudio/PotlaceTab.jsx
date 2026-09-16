@@ -43,7 +43,6 @@ export default function PotlaceTab({ supabase }) {
   const [vysivkaNaklady, setVysivkaNaklady] = useState(null);
   const [sietotlacVelkosti, setSietotlacVelkosti] = useState([]);
 
-  const [testTech, setTestTech] = useState('sublimacia');
   const [testW, setTestW] = useState(10);
   const [testH, setTestH] = useState(10);
   const [testKs, setTestKs] = useState(1);
@@ -121,7 +120,6 @@ export default function PotlaceTab({ supabase }) {
   const cennikProKalkulacku = { sublimacia, dtf, sietotlac, folie, rezanyMinCena: rezany.min_cena };
   const plocha = Math.round((parseFloat(testW) || 0) * (parseFloat(testH) || 0) * 10) / 10;
   const ks = Math.max(1, parseInt(testKs) || 1);
-  const vysledok = vypocitajCenuPotlace(cennikProKalkulacku, testTech, plocha, parseInt(testFarby) || 1, testTmavyTextil, testFoliaId);
 
   // --- Vyrobne ceny (VC) — vzorce zdielane s Cenovymi ponukami cez vyrobneNaklady.js, nic sa tu
   // uz nezaduva duplicitne (viackrat sposobilo nezhodu cien medzi appkami).
@@ -287,39 +285,46 @@ export default function PotlaceTab({ supabase }) {
         )}
       </div>
 
-      {/* TESTOVACIA KALKULAČKA (predajnych cien) */}
+      {/* TESTOVACIA KALKULAČKA (predajnych cien) — porovnanie VŠETKÝCH technologii naraz */}
       <div className="bg-slate-950 rounded-2xl p-5 border border-indigo-900/40">
-        <h3 className="font-bold text-sm text-white mb-1 flex items-center gap-1.5"><Calculator className="w-4 h-4 text-indigo-400" /> Testovacia kalkulačka predajnej ceny</h3>
-        <p className="text-xs text-slate-400 mb-4">Over si, akú cenu dostane zákazník pri aktuálne nastavených predajných sadzbách (používa rovnakú referenčnú veľkosť ako vyššie).</p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+        <h3 className="font-bold text-sm text-white mb-1 flex items-center gap-1.5"><Calculator className="w-4 h-4 text-indigo-400" /> Testovacia kalkulačka predajnej ceny — porovnanie technológií</h3>
+        <p className="text-xs text-slate-400 mb-1">Zadaj rozmer, počet kusov, farby a hneď vidíš cenu pri KAŽDEJ technológii naraz (podľa aktuálne uložených predajných sadzieb vyššie).</p>
+        <p className="text-[11px] text-amber-400/80 mb-4">⚠️ Neoverené, či appka pre "vlastnú potlač" (Dizajner) k týmto sadzbám niekde pripočítava DPH — over si to, alebo mi daj vedieť, nech to preveríme spolu.</p>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">
+          <div><label className="text-xs text-slate-400">Šírka (cm)</label><input type="number" value={testW} onChange={(e) => setTestW(e.target.value)} className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white" /></div>
+          <div><label className="text-xs text-slate-400">Výška (cm)</label><input type="number" value={testH} onChange={(e) => setTestH(e.target.value)} className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white" /></div>
+          <div><label className="text-xs text-slate-400">Počet ks</label><input type="number" min="1" value={testKs} onChange={(e) => setTestKs(e.target.value)} className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white" /></div>
+          <div><label className="text-xs text-slate-400">Počet farieb</label><input type="number" min="1" value={testFarby} onChange={(e) => setTestFarby(e.target.value)} className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white" /></div>
           <div>
-            <label className="text-xs text-slate-400">Technológia</label>
-            <select value={testTech} onChange={(e) => setTestTech(e.target.value)} className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white">
-              <option value="sublimacia">Sublimácia</option>
-              <option value="dtf">Digitálny transfer</option>
-              <option value="sietotlac">Sieťotlač</option>
-              <option value="rezany">Rezaný transfer</option>
+            <label className="text-xs text-slate-400">Typ fólie (rezaný)</label>
+            <select value={testFoliaId || ''} onChange={(e) => setTestFoliaId(parseInt(e.target.value))} className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white">
+              {folie.map(f => <option key={f.id} value={f.id}>{f.nazov}</option>)}
             </select>
           </div>
-          <div>
-            <label className="text-xs text-slate-400">Počet farieb</label>
-            <input type="number" min="1" value={testFarby} onChange={(e) => setTestFarby(e.target.value)} className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white" />
-          </div>
-          {testTech === 'rezany' && (
-            <div>
-              <label className="text-xs text-slate-400">Typ fólie</label>
-              <select value={testFoliaId || ''} onChange={(e) => setTestFoliaId(parseInt(e.target.value))} className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white">
-                {folie.map(f => <option key={f.id} value={f.id}>{f.nazov} ({Number(f.cena_cm2).toFixed(2)} €/cm²)</option>)}
-              </select>
-            </div>
-          )}
         </div>
-        <div className="flex items-center justify-between pt-3 border-t border-slate-800">
-          <div className="text-xs text-slate-400">
-            Plocha: <span className="text-white font-semibold">{plocha} cm²</span>
-            <span className="block mt-0.5">{vysledok.vzorec}</span>
-          </div>
-          <div className="text-2xl font-black text-emerald-400">{vysledok.cena.toFixed(2)} €</div>
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-xs text-slate-400">Textil pre sieťotlač:</span>
+          <button onClick={() => setTestTmavyTextil(false)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold border-2 transition ${!testTmavyTextil ? 'border-indigo-500 bg-indigo-950/40 text-indigo-300' : 'border-slate-700 text-slate-400'}`}>Svetlý</button>
+          <button onClick={() => setTestTmavyTextil(true)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold border-2 transition ${testTmavyTextil ? 'border-indigo-500 bg-indigo-950/40 text-indigo-300' : 'border-slate-700 text-slate-400'}`}>Tmavý</button>
+        </div>
+        <p className="text-xs text-slate-400 mb-2">Plocha motívu: <span className="text-white font-semibold">{plocha} cm²</span> × {ks} ks</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {[
+            { key: 'sublimacia', label: 'Sublimácia' },
+            { key: 'dtf', label: 'DTF' },
+            { key: 'sietotlac', label: 'Sieťotlač' },
+            { key: 'rezany', label: 'Rezaný transfer (flex)' },
+          ].map(({ key, label }) => {
+            const r = vypocitajCenuPotlace(cennikProKalkulacku, key, plocha, parseInt(testFarby) || 1, testTmavyTextil, testFoliaId);
+            return (
+              <div key={key} className="bg-slate-900 rounded-xl border border-slate-800 p-3">
+                <p className="text-xs font-bold text-slate-300 mb-1">{label}</p>
+                <p className="text-xl font-black text-emerald-400">{r.cena.toFixed(2)} €<span className="text-xs text-slate-500 font-normal"> /ks</span></p>
+                <p className="text-sm text-slate-400">{(r.cena * ks).toFixed(2)} € spolu za {ks}ks</p>
+                <p className="text-[10px] text-slate-600 mt-1">{r.vzorec}</p>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
