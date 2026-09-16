@@ -53,10 +53,11 @@ export default function KostraCienTab({ supabase }) {
   const [sietotlac, setSietotlac] = useState(null);
   const [sietotlacVelkosti, setSietotlacVelkosti] = useState([]);
   const [vysivka, setVysivka] = useState(null);
+  const [materials, setMaterials] = useState([]);
 
   const nacitaj = async () => {
     setIsLoading(true);
-    const [{ data: tn }, { data: sg }, { data: rez }, { data: fol }, { data: dtfN }, { data: siet }, { data: sietVel }, { data: vys }] = await Promise.all([
+    const [{ data: tn }, { data: sg }, { data: rez }, { data: fol }, { data: dtfN }, { data: siet }, { data: sietVel }, { data: vys }, { data: mats }] = await Promise.all([
       supabase.from('textil_naklady').select('*').eq('technologia', 'sublimacia').maybeSingle(),
       supabase.from('cennik_sublimacia_naklady').select('*').eq('id', 1).maybeSingle(),
       supabase.from('cennik_rezany_transfer').select('*').eq('id', 1).maybeSingle(),
@@ -65,8 +66,10 @@ export default function KostraCienTab({ supabase }) {
       supabase.from('cennik_sietotlac').select('*').eq('id', 1).maybeSingle(),
       supabase.from('cennik_sietotlac_velkosti').select('*').order('poradie'),
       supabase.from('kostra_vysivka').select('*').eq('id', 1).maybeSingle(),
+      supabase.from('materials').select('id, name, unit').order('name'),
     ]);
     setTextilSub(tn || { technologia: 'sublimacia', cena_papier_bm: 0, cena_ochranny_papier_bm: 0, cena_atrament_l: 0, spotreba_atrament_ml_m2: 0, cena_prace_hod: 0, rychlost_m_hod: 1 });
+    setMaterials(mats || []);
     setSublimaciaGarment(sg || { id: 1, sirka_papiera_cm: 160, naklady_manipulacia: 0, naklady_ochranny_papier: 0, cas_nazehlovania_min: 0, koeficient_rizika_percent: 0 });
     setRezany(rez || { id: 1, cena_prace_hod: 0, cas_rezania_min: 0, cas_vylupovania_min: 0, cas_nazehlovania_min: 0, naklady_manipulacia: 0, sirka_folie_cm: 50, sirka_vyuzitelna_cm: 49 });
     setFolie(fol || []);
@@ -208,6 +211,33 @@ export default function KostraCienTab({ supabase }) {
               <Field label="Sublimačný atrament CMYK (€/l)" value={textilSub.cena_atrament_l} step="1" onChange={(v) => ulozTextilSub({ cena_atrament_l: v })} />
               <Field label="Spotreba atramentu (ml/m²)" value={textilSub.spotreba_atrament_ml_m2} step="1" onChange={(v) => ulozTextilSub({ spotreba_atrament_ml_m2: v })} />
               <Field label="Operátor + kalander (€/hod)" value={textilSub.cena_prace_hod} step="1" onChange={(v) => ulozTextilSub({ cena_prace_hod: v })} />
+            </div>
+          </div>
+          <div>
+            <span className="text-xs font-bold text-slate-300 uppercase tracking-wide block mb-2">Prepojenie na Sklad (reálne odčítanie pri zákazke)</span>
+            <p className="text-[11px] text-slate-500 mb-2">Priraď ku každému spotrebnému materiálu konkrétnu položku zo Skladu — pri vygenerovaní zákazky s produktom, ktorý má zapnutú sublimáciu, sa spolu s látkou odpočíta aj toto (podľa plochy potlače). Bez priradenia sa nič zo skladu neodpočíta (len sa počíta cena ako doteraz).</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-slate-950 rounded-xl border border-slate-800">
+              <div>
+                <label className={labelCls}>Sublimačný papier</label>
+                <select value={textilSub.papier_material_id || ''} onChange={(e) => ulozTextilSub({ papier_material_id: e.target.value || null })} className={inputCls}>
+                  <option value="">— nepriradené —</option>
+                  {materials.map(m => (<option key={m.id} value={m.id}>{m.name} ({m.unit})</option>))}
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>Sublimačný atrament</label>
+                <select value={textilSub.atrament_material_id || ''} onChange={(e) => ulozTextilSub({ atrament_material_id: e.target.value || null })} className={inputCls}>
+                  <option value="">— nepriradené —</option>
+                  {materials.map(m => (<option key={m.id} value={m.id}>{m.name} ({m.unit})</option>))}
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>Protekčný papier</label>
+                <select value={textilSub.protekcny_papier_material_id || ''} onChange={(e) => ulozTextilSub({ protekcny_papier_material_id: e.target.value || null })} className={inputCls}>
+                  <option value="">— nepriradené —</option>
+                  {materials.map(m => (<option key={m.id} value={m.id}>{m.name} ({m.unit})</option>))}
+                </select>
+              </div>
             </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

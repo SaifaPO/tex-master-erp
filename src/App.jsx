@@ -3536,6 +3536,38 @@ export default function App() {
     return consumptionM * widthCm * 100;
   };
 
+  // Sublimacna potlac — realne odpocitanie papiera/atramentu/protekcneho papiera zo Skladu, podla
+  // plochy potlace pre CELU zakazku (rovnaky princip ako odpocet latky cez calculateLayerConsumption).
+  // Ak admin v Kostre cien nepriradil ku konkretnemu spotrebnemu materialu ziadnu polozku zo Skladu,
+  // ten sa jednoducho preskoci (vracia sa prazdny zoznam) — spatna kompatibilita, nic sa nerozbije.
+  const vypocitajSublimacnuSpotrebuZoSkladu = (product, gender, qty) => {
+    if (!product?.tlacSublimacia || !kostra?.textilSub || !product.layer1?.materialId) return [];
+    const latka = materials.find(m => m.id === product.layer1.materialId);
+    const latkaWidthCm = parseFloat(latka?.width) || 0;
+    const totalConsumptionM = calculateLayerConsumption(product, gender, 'layer1', qty);
+    const totalPlochaCm2 = totalConsumptionM * latkaWidthCm * 100;
+    if (totalPlochaCm2 <= 0) return [];
+    const { papier_material_id, atrament_material_id, protekcny_papier_material_id, spotreba_atrament_ml_m2 } = kostra.textilSub;
+    const result = [];
+    if (papier_material_id) {
+      const papierMat = materials.find(m => m.id === papier_material_id);
+      const rollWidthCm = parseFloat(papierMat?.width) || 160;
+      result.push({ layerName: 'Sublimačný papier', materialId: papier_material_id, qtyNeeded: Math.round((totalPlochaCm2 / (rollWidthCm * 100)) * 100) / 100 });
+    }
+    if (atrament_material_id) {
+      const atramentMat = materials.find(m => m.id === atrament_material_id);
+      const ml = (totalPlochaCm2 / 10000) * (parseFloat(spotreba_atrament_ml_m2) || 0);
+      const qtyNeeded = (atramentMat?.unit === 'l') ? ml / 1000 : ml;
+      result.push({ layerName: 'Sublimačný atrament', materialId: atrament_material_id, qtyNeeded: Math.round(qtyNeeded * 1000) / 1000 });
+    }
+    if (protekcny_papier_material_id) {
+      const ppMat = materials.find(m => m.id === protekcny_papier_material_id);
+      const ppWidthCm = parseFloat(ppMat?.width) || latkaWidthCm;
+      result.push({ layerName: 'Protekčný papier', materialId: protekcny_papier_material_id, qtyNeeded: Math.round((totalPlochaCm2 / (ppWidthCm * 100)) * 100) / 100 });
+    }
+    return result;
+  };
+
   // Rezany transfer — ak je zvolena folia z Kostry cien AJ plocha motivu (napr. velkostny stitok
   // 5x2cm = 10cm2), cena sa pocita automaticky (rovnaky vzorec ako v Kostre cien). Ak nie je vyplnene
   // oboje, vracia null a pouzije sa rucne zadana cena (spatna kompatibilita).
@@ -3841,6 +3873,7 @@ export default function App() {
     if (selectedProduct.layer1) neededList.push({ layerName: 'Primárna látka', materialId: selectedLayer1Mat, qtyNeeded: calculateLayerConsumption(selectedProduct, selectedGender, 'layer1', qtyNum) });
     if (selectedProduct.layer2 && selectedLayer2Mat) neededList.push({ layerName: 'Sekundárna látka', materialId: selectedLayer2Mat, qtyNeeded: calculateLayerConsumption(selectedProduct, selectedGender, 'layer2', qtyNum) });
     if (selectedProduct.layer3 && selectedLayer3Mat) neededList.push({ layerName: 'Terciárna látka', materialId: selectedLayer3Mat, qtyNeeded: calculateLayerConsumption(selectedProduct, selectedGender, 'layer3', qtyNum) });
+    neededList.push(...vypocitajSublimacnuSpotrebuZoSkladu(selectedProduct, selectedGender, qtyNum));
 
     let imageUrl = '';
     if (itemImageFile) {
@@ -3964,6 +3997,7 @@ export default function App() {
     if (product.layer1?.materialId) neededList.push({ layerName: 'Primárna látka', materialId: product.layer1.materialId, qtyNeeded: calculateLayerConsumption(product, gender, 'layer1', qty) });
     if (product.layer2?.materialId) neededList.push({ layerName: 'Sekundárna látka', materialId: product.layer2.materialId, qtyNeeded: calculateLayerConsumption(product, gender, 'layer2', qty) });
     if (product.layer3?.materialId) neededList.push({ layerName: 'Terciárna látka', materialId: product.layer3.materialId, qtyNeeded: calculateLayerConsumption(product, gender, 'layer3', qty) });
+    neededList.push(...vypocitajSublimacnuSpotrebuZoSkladu(product, gender, qty));
     return {
       tempId: `tmp-ai-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       productId: product.id, productName: product.name, customCode: product.customCode,
@@ -4576,11 +4610,15 @@ export default function App() {
           { key: 'layer2', label: 'Sekundárna látka' },
           { key: 'layer3', label: 'Terciárna látka' }
         ];
-        const updatedMaterials = (it.materialsNeeded || []).map(m => {
-          const layerInfo = layerMap.find(l => l.label === m.layerName);
-          if (!layerInfo || !product[layerInfo.key]) return m;
-          return { ...m, qtyNeeded: calculateLayerConsumption(product, it.gender, layerInfo.key, newQty) };
-        });
+        const konzumneLabely = ['Sublimačný papier', 'Sublimačný atrament', 'Protekčný papier'];
+        const updatedMaterials = (it.materialsNeeded || [])
+          .filter(m => !konzumneLabely.includes(m.layerName))
+          .map(m => {
+            const layerInfo = layerMap.find(l => l.label === m.layerName);
+            if (!layerInfo || !product[layerInfo.key]) return m;
+            return { ...m, qtyNeeded: calculateLayerConsumption(product, it.gender, layerInfo.key, newQty) };
+          });
+        updatedMaterials.push(...vypocitajSublimacnuSpotrebuZoSkladu(product, it.gender, newQty));
         return { ...it, qty: newQty, materialsNeeded: updatedMaterials, threadQtyM: product.threadM * newQty };
       })
     }));
@@ -4732,6 +4770,7 @@ export default function App() {
     if (product.layer1) neededList.push({ layerName: 'Primárna látka', materialId: addItemLayer1Mat, qtyNeeded: calculateLayerConsumption(product, addItemGender, 'layer1', qtyNum) });
     if (product.layer2 && addItemLayer2Mat) neededList.push({ layerName: 'Sekundárna látka', materialId: addItemLayer2Mat, qtyNeeded: calculateLayerConsumption(product, addItemGender, 'layer2', qtyNum) });
     if (product.layer3 && addItemLayer3Mat) neededList.push({ layerName: 'Terciárna látka', materialId: addItemLayer3Mat, qtyNeeded: calculateLayerConsumption(product, addItemGender, 'layer3', qtyNum) });
+    neededList.push(...vypocitajSublimacnuSpotrebuZoSkladu(product, addItemGender, qtyNum));
 
     let imageUrl = '';
     if (addItemImageFile) {
