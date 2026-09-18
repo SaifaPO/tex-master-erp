@@ -624,6 +624,7 @@ const mapAddonTypeFromDb = (r) => ({ id: r.id, label: r.label, sortOrder: r.sort
 const PBT_STATIONS = ['sublimacia', 'laser', 'transfer', 'sietotlac'];
 const ATAK_STATIONS = ['strihanie', 'sitie'];
 const mapIntercompanyRateFromDb = (r) => ({ serviceKey: r.service_key, label: r.label, unit: r.unit, price: r.price || 0, markupPercent: r.markup_percent || 0 });
+const mapIntercompanyClosedPeriodFromDb = (r) => ({ id: `${r.direction}_${r.month}`, direction: r.direction, month: r.month, closedAt: r.closed_at, closedBy: r.closed_by || '', snapshot: r.snapshot });
 
 // Body na papierovom dotlačovom listku, ktoré vie predajňa rýchlo označiť (predné + zadné schéma trička/nohavíc).
 // Pohľad je na osobu spredu/zozadu (ako keby sme sa na ňu pozerali) — jej ľavá strana je preto na PRAVEJ strane obrázka.
@@ -1253,6 +1254,7 @@ export default function App() {
   const [dotlacovkaPriceList, setDotlacovkaPriceList] = useState([]);
   const [addonTypes, setAddonTypes] = useState([]);
   const [intercompanyRates, setIntercompanyRates] = useState([]);
+  const [intercompanyClosedPeriods, setIntercompanyClosedPeriods] = useState([]);
   const [showIntercompanyRateEditor, setShowIntercompanyRateEditor] = useState(false);
   const [intercompanyDirection, setIntercompanyDirection] = useState('ATAK_TO_PBT'); // ATAK_TO_PBT = PBT fakturuje ATAK; PBT_TO_ATAK = ATAK fakturuje PBT
   const [intercompanyMonth, setIntercompanyMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
@@ -1598,7 +1600,7 @@ export default function App() {
     }
     async function loadAll() {
       try {
-        const [matRes, prodRes, tierRes, sportRes, empRes, aclRes, orderRes, whRes, rateRes, assignRes, stationDefaultRes, stationExclusionRes, checkinRes, attendanceRes, mismatchRes, problemRes, companyRes, invoiceRes, bankRes, journalRes, deadlineRes, cashDocRes, capacityRes, productTimesRes, assetRes, metricRes, tierRuleRes, travelRes, vehicleRes, vehicleLogRes, customerRes, dotlackovkaPriceRes, addonTypeRes, helpRequestRes, intercompanyRateRes, pricingConfigRes, krajcirkyRes, kapacitaRes] = await Promise.all([
+        const [matRes, prodRes, tierRes, sportRes, empRes, aclRes, orderRes, whRes, rateRes, assignRes, stationDefaultRes, stationExclusionRes, checkinRes, attendanceRes, mismatchRes, problemRes, companyRes, invoiceRes, bankRes, journalRes, deadlineRes, cashDocRes, capacityRes, productTimesRes, assetRes, metricRes, tierRuleRes, travelRes, vehicleRes, vehicleLogRes, customerRes, dotlackovkaPriceRes, addonTypeRes, helpRequestRes, intercompanyRateRes, intercompanyClosedRes, pricingConfigRes, krajcirkyRes, kapacitaRes] = await Promise.all([
           supabase.from('materials').select('*').order('name'),
           supabase.from('products').select('*'),
           supabase.from('quality_tiers').select('*'),
@@ -1634,6 +1636,7 @@ export default function App() {
           supabase.from('addon_types').select('*').order('sort_order'),
           supabase.from('help_requests').select('*').order('created_at', { ascending: false }).limit(200),
           supabase.from('intercompany_rates').select('*'),
+          supabase.from('intercompany_closed_periods').select('*'),
           supabase.from('pricing_config').select('cena_minuty_sitia, cena_strihania_100cm2, sadzba_rv_min, coef_a, coef_b, margin_floor, coef_p, qty_at_floor').eq('id', 1).maybeSingle(),
           supabase.from('krajcirky').select('*').order('poradie').order('id'),
           supabase.from('vyrobna_kapacita_nastavenia').select('*').eq('id', 1).maybeSingle()
@@ -1682,6 +1685,7 @@ export default function App() {
         setAddonTypes(addonTypeRes.error ? [] : (addonTypeRes.data || []).map(mapAddonTypeFromDb));
         setHelpRequests(helpRequestRes.error ? [] : (helpRequestRes.data || []).map(mapHelpRequestFromDb));
         setIntercompanyRates(intercompanyRateRes.error ? [] : (intercompanyRateRes.data || []).map(mapIntercompanyRateFromDb));
+        setIntercompanyClosedPeriods(intercompanyClosedRes.error ? [] : (intercompanyClosedRes.data || []).map(mapIntercompanyClosedPeriodFromDb));
         setCenaMinutySitia(pricingConfigRes.error || !pricingConfigRes.data ? 0 : Number(pricingConfigRes.data.cena_minuty_sitia) || 0);
         setCenaStrihania100cm2(pricingConfigRes.error || !pricingConfigRes.data ? 0 : Number(pricingConfigRes.data.cena_strihania_100cm2) || 0);
         setSadzbaRvMin(pricingConfigRes.error || !pricingConfigRes.data || pricingConfigRes.data.sadzba_rv_min == null ? 0.3 : Number(pricingConfigRes.data.sadzba_rv_min));
@@ -1764,6 +1768,7 @@ export default function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'dotlacovka_price_list' }, (payload) => applyRealtimeChange(setDotlacovkaPriceList, payload, mapDotlackovkaPriceFromDb))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'addon_types' }, (payload) => applyRealtimeChange(setAddonTypes, payload, mapAddonTypeFromDb))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'intercompany_rates' }, (payload) => applyRealtimeChange(setIntercompanyRates, payload, mapIntercompanyRateFromDb, 'serviceKey'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'intercompany_closed_periods' }, (payload) => applyRealtimeChange(setIntercompanyClosedPeriods, payload, mapIntercompanyClosedPeriodFromDb))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'help_requests' }, (payload) => {
         applyRealtimeChange(setHelpRequests, payload, mapHelpRequestFromDb);
         if (payload.eventType === 'INSERT') {
@@ -4313,22 +4318,23 @@ export default function App() {
           if (!status || status === 'neaktivne') return;
           const rate = intercompanyRates.find(r => r.serviceKey === sid);
           const kostraCostPerKs = getKostraCostPerKsPreStanicu(product, sid);
+          const itemKey = `${order.id}_${item.itemId}`;
           if (kostraCostPerKs != null && marginCurveConfig && item.qty) {
             const unitPrice = priceAt(kostraCostPerKs, item.qty, marginCurveConfig);
-            lines.push({ orderNumber: order.orderNumber || order.id, productName: `${item.productName} — ${rate?.label || sid} (z Kostry, ${item.qty}ks)`, unit: 'ks', qty: item.qty, unitPrice, total: parseFloat((item.qty * unitPrice).toFixed(2)) });
+            lines.push({ itemKey, baseProductName: item.productName, itemQty: item.qty, orderNumber: order.orderNumber || order.id, productName: `${item.productName} — ${rate?.label || sid} (z Kostry, ${item.qty}ks)`, unit: 'ks', qty: item.qty, unitPrice, total: parseFloat((item.qty * unitPrice).toFixed(2)) });
             return;
           }
           if (!rate) return;
           const qty = rate.unit === 'bm' ? (item.materialsNeeded || []).reduce((s, m) => s + (m.qtyNeeded || 0), 0) : item.qty;
           if (!qty) return;
           const unitPrice = parseFloat((rate.price * (1 + rate.markupPercent / 100)).toFixed(2));
-          lines.push({ orderNumber: order.orderNumber || order.id, productName: `${item.productName} — ${rate.label} (ručná sadzba)`, unit: rate.unit, qty: parseFloat(qty.toFixed(2)), unitPrice, total: parseFloat((qty * unitPrice).toFixed(2)) });
+          lines.push({ itemKey, baseProductName: item.productName, itemQty: item.qty, orderNumber: order.orderNumber || order.id, productName: `${item.productName} — ${rate.label} (ručná sadzba)`, unit: rate.unit, qty: parseFloat(qty.toFixed(2)), unitPrice, total: parseFloat((qty * unitPrice).toFixed(2)) });
         });
         if (direction === 'PBT_TO_ATAK') {
           const reziaRate = intercompanyRates.find(r => r.serviceKey === 'rezia');
           if (reziaRate && item.qty) {
             const unitPrice = parseFloat((reziaRate.price * (1 + reziaRate.markupPercent / 100)).toFixed(2));
-            lines.push({ orderNumber: order.orderNumber || order.id, productName: `${item.productName} — Réžia`, unit: 'ks', qty: item.qty, unitPrice, total: parseFloat((item.qty * unitPrice).toFixed(2)) });
+            lines.push({ itemKey: `${order.id}_${item.itemId}`, baseProductName: item.productName, itemQty: item.qty, orderNumber: order.orderNumber || order.id, productName: `${item.productName} — Réžia`, unit: 'ks', qty: item.qty, unitPrice, total: parseFloat((item.qty * unitPrice).toFixed(2)) });
           }
         }
         (item.materialsNeeded || []).forEach(needed => {
@@ -4338,7 +4344,7 @@ export default function App() {
             const matRate = intercompanyRates.find(r => r.serviceKey === 'material');
             const markup = matRate?.markupPercent || 0;
             const unitPrice = parseFloat(((mat.pricePerM || 0) * (1 + markup / 100)).toFixed(2));
-            lines.push({ orderNumber: order.orderNumber || order.id, productName: `${item.productName} — Materiál (${mat.name})`, unit: mat.unit || 'm', qty: needed.qtyNeeded, unitPrice, total: parseFloat((needed.qtyNeeded * unitPrice).toFixed(2)) });
+            lines.push({ itemKey: `${order.id}_${item.itemId}`, baseProductName: item.productName, itemQty: item.qty, orderNumber: order.orderNumber || order.id, productName: `${item.productName} — Materiál (${mat.name})`, unit: mat.unit || 'm', qty: needed.qtyNeeded, unitPrice, total: parseFloat((needed.qtyNeeded * unitPrice).toFixed(2)) });
           }
         });
       });
@@ -4353,6 +4359,25 @@ export default function App() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Dodaci list');
     XLSX.writeFile(wb, `dodaci_list_${invoicer}_${payer}_${monthStr}.xlsx`);
+  };
+
+  // Uzavretie mesiaca (mesacna uzavierka) — zmrazi aktualne vypocitane riadky/sucet dodacieho
+  // listu, aby sa uz nezmenili ani ked sa nejaka zakazka z toho obdobia neskor upravi. Bez toho by
+  // sa vystaveny dodaci list mohol potichu prepocitat inak, ked by sa doplatky/rozpis zakazky zmenili.
+  const handleCloseIntercompanyPeriod = async (direction, monthStr, lines, grandTotal) => {
+    if (!window.confirm(`Uzavrieť dodací list za ${monthStr}? Po uzavretí sa už nebude meniť, aj keby sa súvisiace zákazky neskôr upravili.`)) return;
+    const snapshot = { lines, grandTotal };
+    const { error } = await supabase.from('intercompany_closed_periods').upsert({
+      direction, month: monthStr, closed_by: `${currentUser.firstName} ${currentUser.lastName}`, snapshot,
+    });
+    if (error) { triggerNotification('error', error.message); return; }
+    triggerNotification('success', `Mesiac ${monthStr} bol uzavretý.`);
+  };
+  const handleReopenIntercompanyPeriod = async (direction, monthStr) => {
+    if (!window.confirm('Odomknúť tento mesiac? Dodací list sa opäť začne počítať naživo z aktuálnych dát.')) return;
+    const { error } = await supabase.from('intercompany_closed_periods').delete().eq('direction', direction).eq('month', monthStr);
+    if (error) { triggerNotification('error', error.message); return; }
+    setIntercompanyClosedPeriods(prev => prev.filter(c => !(c.direction === direction && c.month === monthStr)));
   };
 
   const handleAddAddonType = async () => {
@@ -10680,10 +10705,24 @@ export default function App() {
               )}
 
               {financeSubTab === 'intercompany' && currentUser.role === 'master' && (() => {
-                const lines = getIntercompanyLineItems(intercompanyMonth, intercompanyDirection);
-                const grandTotal = lines.reduce((s, l) => s + l.total, 0);
+                const closedRecord = intercompanyClosedPeriods.find(c => c.direction === intercompanyDirection && c.month === intercompanyMonth);
+                // Uzavrety mesiac pouziva zmrazeny snapshot (nemeni sa), inak sa pocita naziv z aktualnych dat.
+                const lines = closedRecord ? closedRecord.snapshot.lines : getIntercompanyLineItems(intercompanyMonth, intercompanyDirection);
+                const grandTotal = closedRecord ? closedRecord.snapshot.grandTotal : lines.reduce((s, l) => s + l.total, 0);
                 const invoicer = intercompanyDirection === 'ATAK_TO_PBT' ? 'PBT' : 'ATAK';
                 const payer = intercompanyDirection === 'ATAK_TO_PBT' ? 'ATAK' : 'PBT';
+                // Zbaleny sumar na tlac — jeden riadok na polozku zakazky (sucet vsetkych sluzieb/materialu),
+                // aby tlacovy dodaci list nemal desiatky stran pri rozpisanych sluzbach po staniciach.
+                // Na obrazovke ostava rozpisany pohlad (nizsie), tento sa pouzije LEN pri tlaci.
+                const groupedByItem = [];
+                const groupedIndex = {};
+                lines.forEach(l => {
+                  if (!groupedIndex[l.itemKey]) {
+                    groupedIndex[l.itemKey] = { orderNumber: l.orderNumber, productName: l.baseProductName, qty: l.itemQty, total: 0 };
+                    groupedByItem.push(groupedIndex[l.itemKey]);
+                  }
+                  groupedIndex[l.itemKey].total += l.total;
+                });
                 return (
                   <div className="space-y-4">
                     <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900 p-3 rounded-xl border border-slate-800">
@@ -10694,8 +10733,16 @@ export default function App() {
                         </div>
                         <input type="month" value={intercompanyMonth} onChange={(e) => setIntercompanyMonth(e.target.value)} className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white" />
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <button onClick={() => setShowIntercompanyRateEditor(v => !v)} className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5"><Sliders className="h-3.5 w-3.5" /> Cenník a marže</button>
+                        {closedRecord ? (
+                          <>
+                            <span className="text-[10px] bg-emerald-950/40 text-emerald-300 border border-emerald-800/40 px-2.5 py-1.5 rounded-lg font-bold">🔒 Uzavreté {closedRecord.closedAt?.slice(0, 10)} ({closedRecord.closedBy})</span>
+                            <button onClick={() => handleReopenIntercompanyPeriod(intercompanyDirection, intercompanyMonth)} className="bg-amber-800 hover:bg-amber-700 text-white font-bold text-xs px-3 py-1.5 rounded-lg">Odomknúť</button>
+                          </>
+                        ) : (
+                          <button onClick={() => handleCloseIntercompanyPeriod(intercompanyDirection, intercompanyMonth, lines, grandTotal)} disabled={lines.length === 0} className="bg-indigo-700 hover:bg-indigo-600 disabled:opacity-40 text-white font-bold text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5">🔒 Uzavrieť mesiac</button>
+                        )}
                         <button onClick={() => handleExportIntercompanyList(lines, intercompanyDirection, intercompanyMonth)} disabled={lines.length === 0} className="bg-emerald-700 hover:bg-emerald-800 disabled:opacity-40 text-white font-bold text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5"><Download className="h-3.5 w-3.5" /> Export XLSX</button>
                         <button onClick={() => window.print()} disabled={lines.length === 0} className="bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 font-bold text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5"><FileText className="h-3.5 w-3.5" /> Tlač</button>
                       </div>
@@ -10720,11 +10767,11 @@ export default function App() {
                       </div>
                     )}
 
-                    <div className="bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
+                    <div className="bg-slate-950 border border-slate-800 rounded-xl overflow-hidden print:hidden">
                       <div className="p-4 border-b border-slate-800 flex items-center justify-between">
                         <div>
                           <h3 className="font-bold text-white">Dodací list — {invoicer} fakturuje {payer}</h3>
-                          <p className="text-xs text-slate-500">Obdobie: {intercompanyMonth} • {lines.length} položiek</p>
+                          <p className="text-xs text-slate-500">Obdobie: {intercompanyMonth} • {lines.length} položiek (podrobný rozpis — na tlač sa použije zbalený súhrn za položku)</p>
                         </div>
                         <span className="text-xl font-mono font-extrabold text-emerald-400">{grandTotal.toFixed(2)} €</span>
                       </div>
@@ -10756,6 +10803,40 @@ export default function App() {
                           </tbody>
                         </table>
                       </div>
+                    </div>
+
+                    {/* Zbaleny pohlad — LEN na tlac (1 riadok na polozku zakazky, bez rozpisu po staniciach) */}
+                    <div className="hidden print:block">
+                      <h3 className="font-bold text-black text-lg mb-1">Dodací list — {invoicer} fakturuje {payer}</h3>
+                      <p className="text-xs text-slate-600 mb-3">Obdobie: {intercompanyMonth} • {groupedByItem.length} položiek</p>
+                      <table className="w-full text-left text-xs text-black border-collapse">
+                        <thead>
+                          <tr className="border-b-2 border-black">
+                            <th className="py-1.5 pr-2">P.č.</th>
+                            <th className="py-1.5 pr-2">Číslo zákazky</th>
+                            <th className="py-1.5 pr-2">Produkt</th>
+                            <th className="py-1.5 pr-2 text-center">Ks</th>
+                            <th className="py-1.5 text-right">Cena spolu bez DPH</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {groupedByItem.map((g, i) => (
+                            <tr key={g.orderNumber + i} className="border-b border-slate-300">
+                              <td className="py-1 pr-2">{i + 1}</td>
+                              <td className="py-1 pr-2 font-mono">{g.orderNumber}</td>
+                              <td className="py-1 pr-2">{g.productName}</td>
+                              <td className="py-1 pr-2 text-center">{g.qty}</td>
+                              <td className="py-1 text-right font-bold">{g.total.toFixed(2)} €</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="border-t-2 border-black">
+                            <td colSpan={4} className="py-2 text-right font-bold uppercase">Spolu bez DPH</td>
+                            <td className="py-2 text-right font-extrabold">{grandTotal.toFixed(2)} €</td>
+                          </tr>
+                        </tfoot>
+                      </table>
                     </div>
                   </div>
                 );
