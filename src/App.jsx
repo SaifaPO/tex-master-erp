@@ -4622,6 +4622,35 @@ export default function App() {
     setOrders(prev => prev.map(o => newItemsByOrder[o.id] ? { ...o, items: newItemsByOrder[o.id] } : o));
   };
 
+  // Jemné posunutie priority IBA v rámci jedného dňa/stanice (Plánovacia Matica) — šípky pri karte.
+  // Na rozdiel od handleMovePriority (globálne v celom zozname) tu prehodíme prioritu len s
+  // najbližším susedom PRESNE v tomto dni+stanici, aby sa karta neposunula mimo dňa.
+  const handleMoveWithinDay = async (item, dayItemsSorted, direction) => {
+    if (!hasPermission('edit_priority')) { triggerNotification('error', 'Nemáte oprávnenie meniť plán výroby.'); return; }
+    const idx = dayItemsSorted.findIndex(i => i.itemId === item.itemId);
+    const targetIdx = idx + direction;
+    if (idx === -1 || targetIdx < 0 || targetIdx >= dayItemsSorted.length) return;
+    const target = dayItemsSorted[targetIdx];
+    const aPriority = item.priority, bPriority = target.priority;
+
+    setRecentlyMovedItemId(item.itemId);
+    setTimeout(() => setRecentlyMovedItemId(prev => (prev === item.itemId ? null : prev)), 600);
+
+    const affectedOrderIds = [...new Set([item.orderId, target.orderId])];
+    const newItemsByOrder = {};
+    for (const orderId of affectedOrderIds) {
+      const order = orders.find(o => o.id === orderId);
+      if (!order) continue;
+      newItemsByOrder[orderId] = order.items.map(it => {
+        if (it.itemId === item.itemId) return { ...it, priority: bPriority };
+        if (it.itemId === target.itemId) return { ...it, priority: aPriority };
+        return it;
+      });
+      await supabase.from('orders').update({ items: newItemsByOrder[orderId] }).eq('id', orderId);
+    }
+    setOrders(prev => prev.map(o => newItemsByOrder[o.id] ? { ...o, items: newItemsByOrder[o.id] } : o));
+  };
+
   // Presun myšou (drag & drop) — funguje popri šípkach, hodí sa hlavne na počítači/myš.
   // Na dotykových tabletoch je spoľahlivejšie použiť šípky ↑↓.
   const handleDragDropReorder = async (draggedItem, targetItem) => {
@@ -6388,6 +6417,22 @@ export default function App() {
                                                 </span>
                                               );
                                             })()}
+                                            {hasPermission('edit_priority') && dayItems.length > 1 && (
+                                              <div className="absolute top-1/2 -right-1.5 -translate-y-1/2 flex flex-col gap-0.5 z-10">
+                                                <button
+                                                  onClick={(e) => { e.stopPropagation(); handleMoveWithinDay(item, dayItems, -1); }}
+                                                  disabled={dayItems.findIndex(i => i.itemId === item.itemId) === 0}
+                                                  title="Posunúť vyššie v tomto dni (vyššia priorita)"
+                                                  className="p-0.5 bg-slate-800/90 hover:bg-indigo-700 disabled:opacity-20 disabled:pointer-events-none rounded text-slate-300 hover:text-white shadow"
+                                                ><ArrowUp className="h-2.5 w-2.5" /></button>
+                                                <button
+                                                  onClick={(e) => { e.stopPropagation(); handleMoveWithinDay(item, dayItems, 1); }}
+                                                  disabled={dayItems.findIndex(i => i.itemId === item.itemId) === dayItems.length - 1}
+                                                  title="Posunúť nižšie v tomto dni (nižšia priorita)"
+                                                  className="p-0.5 bg-slate-800/90 hover:bg-indigo-700 disabled:opacity-20 disabled:pointer-events-none rounded text-slate-300 hover:text-white shadow"
+                                                ><ArrowDown className="h-2.5 w-2.5" /></button>
+                                              </div>
+                                            )}
                                             {matrixDensity === 'ultra' ? (
                                               <>
                                                 <div className="flex items-center justify-between gap-1">
