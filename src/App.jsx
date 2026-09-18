@@ -11,7 +11,7 @@ import {
   ClipboardList, Package, Cpu, QrCode, Plus, User, Clock, Layers, Search, Check, X, Calendar,
   Palette, Scissors, Printer, Sliders, Sparkles, ZoomIn, ZoomOut, FileText, PlusCircle, Table,
   Shield, Users, Lock, Edit2, Trash2, Tag, Scale, CalendarDays, FileEdit, Gift, Loader2, AlertTriangle,
-  Shirt, Box, Banknote, GripVertical, Download, Upload, ArrowUp, ArrowDown, BarChart3, Camera, Bot, Zap, Star, RefreshCw, BookOpen
+  Shirt, Box, Banknote, GripVertical, Download, Upload, ArrowUp, ArrowDown, BarChart3, Camera, Bot, Zap, Star, RefreshCw, BookOpen, Paperclip
 } from 'lucide-react';
 
 // ============================================================
@@ -288,8 +288,8 @@ const mapTierToDb = (t) => ({ id: t.id, name: t.name, fit: t.fit, ventilation: t
 const mapEmployeeFromDb = (r) => ({ id: r.id, firstName: r.first_name, lastName: r.last_name, birthday: r.birthday, nameday: r.nameday, entryDate: r.entry_date, role: r.role, position: r.position, hasPassword: !!r.has_password, phone: r.phone || '', email: r.email || '', avatar: r.avatar || '', hasPin: !!r.has_pin, authUserId: r.auth_user_id || '', hasSignupToken: !!r.has_signup_token, signupTokenExpires: r.signup_token_expires || null, company: r.company || '', mzdaHruba: r.mzda_hruba ?? null, socialnePoistenie: r.socialne_poistenie ?? null, zdravotnePoistenie: r.zdravotne_poistenie ?? null });
 const mapEmployeeToDb = (e) => ({ id: e.id, first_name: e.firstName, last_name: e.lastName, birthday: e.birthday, nameday: e.nameday, entry_date: e.entryDate, role: e.role, position: e.position, phone: e.phone || null, email: e.email || null, avatar: e.avatar || null, auth_user_id: e.authUserId || null, company: e.company || null, mzda_hruba: e.mzdaHruba === '' || e.mzdaHruba == null ? null : parseFloat(e.mzdaHruba), socialne_poistenie: e.socialnePoistenie === '' || e.socialnePoistenie == null ? null : parseFloat(e.socialnePoistenie), zdravotne_poistenie: e.zdravotnePoistenie === '' || e.zdravotnePoistenie == null ? null : parseFloat(e.zdravotnePoistenie) });
 
-const mapOrderFromDb = (r) => ({ id: r.id, customer: r.customer, createdAt: r.created_at, deliveryDate: r.scheduled_day, driveLink: r.drive_link, notes: r.notes, paymentType: r.payment_type || 'faktura', items: r.items || [], orderLog: r.order_log || [], legacyOrderNumber: r.legacy_order_number || '', companyBrand: r.company_brand || 'ATAK', orderNumber: r.order_number || '', accountingStatus: r.accounting_status || null, lastModifiedAt: r.last_modified_at || null, lastModifiedNote: r.last_modified_note || '', variableSymbol: r.variable_symbol || '', expectedAmount: r.expected_amount ?? null, variableSymbolConfirmed: !!r.variable_symbol_confirmed });
-const mapOrderToDb = (o) => ({ id: o.id, customer: o.customer, created_at: o.createdAt, scheduled_day: o.deliveryDate, drive_link: o.driveLink, notes: o.notes, payment_type: o.paymentType, items: o.items, order_log: o.orderLog || [], legacy_order_number: o.legacyOrderNumber || null, company_brand: o.companyBrand || 'ATAK', order_number: o.orderNumber || null, accounting_status: o.accountingStatus || null, last_modified_at: o.lastModifiedAt || null, last_modified_note: o.lastModifiedNote || null, variable_symbol: o.variableSymbol || null, expected_amount: o.expectedAmount ?? null, variable_symbol_confirmed: o.variableSymbolConfirmed ?? false });
+const mapOrderFromDb = (r) => ({ id: r.id, customer: r.customer, createdAt: r.created_at, deliveryDate: r.scheduled_day, driveLink: r.drive_link, notes: r.notes, paymentType: r.payment_type || 'faktura', items: r.items || [], orderLog: r.order_log || [], legacyOrderNumber: r.legacy_order_number || '', companyBrand: r.company_brand || 'ATAK', orderNumber: r.order_number || '', accountingStatus: r.accounting_status || null, lastModifiedAt: r.last_modified_at || null, lastModifiedNote: r.last_modified_note || '', variableSymbol: r.variable_symbol || '', expectedAmount: r.expected_amount ?? null, variableSymbolConfirmed: !!r.variable_symbol_confirmed, attachments: r.attachments || [] });
+const mapOrderToDb = (o) => ({ id: o.id, customer: o.customer, created_at: o.createdAt, scheduled_day: o.deliveryDate, drive_link: o.driveLink, notes: o.notes, payment_type: o.paymentType, items: o.items, order_log: o.orderLog || [], legacy_order_number: o.legacyOrderNumber || null, company_brand: o.companyBrand || 'ATAK', order_number: o.orderNumber || null, accounting_status: o.accountingStatus || null, last_modified_at: o.lastModifiedAt || null, last_modified_note: o.lastModifiedNote || null, variable_symbol: o.variableSymbol || null, expected_amount: o.expectedAmount ?? null, variable_symbol_confirmed: o.variableSymbolConfirmed ?? false, attachments: o.attachments || [] });
 
 // VS sa odvodzuje rovnakym sposobom ako pri fakturach (len cislice, posledych 10) — zakazka ho dostane
 // uz pri vytvoreni, este pred vystavenim faktury, aby sa dala platba priradit aj bez existujucej faktury.
@@ -1542,6 +1542,8 @@ export default function App() {
   const importFileInputRef = useRef(null);
   const productImportFileInputRef = useRef(null);
   const orderImportFileInputRef = useRef(null);
+  const orderAttachmentFileInputRef = useRef(null);
+  const [orderAttachmentDragOver, setOrderAttachmentDragOver] = useState(false);
 
   useEffect(() => {
     if (!supabase) {
@@ -4749,6 +4751,49 @@ export default function App() {
     setNewOrderLogEntry('');
     setNewOrderLogStation('');
     triggerNotification('success', 'Poznámka bola pridaná do denníka zákazky.');
+  };
+
+  // --- GRAFICKÉ PODKLADY K ZÁKAZKE (Supabase Storage, priečinok podľa roka + čísla zákazky + odberateľa) ---
+  const handleAddOrderAttachment = async (order, file) => {
+    if (!order || !file) return null;
+    const year = new Date(order.createdAt || Date.now()).getFullYear();
+    const folder = `${order.orderNumber || order.id} - ${order.customer || 'bez-mena'}`.replace(/[\\/]+/g, '-').replace(/[^a-zA-Z0-9 ._-]/g, '').trim() || order.id;
+    const index = (order.attachments || []).length + 1;
+    const ext = (file.name.split('.').pop() || 'dat').toLowerCase();
+    const path = `objednavky/${year}/${folder}/${index}.${ext}`;
+    const { error: upErr } = await supabase.storage.from('item-attachments').upload(path, file);
+    if (upErr) { triggerNotification('error', upErr.message); return null; }
+    const { data: pub } = supabase.storage.from('item-attachments').getPublicUrl(path);
+    const attachment = { id: `att-${Date.now()}-${index}`, index, label: '', fileName: file.name, url: pub.publicUrl, mimeType: file.type || '', uploadedAt: new Date().toISOString(), uploadedBy: `${currentUser.firstName} ${currentUser.lastName}` };
+    const updatedAttachments = [...(order.attachments || []), attachment];
+    const { error } = await supabase.from('orders').update({ attachments: updatedAttachments }).eq('id', order.id);
+    if (error) { triggerNotification('error', error.message); return null; }
+    setOrders(prev => prev.map(o => o.id === order.id ? { ...o, attachments: updatedAttachments } : o));
+    if (selectedOrderDetails?.id === order.id) setSelectedOrderDetails({ ...order, attachments: updatedAttachments });
+    return { ...order, attachments: updatedAttachments };
+  };
+  const handleAddOrderAttachmentFiles = async (order, fileList) => {
+    let current = order;
+    for (const file of Array.from(fileList || [])) {
+      const result = await handleAddOrderAttachment(current, file);
+      if (result) current = result;
+    }
+    triggerNotification('success', 'Podklady boli nahraté.');
+  };
+  const handleRenameOrderAttachment = async (order, attachmentId, label) => {
+    const updatedAttachments = (order.attachments || []).map(a => a.id === attachmentId ? { ...a, label } : a);
+    const { error } = await supabase.from('orders').update({ attachments: updatedAttachments }).eq('id', order.id);
+    if (error) { triggerNotification('error', error.message); return; }
+    setOrders(prev => prev.map(o => o.id === order.id ? { ...o, attachments: updatedAttachments } : o));
+    if (selectedOrderDetails?.id === order.id) setSelectedOrderDetails({ ...order, attachments: updatedAttachments });
+  };
+  const handleDeleteOrderAttachment = async (order, attachmentId) => {
+    if (!window.confirm('Naozaj odstrániť tento podklad zo zákazky?')) return;
+    const updatedAttachments = (order.attachments || []).filter(a => a.id !== attachmentId);
+    const { error } = await supabase.from('orders').update({ attachments: updatedAttachments }).eq('id', order.id);
+    if (error) { triggerNotification('error', error.message); return; }
+    setOrders(prev => prev.map(o => o.id === order.id ? { ...o, attachments: updatedAttachments } : o));
+    if (selectedOrderDetails?.id === order.id) setSelectedOrderDetails({ ...order, attachments: updatedAttachments });
   };
 
   // Presun karty ťahaním na presné miesto (pred/za konkrétnu inú kartu, alebo na koniec dňa) — mení aj deň danej stanice, aj poradie (prioritu)
@@ -11943,6 +11988,42 @@ export default function App() {
                     <p className="text-[9px] text-black font-bold mt-1">PAY by square</p>
                   </div>
                 )}
+              </div>
+
+              <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 space-y-3">
+                <h4 className="font-extrabold text-[11px] uppercase tracking-wider text-slate-400 flex items-center gap-1.5"><Paperclip className="h-3.5 w-3.5" /> Grafické podklady</h4>
+                <div className="space-y-1.5">
+                  {(selectedOrderDetails.attachments || []).length === 0 && (
+                    <p className="text-xs text-slate-600 italic print:hidden">Zatiaľ žiadne nahraté podklady.</p>
+                  )}
+                  {(selectedOrderDetails.attachments || []).map(a => (
+                    <div key={a.id} className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 flex items-center gap-2">
+                      <span className="shrink-0 bg-indigo-950/50 text-indigo-300 border border-indigo-800/40 text-[10px] font-extrabold px-1.5 py-0.5 rounded-full">{a.index}</span>
+                      <a href={a.url} target="_blank" rel="noreferrer" className="text-xs text-indigo-400 hover:text-indigo-300 underline truncate shrink-0 max-w-[140px]">{a.fileName}</a>
+                      <input
+                        type="text"
+                        defaultValue={a.label}
+                        placeholder="popis (napr. náhľad, rozpis...)"
+                        onBlur={(e) => { if (e.target.value !== a.label) handleRenameOrderAttachment(selectedOrderDetails, a.id, e.target.value); }}
+                        className="print:hidden flex-1 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-white min-w-[100px]"
+                      />
+                      {a.label && <span className="hidden print:inline text-xs text-slate-300">{a.label}</span>}
+                      <span className="print:hidden text-[10px] text-slate-500 shrink-0">{a.uploadedBy} • {new Date(a.uploadedAt).toLocaleDateString('sk-SK')}</span>
+                      <button onClick={() => handleDeleteOrderAttachment(selectedOrderDetails, a.id)} className="print:hidden shrink-0 p-1 text-slate-500 hover:text-rose-400"><Trash2 className="h-3.5 w-3.5" /></button>
+                    </div>
+                  ))}
+                </div>
+                <div
+                  onDragOver={(e) => { e.preventDefault(); setOrderAttachmentDragOver(true); }}
+                  onDragLeave={() => setOrderAttachmentDragOver(false)}
+                  onDrop={(e) => { e.preventDefault(); setOrderAttachmentDragOver(false); handleAddOrderAttachmentFiles(selectedOrderDetails, e.dataTransfer.files); }}
+                  onClick={() => orderAttachmentFileInputRef.current?.click()}
+                  className={`print:hidden border-2 border-dashed rounded-xl p-3 text-center cursor-pointer text-xs transition-colors ${orderAttachmentDragOver ? 'border-indigo-500 bg-indigo-950/20 text-indigo-300' : 'border-slate-700 text-slate-500 hover:border-slate-600 hover:text-slate-400'}`}
+                >
+                  <Upload className="h-4 w-4 mx-auto mb-1" />
+                  Pretiahni sem súbory alebo klikni pre výber
+                  <input ref={orderAttachmentFileInputRef} type="file" multiple className="hidden" onChange={(e) => { handleAddOrderAttachmentFiles(selectedOrderDetails, e.target.files); e.target.value = ''; }} />
+                </div>
               </div>
 
               <div className="print:hidden bg-slate-900/60 border border-slate-800 rounded-xl p-4 space-y-3">
