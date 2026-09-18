@@ -73,6 +73,17 @@ function odpoved(body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 }
 
+// Citatelne cislo objednavky (napr. "TXT-260001") namiesto holeho UUID v Shopify — pocitadlo
+// podla predpony+roka, resetuje sa kazdy rok. UUID (id stlpca v *_objednavky) ostava interny kluc.
+async function ziskajCisloObjednavky(supabase: ReturnType<typeof createClient>, prefix: string) {
+  const year = new Date().getFullYear();
+  const shortYear = String(year).slice(-2);
+  const { data: counter } = await supabase.from('print_objednavky_pocitadla').select('next_number').eq('prefix', prefix).eq('year', year).maybeSingle();
+  const nextNum = (counter as { next_number: number } | null)?.next_number || 1;
+  await supabase.from('print_objednavky_pocitadla').upsert({ prefix, year, next_number: nextNum + 1 }, { onConflict: 'prefix,year' });
+  return `${prefix}-${shortYear}${String(nextNum).padStart(4, '0')}`;
+}
+
 // Obchod uz nema klasicky staly "Admin API access token" (Shopify presiel na Dev Dashboard
 // aplikacie bez tejto moznosti) — token si preto appka vyziada sama, za behu, cez OAuth
 // "client credentials" grant (Client ID + Secret appky, ktora ma nastavene opravnenie
@@ -170,8 +181,19 @@ Deno.serve(async (req) => {
     const grandTotal = grandTotalBezDph + dphSuma;
 
     const objednavkaId = crypto.randomUUID();
+    const cisloObjednavky = await ziskajCisloObjednavky(supabase, 'TXT');
+
+    // Podpisany odkaz na stiahnutie nahrateho suboru (bucket je sukromny), platnost 1 rok. Uklada sa
+    // aj do DB, aby sa dal zobrazit priamo v admin fronte v ERP, nielen v Shopify note.
+    let suborUrl: string | null = null;
+    if (suborCesta) {
+      const { data: signed } = await supabase.storage.from('print-designs').createSignedUrl(suborCesta, 60 * 60 * 24 * 365);
+      suborUrl = signed?.signedUrl || null;
+    }
+
     const { error: insertErr } = await supabase.from('textil_objednavky').insert({
       id: objednavkaId,
+      cislo_objednavky: cisloObjednavky,
       technologia,
       rezim: mode,
       raster_typ: mode === 'auto' ? (patternRepeat || null) : null,
@@ -186,6 +208,7 @@ Deno.serve(async (req) => {
       harmonogram: harmonogram || null,
       subor_nazov: suborNazov,
       subor_cesta: suborCesta,
+      subor_url: suborUrl,
       material_kod: vybranyMaterial?.kod || null,
       material_nazov: vybranyMaterial?.nazov || null,
       sluzba_rezim: sluzbaRezim,
@@ -213,6 +236,7 @@ Deno.serve(async (req) => {
             taxable: false, // cena uz zahrna DPH (vypocitana server-side) — Shopify ju druhykrat neprirata
             requires_shipping: true,
             properties: [
+              { name: '_cislo_objednavky', value: cisloObjednavky },
               { name: '_objednavka_id', value: objednavkaId },
               { name: '_technologia', value: technikaLabel },
               { name: '_uroven_sluzby', value: sluzbaRezim === 'len_papier' ? 'Len papier s grafikou' : sluzbaRezim === 'na_nas_material' ? 'Na náš materiál' : 'Na váš materiál' },
@@ -220,11 +244,12 @@ Deno.serve(async (req) => {
               { name: '_sirka_tlace_cm', value: String(Math.round(printWidthCm * 10) / 10) },
               { name: '_harmonogram', value: harmonogram || '' },
               { name: '_subor', value: suborNazov || '' },
+              { name: '_subor_link', value: suborUrl || '' },
               { name: '_material', value: vybranyMaterial?.nazov || '' },
             ],
           },
         ],
-        note: `Textilná metráž objednávka ${objednavkaId}`,
+        note: `${cisloObjednavky} (Textilná metráž)` + (suborUrl ? `\nSúbor na tlač: ${suborUrl}` : ''),
         tags: 'textil-metraz',
         use_customer_default_address: true,
       },
@@ -243,7 +268,7 @@ Deno.serve(async (req) => {
     const draftOrder = data?.draft_order;
     if (!draftOrder?.invoice_url) throw new Error('Shopify nevrátil odkaz na platbu draft objednávky.');
 
-    return odpoved({ checkoutUrl: draftOrder.invoice_url, cenaSpolu: grandTotal, objednavkaId });
+    return odpoved({ checkoutUrl: draftOrder.invoice_url, cenaSpolu: grandTotal, objednavkaId, cisloObjednavky });
   } catch (e) {
     const msg = e instanceof Error ? e.message : (e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : JSON.stringify(e));
     return odpoved({ error: msg });

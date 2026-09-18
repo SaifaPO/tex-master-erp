@@ -167,10 +167,13 @@ export default function DtfMetrazTab({ supabase }) {
               <div key={o.id} className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-bold text-white font-mono">{o.id.slice(0, 8)}</span>
+                    <span className="font-bold text-white font-mono">{o.cislo_objednavky || o.id.slice(0, 8)}</span>
                     <span className={`px-2 py-0.5 rounded text-[10px] border ${o.rezim === 'vzorky' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30'}`}>{o.rezim === 'auto' ? `${o.pocet_ks}ks ${o.sirka_cm}×${o.vyska_cm}cm` : o.rezim === 'vzorky' ? 'Vzorka A4' : 'Hotová rolka'}</span>
                     {o.rezim === 'auto' && o.otoceny && (
                       <span className="px-2 py-0.5 rounded text-[10px] border bg-amber-500/20 text-amber-300 border-amber-500/30" title="Motív je na vyskladanie otočený o 90° pre lepšie využitie materiálu — rozmery vyššie sú už v tejto (produkčnej) orientácii.">⟳ otočené na výrobu</span>
+                    )}
+                    {o.subor_url && (
+                      <a href={o.subor_url} target="_blank" rel="noopener noreferrer" className="px-2 py-0.5 rounded text-[10px] border bg-teal-500/20 text-teal-300 border-teal-500/30 hover:bg-teal-500/30">⬇ {o.subor_nazov || 'Súbor na tlač'}</a>
                     )}
                     <span className="text-slate-500 text-[10px]">{new Date(o.created_at).toLocaleString('sk-SK')}</span>
                   </div>

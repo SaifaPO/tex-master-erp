@@ -62,6 +62,20 @@ function odpoved(body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 }
 
+// Citatelne cislo objednavky (napr. "DTF-260001") namiesto holeho UUID v Shopify — pocitadlo
+// podla predpony+roka, resetuje sa kazdy rok. UUID (id stlpca v *_objednavky) ostava interny kluc,
+// toto je len na zobrazenie zamestnancom. Nie je 100% atomicke pri subeznych requestoch v tej istej
+// sekunde (rovnaka uroven ako existujuci order_number_counters v hlavnom ERP) — pri realnom objeme
+// objednavok tohto obchodu je to zanedbatelne riziko.
+async function ziskajCisloObjednavky(supabase: ReturnType<typeof createClient>, prefix: string) {
+  const year = new Date().getFullYear();
+  const shortYear = String(year).slice(-2);
+  const { data: counter } = await supabase.from('print_objednavky_pocitadla').select('next_number').eq('prefix', prefix).eq('year', year).maybeSingle();
+  const nextNum = (counter as { next_number: number } | null)?.next_number || 1;
+  await supabase.from('print_objednavky_pocitadla').upsert({ prefix, year, next_number: nextNum + 1 }, { onConflict: 'prefix,year' });
+  return `${prefix}-${shortYear}${String(nextNum).padStart(4, '0')}`;
+}
+
 // Obchod uz nema klasicky staly "Admin API access token" (Shopify presiel na Dev Dashboard
 // aplikacie bez tejto moznosti) — token si preto appka vyziada sama, za behu, cez OAuth
 // "client credentials" grant (Client ID + Secret appky, ktora ma nastavene opravnenie
@@ -118,7 +132,7 @@ Deno.serve(async (req) => {
     const PRIPRAVA_GRAFIKY_EUR = 10;
 
     let totalLengthBm = 0, totalM2 = 0, baseRate = 0, grandTotal = mode === 'paleta' ? PALETA_CENA_S_DPH : VZORKA_CENA_S_DPH;
-    let rozlozenie: { jeOtoceny: boolean; efektivnaSirkaCm: number; efektivnaVyskaCm: number } | null = null;
+    let rozlozenie: { dlzkaBm: number; jeOtoceny: boolean; efektivnaSirkaCm: number; efektivnaVyskaCm: number } | null = null;
     if (mode === 'auto' || mode === 'subor') {
       if (mode === 'auto') {
         const w = Number(widthCm) || 0, h = Number(heightCm) || 0, q = Math.max(1, Math.round(Number(qty)) || 1);
@@ -142,8 +156,21 @@ Deno.serve(async (req) => {
     }
 
     const objednavkaId = crypto.randomUUID();
+    const cisloObjednavky = await ziskajCisloObjednavky(supabase, 'DTF');
+
+    // Podpisany odkaz na stiahnutie nahrateho suboru (bucket je sukromny) — bez tohto malo Martin
+    // v Shopify objednavke len holy text s ID, ziadny sposob ako sa hned dostat k tlacovemu suboru.
+    // Platnost 1 rok (staci na cely zivotny cyklus objednavky aj pripadnu reklamaciu/reprint).
+    // Uklada sa aj do DB, aby sa dal zobrazit priamo v admin fronte v ERP, nielen v Shopify note.
+    let suborUrl: string | null = null;
+    if (suborCesta) {
+      const { data: signed } = await supabase.storage.from('print-designs').createSignedUrl(suborCesta, 60 * 60 * 24 * 365);
+      suborUrl = signed?.signedUrl || null;
+    }
+
     const { error: insertErr } = await supabase.from('dtf_objednavky').insert({
       id: objednavkaId,
+      cislo_objednavky: cisloObjednavky,
       rezim: mode,
       sirka_cm: mode === 'auto' ? rozlozenie!.efektivnaSirkaCm : null,
       vyska_cm: mode === 'auto' ? rozlozenie!.efektivnaVyskaCm : null,
@@ -157,6 +184,7 @@ Deno.serve(async (req) => {
       harmonogram: mode === 'vzorky' ? 'A4 vzorka' : mode === 'paleta' ? 'Paleta farieb' : (harmonogram || null),
       subor_nazov: suborNazov,
       subor_cesta: suborCesta,
+      subor_url: suborUrl,
       graficka_priprava: (mode === 'auto' || mode === 'subor') && !!grafickaPriprava,
     });
     if (insertErr) throw insertErr;
@@ -185,15 +213,17 @@ Deno.serve(async (req) => {
             taxable: false, // cena uz zahrna DPH (vypocitana server-side) — Shopify ju druhykrat neprirata
             requires_shipping: true,
             properties: [
+              { name: '_cislo_objednavky', value: cisloObjednavky },
               { name: '_objednavka_id', value: objednavkaId },
               { name: '_dlzka_bm', value: mode === 'auto' || mode === 'subor' ? totalLengthBm.toFixed(2) : mode === 'vzorky' ? 'A4' : '—' },
               { name: '_harmonogram', value: mode === 'auto' || mode === 'subor' ? (harmonogram || '') : '' },
               { name: '_subor', value: suborNazov || '' },
+              { name: '_subor_link', value: suborUrl || '' },
               { name: '_priprava_grafiky', value: grafickaPriprava ? 'áno (+10€)' : 'nie' },
             ],
           },
         ],
-        note: `DTF metráž objednávka ${objednavkaId}`,
+        note: `${cisloObjednavky} (DTF metráž)` + (suborUrl ? `\nSúbor na tlač: ${suborUrl}` : ''),
         tags: 'dtf-metraz',
         use_customer_default_address: true,
       },
@@ -212,7 +242,7 @@ Deno.serve(async (req) => {
     const draftOrder = data?.draft_order;
     if (!draftOrder?.invoice_url) throw new Error('Shopify nevrátil odkaz na platbu draft objednávky.');
 
-    return odpoved({ checkoutUrl: draftOrder.invoice_url, cenaSpolu: grandTotal, objednavkaId });
+    return odpoved({ checkoutUrl: draftOrder.invoice_url, cenaSpolu: grandTotal, objednavkaId, cisloObjednavky });
   } catch (e) {
     const msg = e instanceof Error ? e.message : (e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : JSON.stringify(e));
     return odpoved({ error: msg });
