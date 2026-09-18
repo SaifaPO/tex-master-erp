@@ -6088,7 +6088,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 font-sans flex flex-col antialiased">
+    <div className="min-h-screen print:min-h-0 bg-slate-900 text-slate-100 font-sans flex flex-col antialiased">
       
       <div className="bg-slate-950 border-b border-indigo-950 px-4 py-2 flex flex-col md:flex-row justify-between items-center gap-3 text-xs text-slate-300 print:hidden">
         <div className="flex items-center gap-2">
