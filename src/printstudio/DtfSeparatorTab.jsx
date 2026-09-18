@@ -65,6 +65,7 @@ export default function DtfSeparatorTab() {
   const [isRendering, setIsRendering] = useState(false);
   const canvasWrapRef = useRef(null);
   const fileInputRef = useRef(null);
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
 
   const handleFile = (file) => {
     if (!file) return;
@@ -247,9 +248,14 @@ export default function DtfSeparatorTab() {
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6">
         <div className="space-y-3">
           {!workingPreviewCanvas ? (
-            <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-slate-700 rounded-2xl py-24 cursor-pointer hover:border-indigo-500 transition-colors">
+            <label
+              onDragOver={(e) => { e.preventDefault(); setIsDraggingFile(true); }}
+              onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setIsDraggingFile(false); }}
+              onDrop={(e) => { e.preventDefault(); setIsDraggingFile(false); handleFile(e.dataTransfer.files?.[0]); }}
+              className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-2xl py-24 cursor-pointer transition-colors ${isDraggingFile ? 'border-indigo-500 bg-indigo-950/20' : 'border-slate-700 hover:border-indigo-500'}`}
+            >
               <Upload className="h-8 w-8 text-slate-500" />
-              <span className="text-sm text-slate-400">Klikni a nahraj obrázok (PNG/JPG)</span>
+              <span className="text-sm text-slate-400">Klikni a nahraj obrázok, alebo ho sem pretiahni (PNG/JPG)</span>
               <input ref={fileInputRef} type="file" accept="image/png,image/jpeg" className="hidden" onChange={(e) => handleFile(e.target.files[0])} />
             </label>
           ) : (
@@ -291,10 +297,16 @@ export default function DtfSeparatorTab() {
                   <input type="color" value={previewBg} onChange={(e) => setPreviewBg(e.target.value)} className="h-6 w-8 bg-transparent border border-slate-700 rounded cursor-pointer" />
                 </div>
               )}
-              <div className="rounded-xl overflow-hidden border border-slate-800 flex items-center justify-center" style={{ backgroundColor: (mode === 'cmyk' || mode === 'dtg') ? previewBg : '#ffffff' }}>
+              <div
+                onDragOver={(e) => { e.preventDefault(); setIsDraggingFile(true); }}
+                onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setIsDraggingFile(false); }}
+                onDrop={(e) => { e.preventDefault(); setIsDraggingFile(false); handleFile(e.dataTransfer.files?.[0]); }}
+                className={`rounded-xl overflow-hidden border-2 flex items-center justify-center transition-colors ${isDraggingFile ? 'border-dashed border-indigo-500 bg-indigo-950/20' : 'border-slate-800'}`}
+                style={{ backgroundColor: isDraggingFile ? undefined : ((mode === 'cmyk' || mode === 'dtg') ? previewBg : '#ffffff') }}
+              >
                 <canvas ref={(node) => { canvasWrapRef.current = node; drawCanvasRef(node); }} className="max-w-full h-auto" />
               </div>
-              <button onClick={() => fileInputRef.current?.click()} className="text-xs text-slate-500 hover:text-slate-300 underline">Nahrať iný obrázok</button>
+              <button onClick={() => fileInputRef.current?.click()} className="text-xs text-slate-500 hover:text-slate-300 underline">Nahrať iný obrázok (alebo ho pretiahni na náhľad vyššie)</button>
               <input ref={fileInputRef} type="file" accept="image/png,image/jpeg" className="hidden" onChange={(e) => handleFile(e.target.files[0])} />
             </>
           )}
