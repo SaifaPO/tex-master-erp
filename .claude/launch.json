@@ -12,6 +12,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "printstudio-pro", "run", "dev", "--", "--port", "5184"],
       "port": 5184
+    },
+    {
+      "name": "dtf-separator-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "dtf-separator", "run", "dev", "--", "--port", "5185"],
+      "port": 5185
     }
   ]
 }

@@ -1749,7 +1749,7 @@ export default function App() {
     const applyFit = () => {
       const availableWidth = el.clientWidth;
       if (!availableWidth) return;
-      const fitZoom = Math.min(110, Math.max(40, Math.floor((availableWidth / MATRIX_NATURAL_WIDTH) * 100)));
+      const fitZoom = Math.min(110, Math.max(20, Math.floor((availableWidth / MATRIX_NATURAL_WIDTH) * 100)));
       setZoomLevel(fitZoom);
     };
     // Prve meranie odlozene na dalsi animacny frame — hned po prepnuti zalozky/rezimu este nemusi byt
@@ -1786,7 +1786,7 @@ export default function App() {
         e.preventDefault();
         const ratio = getDist(e.touches) / pinchStartDist;
         setMatrixAutoFit(false);
-        setZoomLevel(Math.min(110, Math.max(40, Math.round(pinchStartZoom * ratio))));
+        setZoomLevel(Math.min(110, Math.max(20, Math.round(pinchStartZoom * ratio))));
       }
     };
     const onTouchEnd = (e) => { if (e.touches.length < 2) pinchStartDist = null; };
@@ -6063,7 +6063,7 @@ export default function App() {
                   <div className="flex flex-wrap justify-between items-center gap-2 bg-slate-900 p-3 rounded-xl border border-slate-800 text-xs text-slate-400">
                     <div className="flex flex-wrap items-center gap-2">
                       <span>Mierka:</span>
-                      <button onClick={() => { setMatrixAutoFit(false); setZoomLevel(prev => Math.max(40, prev - 5)); }} className="p-1 bg-slate-800 hover:bg-slate-700 rounded"><ZoomOut className="h-3.5 w-3.5" /></button>
+                      <button onClick={() => { setMatrixAutoFit(false); setZoomLevel(prev => Math.max(20, prev - 5)); }} className="p-1 bg-slate-800 hover:bg-slate-700 rounded"><ZoomOut className="h-3.5 w-3.5" /></button>
                       <span className="font-bold text-white w-8 text-center">{zoomLevel}%</span>
                       <button onClick={() => { setMatrixAutoFit(false); setZoomLevel(prev => Math.min(110, prev + 5)); }} className="p-1 bg-slate-800 hover:bg-slate-700 rounded"><ZoomIn className="h-3.5 w-3.5" /></button>
                       <button onClick={() => setMatrixAutoFit(true)} title="Automaticky prispôsobiť mierku tak, aby boli vidno všetky stanice bez skrolovania" className={`px-2 py-1 rounded font-bold ${matrixAutoFit ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300 hover:text-white'}`}>Prispôsobiť šírke</button>
