@@ -1788,24 +1788,32 @@ export default function App() {
     return () => clearInterval(interval);
   }, [activeTab]);
 
-  // Plánovacia Matica — automatické prispôsobenie mierky šírke obrazovky, aby boli vidno všetky stanice bez skrolovania
+  // Plánovacia Matica — automatické prispôsobenie mierky šírke obrazovky, aby boli vidno všetky stanice bez skrolovania.
+  // Samostatná funkcia (nie len vnútri efektu), aby ju vedelo priamo zavolať aj tlačidlo "Prispôsobiť šírke" —
+  // keď bolo prispôsobenie už predtým zapnuté, kliknutie naň by inak bolo no-op (matrixAutoFit sa nezmení z true na true,
+  // efekt sa vôbec nespustí znova) a človek musel najprv ručne zoomovať, aby sa vôbec niečo prepočítalo.
+  const applyMatrixAutoFit = () => {
+    const el = matrixTableWrapRef.current;
+    if (!el) return;
+    const availableWidth = el.clientWidth;
+    if (!availableWidth) return;
+    const fitZoom = Math.min(110, Math.max(20, Math.floor((availableWidth / MATRIX_NATURAL_WIDTH) * 100)));
+    setZoomLevel(fitZoom);
+  };
   useEffect(() => {
     if (activeTab !== 'planner' || plannerViewMode !== 'matrix' || !matrixAutoFit) return;
     const el = matrixTableWrapRef.current;
     if (!el) return;
-    const applyFit = () => {
-      const availableWidth = el.clientWidth;
-      if (!availableWidth) return;
-      const fitZoom = Math.min(110, Math.max(20, Math.floor((availableWidth / MATRIX_NATURAL_WIDTH) * 100)));
-      setZoomLevel(fitZoom);
-    };
     // Prve meranie odlozene na dalsi animacny frame — hned po prepnuti zalozky/rezimu este nemusi byt
-    // layout definitivne ustaleny (sirka wrappera vie byt 0 tesne pred commitom), co sposobovalo, ze
-    // "Prispôsobiť šírke" naozaj zabralo az po rucnej zmene mierky (ktora prinutila efekt bezat znova).
-    const raf = requestAnimationFrame(applyFit);
-    const observer = new ResizeObserver(applyFit);
+    // layout definitivne ustaleny (sirka wrappera vie byt 0 tesne pred commitom). Druhe meranie o chvilu
+    // neskor navyse zachyti aj neskorsie ustalenie layoutu (napr. scrollbar, nacitanie fontov), ktore
+    // prve meranie mohlo minut — bez neho ostala sirka niekedy nespravne odhadnuta uz navzdy (kym
+    // clovek rucne nezoomoval a znova neklikol na "Prispôsobiť šírke").
+    const raf = requestAnimationFrame(applyMatrixAutoFit);
+    const timeout = setTimeout(applyMatrixAutoFit, 300);
+    const observer = new ResizeObserver(applyMatrixAutoFit);
     observer.observe(el);
-    return () => { cancelAnimationFrame(raf); observer.disconnect(); };
+    return () => { cancelAnimationFrame(raf); clearTimeout(timeout); observer.disconnect(); };
   }, [activeTab, plannerViewMode, matrixAutoFit, isMatrixFullscreen]);
 
   // Fullscreen API pre Plánovaciu Maticu — sleduje, či si používateľ zavrel fullscreen aj mimo nášho tlačidla (napr. klávesou Esc)
@@ -4590,47 +4598,17 @@ export default function App() {
     triggerNotification('success', `Zákazka ${orderNumber} bola zaradená do výroby (${itemsWithMeta.length} položiek) a materiál bol odpočítaný zo skladu.`);
   };
 
+  // Priorita sa mení posunom SUSEDNEJ dvojice (nie prepisom celého zoznamu — pri stovkách položiek
+  // naprieč desiatkami zákaziek by to znamenalo desiatky sekvenčných zápisov do Supabase pri
+  // KAŽDOM jednom presune, čo pôsobilo ako "nefunguje to" (v skutočnosti to bolo len extrémne
+  // pomalé a chyby zápisu sa vôbec nekontrolovali). Teraz sa mení priorita len u 1-2 položiek.
   const handleMovePriority = async (item, direction) => {
     if (!hasPermission('edit_priority')) { triggerNotification('error', 'Nemáte oprávnenie meniť priority.'); return; }
     const group = allItems.slice().sort((a, b) => a.priority - b.priority);
     const currentIndex = group.findIndex(i => i.itemId === item.itemId);
     const targetIndex = currentIndex + direction;
-    if (targetIndex < 0 || targetIndex >= group.length) return;
-
-    setRecentlyMovedItemId(item.itemId);
-    setTimeout(() => setRecentlyMovedItemId(prev => (prev === item.itemId ? null : prev)), 600);
-
-    const reordered = [...group];
-    [reordered[currentIndex], reordered[targetIndex]] = [reordered[targetIndex], reordered[currentIndex]];
-    const withNewPriority = reordered.map((it, idx) => ({ itemId: it.itemId, orderId: it.orderId, priority: idx + 1 }));
-
-    const byOrder = {};
-    withNewPriority.forEach(r => { (byOrder[r.orderId] = byOrder[r.orderId] || []).push(r); });
-
-    const newItemsByOrder = {};
-    for (const orderId of Object.keys(byOrder)) {
-      const order = orders.find(o => o.id === orderId);
-      if (!order) continue;
-      const updates = byOrder[orderId];
-      const newItems = order.items.map(it => {
-        const upd = updates.find(u => u.itemId === it.itemId);
-        return upd ? { ...it, priority: upd.priority } : it;
-      });
-      newItemsByOrder[orderId] = newItems;
-      await supabase.from('orders').update({ items: newItems }).eq('id', orderId);
-    }
-    setOrders(prev => prev.map(o => newItemsByOrder[o.id] ? { ...o, items: newItemsByOrder[o.id] } : o));
-  };
-
-  // Jemné posunutie priority IBA v rámci jedného dňa/stanice (Plánovacia Matica) — šípky pri karte.
-  // Na rozdiel od handleMovePriority (globálne v celom zozname) tu prehodíme prioritu len s
-  // najbližším susedom PRESNE v tomto dni+stanici, aby sa karta neposunula mimo dňa.
-  const handleMoveWithinDay = async (item, dayItemsSorted, direction) => {
-    if (!hasPermission('edit_priority')) { triggerNotification('error', 'Nemáte oprávnenie meniť plán výroby.'); return; }
-    const idx = dayItemsSorted.findIndex(i => i.itemId === item.itemId);
-    const targetIdx = idx + direction;
-    if (idx === -1 || targetIdx < 0 || targetIdx >= dayItemsSorted.length) return;
-    const target = dayItemsSorted[targetIdx];
+    if (currentIndex === -1 || targetIndex < 0 || targetIndex >= group.length) return;
+    const target = group[targetIndex];
     const aPriority = item.priority, bPriority = target.priority;
 
     setRecentlyMovedItemId(item.itemId);
@@ -4646,38 +4624,32 @@ export default function App() {
         if (it.itemId === target.itemId) return { ...it, priority: aPriority };
         return it;
       });
-      await supabase.from('orders').update({ items: newItemsByOrder[orderId] }).eq('id', orderId);
+      const { error } = await supabase.from('orders').update({ items: newItemsByOrder[orderId] }).eq('id', orderId);
+      if (error) { triggerNotification('error', error.message); return; }
     }
     setOrders(prev => prev.map(o => newItemsByOrder[o.id] ? { ...o, items: newItemsByOrder[o.id] } : o));
   };
 
   // Presun myšou (drag & drop) — funguje popri šípkach, hodí sa hlavne na počítači/myš.
   // Na dotykových tabletoch je spoľahlivejšie použiť šípky ↑↓.
+  // Nová priorita sa počíta ako medzihodnota medzi susedmi (fractional/gap indexing) — mení sa
+  // teda len u PRESÚVANEJ položky (1 zápis), nie u celého zoznamu (rovnaký dôvod ako pri handleMovePriority vyššie).
   const handleDragDropReorder = async (draggedItem, targetItem) => {
     if (!hasPermission('edit_priority')) { triggerNotification('error', 'Nemáte oprávnenie meniť priority.'); return; }
     if (!draggedItem || draggedItem.itemId === targetItem.itemId) return;
     const group = allItems.slice().sort((a, b) => a.priority - b.priority);
     const withoutDragged = group.filter(i => i.itemId !== draggedItem.itemId);
     const targetIndex = withoutDragged.findIndex(i => i.itemId === targetItem.itemId);
-    withoutDragged.splice(targetIndex, 0, draggedItem);
-    const withNewPriority = withoutDragged.map((it, idx) => ({ itemId: it.itemId, orderId: it.orderId, priority: idx + 1 }));
+    if (targetIndex === -1) return;
+    const prevPriority = targetIndex > 0 ? withoutDragged[targetIndex - 1].priority : withoutDragged[targetIndex].priority - 1;
+    const newPriority = (prevPriority + withoutDragged[targetIndex].priority) / 2;
 
-    const byOrder = {};
-    withNewPriority.forEach(r => { (byOrder[r.orderId] = byOrder[r.orderId] || []).push(r); });
-
-    const newItemsByOrder = {};
-    for (const orderId of Object.keys(byOrder)) {
-      const order = orders.find(o => o.id === orderId);
-      if (!order) continue;
-      const updates = byOrder[orderId];
-      const newItems = order.items.map(it => {
-        const upd = updates.find(u => u.itemId === it.itemId);
-        return upd ? { ...it, priority: upd.priority } : it;
-      });
-      newItemsByOrder[orderId] = newItems;
-      await supabase.from('orders').update({ items: newItems }).eq('id', orderId);
-    }
-    setOrders(prev => prev.map(o => newItemsByOrder[o.id] ? { ...o, items: newItemsByOrder[o.id] } : o));
+    const order = orders.find(o => o.id === draggedItem.orderId);
+    if (!order) return;
+    const newItems = order.items.map(it => it.itemId === draggedItem.itemId ? { ...it, priority: newPriority } : it);
+    const { error } = await supabase.from('orders').update({ items: newItems }).eq('id', order.id);
+    if (error) { triggerNotification('error', error.message); return; }
+    setOrders(prev => prev.map(o => o.id === order.id ? { ...o, items: newItems } : o));
     triggerNotification('success', 'Poradie priorít bolo upravené.');
   };
 
@@ -4827,42 +4799,45 @@ export default function App() {
     if (selectedOrderDetails?.id === order.id) setSelectedOrderDetails({ ...order, attachments: updatedAttachments });
   };
 
-  // Presun karty ťahaním na presné miesto (pred/za konkrétnu inú kartu, alebo na koniec dňa) — mení aj deň danej stanice, aj poradie (prioritu)
+  // Presun karty ťahaním na presné miesto (pred/za konkrétnu inú kartu, alebo na koniec dňa) — mení aj deň danej stanice, aj poradie (prioritu).
+  // Nová priorita = medzihodnota medzi susedmi na cieľovom mieste (fractional/gap indexing), takže
+  // sa zapisuje LEN presúvaná položka (1 zápis) namiesto prepočítania a zápisu úplne všetkých
+  // položiek naprieč všetkými zákazkami pri každom jednom presune (to bolo pri väčšom počte
+  // zákaziek extrémne pomalé/nespoľahlivé a pôsobilo to, akoby sa karta "vrátila na pôvodné miesto").
   const handleMoveAndReorder = async (dragged, stationId, newDate, targetItemId, position) => {
     if (!hasPermission('edit_priority')) { triggerNotification('error', 'Nemáte oprávnenie meniť plán výroby.'); return; }
     const group = allItems.slice().sort((a, b) => a.priority - b.priority);
     const withoutDragged = group.filter(i => i.itemId !== dragged.itemId);
-    let insertIndex = withoutDragged.length; // predvolene na koniec
-    if (targetItemId) {
-      const idx = withoutDragged.findIndex(i => i.itemId === targetItemId);
-      if (idx !== -1) insertIndex = position === 'before' ? idx : idx + 1;
+    if (withoutDragged.length === 0) {
+      const order = orders.find(o => o.id === dragged.orderId);
+      if (!order) return;
+      const newItems = order.items.map(it => it.itemId === dragged.itemId ? { ...it, priority: 1, stationDates: { ...(it.stationDates || {}), [stationId]: newDate } } : it);
+      const { error } = await supabase.from('orders').update({ items: newItems }).eq('id', order.id);
+      if (error) { triggerNotification('error', error.message); return; }
+      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, items: newItems } : o));
+      return;
     }
-    const draggedFull = group.find(i => i.itemId === dragged.itemId);
-    if (!draggedFull) return;
-    withoutDragged.splice(insertIndex, 0, draggedFull);
-    const withNewPriority = withoutDragged.map((it, idx) => ({ itemId: it.itemId, orderId: it.orderId, priority: idx + 1 }));
-
-    const byOrder = {};
-    withNewPriority.forEach(r => { (byOrder[r.orderId] = byOrder[r.orderId] || []).push(r); });
-
-    const newItemsByOrder = {};
-    for (const orderId of Object.keys(byOrder)) {
-      const order = orders.find(o => o.id === orderId);
-      if (!order) continue;
-      const updates = byOrder[orderId];
-      const newItems = order.items.map(it => {
-        const upd = updates.find(u => u.itemId === it.itemId);
-        if (!upd) return it;
-        let patched = { ...it, priority: upd.priority };
-        if (it.itemId === dragged.itemId) {
-          patched = { ...patched, stationDates: { ...(it.stationDates || {}), [stationId]: newDate } };
-        }
-        return patched;
-      });
-      newItemsByOrder[orderId] = newItems;
-      await supabase.from('orders').update({ items: newItems }).eq('id', orderId);
+    let newPriority;
+    let idx = targetItemId ? withoutDragged.findIndex(i => i.itemId === targetItemId) : -1;
+    if (idx === -1) {
+      // Bez konkrétneho ciela (alebo cieľ sa nenašiel) = presun na koniec dňa
+      newPriority = withoutDragged[withoutDragged.length - 1].priority + 1;
+    } else if (position === 'before') {
+      const prevPriority = idx > 0 ? withoutDragged[idx - 1].priority : withoutDragged[idx].priority - 1;
+      newPriority = (prevPriority + withoutDragged[idx].priority) / 2;
+    } else {
+      const nextPriority = idx < withoutDragged.length - 1 ? withoutDragged[idx + 1].priority : withoutDragged[idx].priority + 1;
+      newPriority = (withoutDragged[idx].priority + nextPriority) / 2;
     }
-    setOrders(prev => prev.map(o => newItemsByOrder[o.id] ? { ...o, items: newItemsByOrder[o.id] } : o));
+
+    const order = orders.find(o => o.id === dragged.orderId);
+    if (!order) return;
+    const newItems = order.items.map(it => it.itemId === dragged.itemId
+      ? { ...it, priority: newPriority, stationDates: { ...(it.stationDates || {}), [stationId]: newDate } }
+      : it);
+    const { error } = await supabase.from('orders').update({ items: newItems }).eq('id', order.id);
+    if (error) { triggerNotification('error', error.message); return; }
+    setOrders(prev => prev.map(o => o.id === order.id ? { ...o, items: newItems } : o));
   };
 
   const handleMoveProductionDate = async (orderId, itemId, stationId, newDate) => {
@@ -6236,7 +6211,7 @@ export default function App() {
                       <button onClick={() => { setMatrixAutoFit(false); setZoomLevel(prev => Math.max(20, prev - 5)); }} className="p-1 bg-slate-800 hover:bg-slate-700 rounded"><ZoomOut className="h-3.5 w-3.5" /></button>
                       <span className="font-bold text-white w-8 text-center">{zoomLevel}%</span>
                       <button onClick={() => { setMatrixAutoFit(false); setZoomLevel(prev => Math.min(110, prev + 5)); }} className="p-1 bg-slate-800 hover:bg-slate-700 rounded"><ZoomIn className="h-3.5 w-3.5" /></button>
-                      <button onClick={() => setMatrixAutoFit(true)} title="Automaticky prispôsobiť mierku tak, aby boli vidno všetky stanice bez skrolovania" className={`px-2 py-1 rounded font-bold ${matrixAutoFit ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300 hover:text-white'}`}>Prispôsobiť šírke</button>
+                      <button onClick={() => { setMatrixAutoFit(true); requestAnimationFrame(applyMatrixAutoFit); }} title="Automaticky prispôsobiť mierku tak, aby boli vidno všetky stanice bez skrolovania" className={`px-2 py-1 rounded font-bold ${matrixAutoFit ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300 hover:text-white'}`}>Prispôsobiť šírke</button>
                       <button onClick={handleToggleMatrixFullscreen} title="Celá obrazovka" className="px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded font-bold text-slate-200">
                         {isMatrixFullscreen ? '✕ Zavrieť celú obrazovku' : '⛶ Celá obrazovka'}
                       </button>
@@ -6417,22 +6392,6 @@ export default function App() {
                                                 </span>
                                               );
                                             })()}
-                                            {hasPermission('edit_priority') && dayItems.length > 1 && (
-                                              <div className="absolute top-1/2 -right-1.5 -translate-y-1/2 flex flex-col gap-0.5 z-10">
-                                                <button
-                                                  onClick={(e) => { e.stopPropagation(); handleMoveWithinDay(item, dayItems, -1); }}
-                                                  disabled={dayItems.findIndex(i => i.itemId === item.itemId) === 0}
-                                                  title="Posunúť vyššie v tomto dni (vyššia priorita)"
-                                                  className="p-0.5 bg-slate-800/90 hover:bg-indigo-700 disabled:opacity-20 disabled:pointer-events-none rounded text-slate-300 hover:text-white shadow"
-                                                ><ArrowUp className="h-2.5 w-2.5" /></button>
-                                                <button
-                                                  onClick={(e) => { e.stopPropagation(); handleMoveWithinDay(item, dayItems, 1); }}
-                                                  disabled={dayItems.findIndex(i => i.itemId === item.itemId) === dayItems.length - 1}
-                                                  title="Posunúť nižšie v tomto dni (nižšia priorita)"
-                                                  className="p-0.5 bg-slate-800/90 hover:bg-indigo-700 disabled:opacity-20 disabled:pointer-events-none rounded text-slate-300 hover:text-white shadow"
-                                                ><ArrowDown className="h-2.5 w-2.5" /></button>
-                                              </div>
-                                            )}
                                             {matrixDensity === 'ultra' ? (
                                               <>
                                                 <div className="flex items-center justify-between gap-1">
