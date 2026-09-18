@@ -1334,6 +1334,8 @@ export default function App() {
 
   const [rowSearch, setRowSearch] = useState('');
   const [rowDateFilter, setRowDateFilter] = useState('vsetko');
+  const [rowSortColumn, setRowSortColumn] = useState('priority');
+  const [rowSortDirection, setRowSortDirection] = useState('asc');
   const [draggedRowItem, setDraggedRowItem] = useState(null);
   const [draggedMatrixCard, setDraggedMatrixCard] = useState(null);
   const [dragOverMatrixCell, setDragOverMatrixCell] = useState(null); // { date, stationId } | null
@@ -5803,6 +5805,39 @@ export default function App() {
     return matchesSearch && matchesDate;
   });
 
+  // Zoraďovanie Riadkového Zoznamu podľa ktoréhokoľvek stĺpca (klik na hlavičku, klik znova = opačný smer)
+  const toggleRowSort = (column) => {
+    if (rowSortColumn === column) setRowSortDirection(d => d === 'asc' ? 'desc' : 'asc');
+    else { setRowSortColumn(column); setRowSortDirection('asc'); }
+  };
+  const rowSortIndicator = (column) => rowSortColumn === column ? (rowSortDirection === 'asc' ? ' ▲' : ' ▼') : '';
+  const getRowSortValue = (item, column) => {
+    switch (column) {
+      case 'priority': return item.priority;
+      case 'itemId': return item.itemId || '';
+      case 'order': return item.orderNumber || item.orderId || '';
+      case 'customer': return (item.customer || '').toLowerCase();
+      case 'product': return (item.productName || '').toLowerCase();
+      case 'qty': return item.qty || 0;
+      case 'rv': {
+        const productMatch = products.find(p => p.id === item.productId);
+        const rvKatalog = productMatch?.redukovanyVykon != null ? productMatch.redukovanyVykon * item.qty : null;
+        const rv = item.redukovanyVykonOverride ?? rvKatalog;
+        return rv ?? -Infinity;
+      }
+      case 'deliveryDate': return item.deliveryDate || '';
+      case 'productionDate': return item.productionDate || '';
+      case 'stage': { const s = currentStageLabel(item); return `${s.done ? 1 : 0}_${s.label}`; }
+      default: return 0;
+    }
+  };
+  const displayedRows = sortedRows.slice().sort((a, b) => {
+    const va = getRowSortValue(a, rowSortColumn);
+    const vb = getRowSortValue(b, rowSortColumn);
+    const cmp = (typeof va === 'number' && typeof vb === 'number') ? va - vb : String(va).localeCompare(String(vb), 'sk');
+    return rowSortDirection === 'asc' ? cmp : -cmp;
+  });
+
   const catalogFilteredProducts = products.filter(p => catalogSportFilter === 'vsetko' ? true : p.sports?.includes(catalogSportFilter));
   // Ziskovosť podľa zákazky — vyhľadávanie podľa názvu (zákazka/odberateľ) + zoradenie podľa
   // ľubovoľného stĺpca (klik na hlavičku, rovnaky vzor ako triedenie skladu).
@@ -6518,31 +6553,26 @@ export default function App() {
                     </div>
                     <div className="flex items-center justify-end text-slate-400 text-[11px]"><span>Záznamov: <strong className="text-white font-bold">{sortedRows.length}</strong></span></div>
                   </div>
-                  {hasPermission('edit_priority') && (
-                    <p className="text-[10px] text-slate-500 italic">Poradie priority zmeníš šípkami ↑↓ pri čísle poradia — posúva sa naprieč celým zoznamom, bez ohľadu na termín dodania.</p>
-                  )}
+                  <p className="text-[10px] text-slate-500 italic">Klikni na názov ktoréhokoľvek stĺpca — zoradí sa podľa neho, druhým kliknutím opačne. {hasPermission('edit_priority') && 'Poradie priority zmeníš šípkami ↑↓ pri čísle poradia — posúva sa naprieč celým zoznamom, bez ohľadu na termín dodania.'}</p>
                   <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/20">
                     <table className="w-full text-left text-xs text-slate-300">
                       <thead className="bg-slate-900 text-[11px] text-slate-400 uppercase tracking-wider">
                         <tr>
-                          <th className="px-4 py-3 w-12">Poradie</th>
-                          <th className="px-4 py-3">Položka</th>
-                          <th className="px-4 py-3">Zákazka</th>
-                          <th className="px-4 py-3">Odberateľ</th>
-                          <th className="px-4 py-3">Produkt (Vyhotovenie)</th>
-                          <th className="px-4 py-3 text-center">Ks</th>
-                          {showRedukovaneVykony && <th className="px-4 py-3 text-center">RV/VC</th>}
-                          <th className="px-4 py-3 text-center">Termín (deadline)</th>
-                          <th className="px-4 py-3 text-center">Deň výroby (všetky st.)</th>
-                          <th className="px-4 py-3 text-center">Aktuálne štádium</th>
+                          <th className="px-4 py-3 w-12 cursor-pointer select-none hover:text-white" onClick={() => toggleRowSort('priority')}>Poradie{rowSortIndicator('priority')}</th>
+                          <th className="px-4 py-3 cursor-pointer select-none hover:text-white" onClick={() => toggleRowSort('itemId')}>Položka{rowSortIndicator('itemId')}</th>
+                          <th className="px-4 py-3 cursor-pointer select-none hover:text-white" onClick={() => toggleRowSort('order')}>Zákazka{rowSortIndicator('order')}</th>
+                          <th className="px-4 py-3 cursor-pointer select-none hover:text-white" onClick={() => toggleRowSort('customer')}>Odberateľ{rowSortIndicator('customer')}</th>
+                          <th className="px-4 py-3 cursor-pointer select-none hover:text-white" onClick={() => toggleRowSort('product')}>Produkt (Vyhotovenie){rowSortIndicator('product')}</th>
+                          <th className="px-4 py-3 text-center cursor-pointer select-none hover:text-white" onClick={() => toggleRowSort('qty')}>Ks{rowSortIndicator('qty')}</th>
+                          {showRedukovaneVykony && <th className="px-4 py-3 text-center cursor-pointer select-none hover:text-white" onClick={() => toggleRowSort('rv')}>RV/VC{rowSortIndicator('rv')}</th>}
+                          <th className="px-4 py-3 text-center cursor-pointer select-none hover:text-white" onClick={() => toggleRowSort('deliveryDate')}>Termín (deadline){rowSortIndicator('deliveryDate')}</th>
+                          <th className="px-4 py-3 text-center cursor-pointer select-none hover:text-white" onClick={() => toggleRowSort('productionDate')}>Deň výroby (všetky st.){rowSortIndicator('productionDate')}</th>
+                          <th className="px-4 py-3 text-center cursor-pointer select-none hover:text-white" onClick={() => toggleRowSort('stage')}>Aktuálne štádium{rowSortIndicator('stage')}</th>
                           <th className="px-4 py-3 text-center">Akcie</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800">
-                        {sortedRows
-                          .slice()
-                          .sort((a, b) => a.priority - b.priority)
-                          .map(item => {
+                        {displayedRows.map(item => {
                           const stage = currentStageLabel(item);
                           const orderColor = colorForOrder(item.orderId);
                           const canReorder = hasPermission('edit_priority');
