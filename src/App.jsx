@@ -1153,6 +1153,10 @@ export default function App() {
   const [selectedAssetForDetail, setSelectedAssetForDetail] = useState(null);
   const [costMetrics, setCostMetrics] = useState([]);
   const [newMetricName, setNewMetricName] = useState('');
+  const [rychlaKalkulackaZariadenieId, setRychlaKalkulackaZariadenieId] = useState('');
+  const [rychlaKalkulackaSirkaCm, setRychlaKalkulackaSirkaCm] = useState('');
+  const [rychlaKalkulackaVyskaCm, setRychlaKalkulackaVyskaCm] = useState('');
+  const [rychlaKalkulackaMnozstvo, setRychlaKalkulackaMnozstvo] = useState('');
   const [newMetricValue, setNewMetricValue] = useState('');
   const [newMetricUnit, setNewMetricUnit] = useState('');
   const [newMetricDescription, setNewMetricDescription] = useState('');
@@ -9662,6 +9666,38 @@ export default function App() {
                   )}
                 </table>
               </div>
+
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 mb-4 space-y-3">
+                <h4 className="font-bold text-sm text-slate-200 flex items-center gap-1.5"><Sliders className="h-4 w-4 text-indigo-400" /> Rýchla kalkulačka — cena podľa zariadenia</h4>
+                <p className="text-[10px] text-slate-500">Na jednorazové dopyty (napr. "koľko stojí vyrezanie 20×20 cm laserom?"), bez potreby zakladať produkt v katalógu.</p>
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                  <select value={rychlaKalkulackaZariadenieId} onChange={(e) => setRychlaKalkulackaZariadenieId(e.target.value)} className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white sm:col-span-2">
+                    <option value="">Vyber zariadenie...</option>
+                    {costMetrics.filter(m => calculateDeviceRatePerUnit(m, costMetrics) != null).map(m => (
+                      <option key={m.id} value={m.id}>{m.name} ({calculateDeviceRatePerUnit(m, costMetrics).toFixed(4)} €/{m.vykonJednotka || 'jedn.'})</option>
+                    ))}
+                  </select>
+                  <input type="number" step="0.1" min="0" value={rychlaKalkulackaSirkaCm} onChange={(e) => setRychlaKalkulackaSirkaCm(e.target.value)} placeholder="šírka (cm)" className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white" />
+                  <input type="number" step="0.1" min="0" value={rychlaKalkulackaVyskaCm} onChange={(e) => setRychlaKalkulackaVyskaCm(e.target.value)} placeholder="výška (cm)" className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white" />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-center">
+                  <input type="number" step="0.01" min="0" value={rychlaKalkulackaMnozstvo} onChange={(e) => setRychlaKalkulackaMnozstvo(e.target.value)} placeholder="alebo priamo množstvo v jednotke zariadenia" className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white sm:col-span-2" />
+                  <button type="button" onClick={() => setRychlaKalkulackaMnozstvo(String((parseFloat(rychlaKalkulackaSirkaCm) || 0) * (parseFloat(rychlaKalkulackaVyskaCm) || 0)))} className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs px-3 py-2 rounded-lg">↓ Prepočítať rozmer na plochu</button>
+                </div>
+                {(() => {
+                  const zariadenie = costMetrics.find(m => m.id === rychlaKalkulackaZariadenieId);
+                  const sadzba = zariadenie ? calculateDeviceRatePerUnit(zariadenie, costMetrics) : null;
+                  const mnozstvo = parseFloat(rychlaKalkulackaMnozstvo) || 0;
+                  if (!zariadenie || sadzba == null) return <p className="text-xs text-slate-500 italic">Vyber zariadenie s nastavenou sadzbou €/jednotku.</p>;
+                  return (
+                    <div className="bg-slate-950 border border-emerald-800/40 rounded-lg px-4 py-3 flex items-center justify-between flex-wrap gap-2">
+                      <span className="text-xs text-slate-400">{mnozstvo} {zariadenie.vykonJednotka || 'jedn.'} × {sadzba.toFixed(4)} €/{zariadenie.vykonJednotka || 'jedn.'}</span>
+                      <span className="text-xl font-mono font-extrabold text-emerald-400">{(mnozstvo * sadzba).toFixed(2)} €</span>
+                    </div>
+                  );
+                })()}
+              </div>
+
               <form onSubmit={handleAddCostMetric} className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
                 <input type="text" required value={newMetricName} onChange={(e) => setNewMetricName(e.target.value)} placeholder="Názov" className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white col-span-2" />
                 <select value={newMetricCompany} onChange={(e) => setNewMetricCompany(e.target.value)} className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-2 text-xs text-white">
