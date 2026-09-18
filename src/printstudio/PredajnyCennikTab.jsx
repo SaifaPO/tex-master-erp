@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Printer, Plus, Trash2, X, Tag, Wand2, Hash, Image as ImageIcon, Shirt, Sparkles, Scissors, Palette } from 'lucide-react';
+import { Printer, Plus, Trash2, X, Tag, Wand2, Hash, Image as ImageIcon, Shirt, Sparkles, Scissors, Palette, Share2 } from 'lucide-react';
 import { priceAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 
 // Rovnaky vzor ako printWithFilename v hlavnom ERP (src/App.jsx) — dočasne premenuje kartu
@@ -128,6 +128,66 @@ export default function PredajnyCennikTab({ supabase }) {
     if (!window.confirm('Zmazať túto položku z cenníka?')) return;
     setPolozky(prev => prev.filter(p => p.id !== id));
     await supabase.from('predajny_cennik_polozky').delete().eq('id', id);
+  };
+
+  const [shareStav, setShareStav] = useState(''); // '', 'nahravam', 'hotovo', 'chyba'
+  const [shareUrl, setShareUrl] = useState('');
+
+  // Zdielanie cennika ako verejny odkaz (namiesto stahovania suboru) — nahra samostatnu HTML
+  // stranku (rovnaky obsah ako tlacovy nahlad, bez zavislosti na prihlaseni do ERP) do uz
+  // existujuceho Storage bucketu, a ak prehliadac podporuje Web Share API (mobil, aj vela desktop
+  // prehliadacov), rovno otvori systemove okno "zdielat" — odtial sa da poslat priamo cez Messenger,
+  // WhatsApp, e-mail a pod. Bez toho len skopiruje odkaz do schranky.
+  const handleShare = async () => {
+    setShareStav('nahravam');
+    try {
+      const riadok = (p) => {
+        const rozmer = p.sirka_cm && p.vyska_cm ? ` (${fmtCm(p.sirka_cm)}×${fmtCm(p.vyska_cm)} cm)` : '';
+        const popis = p.popis ? `<div style="font-size:11px;color:#64748b">${p.popis}</div>` : '';
+        return `<div style="display:flex;justify-content:space-between;gap:12px;border-bottom:1px dotted #cbd5e1;padding:6px 0"><div><span style="font-weight:700">${p.nazov}${rozmer}</span>${popis}</div><span style="font-weight:800;white-space:nowrap">${retailPrice(Number(p.vyrobna_cena) || 0, nastavenia, pricingConfig).toFixed(2)} €</span></div>`;
+      };
+      const kategorieHtml = kategorie.map(kat => {
+        const polozkyKat = aktivnePolozky.filter(p => (p.kategoria || 'Ostatné') === kat);
+        if (polozkyKat.length === 0) return '';
+        return `<h3 style="font-size:11px;font-weight:800;text-transform:uppercase;color:#64748b;margin:16px 0 6px">${kat}</h3>${polozkyKat.map(riadok).join('')}`;
+      }).join('');
+      const html = `<!DOCTYPE html><html lang="sk"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${nastavenia.nazov_cennika}</title></head>
+<body style="font-family:Arial,Helvetica,sans-serif;color:#0f172a;max-width:720px;margin:0 auto;padding:24px 16px">
+<div style="text-align:center;border-bottom:4px solid #1e293b;padding-bottom:16px;margin-bottom:24px">
+<h1 style="font-size:22px;text-transform:uppercase;margin:0">${nastavenia.nazov_cennika}</h1>
+${companySettings?.company_name ? `<p style="color:#475569;margin:4px 0 0">${companySettings.company_name}</p>` : ''}
+</div>
+<h2 style="font-size:13px;font-weight:800;text-transform:uppercase;border-bottom:2px solid #1e293b;padding-bottom:6px">Druhy dotlače</h2>
+${kategorieHtml}
+<h2 style="font-size:13px;font-weight:800;text-transform:uppercase;border-bottom:2px solid #1e293b;padding-bottom:6px;margin-top:24px">Doba dodania a príplatky</h2>
+<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px;margin-top:10px"><strong>Štandardné dodanie</strong> — do ${nastavenia.standard_dni} pracovných dní, bez príplatku</div>
+<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px;margin-top:10px"><strong>Expres do 2. dňa</strong> — +${nastavenia.expres2_priplatok_percent}% z ceny dotlače (alebo min. +${Number(nastavenia.expres2_min_eur).toFixed(2)} €, platí vyššia suma)</div>
+<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px;margin-top:10px"><strong>Expres v deň objednávky</strong> — +${nastavenia.expresny_den_priplatok_percent}% z ceny dotlače (alebo min. +${Number(nastavenia.expresny_den_min_eur).toFixed(2)} €, platí vyššia suma), objednávka do ${nastavenia.expresny_den_cutoff_hodina}:00</div>
+<div style="margin-top:24px;padding-top:12px;border-top:1px solid #cbd5e1;font-size:11px;color:#64748b">
+<p style="font-weight:700;text-transform:uppercase">Dôležité informácie</p>
+<p>${nastavenia.poznamka}</p>
+${(companySettings?.address || nastavenia.kontakt_riadok) ? `<p>${companySettings?.address || ''}${companySettings?.address && nastavenia.kontakt_riadok ? ' • ' : ''}${nastavenia.kontakt_riadok}</p>` : ''}
+</div>
+</body></html>`;
+
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const path = `cenniky/predajny-cennik-${stamp}.html`;
+      const { error: upErr } = await supabase.storage.from('item-attachments').upload(path, new Blob([html], { type: 'text/html' }));
+      if (upErr) throw upErr;
+      const { data: pub } = supabase.storage.from('item-attachments').getPublicUrl(path);
+      setShareUrl(pub.publicUrl);
+      if (navigator.share) {
+        await navigator.share({ title: nastavenia.nazov_cennika, url: pub.publicUrl });
+        setShareStav('');
+      } else {
+        await navigator.clipboard.writeText(pub.publicUrl);
+        setShareStav('hotovo');
+      }
+    } catch (e) {
+      if (e?.name !== 'AbortError') { setShareStav('chyba'); }
+      else setShareStav('');
+    }
   };
 
   if (isLoading) return <p className="text-sm text-slate-500">Načítavam…</p>;
@@ -259,10 +319,27 @@ export default function PredajnyCennikTab({ supabase }) {
       {showPrint && createPortal(
         <div className="fixed inset-0 bg-slate-950/95 z-50 overflow-y-auto print:relative print:inset-auto print:bg-white">
           <div className="max-w-4xl mx-auto bg-white text-black p-8 my-6 rounded-xl print:my-0 print:rounded-none print:shadow-none shadow-2xl">
-            <div className="flex justify-between items-center mb-6 print:hidden">
-              <button onClick={() => printWithFilename(nastavenia.nazov_cennika)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Printer className="h-4 w-4" /> Tlačiť / Uložiť ako PDF</button>
+            <div className="flex justify-between items-center mb-2 print:hidden">
+              <div className="flex items-center gap-2 flex-wrap">
+                <button onClick={() => printWithFilename(nastavenia.nazov_cennika)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Printer className="h-4 w-4" /> Tlačiť / Uložiť ako PDF</button>
+                <button onClick={handleShare} disabled={shareStav === 'nahravam'} className="bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5">
+                  {shareStav === 'nahravam' ? 'Pripravujem odkaz...' : (<><Share2 className="h-4 w-4" /> Zdieľať odkaz</>)}
+                </button>
+              </div>
               <button onClick={() => setShowPrint(false)} className="p-1.5 rounded bg-slate-200 text-slate-600 hover:text-slate-900"><X className="h-5 w-5" /></button>
             </div>
+            {shareStav === 'hotovo' && (
+              <div className="print:hidden mb-4 bg-emerald-50 border border-emerald-300 rounded-lg px-3 py-2 flex items-center justify-between gap-2 flex-wrap">
+                <span className="text-xs text-emerald-800">Odkaz skopírovaný do schránky — vlož ho (Ctrl+V) kamkoľvek chceš (Messenger, e-mail...): <span className="font-mono">{shareUrl}</span></span>
+                <button onClick={() => setShareStav('')} className="text-emerald-700 hover:text-emerald-900 text-xs font-bold shrink-0">OK</button>
+              </div>
+            )}
+            {shareStav === 'chyba' && (
+              <div className="print:hidden mb-4 bg-rose-50 border border-rose-300 rounded-lg px-3 py-2 flex items-center justify-between gap-2">
+                <span className="text-xs text-rose-800">Odkaz sa nepodarilo pripraviť. Skús to prosím znova.</span>
+                <button onClick={() => setShareStav('')} className="text-rose-700 hover:text-rose-900 text-xs font-bold shrink-0">OK</button>
+              </div>
+            )}
 
             <div className="text-center border-b-4 border-slate-800 pb-4 mb-6">
               <h1 className="text-2xl font-extrabold uppercase tracking-tight">{nastavenia.nazov_cennika}</h1>
