@@ -7,6 +7,7 @@ import { Html5Qrcode } from 'html5-qrcode';
 import CenovePonukyTab from './CenovePonukyTab';
 import PrintStudioAdmin from './printstudio/PrintStudioAdmin';
 import { nacitajKostru, vcSublimaciaGarment, vcSublimaciaGarmentRozpis, vcRezanyTransfer, vcSietotlacCelkom, vcSietotlacRozpad } from './printstudio/vyrobneNaklady';
+import { priceAt } from './printstudio/pricingEngine';
 import {
   ClipboardList, Package, Cpu, QrCode, Plus, User, Clock, Layers, Search, Check, X, Calendar,
   Palette, Scissors, Printer, Sliders, Sparkles, ZoomIn, ZoomOut, FileText, PlusCircle, Table,
@@ -4257,6 +4258,41 @@ export default function App() {
   };
 
   // Vygeneruje riadky medzifiremneho dodacieho listu (ATAK <-> PBT) za zvoleny mesiac a smer.
+  // Skutocna vyrobna cena/ks pre danu stanicu, pocitana z Kostry cien (rovnake vzorce ako Katalog
+  // produktov), ak je produkt zalozeny a ma potrebne udaje vyplnene. Vracia null, ked sa cena z
+  // Kostry nedá spočítať (chýbajúci produkt/kostra/technológia) — vtedy sa použije stará plochá
+  // sadzba z cennika (spatna kompatibilita).
+  const getKostraCostPerKsPreStanicu = (product, sid) => {
+    if (!product) return null;
+    if (sid === 'sublimacia') {
+      if (!product.tlacSublimacia || !kostra) return null;
+      return vcSublimaciaGarment(kostra, vypocitajPlochaCm2ZLatky(product.layer1));
+    }
+    if (sid === 'laser') {
+      const c = vypocitajCenuLasera(product);
+      return c > 0 ? c : null;
+    }
+    if (sid === 'transfer') {
+      let sum = 0, any = false;
+      if (product.tlacRezanyTransfer) { sum += vypocitajCenuRezanehoTransferu(product) ?? (parseFloat(product.cenaPotlaceRezanyTransferKs) || 0); any = true; }
+      if (product.tlacDtf) { sum += parseFloat(product.cenaPotlaceDtfKs) || 0; any = true; }
+      return any ? sum : null;
+    }
+    if (sid === 'sietotlac') {
+      if (!product.tlacSietotlac) return null;
+      return vypocitajCenuSietotlace(product) ?? (parseFloat(product.cenaPotlaceSietotlacKs) || 0);
+    }
+    if (sid === 'strihanie') {
+      const c = vypocitajCenuStrihania(product);
+      return c > 0 ? c : null;
+    }
+    if (sid === 'sitie') {
+      if (product.minutySitia === null || product.minutySitia === undefined || product.minutySitia === '') return null;
+      return (parseFloat(product.minutySitia) || 0) * cenaMinutySitia;
+    }
+    return null;
+  };
+
   const getIntercompanyLineItems = (monthStr, direction) => {
     const invoicerCompany = direction === 'ATAK_TO_PBT' ? 'PBT' : 'ATAK';
     const payerBrand = direction === 'ATAK_TO_PBT' ? 'ATAK' : 'PBT';
@@ -4271,15 +4307,22 @@ export default function App() {
     const lines = [];
     relevantOrders.forEach(order => {
       (order.items || []).forEach(item => {
+        const product = products.find(pr => pr.id === item.productId);
         billableStations.forEach(sid => {
           const status = item.stationStatuses?.[sid];
           if (!status || status === 'neaktivne') return;
           const rate = intercompanyRates.find(r => r.serviceKey === sid);
+          const kostraCostPerKs = getKostraCostPerKsPreStanicu(product, sid);
+          if (kostraCostPerKs != null && marginCurveConfig && item.qty) {
+            const unitPrice = priceAt(kostraCostPerKs, item.qty, marginCurveConfig);
+            lines.push({ orderNumber: order.orderNumber || order.id, productName: `${item.productName} — ${rate?.label || sid} (z Kostry, ${item.qty}ks)`, unit: 'ks', qty: item.qty, unitPrice, total: parseFloat((item.qty * unitPrice).toFixed(2)) });
+            return;
+          }
           if (!rate) return;
           const qty = rate.unit === 'bm' ? (item.materialsNeeded || []).reduce((s, m) => s + (m.qtyNeeded || 0), 0) : item.qty;
           if (!qty) return;
           const unitPrice = parseFloat((rate.price * (1 + rate.markupPercent / 100)).toFixed(2));
-          lines.push({ orderNumber: order.orderNumber || order.id, productName: `${item.productName} — ${rate.label}`, unit: rate.unit, qty: parseFloat(qty.toFixed(2)), unitPrice, total: parseFloat((qty * unitPrice).toFixed(2)) });
+          lines.push({ orderNumber: order.orderNumber || order.id, productName: `${item.productName} — ${rate.label} (ručná sadzba)`, unit: rate.unit, qty: parseFloat(qty.toFixed(2)), unitPrice, total: parseFloat((qty * unitPrice).toFixed(2)) });
         });
         if (direction === 'PBT_TO_ATAK') {
           const reziaRate = intercompanyRates.find(r => r.serviceKey === 'rezia');
@@ -10661,6 +10704,7 @@ export default function App() {
                     {showIntercompanyRateEditor && (
                       <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-2">
                         <span className="text-xs font-bold text-slate-300 uppercase block mb-1">Cenník medzifiremných služieb (bez DPH) + marža</span>
+                        <p className="text-[9px] text-indigo-400 pb-1">Pre sublimáciu/laser/transfer/sieťotlač/strihanie/šitie sa cena teraz počíta automaticky zo skutočnej výrobnej ceny (Kostra cien) + rovnaká množstevná maržová krivka ako pri Textilnej metráži — čím väčšia zákazka, tým nižšia marža na kus. Nižšie zadané ručné sadzby sa použijú len ako záloha pre položky, ktoré ešte nemajú vyplnené potrebné údaje v Katalógu produktov (napr. produkt bez zvolenej technológie tlače).</p>
                         <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 text-[9px] text-slate-500 uppercase font-bold px-0.5">
                           <span>Služba</span><span className="text-center">Cena / MJ</span><span className="text-center">MJ</span><span className="text-center">Marža %</span>
                         </div>
