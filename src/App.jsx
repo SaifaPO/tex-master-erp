@@ -127,6 +127,47 @@ function isWeekendDate(dateStr) {
   return day === 0 || day === 6;
 }
 
+// Fuzzy zhoda mien odberateľov — rôzni obchodníci vedia toho istého zákazníka zapísať rôzne
+// ("SK SLOVANBRATISLAVA", "ŠK Slovan BA", "sk slovan"...), takže pri zadávaní novej zákazky
+// treba vedieť poradiť už existujúci názov namiesto zakladania duplicity.
+function normalizeCustomerKey(s) {
+  return (s || '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '')
+    .trim();
+}
+function compactCustomerKey(s) { return normalizeCustomerKey(s).replace(/\s+/g, ''); }
+function levenshteinDistance(a, b) {
+  const m = a.length, n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] : 1 + Math.min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1]);
+    }
+  }
+  return dp[m][n];
+}
+function customerNameSimilarity(query, candidate) {
+  const qCompact = compactCustomerKey(query), cCompact = compactCustomerKey(candidate);
+  if (!qCompact || !cCompact) return 0;
+  if (qCompact === cCompact) return 1;
+  if (cCompact.includes(qCompact) || qCompact.includes(cCompact)) {
+    return 0.85 * (Math.min(qCompact.length, cCompact.length) / Math.max(qCompact.length, cCompact.length)) + 0.15;
+  }
+  const qTokens = normalizeCustomerKey(query).split(/\s+/).filter(Boolean);
+  const cTokens = normalizeCustomerKey(candidate).split(/\s+/).filter(Boolean);
+  const common = qTokens.filter(t => cTokens.some(ct => ct === t || ct.includes(t) || t.includes(ct)));
+  const tokenScore = (qTokens.length && cTokens.length) ? common.length / Math.max(qTokens.length, cTokens.length) : 0;
+  const dist = levenshteinDistance(qCompact, cCompact);
+  const distScore = 1 - dist / Math.max(qCompact.length, cCompact.length);
+  return Math.max(tokenScore * 0.9, distScore);
+}
+
 // Stanice, kde musí zamestnanec pred spustením tlače/balenia potvrdiť kontrolu (rozpis/textil/kvalita) (Funkcia 2)
 const MATERIAL_CHECK_STATIONS = ['transfer', 'sietotlac', 'balenie'];
 // Zistí, či na danej stanici/položke ešte treba prejsť potvrdením materiálu pred spustením práce
@@ -1345,6 +1386,7 @@ export default function App() {
   const [catalogViewMode, setCatalogViewMode] = useState('karty'); // 'karty' | 'riadky'
 
   const [newOrderCustomer, setNewOrderCustomer] = useState('');
+  const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
   const [newOrderDeliveryDate, setNewOrderDeliveryDate] = useState(() => {
     const d = new Date(); d.setDate(d.getDate() + 3);
     return d.toISOString().slice(0, 10);
@@ -1354,6 +1396,7 @@ export default function App() {
   const [newOrderLegacyNumber, setNewOrderLegacyNumber] = useState('');
   const [newOrderCompany, setNewOrderCompany] = useState('ATAK');
   const [newOrderLogEntry, setNewOrderLogEntry] = useState('');
+  const [newOrderLogStation, setNewOrderLogStation] = useState('');
   const [archiveSearchQuery, setArchiveSearchQuery] = useState('');
   const [orderNotes, setOrderNotes] = useState('');
 
@@ -2891,6 +2934,23 @@ export default function App() {
 
   // --- CRM: KARTA ZÁKAZNÍKA ---
   const getOrCreateCustomerRecord = (name) => customers.find(c => c.name === name) || { name, phone: '', email: '', contactPerson: '', address: '', notes: '', interactionLog: [] };
+
+  // Zoznam všetkých doteraz použitých názvov odberateľov (z karty zákazníka aj z minulých zákaziek, ak by ešte kartu nemali)
+  const getCustomerNameOptions = () => {
+    const seen = new Map();
+    customers.forEach(c => { const k = compactCustomerKey(c.name); if (k && !seen.has(k)) seen.set(k, c.name); });
+    orders.forEach(o => { const k = compactCustomerKey(o.customer); if (k && !seen.has(k)) seen.set(k, o.customer); });
+    return Array.from(seen.values());
+  };
+  const getCustomerSuggestions = (query) => {
+    const q = (query || '').trim();
+    if (q.length < 2) return [];
+    return getCustomerNameOptions()
+      .map(name => ({ name, score: customerNameSimilarity(q, name) }))
+      .filter(o => o.score >= 0.4 && compactCustomerKey(o.name) !== compactCustomerKey(q))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5);
+  };
 
   const handleOpenCustomerDetail = (name) => {
     const record = getOrCreateCustomerRecord(name);
@@ -4678,15 +4738,16 @@ export default function App() {
   };
 
   // --- TRVALÝ DENNÍK ZÁKAZKY (append-only, nedá sa mazať ani upravovať) ---
-  const handleAddOrderLogEntry = async (order, text) => {
+  const handleAddOrderLogEntry = async (order, text, station = '') => {
     if (!text.trim()) return;
     const now = getFormattedDateTime();
-    const newLog = [...(order.orderLog || []), { date: now, author: `${currentUser.firstName} ${currentUser.lastName}`, text: text.trim() }];
+    const newLog = [...(order.orderLog || []), { date: now, author: `${currentUser.firstName} ${currentUser.lastName}`, text: text.trim(), station: station || null }];
     const { error } = await supabase.from('orders').update({ order_log: newLog }).eq('id', order.id);
     if (error) { triggerNotification('error', error.message); return; }
     setOrders(prev => prev.map(o => o.id === order.id ? { ...o, orderLog: newLog } : o));
     if (selectedOrderDetails?.id === order.id) setSelectedOrderDetails({ ...order, orderLog: newLog });
     setNewOrderLogEntry('');
+    setNewOrderLogStation('');
     triggerNotification('success', 'Poznámka bola pridaná do denníka zákazky.');
   };
 
@@ -6716,9 +6777,37 @@ export default function App() {
                 <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 shadow-xl">
                   <h2 className="text-xl font-bold text-white flex items-center gap-2 mb-4"><User className="text-indigo-400 h-5 w-5" /> 1. Zákazník & Harmonogram</h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
+                    <div className="relative">
                       <label className="block text-xs font-semibold text-slate-400 mb-1">Odberateľ (Klub / Firma)</label>
-                      <input type="text" placeholder="napr. MŠK Kežmarok" value={newOrderCustomer} onChange={(e) => setNewOrderCustomer(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white" />
+                      <input
+                        type="text"
+                        placeholder="napr. MŠK Kežmarok"
+                        value={newOrderCustomer}
+                        onChange={(e) => { setNewOrderCustomer(e.target.value); setShowCustomerSuggestions(true); }}
+                        onFocus={() => setShowCustomerSuggestions(true)}
+                        onBlur={() => setTimeout(() => setShowCustomerSuggestions(false), 150)}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white"
+                      />
+                      {showCustomerSuggestions && getCustomerSuggestions(newOrderCustomer).length > 0 && (
+                        <div className="absolute z-20 mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg shadow-2xl overflow-hidden">
+                          {getCustomerSuggestions(newOrderCustomer).map(s => {
+                            const pastOrders = orders.filter(o => o.customer === s.name).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+                            return (
+                              <div
+                                key={s.name}
+                                onMouseDown={(e) => { e.preventDefault(); setNewOrderCustomer(s.name); setShowCustomerSuggestions(false); const last = pastOrders[0]; if (last) { if (last.companyBrand) setNewOrderCompany(last.companyBrand); if (last.paymentType) setNewOrderPaymentType(last.paymentType); } }}
+                                className="w-full text-left px-3 py-2 text-xs hover:bg-slate-800 border-b border-slate-800 last:border-b-0 flex items-center justify-between gap-2 cursor-pointer"
+                              >
+                                <span className="text-white font-semibold truncate">{s.name}</span>
+                                <span className="flex items-center gap-2 shrink-0">
+                                  {pastOrders.length > 0 && <span className="text-[10px] text-slate-500">{pastOrders.length}x objednávka</span>}
+                                  <span onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setShowCustomerSuggestions(false); handleOpenCustomerDetail(s.name); }} className="text-[10px] text-indigo-400 hover:text-indigo-300 underline">história</span>
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-400 mb-1">Dátum vytvorenia (automaticky)</label>
@@ -11864,21 +11953,32 @@ export default function App() {
                   )}
                   {(selectedOrderDetails.orderLog || []).map((entry, i) => (
                     <div key={i} className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2">
-                      <p className="text-xs text-slate-200">{entry.text}</p>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {entry.station && STATION_CONFIGS[entry.station] && (
+                          <span className="inline-flex items-center gap-1 bg-indigo-950/50 text-indigo-300 border border-indigo-800/40 text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-full">
+                            {React.createElement(STATION_CONFIGS[entry.station].icon, { className: 'h-2.5 w-2.5' })} {STATION_CONFIGS[entry.station].name}
+                          </span>
+                        )}
+                        <p className="text-xs text-slate-200">{entry.text}</p>
+                      </div>
                       <p className="text-[10px] text-slate-500 mt-0.5">{entry.author} • {entry.date}</p>
                     </div>
                   ))}
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
+                  <select value={newOrderLogStation} onChange={(e) => setNewOrderLogStation(e.target.value)} className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-2 text-xs text-white shrink-0" title="Z ktorej stanice je táto poznámka?">
+                    <option value="">Všeobecné</option>
+                    {STATION_ORDER.map(sid => <option key={sid} value={sid}>{STATION_CONFIGS[sid].name}</option>)}
+                  </select>
                   <input
                     type="text"
                     value={newOrderLogEntry}
                     onChange={(e) => setNewOrderLogEntry(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddOrderLogEntry(selectedOrderDetails, newOrderLogEntry)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddOrderLogEntry(selectedOrderDetails, newOrderLogEntry, newOrderLogStation)}
                     placeholder="napr. Zákazník chce logo o 2cm menšie ako štandard, farba na mieru miešaná..."
-                    className="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white"
+                    className="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white min-w-[180px]"
                   />
-                  <button onClick={() => handleAddOrderLogEntry(selectedOrderDetails, newOrderLogEntry)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-lg shrink-0">Zapísať natrvalo</button>
+                  <button onClick={() => handleAddOrderLogEntry(selectedOrderDetails, newOrderLogEntry, newOrderLogStation)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-lg shrink-0">Zapísať natrvalo</button>
                 </div>
               </div>
 
