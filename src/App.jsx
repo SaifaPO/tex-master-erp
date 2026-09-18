@@ -1050,6 +1050,40 @@ function computeStockWarnings(neededList, materialsList, reservedMap = {}) {
 
 const mapCostRateToDb = (r) => ({ station_id: r.stationId, rate: r.rate, unit: r.unit, note: r.note });
 
+// Karta jednoduchej rezijnej kategorie (Najom/Splatky/Uvery/Material) v Financiach -> Rezia firiem.
+// MUSI byt definovana MIMO App komponentu (na najvyssej urovni modulu) — predtym bola definovana
+// priamo vnutri renderu App, co znamenalo, ze pri kazdom stlacenom znaku (kazdy onChange = re-render
+// App-u) vznikla NOVA funkcia/typ komponentu, React ho preto zakazdym cely odmontoval a znova
+// namontoval, a input strácal focus po kazdom jednom písmene (Martin nahlásil presne tento bug).
+function JednoduchaKategoria({ titul, zoznam, nazovState, setNazov, hodnotaState, setHodnota, kategoria, onUpdate, onDelete, onQuickAdd }) {
+  const sucetZoznamu = zoznam.reduce((s, m) => s + (m.value || 0), 0);
+  return (
+    <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-bold text-sm text-white">{titul}</h3>
+        <span className="text-xs font-mono font-bold text-emerald-400">{sucetZoznamu.toFixed(2)} €/mes.</span>
+      </div>
+      <div className="space-y-1.5 mb-3">
+        {zoznam.length === 0 && <p className="text-xs text-slate-500 italic">Zatiaľ žiadne položky.</p>}
+        {zoznam.map(m => (
+          <div key={m.id} className="flex items-center gap-2 text-xs bg-slate-900 border border-slate-800 rounded-lg p-2">
+            <input type="text" defaultValue={m.name} onBlur={(e) => onUpdate(m.id, 'name', e.target.value)} className="flex-1 bg-slate-950 border border-slate-800 rounded p-1.5 text-white" />
+            <input type="number" step="0.01" defaultValue={m.value} onBlur={(e) => onUpdate(m.id, 'value', e.target.value)} className="w-24 bg-slate-950 border border-slate-800 rounded p-1.5 text-center text-white" />
+            <span className="text-slate-500 w-16">€/mes.</span>
+            {!m.company && <span className="text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded shrink-0">spoločné</span>}
+            <button onClick={() => onDelete(m)} className="text-rose-400 hover:text-rose-300 shrink-0"><Trash2 className="h-3.5 w-3.5" /></button>
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <input type="text" value={nazovState} onChange={(e) => setNazov(e.target.value)} placeholder="Názov položky" className="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white" />
+        <input type="number" step="0.01" value={hodnotaState} onChange={(e) => setHodnota(e.target.value)} placeholder="€/mes." className="w-24 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white" />
+        <button onClick={() => onQuickAdd(nazovState, hodnotaState, kategoria, () => { setNazov(''); setHodnota(''); })} className="bg-indigo-600 hover:bg-indigo-700 text-white p-1.5 rounded-lg shrink-0"><Plus className="h-3.5 w-3.5" /></button>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
@@ -1103,6 +1137,10 @@ export default function App() {
   // pricing_config (zdielane s Cenotvorbou v PrintStudio Pro), pouziva sa na automaticky dopocet
   // Vyrobnej ceny v Katalogu Produktov.
   const [cenaMinutySitia, setCenaMinutySitia] = useState(0);
+  // Zdielana marzova krivka (Cenotvorba v PrintStudio Pro) — pouziva sa aj na automaticky dopocet
+  // medzifiremnych cien (Financie -> Cenník medzifiremných služieb) podla mnozstva zakazky, presne
+  // ako pri Textilnej metrazi, namiesto rucne zadanej plochej ceny.
+  const [marginCurveConfig, setMarginCurveConfig] = useState(null);
   const [cenaStrihania100cm2, setCenaStrihania100cm2] = useState(0);
   // Sadzba RV (redukovany vykon, €/min) — z historickych dat vo Vydaji z vyroby overene presne
   // 0,30 €/min (RV za ks = minuty sitia x 0,30, bez vynimky naprieč stovkami zaznamov). Pouziva sa
@@ -1595,7 +1633,7 @@ export default function App() {
           supabase.from('addon_types').select('*').order('sort_order'),
           supabase.from('help_requests').select('*').order('created_at', { ascending: false }).limit(200),
           supabase.from('intercompany_rates').select('*'),
-          supabase.from('pricing_config').select('cena_minuty_sitia, cena_strihania_100cm2, sadzba_rv_min').eq('id', 1).maybeSingle(),
+          supabase.from('pricing_config').select('cena_minuty_sitia, cena_strihania_100cm2, sadzba_rv_min, coef_a, coef_b, margin_floor, coef_p, qty_at_floor').eq('id', 1).maybeSingle(),
           supabase.from('krajcirky').select('*').order('poradie').order('id'),
           supabase.from('vyrobna_kapacita_nastavenia').select('*').eq('id', 1).maybeSingle()
         ]);
@@ -1646,6 +1684,10 @@ export default function App() {
         setCenaMinutySitia(pricingConfigRes.error || !pricingConfigRes.data ? 0 : Number(pricingConfigRes.data.cena_minuty_sitia) || 0);
         setCenaStrihania100cm2(pricingConfigRes.error || !pricingConfigRes.data ? 0 : Number(pricingConfigRes.data.cena_strihania_100cm2) || 0);
         setSadzbaRvMin(pricingConfigRes.error || !pricingConfigRes.data || pricingConfigRes.data.sadzba_rv_min == null ? 0.3 : Number(pricingConfigRes.data.sadzba_rv_min));
+        if (!pricingConfigRes.error && pricingConfigRes.data) {
+          const pc = pricingConfigRes.data;
+          if (pc.coef_a != null) setMarginCurveConfig({ coefA: Number(pc.coef_a), coefB: Number(pc.coef_b), marginFloor: Number(pc.margin_floor), coefP: Number(pc.coef_p), qtyAtFloor: Number(pc.qty_at_floor) });
+        }
         setKrajcirky(krajcirkyRes.error ? [] : (krajcirkyRes.data || []));
         if (kapacitaRes.data) setVyrobnaKapacitaNastavenia(kapacitaRes.data);
         nacitajKostru(supabase).then(setKostra).catch(() => setKostra(null));
@@ -10702,31 +10744,6 @@ export default function App() {
                   return z + k + rest + mzdy;
                 };
 
-                const JednoduchaKategoria = ({ titul, zoznam, nazovState, setNazov, hodnotaState, setHodnota, kategoria }) => (
-                  <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800">
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="font-bold text-sm text-white">{titul}</h3>
-                      <span className="text-xs font-mono font-bold text-emerald-400">{sucet(zoznam).toFixed(2)} €/mes.</span>
-                    </div>
-                    <div className="space-y-1.5 mb-3">
-                      {zoznam.length === 0 && <p className="text-xs text-slate-500 italic">Zatiaľ žiadne položky.</p>}
-                      {zoznam.map(m => (
-                        <div key={m.id} className="flex items-center gap-2 text-xs bg-slate-900 border border-slate-800 rounded-lg p-2">
-                          <input type="text" defaultValue={m.name} onBlur={(e) => handleUpdateCostMetric(m.id, 'name', e.target.value)} className="flex-1 bg-slate-950 border border-slate-800 rounded p-1.5 text-white" />
-                          <input type="number" step="0.01" defaultValue={m.value} onBlur={(e) => handleUpdateCostMetric(m.id, 'value', e.target.value)} className="w-24 bg-slate-950 border border-slate-800 rounded p-1.5 text-center text-white" />
-                          <span className="text-slate-500 w-16">€/mes.</span>
-                          {!m.company && <span className="text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded shrink-0">spoločné</span>}
-                          <button onClick={() => handleDeleteCostMetric(m)} className="text-rose-400 hover:text-rose-300 shrink-0"><Trash2 className="h-3.5 w-3.5" /></button>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="flex gap-2">
-                      <input type="text" value={nazovState} onChange={(e) => setNazov(e.target.value)} placeholder="Názov položky" className="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white" />
-                      <input type="number" step="0.01" value={hodnotaState} onChange={(e) => setHodnota(e.target.value)} placeholder="€/mes." className="w-24 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white" />
-                      <button onClick={() => handleQuickAddOverheadCost(nazovState, hodnotaState, kategoria, () => { setNazov(''); setHodnota(''); })} className="bg-indigo-600 hover:bg-indigo-700 text-white p-1.5 rounded-lg shrink-0"><Plus className="h-3.5 w-3.5" /></button>
-                    </div>
-                  </div>
-                );
 
                 return (
                   <div className="space-y-6">
@@ -10814,10 +10831,10 @@ export default function App() {
                     )}
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                      <JednoduchaKategoria titul="Nájom" zoznam={najom} nazovState={najomName} setNazov={setNajomName} hodnotaState={najomValue} setHodnota={setNajomValue} kategoria="najom" />
-                      <JednoduchaKategoria titul="Splátky strojov" zoznam={splatky} nazovState={splatkyName} setNazov={setSplatkyName} hodnotaState={splatkyValue} setHodnota={setSplatkyValue} kategoria="splatky_strojov" />
-                      <JednoduchaKategoria titul="Úvery" zoznam={uvery} nazovState={uverName} setNazov={setUverName} hodnotaState={uverValue} setHodnota={setUverValue} kategoria="uver" />
-                      <JednoduchaKategoria titul="Materiál (farby, papiere, fólie...)" zoznam={material} nazovState={materialName} setNazov={setMaterialName} hodnotaState={materialValue} setHodnota={setMaterialValue} kategoria="material" />
+                      <JednoduchaKategoria titul="Nájom" zoznam={najom} nazovState={najomName} setNazov={setNajomName} hodnotaState={najomValue} setHodnota={setNajomValue} kategoria="najom" onUpdate={handleUpdateCostMetric} onDelete={handleDeleteCostMetric} onQuickAdd={handleQuickAddOverheadCost} />
+                      <JednoduchaKategoria titul="Splátky strojov" zoznam={splatky} nazovState={splatkyName} setNazov={setSplatkyName} hodnotaState={splatkyValue} setHodnota={setSplatkyValue} kategoria="splatky_strojov" onUpdate={handleUpdateCostMetric} onDelete={handleDeleteCostMetric} onQuickAdd={handleQuickAddOverheadCost} />
+                      <JednoduchaKategoria titul="Úvery" zoznam={uvery} nazovState={uverName} setNazov={setUverName} hodnotaState={uverValue} setHodnota={setUverValue} kategoria="uver" onUpdate={handleUpdateCostMetric} onDelete={handleDeleteCostMetric} onQuickAdd={handleQuickAddOverheadCost} />
+                      <JednoduchaKategoria titul="Materiál (farby, papiere, fólie...)" zoznam={material} nazovState={materialName} setNazov={setMaterialName} hodnotaState={materialValue} setHodnota={setMaterialValue} kategoria="material" onUpdate={handleUpdateCostMetric} onDelete={handleDeleteCostMetric} onQuickAdd={handleQuickAddOverheadCost} />
                     </div>
 
                     <div className="bg-slate-950 p-5 rounded-2xl border border-indigo-900/40">
