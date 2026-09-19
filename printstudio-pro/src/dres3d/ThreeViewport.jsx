@@ -290,42 +290,57 @@ function vytvorDresGeometriu(scene, textureCanvas) {
 
   const jerseyGroup = new THREE.Group();
 
-  const bodyGeo = new THREE.CylinderGeometry(0.78, 0.72, 1.75, 48, 24, true);
+  // Torzo: kuzelovito rozsirene ramena, zuzeny pas, zaoblene splecia a mierne zaoblena spodna
+  // obruba (namiesto rovneho valca) — cielom je siluteta trika, nie hladky valec/vazu.
+  const bodyGeo = new THREE.CylinderGeometry(0.62, 0.66, 1.75, 48, 32, true);
   const pos = bodyGeo.attributes.position;
   for (let i = 0; i < pos.count; i++) {
     let x = pos.getX(i);
     const y = pos.getY(i);
     let z = pos.getZ(i);
-    z *= 0.68;
-    if (y > 0.2) x *= (1.0 + (y - 0.2) * 0.32);
+    z *= 0.58; // splostenie do oválu predok/zadok (hrudnik nie je kruhovy v priereze)
+    // Normalizovana vyska tela (-1 dole na obrube, +1 hore pri golieri) na plynule tvarovanie.
+    const t = y / 0.875;
+    if (t > 0.35) {
+      // Ramena: vyrazne rozsirenie smerom hore k plecu (siluteta "T", nie rovny valec).
+      const shoulderT = (t - 0.35) / 0.65;
+      x *= 1.0 + shoulderT * shoulderT * 0.55;
+    } else if (t < -0.2) {
+      // Pas: mierne zuzenie pod hrudnikom pre prirodzenejsi tvar trupu.
+      const waistT = (-0.2 - t) / 0.8;
+      x *= 1.0 - waistT * 0.1;
+    }
     pos.setXYZ(i, x, y, z);
   }
   bodyGeo.computeVertexNormals();
+  bodyGeo.rotateY(-Math.PI / 2); // zarovna UV sev (u=0/1) na bok tela, nie na stred predku/chrbta
   remapJerseyUV(bodyGeo, 'body');
   const jerseyMesh = new THREE.Mesh(bodyGeo, jerseyMaterial);
   jerseyMesh.castShadow = true;
   jerseyGroup.add(jerseyMesh);
 
-  const sleeveGeoL = new THREE.CylinderGeometry(0.32, 0.28, 0.9, 32, 16, true);
-  sleeveGeoL.rotateZ(Math.PI / 3.4);
-  sleeveGeoL.translate(-0.95, 0.45, 0);
+  // Rukavy: visia DOLE od pleca a mierne von od tela (ako kratky rukav trika), nie hore ako "V".
+  const SLEEVE_ANGLE = Math.PI - Math.PI / 5.2; // ~145° od zvislej osi (dole a mierne von)
+  const sleeveGeoL = new THREE.CylinderGeometry(0.24, 0.38, 0.62, 32, 16, true);
+  sleeveGeoL.rotateZ(SLEEVE_ANGLE);
+  sleeveGeoL.translate(-0.42, 0.62, 0);
   remapJerseyUV(sleeveGeoL, 'sleeveL');
   const sleeveL = new THREE.Mesh(sleeveGeoL, jerseyMaterial);
   sleeveL.castShadow = true;
   jerseyGroup.add(sleeveL);
 
-  const sleeveGeoR = new THREE.CylinderGeometry(0.32, 0.28, 0.9, 32, 16, true);
-  sleeveGeoR.rotateZ(-Math.PI / 3.4);
-  sleeveGeoR.translate(0.95, 0.45, 0);
+  const sleeveGeoR = new THREE.CylinderGeometry(0.24, 0.38, 0.62, 32, 16, true);
+  sleeveGeoR.rotateZ(-SLEEVE_ANGLE);
+  sleeveGeoR.translate(0.42, 0.62, 0);
   remapJerseyUV(sleeveGeoR, 'sleeveR');
   const sleeveR = new THREE.Mesh(sleeveGeoR, jerseyMaterial);
   sleeveR.castShadow = true;
   jerseyGroup.add(sleeveR);
 
-  const collarGeo = new THREE.TorusGeometry(0.42, 0.045, 16, 48);
+  const collarGeo = new THREE.TorusGeometry(0.34, 0.045, 16, 48);
   collarGeo.rotateX(Math.PI / 2);
   collarGeo.scale(1, 1.2, 0.8);
-  collarGeo.translate(0, 0.88, 0);
+  collarGeo.translate(0, 0.86, 0);
   remapJerseyUV(collarGeo, 'collar');
   const collar = new THREE.Mesh(collarGeo, jerseyMaterial);
   collar.castShadow = true;
