@@ -88,6 +88,14 @@ export default function TextilMetraz({ supabase, onSpat }) {
   const printWidthCm = sluzbaRezim === 'len_papier'
     ? maxSirka
     : Math.min(vybranyMaterial ? (Number(vybranyMaterial.sirka_tlace_cm) || maxSirka) : manualSirkaCm, maxSirka);
+  // Zdielane so sekciou "Prehľad množstevných zliav" nižšie, aby aj tá ukazovala SKUTOČNÚ sadzbu
+  // pre aktuálne zvolenú úroveň služby (predtým vždy počítala bez bonusu, takže "na váš materiál"
+  // a "len papier" v nej vyzerali rovnako drahé ako "na náš materiál" — zavádzajúce).
+  const rateForQtyAndRezim = (qty) => {
+    if (sluzbaRezim === 'len_papier') return priceAtBonus(nakladBm, qty, pricingConfig, BONUS_LEN_PAPIER);
+    if (sluzbaRezim === 'na_vas_material') return priceAtBonus(nakladBm, qty, pricingConfig, BONUS_LEN_TLAC);
+    return priceAt(nakladBm, qty, pricingConfig);
+  };
 
   if (nastavenia) {
     totalLengthBm = mode === 'auto' ? Math.max(0.5, lengthBm) : Math.max(0.5, directLengthBm);
@@ -98,9 +106,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
     // "na vas material" a "len papier" nepredavaju latku ani nazehlenie, preto maju bonusovu marzu.
     // Poznamka: sadzba potlace je nezavisla od zvolenej sirky (naklad_bm procesu je pocitany na
     // nominalnej sirke rolky, nie na skutocne pouzitej sirke tlace).
-    if (sluzbaRezim === 'len_papier') baseRate = priceAtBonus(nakladBm, totalLengthBm, pricingConfig, BONUS_LEN_PAPIER);
-    else if (sluzbaRezim === 'na_vas_material') baseRate = priceAtBonus(nakladBm, totalLengthBm, pricingConfig, BONUS_LEN_TLAC);
-    else baseRate = priceAt(nakladBm, totalLengthBm, pricingConfig);
+    baseRate = rateForQtyAndRezim(totalLengthBm);
     // Ak si zakaznik vybral aj nasu latku (rezim "na_nas_material"), jej cena sa pocita rovnakym
     // vzorcom (na skutocnej sirke tlace danej latky) a PRIPOCITAVA k cene potlace.
     if (vybranyMaterial) {
@@ -502,8 +508,8 @@ export default function TextilMetraz({ supabase, onSpat }) {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {BM_PREVIEW_LEVELS.map(level => {
-                const rate = priceAt(nakladBm, level, pricingConfig);
-                const base = priceAt(nakladBm, BM_PREVIEW_LEVELS[0], pricingConfig);
+                const rate = rateForQtyAndRezim(level);
+                const base = rateForQtyAndRezim(BM_PREVIEW_LEVELS[0]);
                 const discount = base > 0 ? Math.round(((base - rate) / base) * 100) : 0;
                 const isCurrent = totalLengthBm >= level && (level === BM_PREVIEW_LEVELS[BM_PREVIEW_LEVELS.length - 1] || totalLengthBm < BM_PREVIEW_LEVELS[BM_PREVIEW_LEVELS.indexOf(level) + 1]);
                 return (
