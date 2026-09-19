@@ -1,6 +1,7 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { RotateCcw, Camera } from 'lucide-react';
 import { updateJerseyTexture } from './dresRenderer';
 
@@ -239,123 +240,70 @@ function aplikujOsvetlenie(scene, lightsRef, renderer, type) {
   lightsRef.current = { ambient, main, fill, rim };
 }
 
-function remapJerseyUV(geometry, part) {
-  const uv = geometry.attributes.uv;
-  for (let i = 0; i < uv.count; i++) {
-    const u = uv.getX(i);
-    const v = uv.getY(i);
-    if (part === 'body') {
-      uv.setXY(i, u, v);
-    } else if (part === 'sleeveL') {
-      uv.setXY(i, 0.05 + u * 0.2, 0.05 + v * 0.3);
-    } else if (part === 'sleeveR') {
-      uv.setXY(i, 0.75 + u * 0.2, 0.05 + v * 0.3);
-    } else if (part === 'collar') {
-      uv.setXY(i, 0.4 + u * 0.2, 0.02 + v * 0.1);
-    }
-  }
-  uv.needsUpdate = true;
-}
-
+// Predoslé pokusy (poťahované valce, potom plochý strihový obrys) boli oba ručne kreslená
+// geometria — a hoci druhý bol lepší, stále vyzeral hranato a nie ako skutočný odev. Poriadne
+// vymodelovať odev od ruky je špecializovaná 3D sochárska práca, nie niečo spoľahlivo
+// dosiahnuteľné skladaním primitív v kóde — presne to isté robia aj reálne nástroje na výrobu
+// dresov (Printful a pod.): používajú HOTOVÝ 3D model trička od 3D grafika, na ktorý sa len
+// prilepí textúra. Tu používame model "T-shirt" (Poly by Google, CC-BY licencia — vyžaduje
+// uvedenie autora, viď public/models/README.txt), uložený v public/models/tshirt-base.glb.
 function vytvorDresGeometriu(scene, textureCanvas) {
   const canvasTexture = new THREE.CanvasTexture(textureCanvas);
   canvasTexture.anisotropy = 16;
   canvasTexture.generateMipmaps = true;
 
-  const bumpCanvas = document.createElement('canvas');
-  bumpCanvas.width = 256;
-  bumpCanvas.height = 256;
-  const bCtx = bumpCanvas.getContext('2d');
-  bCtx.fillStyle = '#808080';
-  bCtx.fillRect(0, 0, 256, 256);
-  for (let x = 0; x < 256; x += 4) {
-    for (let y = 0; y < 256; y += 4) {
-      bCtx.fillStyle = ((x + y) % 8 === 0) ? '#909090' : '#707070';
-      bCtx.fillRect(x, y, 2, 2);
-    }
-  }
-  const fabricBumpTexture = new THREE.CanvasTexture(bumpCanvas);
-  fabricBumpTexture.wrapS = THREE.RepeatWrapping;
-  fabricBumpTexture.wrapT = THREE.RepeatWrapping;
-  fabricBumpTexture.repeat.set(32, 32);
-
   const jerseyMaterial = new THREE.MeshStandardMaterial({
     map: canvasTexture,
-    bumpMap: fabricBumpTexture,
-    bumpScale: 0.008,
-    roughness: 0.55,
-    metalness: 0.1,
+    roughness: 0.6,
+    metalness: 0.05,
     side: THREE.DoubleSide,
   });
 
-  const jerseyGroup = new THREE.Group();
+  const loader = new GLTFLoader();
+  loader.load(
+    '/models/tshirt-base.glb',
+    (gltf) => {
+      const root = gltf.scene;
+      const meshes = [];
+      root.traverse((child) => { if (child.isMesh) meshes.push(child); });
 
-  // Namiesto lepenia poťahaných valcov (predošlý pokus, vyzeralo to ako "cudo") sa cely dres
-  // vystrihne ako JEDEN plosny obrys (strihovy vzor — presne ako sa tricko naozaj strihá z
-  // látky), ktory sa potom vytiahne (extrude) do plytkej 3D hrubky. Ramena/rukavy/golier su
-  // sucastou TOHTO ISTEHO obrysu, takze nemoze vzniknut medzera ani zle napojenie ako predtym.
-  const BBOX = { minX: -0.95, maxX: 0.95, minY: -1.05, maxY: 1.0 };
-  const shape = new THREE.Shape();
-  shape.moveTo(-0.30, 1.00); // lave plece
-  shape.lineTo(-0.62, 0.94); // hrdlo -> vrch rukava (mierny sikmy strih plieca)
-  shape.lineTo(-0.95, 0.86); // vonkajsi vrch laveho rukava
-  shape.lineTo(-0.95, 0.60); // koniec (obruba) laveho kratkeho rukava
-  shape.lineTo(-0.58, 0.44); // podpazusie (naspat k telu)
-  shape.lineTo(-0.66, -0.35);
-  shape.lineTo(-0.62, -1.05); // lavy spodny roh (obruba)
-  shape.quadraticCurveTo(0, -0.97, 0.62, -1.05); // mierne zaoblena spodna obruba
-  shape.lineTo(0.66, -0.35);
-  shape.lineTo(0.58, 0.44); // pravé podpazusie
-  shape.lineTo(0.95, 0.60);
-  shape.lineTo(0.95, 0.86); // vonkajsi vrch praveho rukava
-  shape.lineTo(0.62, 0.94);
-  shape.lineTo(0.30, 1.00); // prave plece
-  shape.quadraticCurveTo(0, 0.72, -0.30, 1.00); // vystrih golierika (predok aj zadok rovnaky obrys)
+      // Model nema ZIADNE UV suradnice (len POSITION/NORMAL, farebne "flaky" su len samostatne
+      // materialy na kus siete) — bez UV by textura ukazovala jedno nahodne miesto plochy farby.
+      // Namiesto toho si UV dopocitame sami: rovinny priemet z pozicie vrcholu (x,y v lokalnom
+      // priestore modelu), predok/zadok urcuje znamienko Z-zlozky normaly (von z tela = predok).
+      const localBox = new THREE.Box3();
+      meshes.forEach((m) => { m.geometry.computeBoundingBox(); localBox.union(m.geometry.boundingBox); });
+      const bMin = localBox.min, bMax = localBox.max;
+      meshes.forEach((m) => {
+        const pos = m.geometry.attributes.position;
+        const nrm = m.geometry.attributes.normal;
+        const uv = new Float32Array(pos.count * 2);
+        for (let i = 0; i < pos.count; i++) {
+          const u = (pos.getX(i) - bMin.x) / (bMax.x - bMin.x);
+          const v = (pos.getY(i) - bMin.y) / (bMax.y - bMin.y);
+          const isFront = nrm.getZ(i) >= 0;
+          uv[i * 2] = isFront ? u * 0.5 : 1 - u * 0.5;
+          uv[i * 2 + 1] = v;
+        }
+        m.geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+        m.material = jerseyMaterial;
+        m.castShadow = true;
+        m.receiveShadow = true;
+      });
 
-  const DEPTH = 0.55;
-  function planarUV(x, y, isFront) {
-    const u = (x - BBOX.minX) / (BBOX.maxX - BBOX.minX);
-    const v = (y - BBOX.minY) / (BBOX.maxY - BBOX.minY);
-    return isFront ? new THREE.Vector2(u * 0.5, v) : new THREE.Vector2(1 - u * 0.5, v);
-  }
-
-  const bodyGeo = new THREE.ExtrudeGeometry(shape, { depth: DEPTH, bevelEnabled: false, curveSegments: 16 });
-  bodyGeo.translate(0, 0, -DEPTH / 2); // vycentrovanie predek/zadok okolo z=0
-  // ExtrudeGeometry-in vlastny UVGenerator hook v tejto verzii three.js nefunguje spolahlivo
-  // (zadny cap sa zobrazoval zrkadlovo s predkovym) — namiesto neho sa UV prepisu RUCNE podla
-  // z-suradnice kazdeho vrcholu, rovnaky osvedceny postup ako remapJerseyUV nizsie.
-  {
-    const posAttr = bodyGeo.attributes.position;
-    const uvAttr = bodyGeo.attributes.uv;
-    const eps = 0.01;
-    for (let i = 0; i < posAttr.count; i++) {
-      const x = posAttr.getX(i), y = posAttr.getY(i), z = posAttr.getZ(i);
-      let uv;
-      if (z > DEPTH / 2 - eps) uv = planarUV(x, y, true); // predny cap
-      else if (z < -DEPTH / 2 + eps) uv = planarUV(x, y, false); // zadny cap
-      else uv = new THREE.Vector2(0.5, 0.005); // bok (tenky, takmer neviditelny)
-      uvAttr.setXY(i, uv.x, uv.y);
-    }
-    uvAttr.needsUpdate = true;
-  }
-  bodyGeo.computeVertexNormals();
-  const jerseyMesh = new THREE.Mesh(bodyGeo, jerseyMaterial);
-  jerseyMesh.castShadow = true;
-  jerseyGroup.add(jerseyMesh);
-
-  // Golier: tenky lem tesne pri vystrihu krku (kopiruje zaoblenie vystrihu, nie plny kruh).
-  const collarGeo = new THREE.TorusGeometry(0.24, 0.035, 12, 32, Math.PI * 1.05);
-  collarGeo.rotateZ(Math.PI / 2 + (Math.PI - Math.PI * 1.05) / 2);
-  collarGeo.rotateX(Math.PI / 2);
-  collarGeo.translate(0, 0.86, DEPTH / 2 - 0.02);
-  remapJerseyUV(collarGeo, 'collar');
-  const collar = new THREE.Mesh(collarGeo, jerseyMaterial);
-  collar.castShadow = true;
-  jerseyGroup.add(collar);
-
-  jerseyGroup.scale.set(0.92, 0.92, 1.15); // mierne "nafuknutie" do hlbky, nech to nevyzera ako placha doska
-  jerseyGroup.position.set(0, -0.05, 0);
-  scene.add(jerseyGroup);
+      // Model prichádza vo vlastnej mierke/polohe — vycentrovanie a normalizácia na výšku ~2
+      // jednotky (rovnaký rád veľkosti, aký očakáva kamera/OrbitControls nastavené nižšie).
+      const box = new THREE.Box3().setFromObject(root);
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+      const scale = 2.1 / Math.max(size.x, size.y, size.z);
+      root.scale.setScalar(scale);
+      root.position.set(-center.x * scale, -center.y * scale - 0.15, -center.z * scale);
+      scene.add(root);
+    },
+    undefined,
+    (err) => console.error('Nepodarilo sa načítať 3D model trička:', err),
+  );
 
   return canvasTexture;
 }
