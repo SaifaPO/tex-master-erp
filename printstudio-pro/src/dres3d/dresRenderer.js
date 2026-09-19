@@ -2,12 +2,25 @@
 // Čisté funkcie parametrizované `configState` (pozri dresPresets.js DEFAULT_CONFIG_STATE) —
 // žiadny globálny stav, žiadna závislosť na DOM mimo dodaného 2D kontextu.
 
+// Poistka pre dlhý text (názov tímu, meno hráča) — zmenší font tak, aby sa zaručene zmestil
+// do bezpečnej šírky namiesto pretečenia mimo dielu.
+function fitTextWidth(c, text, maxWidth, baseFontPx, fontFamily, weight = 'bold') {
+  let size = baseFontPx;
+  while (size > 18) {
+    c.font = `${weight} ${size}px "${fontFamily}", sans-serif`;
+    if (c.measureText(text).width <= maxWidth) break;
+    size -= 4;
+  }
+  return size;
+}
+
 export function updateJerseyTexture(ctx, canvas, configState) {
   const W = canvas.width;
   const H = canvas.height;
   const halfW = W / 2;
 
   ctx.clearRect(0, 0, W, H);
+
   ctx.fillStyle = configState.farby.zakladna;
   ctx.fillRect(0, 0, W, H);
 
@@ -136,19 +149,30 @@ function drawHex(c, cx, cy, r) {
   c.stroke();
 }
 
+// Rukávy sú u tohto modelu (skutočný CLO3D strih) samostatné strihové kusy umiestnené DOLE na
+// plátne (nie v rohoch hore ako pri predchádzajúcom modeli bez UV) — pozri diffuse_1001.png
+// z kúpeného balíka pre presné rozloženie: predný/zadný diel hore v ľavej/pravej polovici,
+// rukávy dole v ľavom/pravom rohu, lem (manžeta) ako úzky pruh na spodku rukávového kusu.
 function renderSleeves(c, W, H, configState) {
+  const sleeveY = H * 0.78;
+  const sleeveH = H * 0.16;
+
   c.fillStyle = configState.farby.rukava;
-  c.fillRect(0, 0, W * 0.12, H * 0.35);
-  c.fillRect(W * 0.88, 0, W * 0.12, H * 0.35);
+  c.fillRect(0, sleeveY, W * 0.35, sleeveH);
+  c.fillRect(W * 0.65, sleeveY, W * 0.35, sleeveH);
 
   c.fillStyle = configState.farby.golier;
-  c.fillRect(0, H * 0.32, W * 0.12, H * 0.03);
-  c.fillRect(W * 0.88, H * 0.32, W * 0.12, H * 0.03);
+  c.fillRect(0, sleeveY + sleeveH - H * 0.02, W * 0.35, H * 0.02);
+  c.fillRect(W * 0.65, sleeveY + sleeveH - H * 0.02, W * 0.35, H * 0.02);
+
+  // úzky pruh úplne dole na plátne = lem (spodný elastický pás dresu)
+  c.fillStyle = configState.farby.golier;
+  c.fillRect(W * 0.12, H * 0.965, W * 0.76, H * 0.02);
 
   if (configState.loga.zobrazitOdznakRukav) {
     c.save();
-    const bX = W * 0.94;
-    const bY = H * 0.18;
+    const bX = W * 0.825;
+    const bY = sleeveY + sleeveH * 0.5;
     c.fillStyle = '#ffffff';
     c.beginPath();
     c.arc(bX, bY, 40, 0, Math.PI * 2);
@@ -178,9 +202,9 @@ function renderFrontDetails(c, x, y, w, h, configState) {
 
   if (configState.text.zobrazitCislo && configState.text.cisloVpredu && configState.text.cisloHraca) {
     c.save();
-    c.font = `bold 110px "${configState.text.fontRodina}", sans-serif`;
     c.textAlign = 'center';
     c.textBaseline = 'middle';
+    fitTextWidth(c, configState.text.cisloHraca, w * 0.35, 110, configState.text.fontRodina, 'bold');
     c.strokeStyle = configState.text.farbaObrysu;
     c.lineWidth = 14;
     c.strokeText(configState.text.cisloHraca, centerX, y + h * 0.33);
@@ -191,9 +215,9 @@ function renderFrontDetails(c, x, y, w, h, configState) {
 
   if (configState.text.zobrazitTimText && configState.text.timText) {
     c.save();
-    c.font = `800 85px "${configState.text.fontRodina}", sans-serif`;
     c.textAlign = 'center';
     c.textBaseline = 'middle';
+    fitTextWidth(c, configState.text.timText, w * 0.42, 85, configState.text.fontRodina, '800');
     c.strokeStyle = configState.text.farbaObrysu;
     c.lineWidth = 16;
     c.strokeText(configState.text.timText, centerX, y + h * 0.54);
@@ -208,22 +232,23 @@ function renderBackDetails(c, x, y, w, h, configState) {
 
   if (configState.text.zobrazitMeno && configState.text.menoHraca) {
     c.save();
-    c.font = `bold 95px "${configState.text.fontRodina}", sans-serif`;
     c.textAlign = 'center';
     c.textBaseline = 'middle';
+    const meno = configState.text.menoHraca.toUpperCase();
+    fitTextWidth(c, meno, w * 0.42, 95, configState.text.fontRodina, 'bold');
     c.strokeStyle = configState.text.farbaObrysu;
     c.lineWidth = 16;
-    c.strokeText(configState.text.menoHraca.toUpperCase(), centerX, y + h * 0.28);
+    c.strokeText(meno, centerX, y + h * 0.28);
     c.fillStyle = configState.text.farbaTextu;
-    c.fillText(configState.text.menoHraca.toUpperCase(), centerX, y + h * 0.28);
+    c.fillText(meno, centerX, y + h * 0.28);
     c.restore();
   }
 
   if (configState.text.zobrazitCislo && configState.text.cisloVzadu && configState.text.cisloHraca) {
     c.save();
-    c.font = `bold 360px "${configState.text.fontRodina}", sans-serif`;
     c.textAlign = 'center';
     c.textBaseline = 'middle';
+    fitTextWidth(c, configState.text.cisloHraca, w * 0.5, 360, configState.text.fontRodina, 'bold');
     c.strokeStyle = configState.text.farbaObrysu;
     c.lineWidth = 32;
     c.strokeText(configState.text.cisloHraca, centerX, y + h * 0.54);
@@ -234,13 +259,6 @@ function renderBackDetails(c, x, y, w, h, configState) {
     c.strokeText(configState.text.cisloHraca, centerX, y + h * 0.54);
     c.restore();
   }
-
-  c.save();
-  c.font = 'bold 36px Inter, sans-serif';
-  c.textAlign = 'center';
-  c.fillStyle = 'rgba(255,255,255,0.7)';
-  c.fillText('CUSTOM MATCH EDITION', centerX, y + h * 0.88);
-  c.restore();
 }
 
 function renderClubCrest(c, cx, cy, size, configState) {

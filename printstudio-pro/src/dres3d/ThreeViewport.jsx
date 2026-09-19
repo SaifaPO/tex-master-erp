@@ -240,17 +240,28 @@ function aplikujOsvetlenie(scene, lightsRef, renderer, type) {
   lightsRef.current = { ambient, main, fill, rim };
 }
 
-// Predoslé pokusy (poťahované valce, potom plochý strihový obrys) boli oba ručne kreslená
-// geometria — a hoci druhý bol lepší, stále vyzeral hranato a nie ako skutočný odev. Poriadne
-// vymodelovať odev od ruky je špecializovaná 3D sochárska práca, nie niečo spoľahlivo
-// dosiahnuteľné skladaním primitív v kóde — presne to isté robia aj reálne nástroje na výrobu
-// dresov (Printful a pod.): používajú HOTOVÝ 3D model trička od 3D grafika, na ktorý sa len
-// prilepí textúra. Tu používame model "T-shirt" (Poly by Google, CC-BY licencia — vyžaduje
-// uvedenie autora, viď public/models/README.txt), uložený v public/models/tshirt-base.glb.
+// Predoslé pokusy (poťahované valce, plochý strihový obrys, potom hotový T-shirt model bez UV
+// s ručne dopočítanou projekciou) boli všetky nedostatočné — buď vyzerali hranato, alebo mali
+// zle namapované rukávy (planárna projekcia z jedného spoločného bounding boxu na celý model
+// nefunguje pre skutočne 3D tvarovaný odev). Tento model je skutočný CLO3D/Marvelous Designer
+// strih (kúpený, licencia viď public/models/README.txt) s poriadnym, neprekrývajúcim sa UV
+// rozvinutím — predný diel, zadný diel, rukávy a lemy sú samostatné strihové kusy so svojimi
+// vlastnými UV súradnicami priamo v súbore. Preto sa UV vôbec nedopočítava ručne — len sa
+// necháva tak, ako je, a naša plátnová textúra sa nakreslí do rovnakého rozloženia, aké malo
+// pôvodné (referenčné) textúrové pozadie modelu (predok/zadok v ľavej/pravej polovici, rukávy
+// dole, lemy v úzkom pruhu úplne dole) — pozri dresRenderer.js.
 function vytvorDresGeometriu(scene, textureCanvas) {
   const canvasTexture = new THREE.CanvasTexture(textureCanvas);
   canvasTexture.anisotropy = 16;
   canvasTexture.generateMipmaps = true;
+  canvasTexture.wrapS = THREE.RepeatWrapping;
+  canvasTexture.wrapT = THREE.RepeatWrapping;
+  // GLTFLoader nastavuje pre textúry z glTF súboru flipY=false (glTF konvencia počiatku UV
+  // v ľavom hornom rohu) — no THREE.CanvasTexture má defaultne flipY=true (tradičná OpenGL
+  // konvencia). Bez zosúladenia by sa naša plátnová textúra vzorkovala inak ako pôvodná
+  // (referenčná) textúra modelu, čo pri zápornych/wrapovaných UV hodnotách tohto strihu
+  // spôsobovalo vzorkovanie z nesprávnej/zrkadlenej časti plátna (skomolený text).
+  canvasTexture.flipY = false;
 
   const jerseyMaterial = new THREE.MeshStandardMaterial({
     map: canvasTexture,
@@ -261,34 +272,15 @@ function vytvorDresGeometriu(scene, textureCanvas) {
 
   const loader = new GLTFLoader();
   loader.load(
-    '/models/tshirt-base.glb',
+    '/models/jersey-base.glb',
     (gltf) => {
       const root = gltf.scene;
-      const meshes = [];
-      root.traverse((child) => { if (child.isMesh) meshes.push(child); });
-
-      // Model nema ZIADNE UV suradnice (len POSITION/NORMAL, farebne "flaky" su len samostatne
-      // materialy na kus siete) — bez UV by textura ukazovala jedno nahodne miesto plochy farby.
-      // Namiesto toho si UV dopocitame sami: rovinny priemet z pozicie vrcholu (x,y v lokalnom
-      // priestore modelu), predok/zadok urcuje znamienko Z-zlozky normaly (von z tela = predok).
-      const localBox = new THREE.Box3();
-      meshes.forEach((m) => { m.geometry.computeBoundingBox(); localBox.union(m.geometry.boundingBox); });
-      const bMin = localBox.min, bMax = localBox.max;
-      meshes.forEach((m) => {
-        const pos = m.geometry.attributes.position;
-        const nrm = m.geometry.attributes.normal;
-        const uv = new Float32Array(pos.count * 2);
-        for (let i = 0; i < pos.count; i++) {
-          const u = (pos.getX(i) - bMin.x) / (bMax.x - bMin.x);
-          const v = (pos.getY(i) - bMin.y) / (bMax.y - bMin.y);
-          const isFront = nrm.getZ(i) >= 0;
-          uv[i * 2] = isFront ? u * 0.5 : 1 - u * 0.5;
-          uv[i * 2 + 1] = v;
-        }
-        m.geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-        m.material = jerseyMaterial;
-        m.castShadow = true;
-        m.receiveShadow = true;
+      odstranDuplicitneVrstvy(root);
+      root.traverse((child) => {
+        if (!child.isMesh) return;
+        child.material = jerseyMaterial;
+        child.castShadow = true;
+        child.receiveShadow = true;
       });
 
       // Model prichádza vo vlastnej mierke/polohe — vycentrovanie a normalizácia na výšku ~2
@@ -302,8 +294,75 @@ function vytvorDresGeometriu(scene, textureCanvas) {
       scene.add(root);
     },
     undefined,
-    (err) => console.error('Nepodarilo sa načítať 3D model trička:', err),
+    (err) => console.error('Nepodarilo sa načítať 3D model dresu:', err),
   );
 
   return canvasTexture;
+}
+
+// CLO3D exportuje látku ako "škrupinu" s hrúbkou — každý strihový kus (predok, zadok, rukáv...)
+// je v súbore 3× (vonkajšia vrstva, vnútorná podšívka so zrkadlenými UV, spojovací bočný pásik),
+// všetky na tej istej pozícii s tou istou UV bounding boxou. Bez odstránenia duplicít dochádza
+// k z-fightingu (blikanie/roztrhnutá textúra podľa toho, ktorá z takmer zhodných vrstiev sa
+// práve vykreslí) — vidno napr. ako "roztrhnutý"/zrkadlený text. Necháva sa len tá vrstva
+// z každej skupiny, ktorej priemerná normála smeruje najviac VON zo stredu modelu (skutočný
+// vonkajší, viditeľný povrch); zvyšné 1-2 takmer zhodné kópie sa zo scény odstránia.
+function odstranDuplicitneVrstvy(root) {
+  const meshes = [];
+  root.traverse((child) => { if (child.isMesh) meshes.push(child); });
+  if (meshes.length < 2) return;
+
+  const overallCenter = new THREE.Vector3();
+  let vertexTotal = 0;
+  meshes.forEach((m) => {
+    const pos = m.geometry.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      overallCenter.x += pos.getX(i);
+      overallCenter.y += pos.getY(i);
+      overallCenter.z += pos.getZ(i);
+    }
+    vertexTotal += pos.count;
+  });
+  overallCenter.divideScalar(Math.max(1, vertexTotal));
+
+  const groups = new Map();
+  meshes.forEach((m) => {
+    const geo = m.geometry;
+    const uv = geo.attributes.uv;
+    if (!uv) return;
+    let uMin = Infinity, uMax = -Infinity, vMin = Infinity, vMax = -Infinity;
+    for (let i = 0; i < uv.count; i++) {
+      const u = uv.getX(i), v = uv.getY(i);
+      if (u < uMin) uMin = u; if (u > uMax) uMax = u;
+      if (v < vMin) vMin = v; if (v > vMax) vMax = v;
+    }
+    const matName = m.material && m.material.name ? m.material.name : 'x';
+    const key = `${matName}|${uMin.toFixed(2)}|${uMax.toFixed(2)}|${vMin.toFixed(2)}|${vMax.toFixed(2)}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(m);
+  });
+
+  const outward = new THREE.Vector3();
+  const normal = new THREE.Vector3();
+  groups.forEach((group) => {
+    if (group.length < 2) return;
+    let best = null, bestScore = -Infinity;
+    group.forEach((m) => {
+      const pos = m.geometry.attributes.position;
+      const nrm = m.geometry.attributes.normal;
+      const step = Math.max(1, Math.floor(pos.count / 500));
+      let score = 0, sampled = 0;
+      for (let i = 0; i < pos.count; i += step) {
+        outward.set(pos.getX(i), pos.getY(i), pos.getZ(i)).sub(overallCenter).normalize();
+        normal.set(nrm.getX(i), nrm.getY(i), nrm.getZ(i));
+        score += outward.dot(normal);
+        sampled++;
+      }
+      score /= Math.max(1, sampled);
+      if (score > bestScore) { bestScore = score; best = m; }
+    });
+    group.forEach((m) => {
+      if (m !== best && m.parent) m.parent.remove(m);
+    });
+  });
 }
