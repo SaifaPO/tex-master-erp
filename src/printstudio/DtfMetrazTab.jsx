@@ -67,8 +67,9 @@ export default function DtfMetrazTab({ supabase }) {
 
   const zmazObjednavku = async (id) => {
     if (!window.confirm('Naozaj zmazať túto objednávku? (Zmaže len záznam tu — prípadnú Shopify draft objednávku treba zmazať samostatne v Shopify Admin → Orders → Drafts.)')) return;
+    const { error } = await supabase.from('dtf_objednavky').delete().eq('id', id);
+    if (error) { window.alert('Zmazanie zlyhalo: ' + error.message); return; }
     setObjednavky(o => o.filter(x => x.id !== id));
-    await supabase.from('dtf_objednavky').delete().eq('id', id);
   };
 
   // Náklad na 1 bm z výrobných vstupov

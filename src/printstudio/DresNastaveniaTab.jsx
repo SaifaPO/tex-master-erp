@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Shirt, Plus, Trash2 } from 'lucide-react';
+import { Shirt, Plus, Trash2, ExternalLink } from 'lucide-react';
+
+const PRINTSTUDIO_BASE_URL = 'https://printstudio-pro.vercel.app';
 
 // Rovnaké statické zoznamy vzorov/golierov ako v printstudio-pro/src/dres3d/dresPresets.js —
 // duplikované zámerne (samostatný Vite projekt, iné node_modules), toto je len zoznam
@@ -24,19 +26,34 @@ const PREDVOLENE_FARBY = { farba_zakladna: '#1e3a8a', farba_vzor: '#dc2626', far
 
 export default function DresNastaveniaTab({ supabase }) {
   const [produkty, setProdukty] = useState([]);
+  const [vsetkyProdukty, setVsetkyProdukty] = useState([]);
+  const [novyProduktId, setNovyProduktId] = useState('');
   const [vybranyId, setVybranyId] = useState(null);
   const [nastavenia, setNastavenia] = useState(null);
   const [materialy, setMaterialy] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    (async () => {
-      const { data } = await supabase.from('produkty').select('id, nazov').eq('typ_konfiguratora', '3d_dres').order('nazov');
-      setProdukty(data || []);
-      if (data && data.length > 0) setVybranyId(data[0].id);
-      setIsLoading(false);
-    })();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const nacitajZoznamProduktov = async () => {
+    const [{ data: dresProdukty }, { data: vsetky }] = await Promise.all([
+      supabase.from('produkty').select('id, nazov, shopify_handle').eq('typ_konfiguratora', '3d_dres').order('nazov'),
+      supabase.from('produkty').select('id, nazov, shopify_handle, typ_konfiguratora').order('nazov'),
+    ]);
+    setProdukty(dresProdukty || []);
+    setVsetkyProdukty(vsetky || []);
+    setVybranyId(prev => prev ?? (dresProdukty && dresProdukty.length > 0 ? dresProdukty[0].id : null));
+    setIsLoading(false);
+  };
+
+  useEffect(() => { nacitajZoznamProduktov(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const nastavAko3dDres = async () => {
+    if (!novyProduktId) return;
+    const { error } = await supabase.from('produkty').update({ typ_konfiguratora: '3d_dres' }).eq('id', Number(novyProduktId));
+    if (error) { window.alert('Nepodarilo sa nastaviť: ' + error.message); return; }
+    setNovyProduktId('');
+    setVybranyId(Number(novyProduktId));
+    await nacitajZoznamProduktov();
+  };
 
   useEffect(() => {
     if (vybranyId == null) return;
@@ -92,26 +109,53 @@ export default function DresNastaveniaTab({ supabase }) {
 
   if (isLoading) return <p className="text-sm text-slate-500">Načítavam…</p>;
 
+  const vybranyProdukt = produkty.find(p => p.id === vybranyId);
+  const produktyNaVyber = vsetkyProdukty.filter(p => p.typ_konfiguratora !== '3d_dres');
+
+  const pridajProduktBlok = (
+    <div className="bg-slate-900/60 rounded-2xl border border-dashed border-slate-700 p-4 space-y-2">
+      <h3 className="font-bold text-sm text-white">Pridať produkt ako 3D dres konfigurátor</h3>
+      <p className="text-xs text-slate-400">Vyber existujúci produkt z katalógu (printstudio-pro) a appka mu nastaví typ konfigurátora — potom sa dá hneď skúšobne otvoriť nižšie.</p>
+      <div className="flex flex-wrap gap-2">
+        <select value={novyProduktId} onChange={(e) => setNovyProduktId(e.target.value)} className="flex-1 min-w-[200px] px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white">
+          <option value="">Vyber produkt...</option>
+          {produktyNaVyber.map(p => <option key={p.id} value={p.id}>{p.nazov}</option>)}
+        </select>
+        <button onClick={nastavAko3dDres} disabled={!novyProduktId} className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white text-sm font-bold rounded-lg flex items-center gap-1.5"><Plus className="h-4 w-4" /> Nastaviť</button>
+      </div>
+      {vsetkyProdukty.length === 0 && <p className="text-xs text-amber-400">V katalógu (printstudio-pro) zatiaľ nie je žiadny produkt — najprv ho pridaj v záložke "Produkty (Blanks)".</p>}
+    </div>
+  );
+
   if (produkty.length === 0) {
     return (
-      <div className="text-sm text-slate-400">
-        Zatiaľ žiadny produkt nemá nastavený typ <code className="text-indigo-400">3d_dres</code>. Nastav ho priamo v Supabase
-        (Table editor → <code className="text-indigo-400">produkty</code> → stĺpec <code className="text-indigo-400">typ_konfiguratora</code>),
-        kým sa v Produktoch nepridá prepínač.
+      <div className="space-y-4">
+        <div className="text-sm text-slate-400">
+          Zatiaľ žiadny produkt nemá nastavený 3D dres konfigurátor — preto tu nič nevidno. Pridaj ho nižšie.
+        </div>
+        {pridajProduktBlok}
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
+      {pridajProduktBlok}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-xl font-bold text-white flex items-center gap-2"><Shirt className="text-indigo-400 h-5 w-5" /> Nastavenia 3D dresu</h2>
           <p className="text-xs text-slate-400 mt-1">Predvolené farby zón, dostupné vzory/goliere a materiály na produkt.</p>
         </div>
-        <select value={vybranyId || ''} onChange={(e) => setVybranyId(Number(e.target.value))} className="px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white">
-          {produkty.map(p => <option key={p.id} value={p.id}>{p.nazov}</option>)}
-        </select>
+        <div className="flex items-center gap-2">
+          <select value={vybranyId || ''} onChange={(e) => setVybranyId(Number(e.target.value))} className="px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white">
+            {produkty.map(p => <option key={p.id} value={p.id}>{p.nazov}</option>)}
+          </select>
+          {vybranyProdukt?.shopify_handle ? (
+            <a href={`${PRINTSTUDIO_BASE_URL}/?produkt=${encodeURIComponent(vybranyProdukt.shopify_handle)}`} target="_blank" rel="noreferrer" className="px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-bold rounded-lg flex items-center gap-1.5"><ExternalLink className="h-4 w-4" /> Otvoriť na test</a>
+          ) : (
+            <span className="text-[11px] text-amber-400 max-w-[200px]">Produkt nemá vyplnený Shopify handle — test link nejde vygenerovať.</span>
+          )}
+        </div>
       </div>
 
       {nastavenia && (
