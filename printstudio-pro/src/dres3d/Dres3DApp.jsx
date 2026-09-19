@@ -122,9 +122,9 @@ export default function Dres3DApp({ supabase, produktId }) {
   if (!katalog) return null;
 
   return (
-    <div className="flex-1 flex flex-col lg:flex-row overflow-hidden relative bg-slate-950 min-h-[calc(100vh-64px)]">
-      <div className="w-full lg:w-auto flex items-center justify-between gap-2 p-2.5 lg:absolute lg:top-3 lg:right-3 lg:z-20 bg-slate-900/90 lg:bg-transparent border-b lg:border-0 border-slate-800">
-        <span className="text-xs font-bold text-slate-300 lg:hidden">{katalog.produkt.nazov}</span>
+    <div className="flex-1 flex flex-col overflow-hidden relative bg-slate-950 min-h-[calc(100vh-64px)]">
+      <div className="w-full flex items-center justify-between gap-2 p-2.5 bg-slate-900/90 border-b border-slate-800 shrink-0 z-20">
+        <span className="text-xs font-bold text-slate-300 truncate">{katalog.produkt.nazov}</span>
         <div className="flex items-center gap-1.5 ml-auto">
           <button onClick={resetKonfiguraciu} title="Resetovať konfiguráciu" className="p-2 rounded-lg border border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white transition bg-slate-800/60">
             <RotateCcw className="w-4 h-4" />
@@ -143,66 +143,68 @@ export default function Dres3DApp({ supabase, produktId }) {
         </div>
       </div>
 
-      <div className="p-2 lg:p-4 lg:pt-16 flex-1">
-        <ThreeViewport ref={viewportRef} configState={configState} />
-      </div>
-
-      <div className="w-full lg:w-[480px] xl:w-[520px] bg-slate-900 border-t lg:border-t-0 lg:border-l border-slate-800 flex flex-col h-[58vh] sm:h-[50vh] lg:h-auto">
-        <div className="flex border-b border-slate-800 bg-slate-950/70 p-1.5 sm:p-2 gap-1 overflow-x-auto">
-          {TABY.map(t => {
-            const Icon = t.icon;
-            const active = aktivnyTab === t.id;
-            return (
-              <button
-                key={t.id}
-                onClick={() => setAktivnyTab(t.id)}
-                className={`flex-1 min-w-[65px] sm:min-w-[70px] py-2 px-1.5 rounded-xl text-xs font-bold transition flex flex-col items-center gap-1 ${active ? 'bg-indigo-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'}`}
-              >
-                <Icon className="w-4 h-4" />
-                <span className="text-[11px] sm:text-xs">{t.label}</span>
-              </button>
-            );
-          })}
+      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+        <div className="p-2 lg:p-4 flex-1 flex">
+          <ThreeViewport ref={viewportRef} configState={configState} />
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-          {aktivnyTab === 'vzory' && (
-            <VzoryTab configState={configState} dostupneVzory={katalog.nastavenia?.dostupne_vzory} onVzor={(id) => setConfigState(p => ({ ...p, vzor: id }))} onPreset={handlePreset} />
-          )}
-          {aktivnyTab === 'farby' && (
-            <FarbyZonyTab configState={configState} onZmenFarbu={handleZmenFarbu} aktivnaZona={aktivnaZona} onZmenAktivnuZonu={setAktivnaZona} />
-          )}
-          {aktivnyTab === 'text' && (
-            <PotlacTab configState={configState} fonty={katalog.fonty} onZmenText={handleZmenText} />
-          )}
-          {aktivnyTab === 'loga' && (
-            <LogaTab configState={configState} grafiky={katalog.grafiky} onZmenLoga={handleZmenLoga} />
-          )}
-          {aktivnyTab === 'golier' && (
-            <GolierMaterialTab
-              configState={configState}
-              dostupneGoliere={katalog.nastavenia?.dostupne_goliere}
-              materialy={katalog.materialy}
-              onGolier={(id) => setConfigState(p => ({ ...p, golierTyp: id }))}
-              onMaterial={(kod) => setConfigState(p => ({ ...p, materialKod: kod }))}
-            />
-          )}
-        </div>
-
-        <div className="p-3.5 sm:p-4 border-t border-slate-800 bg-slate-950 shrink-0 flex items-center justify-between">
-          <div>
-            <span className="text-[10px] sm:text-[11px] text-slate-400 uppercase tracking-wider block">Kalkulácia</span>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-lg sm:text-xl font-extrabold text-white">{cena.jednotkovaCena.toFixed(2)} €</span>
-              <span className="text-[11px] text-slate-400">/ ks s DPH</span>
-            </div>
-            <span className="text-[10px] text-indigo-400 font-semibold block">
-              {cena.zlavaPercent > 0 ? `Aplikovaná tímová zľava ${cena.zlavaPercent}%` : 'Objednajte 5+ ks a získajte zľavu'}
-            </span>
+        <div className="w-full lg:w-[480px] xl:w-[520px] bg-slate-900 border-t lg:border-t-0 lg:border-l border-slate-800 flex flex-col h-[58vh] sm:h-[50vh] lg:h-auto">
+          <div className="flex border-b border-slate-800 bg-slate-950/70 p-1.5 sm:p-2 gap-1 overflow-x-auto">
+            {TABY.map(t => {
+              const Icon = t.icon;
+              const active = aktivnyTab === t.id;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setAktivnyTab(t.id)}
+                  className={`flex-1 min-w-[65px] sm:min-w-[70px] py-2 px-1.5 rounded-xl text-xs font-bold transition flex flex-col items-center gap-1 ${active ? 'bg-indigo-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'}`}
+                >
+                  <Icon className="w-4 h-4" />
+                  <span className="text-[11px] sm:text-xs">{t.label}</span>
+                </button>
+              );
+            })}
           </div>
-          <button onClick={otvorSuhrn} className="px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-slate-950 font-extrabold text-xs sm:text-sm transition">
-            Objednať
-          </button>
+
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+            {aktivnyTab === 'vzory' && (
+              <VzoryTab configState={configState} dostupneVzory={katalog.nastavenia?.dostupne_vzory} onVzor={(id) => setConfigState(p => ({ ...p, vzor: id }))} onPreset={handlePreset} />
+            )}
+            {aktivnyTab === 'farby' && (
+              <FarbyZonyTab configState={configState} onZmenFarbu={handleZmenFarbu} aktivnaZona={aktivnaZona} onZmenAktivnuZonu={setAktivnaZona} />
+            )}
+            {aktivnyTab === 'text' && (
+              <PotlacTab configState={configState} fonty={katalog.fonty} onZmenText={handleZmenText} />
+            )}
+            {aktivnyTab === 'loga' && (
+              <LogaTab configState={configState} grafiky={katalog.grafiky} onZmenLoga={handleZmenLoga} />
+            )}
+            {aktivnyTab === 'golier' && (
+              <GolierMaterialTab
+                configState={configState}
+                dostupneGoliere={katalog.nastavenia?.dostupne_goliere}
+                materialy={katalog.materialy}
+                onGolier={(id) => setConfigState(p => ({ ...p, golierTyp: id }))}
+                onMaterial={(kod) => setConfigState(p => ({ ...p, materialKod: kod }))}
+              />
+            )}
+          </div>
+
+          <div className="p-3.5 sm:p-4 border-t border-slate-800 bg-slate-950 shrink-0 flex items-center justify-between">
+            <div>
+              <span className="text-[10px] sm:text-[11px] text-slate-400 uppercase tracking-wider block">Kalkulácia</span>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-lg sm:text-xl font-extrabold text-white">{cena.jednotkovaCena.toFixed(2)} €</span>
+                <span className="text-[11px] text-slate-400">/ ks s DPH</span>
+              </div>
+              <span className="text-[10px] text-indigo-400 font-semibold block">
+                {cena.zlavaPercent > 0 ? `Aplikovaná tímová zľava ${cena.zlavaPercent}%` : 'Objednajte 5+ ks a získajte zľavu'}
+              </span>
+            </div>
+            <button onClick={otvorSuhrn} className="px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-slate-950 font-extrabold text-xs sm:text-sm transition">
+              Objednať
+            </button>
+          </div>
         </div>
       </div>
 
