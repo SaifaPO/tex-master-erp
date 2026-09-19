@@ -290,63 +290,71 @@ function vytvorDresGeometriu(scene, textureCanvas) {
 
   const jerseyGroup = new THREE.Group();
 
-  // Torzo: kuzelovito rozsirene ramena, zuzeny pas, zaoblene splecia a mierne zaoblena spodna
-  // obruba (namiesto rovneho valca) — cielom je siluteta trika, nie hladky valec/vazu.
-  const bodyGeo = new THREE.CylinderGeometry(0.62, 0.66, 1.75, 48, 32, true);
-  const pos = bodyGeo.attributes.position;
-  for (let i = 0; i < pos.count; i++) {
-    let x = pos.getX(i);
-    const y = pos.getY(i);
-    let z = pos.getZ(i);
-    z *= 0.58; // splostenie do oválu predok/zadok (hrudnik nie je kruhovy v priereze)
-    // Normalizovana vyska tela (-1 dole na obrube, +1 hore pri golieri) na plynule tvarovanie.
-    const t = y / 0.875;
-    if (t > 0.35) {
-      // Ramena: vyrazne rozsirenie smerom hore k plecu (siluteta "T", nie rovny valec).
-      const shoulderT = (t - 0.35) / 0.65;
-      x *= 1.0 + shoulderT * shoulderT * 0.55;
-    } else if (t < -0.2) {
-      // Pas: mierne zuzenie pod hrudnikom pre prirodzenejsi tvar trupu.
-      const waistT = (-0.2 - t) / 0.8;
-      x *= 1.0 - waistT * 0.1;
+  // Namiesto lepenia poťahaných valcov (predošlý pokus, vyzeralo to ako "cudo") sa cely dres
+  // vystrihne ako JEDEN plosny obrys (strihovy vzor — presne ako sa tricko naozaj strihá z
+  // látky), ktory sa potom vytiahne (extrude) do plytkej 3D hrubky. Ramena/rukavy/golier su
+  // sucastou TOHTO ISTEHO obrysu, takze nemoze vzniknut medzera ani zle napojenie ako predtym.
+  const BBOX = { minX: -0.95, maxX: 0.95, minY: -1.05, maxY: 1.0 };
+  const shape = new THREE.Shape();
+  shape.moveTo(-0.30, 1.00); // lave plece
+  shape.lineTo(-0.62, 0.94); // hrdlo -> vrch rukava (mierny sikmy strih plieca)
+  shape.lineTo(-0.95, 0.86); // vonkajsi vrch laveho rukava
+  shape.lineTo(-0.95, 0.60); // koniec (obruba) laveho kratkeho rukava
+  shape.lineTo(-0.58, 0.44); // podpazusie (naspat k telu)
+  shape.lineTo(-0.66, -0.35);
+  shape.lineTo(-0.62, -1.05); // lavy spodny roh (obruba)
+  shape.quadraticCurveTo(0, -0.97, 0.62, -1.05); // mierne zaoblena spodna obruba
+  shape.lineTo(0.66, -0.35);
+  shape.lineTo(0.58, 0.44); // pravé podpazusie
+  shape.lineTo(0.95, 0.60);
+  shape.lineTo(0.95, 0.86); // vonkajsi vrch praveho rukava
+  shape.lineTo(0.62, 0.94);
+  shape.lineTo(0.30, 1.00); // prave plece
+  shape.quadraticCurveTo(0, 0.72, -0.30, 1.00); // vystrih golierika (predok aj zadok rovnaky obrys)
+
+  const DEPTH = 0.55;
+  function planarUV(x, y, isFront) {
+    const u = (x - BBOX.minX) / (BBOX.maxX - BBOX.minX);
+    const v = (y - BBOX.minY) / (BBOX.maxY - BBOX.minY);
+    return isFront ? new THREE.Vector2(u * 0.5, v) : new THREE.Vector2(1 - u * 0.5, v);
+  }
+
+  const bodyGeo = new THREE.ExtrudeGeometry(shape, { depth: DEPTH, bevelEnabled: false, curveSegments: 16 });
+  bodyGeo.translate(0, 0, -DEPTH / 2); // vycentrovanie predek/zadok okolo z=0
+  // ExtrudeGeometry-in vlastny UVGenerator hook v tejto verzii three.js nefunguje spolahlivo
+  // (zadny cap sa zobrazoval zrkadlovo s predkovym) — namiesto neho sa UV prepisu RUCNE podla
+  // z-suradnice kazdeho vrcholu, rovnaky osvedceny postup ako remapJerseyUV nizsie.
+  {
+    const posAttr = bodyGeo.attributes.position;
+    const uvAttr = bodyGeo.attributes.uv;
+    const eps = 0.01;
+    for (let i = 0; i < posAttr.count; i++) {
+      const x = posAttr.getX(i), y = posAttr.getY(i), z = posAttr.getZ(i);
+      let uv;
+      if (z > DEPTH / 2 - eps) uv = planarUV(x, y, true); // predny cap
+      else if (z < -DEPTH / 2 + eps) uv = planarUV(x, y, false); // zadny cap
+      else uv = new THREE.Vector2(0.5, 0.005); // bok (tenky, takmer neviditelny)
+      uvAttr.setXY(i, uv.x, uv.y);
     }
-    pos.setXYZ(i, x, y, z);
+    uvAttr.needsUpdate = true;
   }
   bodyGeo.computeVertexNormals();
-  bodyGeo.rotateY(-Math.PI / 2); // zarovna UV sev (u=0/1) na bok tela, nie na stred predku/chrbta
-  remapJerseyUV(bodyGeo, 'body');
   const jerseyMesh = new THREE.Mesh(bodyGeo, jerseyMaterial);
   jerseyMesh.castShadow = true;
   jerseyGroup.add(jerseyMesh);
 
-  // Rukavy: visia DOLE od pleca a mierne von od tela (ako kratky rukav trika), nie hore ako "V".
-  const SLEEVE_ANGLE = Math.PI - Math.PI / 5.2; // ~145° od zvislej osi (dole a mierne von)
-  const sleeveGeoL = new THREE.CylinderGeometry(0.24, 0.38, 0.62, 32, 16, true);
-  sleeveGeoL.rotateZ(SLEEVE_ANGLE);
-  sleeveGeoL.translate(-0.42, 0.62, 0);
-  remapJerseyUV(sleeveGeoL, 'sleeveL');
-  const sleeveL = new THREE.Mesh(sleeveGeoL, jerseyMaterial);
-  sleeveL.castShadow = true;
-  jerseyGroup.add(sleeveL);
-
-  const sleeveGeoR = new THREE.CylinderGeometry(0.24, 0.38, 0.62, 32, 16, true);
-  sleeveGeoR.rotateZ(-SLEEVE_ANGLE);
-  sleeveGeoR.translate(0.42, 0.62, 0);
-  remapJerseyUV(sleeveGeoR, 'sleeveR');
-  const sleeveR = new THREE.Mesh(sleeveGeoR, jerseyMaterial);
-  sleeveR.castShadow = true;
-  jerseyGroup.add(sleeveR);
-
-  const collarGeo = new THREE.TorusGeometry(0.34, 0.045, 16, 48);
+  // Golier: tenky lem tesne pri vystrihu krku (kopiruje zaoblenie vystrihu, nie plny kruh).
+  const collarGeo = new THREE.TorusGeometry(0.24, 0.035, 12, 32, Math.PI * 1.05);
+  collarGeo.rotateZ(Math.PI / 2 + (Math.PI - Math.PI * 1.05) / 2);
   collarGeo.rotateX(Math.PI / 2);
-  collarGeo.scale(1, 1.2, 0.8);
-  collarGeo.translate(0, 0.86, 0);
+  collarGeo.translate(0, 0.86, DEPTH / 2 - 0.02);
   remapJerseyUV(collarGeo, 'collar');
   const collar = new THREE.Mesh(collarGeo, jerseyMaterial);
   collar.castShadow = true;
   jerseyGroup.add(collar);
 
-  jerseyGroup.position.set(0, -0.15, 0);
+  jerseyGroup.scale.set(0.92, 0.92, 1.15); // mierne "nafuknutie" do hlbky, nech to nevyzera ako placha doska
+  jerseyGroup.position.set(0, -0.05, 0);
   scene.add(jerseyGroup);
 
   return canvasTexture;
