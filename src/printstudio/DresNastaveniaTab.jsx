@@ -1,7 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { Shirt, Plus, Trash2, ExternalLink } from 'lucide-react';
+import { Shirt, Plus, Trash2, ExternalLink, RefreshCw, AlertTriangle } from 'lucide-react';
 
 const PRINTSTUDIO_BASE_URL = 'https://printstudio-pro.vercel.app';
+// Orientacna spotreba latky na jeden dospely dres (predok+chrbat spolu), pri bezne pouzivanej
+// 160cm sirokej rolke — 1,2 bm × 1,6 m ≈ 1,92 m². Pouziva sa LEN na dopocet priplatku pri
+// prepojeni na sklad. material (Dres3D pouziva plochy priplatok €/ks, nie cenu €/m² priamo).
+const REFERENCNA_SPOTREBA_M2 = 1.92;
+function vypocitajPriplatokZoSkladu(skladMaterial) {
+  if (!skladMaterial || !skladMaterial.width || skladMaterial.width <= 0) return null;
+  const sirkaM = skladMaterial.width / 100;
+  const cenaM2 = (Number(skladMaterial.price_per_m) || 0) / sirkaM;
+  return Math.round(cenaM2 * REFERENCNA_SPOTREBA_M2 * 100) / 100;
+}
 
 // Rovnaké statické zoznamy vzorov/golierov ako v printstudio-pro/src/dres3d/dresPresets.js —
 // duplikované zámerne (samostatný Vite projekt, iné node_modules), toto je len zoznam
@@ -31,15 +41,19 @@ export default function DresNastaveniaTab({ supabase }) {
   const [vybranyId, setVybranyId] = useState(null);
   const [nastavenia, setNastavenia] = useState(null);
   const [materialy, setMaterialy] = useState([]);
+  const [skladMaterialy, setSkladMaterialy] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const nacitajZoznamProduktov = async () => {
-    const [{ data: dresProdukty }, { data: vsetky }] = await Promise.all([
+    const [{ data: dresProdukty }, { data: vsetky }, { data: sm }] = await Promise.all([
       supabase.from('produkty').select('id, nazov, shopify_handle').eq('typ_konfiguratora', '3d_dres').order('nazov'),
       supabase.from('produkty').select('id, nazov, shopify_handle, typ_konfiguratora').order('nazov'),
+      // Len materialy predavane na bezny meter (latky) — ostatne (ks, kg...) sa sem nehodia.
+      supabase.from('materials').select('id, name, color, price_per_m, width, unit, qty').eq('unit', 'm').order('name'),
     ]);
     setProdukty(dresProdukty || []);
     setVsetkyProdukty(vsetky || []);
+    setSkladMaterialy(sm || []);
     setVybranyId(prev => prev ?? (dresProdukty && dresProdukty.length > 0 ? dresProdukty[0].id : null));
     setIsLoading(false);
   };
@@ -105,6 +119,20 @@ export default function DresNastaveniaTab({ supabase }) {
     if (!window.confirm('Zmazať tento materiál?')) return;
     setMaterialy(m => m.filter(x => x.id !== id));
     await supabase.from('produkt_dres_materialy').delete().eq('id', id);
+  };
+
+  // Prepojenie na sklad. material — hned dopocita a ulozi aj priplatok_eur, ak sa da (ma vyplnenu sirku).
+  const pripojSklad = async (m, skladMaterialId) => {
+    if (!skladMaterialId) { await upravMaterial(m.id, { sklad_material_id: null }); return; }
+    const sklad = skladMaterialy.find(s => s.id === skladMaterialId);
+    const vypocet = vypocitajPriplatokZoSkladu(sklad);
+    const patch = vypocet != null ? { sklad_material_id: skladMaterialId, priplatok_eur: vypocet } : { sklad_material_id: skladMaterialId };
+    await upravMaterial(m.id, patch);
+  };
+  const prepocitajZoSkladu = async (m) => {
+    const sklad = skladMaterialy.find(s => s.id === m.sklad_material_id);
+    const vypocet = vypocitajPriplatokZoSkladu(sklad);
+    if (vypocet != null) await upravMaterial(m.id, { priplatok_eur: vypocet });
   };
 
   if (isLoading) return <p className="text-sm text-slate-500">Načítavam…</p>;
@@ -208,33 +236,53 @@ export default function DresNastaveniaTab({ supabase }) {
               <h3 className="font-bold text-sm text-white">Materiály</h3>
               <button onClick={pridajMaterial} className="text-xs text-indigo-400 font-semibold hover:text-indigo-300 flex items-center gap-1"><Plus className="w-3.5 h-3.5" /> Pridať materiál</button>
             </div>
-            <p className="text-xs text-slate-400 mb-3">Prvý materiál (najnižšie poradie) sa v konfigurátore ponúka ako štandard — príplatok 0 €.</p>
-            <div className="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-950/60 text-slate-500 text-xs uppercase tracking-wide">
-                  <tr>
-                    <th className="text-left px-4 py-2.5">Kód</th>
-                    <th className="text-left px-4 py-2.5">Názov</th>
-                    <th className="text-left px-4 py-2.5">Popis</th>
-                    <th className="text-left px-4 py-2.5">Príplatok (€)</th>
-                    <th className="text-left px-4 py-2.5">Poradie</th>
-                    <th className="px-4 py-2.5" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {materialy.map(m => (
-                    <tr key={m.id} className="border-t border-slate-800">
-                      <td className="px-4 py-2"><input type="text" value={m.kod} onChange={(e) => upravMaterial(m.id, { kod: e.target.value })} className="w-28 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white font-mono" /></td>
-                      <td className="px-4 py-2"><input type="text" value={m.nazov} onChange={(e) => upravMaterial(m.id, { nazov: e.target.value })} className="w-48 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /></td>
-                      <td className="px-4 py-2"><input type="text" value={m.popis || ''} onChange={(e) => upravMaterial(m.id, { popis: e.target.value })} className="w-56 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white" /></td>
-                      <td className="px-4 py-2"><input type="number" step="0.5" value={m.priplatok_eur} onChange={(e) => upravMaterial(m.id, { priplatok_eur: parseFloat(e.target.value) || 0 })} className="w-24 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /></td>
-                      <td className="px-4 py-2"><input type="number" value={m.poradie} onChange={(e) => upravMaterial(m.id, { poradie: parseInt(e.target.value) || 0 })} className="w-16 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /></td>
-                      <td className="px-4 py-2 text-right"><button onClick={() => zmazMaterial(m.id)} className="text-slate-400 hover:text-rose-400 p-1"><Trash2 className="w-4 h-4" /></button></td>
-                    </tr>
-                  ))}
-                  {materialy.length === 0 && <tr><td colSpan={6} className="text-center text-slate-500 py-6 text-sm">Zatiaľ žiadne materiály — konfigurátor ukáže len golier/vzor bez výberu materiálu.</td></tr>}
-                </tbody>
-              </table>
+            <p className="text-xs text-slate-400 mb-1">Prvý materiál (najnižšie poradie) sa v konfigurátore ponúka ako štandard — príplatok 0 €.</p>
+            <p className="text-xs text-slate-400 mb-3">
+              Materiál sa dá prepojiť na skutočný sklad (Materiály v hlavnom ERP, položky predávané na bežný meter) —
+              príplatok (€/ks) sa dopočíta z ceny €/bm a šírky rolky skladovej položky, orientačne pri spotrebe {REFERENCNA_SPOTREBA_M2} m² na dres,
+              namiesto ručného zadávania. Ak sklad. materiál nemá vyplnenú šírku, prepočet sa nedá urobiť.
+            </p>
+            <div className="space-y-2">
+              {materialy.map(m => {
+                const sklad = skladMaterialy.find(s => s.id === m.sklad_material_id);
+                const jePrepojeny = !!m.sklad_material_id;
+                const chybaSirka = jePrepojeny && sklad && (!sklad.width || sklad.width <= 0);
+                const skladNenajdeny = jePrepojeny && !sklad;
+                return (
+                  <div key={m.id} className="bg-slate-900/60 border border-slate-800 rounded-xl p-3 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input type="text" value={m.kod} onChange={(e) => upravMaterial(m.id, { kod: e.target.value })} placeholder="kód" className="w-28 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white font-mono" />
+                      <input type="text" value={m.nazov} onChange={(e) => upravMaterial(m.id, { nazov: e.target.value })} placeholder="Názov" className="flex-1 min-w-[140px] px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" />
+                      <div className="flex items-center gap-1 text-xs text-slate-400 shrink-0">
+                        <input type="number" step="0.5" value={m.priplatok_eur} disabled={jePrepojeny && !chybaSirka} onChange={(e) => upravMaterial(m.id, { priplatok_eur: parseFloat(e.target.value) || 0 })} className="w-20 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white disabled:opacity-60" /> € príplatok
+                        {jePrepojeny && !chybaSirka && (
+                          <button type="button" onClick={() => prepocitajZoSkladu(m)} title="Prepočítať zo skladu (ak sa zmenila cena/šírka)" className="text-slate-500 hover:text-indigo-400 p-1"><RefreshCw className="w-3.5 h-3.5" /></button>
+                        )}
+                      </div>
+                      <input type="number" value={m.poradie} onChange={(e) => upravMaterial(m.id, { poradie: parseInt(e.target.value) || 0 })} title="Poradie" className="w-14 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white shrink-0" />
+                      <button onClick={() => zmazMaterial(m.id)} className="text-slate-400 hover:text-rose-400 p-1 shrink-0"><Trash2 className="w-4 h-4" /></button>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className="text-[11px] text-slate-500 shrink-0">Materiál zo skladu:</label>
+                      <select value={m.sklad_material_id || ''} onChange={(e) => pripojSklad(m, e.target.value || null)} className="flex-1 min-w-[200px] px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white">
+                        <option value="">-- žiadny (zadať príplatok ručne) --</option>
+                        {skladMaterialy.map(s => <option key={s.id} value={s.id}>{s.name}{s.color ? ` (${s.color})` : ''} — {Number(s.price_per_m).toFixed(2)} €/bm{s.width ? `, š.${s.width}cm` : ''} · sklad {s.qty}m</option>)}
+                      </select>
+                    </div>
+                    {jePrepojeny && !chybaSirka && !skladNenajdeny && (
+                      <p className="text-[10px] text-emerald-500">✓ Prepojené: {sklad.price_per_m} €/bm ÷ {(sklad.width / 100).toFixed(2)}m šírka × {REFERENCNA_SPOTREBA_M2} m² = {vypocitajPriplatokZoSkladu(sklad)?.toFixed(2)} € príplatok (na sklade {sklad.qty}m)</p>
+                    )}
+                    {chybaSirka && (
+                      <p className="text-[10px] text-amber-500 flex items-center gap-1"><AlertTriangle className="w-3 h-3 shrink-0" /> Skladová položka "{sklad.name}" nemá vyplnenú šírku (cm) — doplň ju v Sklade (Materiály), potom sa dá prepočítať. Zatiaľ treba príplatok zadať ručne.</p>
+                    )}
+                    {skladNenajdeny && (
+                      <p className="text-[10px] text-rose-500 flex items-center gap-1"><AlertTriangle className="w-3 h-3 shrink-0" /> Prepojená skladová položka už neexistuje (zmazaná?) — vyber inú, alebo prepojenie zruš.</p>
+                    )}
+                    <input type="text" value={m.popis || ''} onChange={(e) => upravMaterial(m.id, { popis: e.target.value })} placeholder="Popis (zobrazí sa zákazníkovi)" className="w-full px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-300" />
+                  </div>
+                );
+              })}
+              {materialy.length === 0 && <p className="text-xs text-slate-500 italic">Zatiaľ žiadne materiály — konfigurátor ukáže len golier/vzor bez výberu materiálu.</p>}
             </div>
           </div>
         </>
