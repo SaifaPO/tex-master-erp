@@ -14,21 +14,49 @@ function fitTextWidth(c, text, maxWidth, baseFontPx, fontFamily, weight = 'bold'
   return size;
 }
 
+// Presné umiestnenie strihových dielov na 2048×2048 plátne — zmerané priamo z UV súradníc
+// kúpeného modelu (jersey-base.glb) a z referenčnej textúry výrobcu (diffuse_1001.png), nie
+// odhadnuté. Zlomky (frakcie 0..1) sú nezávislé od skutočnej veľkosti plátna.
+const R = (fx0, fy0, fx1, fy1) => ({ fx0, fy0, fx1, fy1 });
+const PANELY = {
+  predok: R(0.0396, 0.0771, 0.5054, 0.6909),
+  zadok: R(0.5381, 0.0771, 0.9849, 0.6909),
+  rukavLavy: R(0.0151, 0.7422, 0.3682, 0.9053),
+  rukavPravy: R(0.4961, 0.7422, 0.8877, 0.9229),
+  manzetaLava: R(0.0269, 0.9131, 0.3569, 0.9321),
+  manzetaPrava: R(0.5088, 0.9321, 0.8745, 0.9531),
+  lemDole: R(0.1650, 0.9663, 0.5967, 0.9849),
+  golierKus1: R(0.3271, 0.7583, 0.4097, 0.7749),
+  golierKus2: R(0.4233, 0.8066, 0.5088, 0.8237),
+  golierKus3: R(0.3809, 0.8882, 0.4663, 0.9053),
+};
+
+function toPx(rect, W, H) {
+  return {
+    x: rect.fx0 * W,
+    y: rect.fy0 * H,
+    w: (rect.fx1 - rect.fx0) * W,
+    h: (rect.fy1 - rect.fy0) * H,
+  };
+}
+
 export function updateJerseyTexture(ctx, canvas, configState) {
   const W = canvas.width;
   const H = canvas.height;
-  const halfW = W / 2;
 
   ctx.clearRect(0, 0, W, H);
 
   ctx.fillStyle = configState.farby.zakladna;
   ctx.fillRect(0, 0, W, H);
 
-  renderPattern(ctx, 0, 0, halfW, H, false, configState);
-  renderPattern(ctx, halfW, 0, halfW, H, true, configState);
+  const predok = toPx(PANELY.predok, W, H);
+  const zadok = toPx(PANELY.zadok, W, H);
+
+  renderPattern(ctx, predok.x, predok.y, predok.w, predok.h, false, configState);
+  renderPattern(ctx, zadok.x, zadok.y, zadok.w, zadok.h, true, configState);
   renderSleeves(ctx, W, H, configState);
-  renderFrontDetails(ctx, 0, 0, halfW, H, configState);
-  renderBackDetails(ctx, halfW, 0, halfW, H, configState);
+  renderFrontDetails(ctx, predok.x, predok.y, predok.w, predok.h, configState);
+  renderBackDetails(ctx, zadok.x, zadok.y, zadok.w, zadok.h, configState);
   renderCollarDecorations(ctx, W, H, configState);
 }
 
@@ -149,42 +177,42 @@ function drawHex(c, cx, cy, r) {
   c.stroke();
 }
 
-// Rukávy sú u tohto modelu (skutočný CLO3D strih) samostatné strihové kusy umiestnené DOLE na
-// plátne (nie v rohoch hore ako pri predchádzajúcom modeli bez UV) — pozri diffuse_1001.png
-// z kúpeného balíka pre presné rozloženie: predný/zadný diel hore v ľavej/pravej polovici,
-// rukávy dole v ľavom/pravom rohu, lem (manžeta) ako úzky pruh na spodku rukávového kusu.
+// Rukávy, manžety a spodný lem sú u tohto modelu (skutočný CLO3D strih) samostatné strihové
+// kusy s vlastnými UV oblasťami dole na plátne — presné súradnice zmerané priamo z UV dát
+// modelu (pozri PANELY vyššie), nie odhadnuté.
 function renderSleeves(c, W, H, configState) {
-  const sleeveY = H * 0.78;
-  const sleeveH = H * 0.16;
+  const lavy = toPx(PANELY.rukavLavy, W, H);
+  const pravy = toPx(PANELY.rukavPravy, W, H);
+  const manzetaL = toPx(PANELY.manzetaLava, W, H);
+  const manzetaP = toPx(PANELY.manzetaPrava, W, H);
+  const lem = toPx(PANELY.lemDole, W, H);
 
   c.fillStyle = configState.farby.rukava;
-  c.fillRect(0, sleeveY, W * 0.35, sleeveH);
-  c.fillRect(W * 0.65, sleeveY, W * 0.35, sleeveH);
+  c.fillRect(lavy.x, lavy.y, lavy.w, lavy.h);
+  c.fillRect(pravy.x, pravy.y, pravy.w, pravy.h);
 
   c.fillStyle = configState.farby.golier;
-  c.fillRect(0, sleeveY + sleeveH - H * 0.02, W * 0.35, H * 0.02);
-  c.fillRect(W * 0.65, sleeveY + sleeveH - H * 0.02, W * 0.35, H * 0.02);
-
-  // úzky pruh úplne dole na plátne = lem (spodný elastický pás dresu)
-  c.fillStyle = configState.farby.golier;
-  c.fillRect(W * 0.12, H * 0.965, W * 0.76, H * 0.02);
+  c.fillRect(manzetaL.x, manzetaL.y, manzetaL.w, manzetaL.h);
+  c.fillRect(manzetaP.x, manzetaP.y, manzetaP.w, manzetaP.h);
+  c.fillRect(lem.x, lem.y, lem.w, lem.h);
 
   if (configState.loga.zobrazitOdznakRukav) {
     c.save();
-    const bX = W * 0.825;
-    const bY = sleeveY + sleeveH * 0.5;
+    const bX = pravy.x + pravy.w * 0.5;
+    const bY = pravy.y + pravy.h * 0.5;
+    const r = Math.min(pravy.w, pravy.h) * 0.28;
     c.fillStyle = '#ffffff';
     c.beginPath();
-    c.arc(bX, bY, 40, 0, Math.PI * 2);
+    c.arc(bX, bY, r, 0, Math.PI * 2);
     c.fill();
     c.strokeStyle = '#020617';
     c.lineWidth = 5;
     c.stroke();
     c.fillStyle = '#1e3a8a';
-    c.font = 'bold 22px Inter, sans-serif';
+    c.font = `bold ${Math.round(r * 0.55)}px Inter, sans-serif`;
     c.textAlign = 'center';
     c.textBaseline = 'middle';
-    c.fillText('PRO', bX, bY - 5);
+    c.fillText('PRO', bX, bY - r * 0.12);
     c.restore();
   }
 }
@@ -193,11 +221,11 @@ function renderFrontDetails(c, x, y, w, h, configState) {
   const centerX = x + w / 2;
 
   if (configState.loga.zobrazitErb) {
-    renderClubCrest(c, x + w * 0.32, y + h * 0.32, 80, configState);
+    renderClubCrest(c, x + w * 0.68, y + h * 0.32, 80, configState);
   }
 
   if (configState.loga.zobrazitBrandLogo) {
-    renderBrandLogo(c, x + w * 0.68, y + h * 0.32, configState);
+    renderBrandLogo(c, x + w * 0.32, y + h * 0.32, configState);
   }
 
   if (configState.text.zobrazitCislo && configState.text.cisloVpredu && configState.text.cisloHraca) {
@@ -332,7 +360,11 @@ function renderBrandLogo(c, cx, cy, configState) {
   c.restore();
 }
 
+// Tri malé samostatné strihové kúsky (goliera/väzby) — presné súradnice z UV dát modelu.
 function renderCollarDecorations(c, W, H, configState) {
   c.fillStyle = configState.farby.golier;
-  c.fillRect(W * 0.35, 0, W * 0.3, H * 0.05);
+  ['golierKus1', 'golierKus2', 'golierKus3'].forEach((key) => {
+    const r = toPx(PANELY[key], W, H);
+    c.fillRect(r.x, r.y, r.w, r.h);
+  });
 }
