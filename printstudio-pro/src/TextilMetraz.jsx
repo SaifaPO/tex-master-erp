@@ -288,7 +288,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
       <div className="bg-gradient-to-r from-slate-50 to-white p-5 sm:p-6 rounded-2xl border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2"><Shirt className="text-teal-600 w-6 h-6" /> Textilná metráž — sublimácia & digitálna bavlna</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2"><Shirt className="text-teal-600 w-6 h-6" /> Textilná metráž a sublimačný papier — sublimácia & digitálna bavlna</h1>
           <p className="text-slate-500 text-xs sm:text-sm mt-1">Tlač na rolku šírky do 160 cm (sublimácia) / do 180 cm (bavlna). Nahraj vzor s opakovaním alebo hotovú rolku (150-300 DPI, TIFF/PNG/PDF).</p>
         </div>
         {onSpat && <button onClick={onSpat} className="text-slate-600 hover:text-teal-600 hover:bg-teal-50 px-3 py-2 rounded-lg text-sm font-medium transition self-start">← Katalóg</button>}

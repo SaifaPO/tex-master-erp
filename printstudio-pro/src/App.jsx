@@ -75,7 +75,7 @@ export default function App() {
               <Scroll className="w-4 h-4" /> <span className="hidden sm:inline">DTF transfery na meter</span>
             </button>
             <button onClick={() => { setZobrazTextilMetraz(v => !v); setZobrazDtfMetraz(false); }} className={`px-3 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5 ${zobrazTextilMetraz ? 'text-teal-600 bg-teal-50' : 'text-slate-600 hover:text-teal-600 hover:bg-slate-100'}`}>
-              <Shirt className="w-4 h-4" /> <span className="hidden sm:inline">Textilná metráž</span>
+              <Shirt className="w-4 h-4" /> <span className="hidden sm:inline">Metráž a papier</span>
             </button>
           </div>
         )}
