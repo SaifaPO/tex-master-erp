@@ -302,7 +302,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
         </button>
         <button type="button" onClick={() => setTechnologia('bavlna')} className={`p-4 rounded-xl border-2 text-left transition ${technologia === 'bavlna' ? 'border-amber-500 bg-amber-50/60' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
           <span className="font-bold text-slate-900 text-sm block">2. Digitálna potlač bavlny</span>
-          <span className="text-xs text-slate-500 mt-1 block">Priama pigmentová potlač bavlnených látok — jednolíc, výplňok, tkaniny.</span>
+          <span className="text-xs text-slate-500 mt-1 block">Priama pigmentová potlač bavlnených látok — jednolíc, výplnok, tkaniny.</span>
         </button>
       </div>
 
