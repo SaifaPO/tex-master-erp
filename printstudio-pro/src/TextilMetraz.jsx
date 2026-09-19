@@ -96,6 +96,17 @@ export default function TextilMetraz({ supabase, onSpat }) {
     if (sluzbaRezim === 'na_vas_material') return priceAtBonus(nakladBm, qty, pricingConfig, BONUS_LEN_TLAC);
     return priceAt(nakladBm, qty, pricingConfig);
   };
+  // To iste ako vyssie, ale pre "Prehlad mnozstevnych zliav" — ak si zakaznik vybral aj nasu latku
+  // (na_nas_material), pripocitava aj jej cenu na danej urovni odberu, aby tabulka ukazovala
+  // SKUTOCNU cenu za bm (potlac + latka spolu), nie len samotnu potlac.
+  const previewRateForQty = (qty) => {
+    let rate = rateForQtyAndRezim(qty);
+    if (vybranyMaterial) {
+      const fabricNakladBm = Number(vybranyMaterial.naklad_m2) * (printWidthCm / 100);
+      rate += priceAt(fabricNakladBm, qty, pricingConfig);
+    }
+    return rate;
+  };
 
   if (nastavenia) {
     totalLengthBm = mode === 'auto' ? Math.max(0.5, lengthBm) : Math.max(0.5, directLengthBm);
@@ -508,8 +519,8 @@ export default function TextilMetraz({ supabase, onSpat }) {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {BM_PREVIEW_LEVELS.map(level => {
-                const rate = rateForQtyAndRezim(level);
-                const base = rateForQtyAndRezim(BM_PREVIEW_LEVELS[0]);
+                const rate = previewRateForQty(level);
+                const base = previewRateForQty(BM_PREVIEW_LEVELS[0]);
                 const discount = base > 0 ? Math.round(((base - rate) / base) * 100) : 0;
                 const isCurrent = totalLengthBm >= level && (level === BM_PREVIEW_LEVELS[BM_PREVIEW_LEVELS.length - 1] || totalLengthBm < BM_PREVIEW_LEVELS[BM_PREVIEW_LEVELS.indexOf(level) + 1]);
                 return (
