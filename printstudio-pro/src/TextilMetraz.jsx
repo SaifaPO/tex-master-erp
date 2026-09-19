@@ -5,8 +5,8 @@ import { priceAt, marginAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pr
 // Bonusove percentualne body navyse k zakladnej marzi z Cenotvorby — pouzite pre urovne sluzby,
 // kde nepredavame latku ani nazehlenie (tenky obrat musi mat vyssiu maržu, inak sa neoplati).
 // Rovnake hodnoty MUSIA byt aj v textil-metraz-create-draft-order (autoritativny prepocet ceny).
-const BONUS_LEN_TLAC = 10; // "na vas material" — predavame len tlac, bez latky
-const BONUS_LEN_PAPIER = 20; // "len papier" — predavame len papier s grafikou, bez tlace na latku
+const BONUS_LEN_TLAC = 10; // "na vas material" — predavame len tlac + nazehlenie na latku zakaznika, bez latky
+const BONUS_LEN_PAPIER = 0; // "len papier" — najmensia sluzba (ziadne nazehlenie, ziadna latka), preto zakladna marza bez prirazky (musi byt NAJLACNEJSIA z troch urovni)
 function priceAtBonus(cost, qty, cfg, bonusBodov) {
   return Math.round(cost * (1 + (marginAt(cost, qty, cfg) + bonusBodov) / 100) * 100) / 100;
 }

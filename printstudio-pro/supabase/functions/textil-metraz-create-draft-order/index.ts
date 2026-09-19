@@ -35,8 +35,8 @@ function priceAt(cost: number, qty: number, cfg: PricingConfig) {
 function priceAtBonus(cost: number, qty: number, cfg: PricingConfig, bonusBodov: number) {
   return Math.round(cost * (1 + (marginAt(cost, qty, cfg) + bonusBodov) / 100) * 100) / 100;
 }
-const BONUS_LEN_TLAC = 10; // + percentualnych bodov k marzi pri "na vas material" (bez nasej latky)
-const BONUS_LEN_PAPIER = 20; // + percentualnych bodov k marzi pri "len papier" (bez tlace na akukolvek latku)
+const BONUS_LEN_TLAC = 10; // + percentualnych bodov k marzi pri "na vas material" (potlac + nazehlenie na latku zakaznika, bez latky)
+const BONUS_LEN_PAPIER = 0; // "len papier" — najmensia sluzba (ziadne nazehlenie, ziadna latka), zakladna marza bez prirazky (musi byt NAJLACNEJSIA z troch urovni)
 
 const REZERVA_SPADAVKA_CM = 8; // rezerva na spadavku/okraje (4cm z kazdej strany), odpocitana zo sirky skladovej rolky
 const MAX_SIRKA_CM: Record<string, number> = { sublimacia: 160, bavlna: 180 };
