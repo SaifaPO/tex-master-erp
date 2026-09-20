@@ -35,6 +35,58 @@ function strokeAndFillText(c, text, x, y, textCfg) {
   c.fillText(text, x, y);
 }
 
+// Vykreslí obrázok so zachovaním pomeru strán (bez deformácie) tak, aby sa celý zmestil do
+// maxW×maxH okolo stredu (cx,cy). Vracia skutočne vykreslené rozmery — potrebné napr. pri
+// skladaní viacerých log nad sebou (aby sa vedelo, koľko miesta logo reálne zabralo).
+function drawImageFit(c, img, cx, cy, maxW, maxH) {
+  if (!img || !img.naturalWidth) return { w: 0, h: 0 };
+  const iw = img.naturalWidth, ih = img.naturalHeight;
+  const scale = Math.min(maxW / iw, maxH / ih);
+  const w = iw * scale, h = ih * scale;
+  try { c.drawImage(img, cx - w / 2, cy - h / 2, w, h); } catch (e) { /* obrázok sa ešte nenačítal */ }
+  return { w, h };
+}
+
+// Rovnaké ako drawImageFit, ale obrázok (očakáva sa čierna kresba na priehľadnom pozadí,
+// napr. logo výrobcu) sa najprv prefarbí na zvolenú farbu — používa sa na logá výrobcu, ktoré
+// sa musia automaticky prepínať medzi bielou a čiernou podľa svetlosti podkladu.
+function drawTintedImageFit(c, img, cx, cy, maxW, maxH, farba) {
+  if (!img || !img.naturalWidth) return { w: 0, h: 0 };
+  const iw = img.naturalWidth, ih = img.naturalHeight;
+  const scale = Math.min(maxW / iw, maxH / ih);
+  const w = Math.max(1, Math.round(iw * scale)), h = Math.max(1, Math.round(ih * scale));
+  const off = document.createElement('canvas');
+  off.width = w;
+  off.height = h;
+  const octx = off.getContext('2d');
+  octx.drawImage(img, 0, 0, w, h);
+  octx.globalCompositeOperation = 'source-in';
+  octx.fillStyle = farba;
+  octx.fillRect(0, 0, w, h);
+  try { c.drawImage(off, cx - w / 2, cy - h / 2, w, h); } catch (e) { /* obrázok sa ešte nenačítal */ }
+  return { w, h };
+}
+
+// Biela na tmavom podklade, čierna na svetlom — podľa vnímanej svetlosti (luminance) farby.
+function kontrastnaFarba(hex) {
+  if (!hex) return '#ffffff';
+  const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.55 ? '#000000' : '#ffffff';
+}
+
+// Fixné logo výrobcu (logo_pred.png / logo_zad.png) — permanentné, zákazník ho nemôže vypnúť
+// ani nahradiť, len (pri prednom) presunúť. Dodané ako čierna kresba na priehľadnom pozadí,
+// preto sa vždy prefarbí na bielu/čiernu podľa podkladu (pozri drawTintedImageFit).
+const logoPredVyrobcu = new Image();
+const logoZadVyrobcu = new Image();
+export const logaVyrobcuReady = Promise.all([
+  new Promise((resolve) => { logoPredVyrobcu.onload = resolve; logoPredVyrobcu.onerror = resolve; }),
+  new Promise((resolve) => { logoZadVyrobcu.onload = resolve; logoZadVyrobcu.onerror = resolve; }),
+]);
+logoPredVyrobcu.src = '/models/logo-pred.png';
+logoZadVyrobcu.src = '/models/logo-zad.png';
+
 // Presné umiestnenie strihových dielov na 2048×2048 plátne — zmerané priamo z UV súradníc
 // kúpeného modelu (jersey-base.glb) a z referenčnej textúry výrobcu (diffuse_1001.png), nie
 // odhadnuté. Zlomky (frakcie 0..1) sú nezávislé od skutočnej veľkosti plátna.
@@ -66,6 +118,9 @@ export function updateJerseyTexture(ctx, canvas, configState) {
   const H = canvas.height;
 
   ctx.clearRect(0, 0, W, H);
+  // Farby na drese pôsobili vyblednuto — mierne zvýšená sýtosť celej kresby (aplikuje sa na
+  // všetko, čo sa odteraz na plátno nakreslí, kým sa filter znova nezmení/nevypne).
+  ctx.filter = 'saturate(1.1)';
 
   ctx.fillStyle = configState.farby.zakladna;
   ctx.fillRect(0, 0, W, H);
@@ -252,20 +307,31 @@ function renderSleeves(c, W, H, configState, maVlastnyVzor) {
   c.fillRect(lem.x, lem.y, lem.w, lem.h);
 
   // Ľubovoľný počet log na každom rukáve, poukladaných nad sebou v poradí `poradie`
-  // (0 = najvyššie), každé s vlastnou veľkosťou (0..1 = násobok šírky rukáva).
+  // (0 = najvyššie). `velkost` je násobok "normálnej" veľkosti (1 = normálna, zadané
+  // posuvníkom 0.5–2) — nie absolútna hodnota, aby nové logo vždy vyzeralo primerane veľké
+  // hneď po pridaní. Rozostup medzi logami je nastaviteľný v mm a skladanie sa počíta vždy
+  // nanovo zo skutočných (fit) rozmerov, takže zväčšenie jedného loga automaticky odsunie
+  // ostatné — nemôžu sa prekryť.
   const rukavLoga = configState.loga.rukavLoga || [];
+  const medzeraPx = (configState.loga.rukavMedzeraMm ?? 6) * PX_PER_MM;
   ['lavy', 'pravy'].forEach((strana) => {
     const panel = strana === 'lavy' ? lavy : pravy;
-    const loga = rukavLoga.filter((l) => l.strana === strana).sort((a, b) => a.poradie - b.poradie);
-    const krok = panel.h / (loga.length + 1);
-    loga.forEach((logo, i) => {
-      if (!logo.img) return;
-      const velkost = (logo.velkost || 0.6) * panel.w;
-      const cx = panel.x + panel.w / 2;
-      const cy = panel.y + krok * (i + 1);
-      try {
-        c.drawImage(logo.img, cx - velkost / 2, cy - velkost / 2, velkost, velkost);
-      } catch (e) { /* obrázok sa ešte nenačítal */ }
+    const baseH = panel.h * 0.42;
+    const maxW = panel.w * 0.8;
+    const loga = rukavLoga.filter((l) => l.strana === strana && l.img).sort((a, b) => a.poradie - b.poradie);
+    const rozmery = loga.map((logo) => {
+      const iw = logo.img.naturalWidth || 1, ih = logo.img.naturalHeight || 1;
+      const targetH = baseH * (logo.velkost ?? 1);
+      const scale = Math.min(maxW / iw, targetH / ih);
+      return { logo, w: iw * scale, h: ih * scale };
+    });
+    const totalH = rozmery.reduce((s, r) => s + r.h, 0) + medzeraPx * Math.max(0, rozmery.length - 1);
+    const cx = panel.x + panel.w / 2;
+    let cursorY = panel.y + panel.h / 2 - totalH / 2;
+    rozmery.forEach(({ logo, w: lw, h: lh }) => {
+      const cy = cursorY + lh / 2;
+      try { c.drawImage(logo.img, cx - lw / 2, cy - lh / 2, lw, lh); } catch (e) { /* obrázok sa ešte nenačítal */ }
+      cursorY += lh + medzeraPx;
     });
   });
 }
@@ -274,27 +340,25 @@ function renderFrontDetails(c, x, y, w, h, configState) {
   const centerX = x + w / 2;
   const erbX = x + w * 0.68;
   const erbY = y + h * 0.32;
-  const erbSize = 96; // 80 * 1.2 (o 20% väčšie)
+  const erbSize = 116; // 80 * 1.2 o niečo štedrejšie, aby zväčšenie bolo naozaj vidieť aj pri vlastnom nahratom logu s okrajmi
 
   if (configState.loga.zobrazitErb) {
     renderClubCrest(c, erbX, erbY, erbSize, configState);
   }
 
+  // Logo výrobcu vpredu — fixné, zákazník ho nemôže vypnúť ani nahradiť, len presunúť.
+  // Dodané ako čierna kresba na priehľadnom pozadí, preto sa vždy prefarbí podľa podkladu.
   const logoPredPoz = configState.loga.logoPredPozicia || 'zaklad';
   const logoPredX = logoPredPoz.startsWith('stred') ? centerX : x + w * 0.32;
   const logoPredY = logoPredPoz.endsWith('vyssie') ? y + h * 0.32 * 0.8 : y + h * 0.32;
-  if (configState.loga.logoPredImg) {
-    try {
-      const s = 90;
-      c.drawImage(configState.loga.logoPredImg, logoPredX - s / 2, logoPredY - s / 2, s, s);
-    } catch (e) { /* obrázok sa ešte nenačítal */ }
-  }
+  const logoPredFarba = kontrastnaFarba(configState.farby.zakladna);
+  const logoPredRozmery = drawTintedImageFit(c, logoPredVyrobcu, logoPredX, logoPredY, w * 0.28, h * 0.09, logoPredFarba);
 
   if (configState.text.zobrazitCislo && configState.text.cisloVpredu && configState.text.cisloHraca) {
     const poz = configState.text.cisloVpreduPozicia || 'stred';
     let cx = centerX, cy = y + h * 0.33;
     if (poz === 'pod_erb') { cx = erbX; cy = erbY + erbSize * 0.75; }
-    else if (poz === 'pod_logo') { cx = logoPredX; cy = logoPredY + 65; }
+    else if (poz === 'pod_logo') { cx = logoPredX; cy = logoPredY + logoPredRozmery.h / 2 + 40; }
     c.save();
     c.textAlign = 'center';
     c.textBaseline = 'middle';
@@ -318,12 +382,9 @@ function renderBackDetails(c, x, y, w, h, configState) {
   const menoY = y + h * 0.28 * 0.8; // o 20% vyššie
   const cisloY = y + h * 0.54 * 0.8; // o 20% vyššie
 
-  if (configState.loga.logoZadImg) {
-    try {
-      const s = 80;
-      c.drawImage(configState.loga.logoZadImg, centerX - s / 2, menoY - h * 0.10 - s / 2, s, s);
-    } catch (e) { /* obrázok sa ešte nenačítal */ }
-  }
+  // Logo výrobcu na krku vzadu — úplne fixné, zákazník doň nijako nezasahuje.
+  const logoZadFarba = kontrastnaFarba(configState.farby.zakladna);
+  drawTintedImageFit(c, logoZadVyrobcu, centerX, y + h * 0.06, w * 0.3, h * 0.05, logoZadFarba);
 
   if (configState.text.zobrazitMeno && configState.text.menoHraca) {
     c.save();
@@ -358,11 +419,9 @@ function renderBackDetails(c, x, y, w, h, configState) {
 function renderClubCrest(c, cx, cy, size, configState) {
   c.save();
   if (configState.loga.typErbu === 'custom' && configState.loga.vlastnyErbImg) {
-    try {
-      c.drawImage(configState.loga.vlastnyErbImg, cx - size / 2, cy - size / 2, size, size);
-      c.restore();
-      return;
-    } catch (e) { /* obrázok sa ešte nenačítal — vykresli sa pri ďalšej aktualizácii */ }
+    drawImageFit(c, configState.loga.vlastnyErbImg, cx, cy, size, size);
+    c.restore();
+    return;
   }
 
   c.translate(cx, cy);

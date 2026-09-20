@@ -90,10 +90,11 @@ export const DEFAULT_CONFIG_STATE = {
     erbText: 'FC TÍM',
     vlastnyErbImg: null,
     zobrazitErb: true,
-    logoPredImg: null,
+    // Logo výrobcu (predné aj na krku vzadu) je fixné — súbory public/models/logo-pred.png
+    // a logo-zad.png, zákazník ho nemôže nahradiť ani vypnúť, len predné presunúť.
     logoPredPozicia: 'zaklad',
-    logoZadImg: null,
     rukavLoga: [],
+    rukavMedzeraMm: 6,
   },
   golierTyp: 'round',
   materialKod: null,

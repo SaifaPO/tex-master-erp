@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { RotateCcw, Camera } from 'lucide-react';
-import { updateJerseyTexture } from './dresRenderer';
+import { updateJerseyTexture, logaVyrobcuReady } from './dresRenderer';
 
 // 3D náhľad dresu — vlastní celú Three.js scénu (kamera/svetlá/geometria/OrbitControls)
 // a offscreen 2D canvas s textúrou. Portované z init3D/setupLighting/createJerseyModel/
@@ -111,6 +111,19 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState }, ref) {
     updateJerseyTexture(ctx, canvas, configState);
     canvasTextureRef.current.needsUpdate = true;
   }, [configState]);
+
+  // Fixné logá výrobcu (logo-pred.png/logo-zad.png) sa načítavajú asynchrónne — ak sa načítajú
+  // až po prvom vykreslení, treba textúru prekresliť ešte raz, inak by ostali neviditeľné.
+  useEffect(() => {
+    logaVyrobcuReady.then(() => {
+      const canvas = textureCanvasRef.current;
+      const ctx = canvas?.getContext('2d');
+      if (!canvas || !ctx || !canvasTextureRef.current) return;
+      updateJerseyTexture(ctx, canvas, configState);
+      canvasTextureRef.current.needsUpdate = true;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (sceneRef.current && rendererRef.current) aplikujOsvetlenie(sceneRef.current, lightsRef, rendererRef.current, svetlo);

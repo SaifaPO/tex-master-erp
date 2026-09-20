@@ -29,20 +29,6 @@ export default function LogaTab({ configState, grafiky, onZmenLoga }) {
     if (img) onZmenLoga({ typErbu: 'custom', vlastnyErbImg: img });
   };
 
-  const naUploadLogoPred = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const img = await nacitajZoSuboru(file);
-    if (img) onZmenLoga({ logoPredImg: img });
-  };
-
-  const naUploadLogoZad = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const img = await nacitajZoSuboru(file);
-    if (img) onZmenLoga({ logoZadImg: img });
-  };
-
   const rukavLoga = configState.loga.rukavLoga || [];
 
   const pridajRukavLogo = async (strana, e) => {
@@ -51,7 +37,7 @@ export default function LogaTab({ configState, grafiky, onZmenLoga }) {
     const img = await nacitajZoSuboru(file);
     if (!img) return;
     const poctStrana = rukavLoga.filter((l) => l.strana === strana).length;
-    const nove = { id: Date.now(), strana, img, velkost: 0.6, poradie: poctStrana };
+    const nove = { id: Date.now(), strana, img, velkost: 1, poradie: poctStrana };
     onZmenLoga({ rukavLoga: [...rukavLoga, nove] });
   };
 
@@ -138,11 +124,10 @@ export default function LogaTab({ configState, grafiky, onZmenLoga }) {
 
       <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/80 space-y-3">
         <div>
-          <span className="text-xs font-bold text-white block">2. Predné logo</span>
-          <span className="text-[10px] text-slate-400">Vždy súčasť dizajnu — dá sa len presunúť.</span>
+          <span className="text-xs font-bold text-white block">2. Logo výrobcu</span>
+          <span className="text-[10px] text-slate-400">Vpredu aj na krku vzadu je vždy súčasť dizajnu — dá sa len presunúť (predné).</span>
         </div>
-        <input type="file" accept="image/*" onChange={naUploadLogoPred} className="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-semibold file:bg-slate-800 file:text-indigo-400 hover:file:bg-slate-700 cursor-pointer" />
-        <label className="block text-[11px] text-slate-400 mb-1">Umiestnenie</label>
+        <label className="block text-[11px] text-slate-400 mb-1">Umiestnenie predného loga</label>
         <select
           value={configState.loga.logoPredPozicia}
           onChange={(e) => onZmenLoga({ logoPredPozicia: e.target.value })}
@@ -154,16 +139,24 @@ export default function LogaTab({ configState, grafiky, onZmenLoga }) {
 
       <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/80 space-y-3">
         <div>
-          <span className="text-xs font-bold text-white block">3. Logo výrobcu (Chrbát, nad menom)</span>
-        </div>
-        <input type="file" accept="image/*" onChange={naUploadLogoZad} className="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-semibold file:bg-slate-800 file:text-indigo-400 hover:file:bg-slate-700 cursor-pointer" />
-      </div>
-
-      <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/80 space-y-3">
-        <div>
-          <span className="text-xs font-bold text-white block">4. Logá na rukávoch</span>
+          <span className="text-xs font-bold text-white block">3. Logá na rukávoch</span>
           <span className="text-[10px] text-slate-400">Ľubovoľný počet, poukladané nad sebou — poradie a veľkosť si nastavíte.</span>
         </div>
+
+        {rukavLoga.length > 1 && (
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[11px] text-slate-400">Rozostup medzi logami</label>
+              <span className="text-[11px] text-slate-300 font-semibold">{configState.loga.rukavMedzeraMm ?? 6} mm</span>
+            </div>
+            <input
+              type="range" min={0} max={20} step={1}
+              value={configState.loga.rukavMedzeraMm ?? 6}
+              onChange={(e) => onZmenLoga({ rukavMedzeraMm: Number(e.target.value) })}
+              className="w-full"
+            />
+          </div>
+        )}
 
         {['lavy', 'pravy'].map((strana) => (
           <div key={strana} className="space-y-2">
@@ -178,7 +171,7 @@ export default function LogaTab({ configState, grafiky, onZmenLoga }) {
               <div key={logo.id} className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-lg p-2">
                 <img src={logo.img.src} alt="" className="w-8 h-8 object-contain bg-slate-800 rounded" />
                 <input
-                  type="range" min={0.2} max={1} step={0.05}
+                  type="range" min={0.5} max={2} step={0.05}
                   value={logo.velkost}
                   onChange={(e) => zmenVelkostRukavLogo(logo.id, Number(e.target.value))}
                   className="flex-1"
