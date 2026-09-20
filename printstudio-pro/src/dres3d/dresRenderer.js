@@ -14,6 +14,27 @@ function fitTextWidth(c, text, maxWidth, baseFontPx, fontFamily, weight = 'bold'
   return size;
 }
 
+// Približný prepočet mm na px plátna (2048×2048 = predný/zadný diel na šírku ~55cm — polovica
+// obvodu hrude veľkosti L). Presné meradlo vieme doladiť, keď Martin dodá skutočný rozmer
+// z vytlačeného vzorku.
+const PX_PER_MM = 1.75;
+
+// Obrys textu — pri niektorých fontoch (ostré serify/hroty) miter spoj vytvára "vystrelujúce"
+// hroty na rohoch písmen. Zaoblený spoj (round join/cap) tento efekt odstraňuje pre všetky
+// fonty. Obrys sa dá úplne vypnúť (obrysZapnuty) alebo mu nastaviť hrúbku v mm.
+function strokeAndFillText(c, text, x, y, textCfg) {
+  if (textCfg.obrysZapnuty !== false) {
+    c.lineJoin = 'round';
+    c.lineCap = 'round';
+    c.miterLimit = 1;
+    c.lineWidth = Math.max(1, (textCfg.obrysHrubkaMm ?? 3) * PX_PER_MM);
+    c.strokeStyle = textCfg.farbaObrysu;
+    c.strokeText(text, x, y);
+  }
+  c.fillStyle = textCfg.farbaTextu;
+  c.fillText(text, x, y);
+}
+
 // Presné umiestnenie strihových dielov na 2048×2048 plátne — zmerané priamo z UV súradníc
 // kúpeného modelu (jersey-base.glb) a z referenčnej textúry výrobcu (diffuse_1001.png), nie
 // odhadnuté. Zlomky (frakcie 0..1) sú nezávislé od skutočnej veľkosti plátna.
@@ -218,7 +239,7 @@ function renderSleeves(c, W, H, configState, maVlastnyVzor) {
   const lem = toPx(PANELY.lemDole, W, H);
 
   // Pri vlastnom nahranom vzore už rukávy vyfarbil renderVlastnyVzor (celé plátno naraz) —
-  // tu sa prekresľuje len manžeta/lem/odznak, aby sa neprekryl nahraný dizajn.
+  // tu sa prekresľuje len manžeta/lem/logá, aby sa neprekryl nahraný dizajn.
   if (!maVlastnyVzor) {
     c.fillStyle = configState.farby.rukava;
     c.fillRect(lavy.x, lavy.y, lavy.w, lavy.h);
@@ -230,48 +251,55 @@ function renderSleeves(c, W, H, configState, maVlastnyVzor) {
   c.fillRect(manzetaP.x, manzetaP.y, manzetaP.w, manzetaP.h);
   c.fillRect(lem.x, lem.y, lem.w, lem.h);
 
-  if (configState.loga.zobrazitOdznakRukav) {
-    c.save();
-    const bX = pravy.x + pravy.w * 0.5;
-    const bY = pravy.y + pravy.h * 0.5;
-    const r = Math.min(pravy.w, pravy.h) * 0.28;
-    c.fillStyle = '#ffffff';
-    c.beginPath();
-    c.arc(bX, bY, r, 0, Math.PI * 2);
-    c.fill();
-    c.strokeStyle = '#020617';
-    c.lineWidth = 5;
-    c.stroke();
-    c.fillStyle = '#1e3a8a';
-    c.font = `bold ${Math.round(r * 0.55)}px Inter, sans-serif`;
-    c.textAlign = 'center';
-    c.textBaseline = 'middle';
-    c.fillText('PRO', bX, bY - r * 0.12);
-    c.restore();
-  }
+  // Ľubovoľný počet log na každom rukáve, poukladaných nad sebou v poradí `poradie`
+  // (0 = najvyššie), každé s vlastnou veľkosťou (0..1 = násobok šírky rukáva).
+  const rukavLoga = configState.loga.rukavLoga || [];
+  ['lavy', 'pravy'].forEach((strana) => {
+    const panel = strana === 'lavy' ? lavy : pravy;
+    const loga = rukavLoga.filter((l) => l.strana === strana).sort((a, b) => a.poradie - b.poradie);
+    const krok = panel.h / (loga.length + 1);
+    loga.forEach((logo, i) => {
+      if (!logo.img) return;
+      const velkost = (logo.velkost || 0.6) * panel.w;
+      const cx = panel.x + panel.w / 2;
+      const cy = panel.y + krok * (i + 1);
+      try {
+        c.drawImage(logo.img, cx - velkost / 2, cy - velkost / 2, velkost, velkost);
+      } catch (e) { /* obrázok sa ešte nenačítal */ }
+    });
+  });
 }
 
 function renderFrontDetails(c, x, y, w, h, configState) {
   const centerX = x + w / 2;
+  const erbX = x + w * 0.68;
+  const erbY = y + h * 0.32;
+  const erbSize = 96; // 80 * 1.2 (o 20% väčšie)
 
   if (configState.loga.zobrazitErb) {
-    renderClubCrest(c, x + w * 0.68, y + h * 0.32, 80, configState);
+    renderClubCrest(c, erbX, erbY, erbSize, configState);
   }
 
-  if (configState.loga.zobrazitBrandLogo) {
-    renderBrandLogo(c, x + w * 0.32, y + h * 0.32, configState);
+  const logoPredPoz = configState.loga.logoPredPozicia || 'zaklad';
+  const logoPredX = logoPredPoz.startsWith('stred') ? centerX : x + w * 0.32;
+  const logoPredY = logoPredPoz.endsWith('vyssie') ? y + h * 0.32 * 0.8 : y + h * 0.32;
+  if (configState.loga.logoPredImg) {
+    try {
+      const s = 90;
+      c.drawImage(configState.loga.logoPredImg, logoPredX - s / 2, logoPredY - s / 2, s, s);
+    } catch (e) { /* obrázok sa ešte nenačítal */ }
   }
 
   if (configState.text.zobrazitCislo && configState.text.cisloVpredu && configState.text.cisloHraca) {
+    const poz = configState.text.cisloVpreduPozicia || 'stred';
+    let cx = centerX, cy = y + h * 0.33;
+    if (poz === 'pod_erb') { cx = erbX; cy = erbY + erbSize * 0.75; }
+    else if (poz === 'pod_logo') { cx = logoPredX; cy = logoPredY + 65; }
     c.save();
     c.textAlign = 'center';
     c.textBaseline = 'middle';
-    fitTextWidth(c, configState.text.cisloHraca, w * 0.35, 110, configState.text.fontRodina, 'bold');
-    c.strokeStyle = configState.text.farbaObrysu;
-    c.lineWidth = 14;
-    c.strokeText(configState.text.cisloHraca, centerX, y + h * 0.33);
-    c.fillStyle = configState.text.farbaTextu;
-    c.fillText(configState.text.cisloHraca, centerX, y + h * 0.33);
+    fitTextWidth(c, configState.text.cisloHraca, w * 0.35, 127, configState.text.fontRodina, 'bold'); // 110 * 1.15
+    strokeAndFillText(c, configState.text.cisloHraca, cx, cy, configState.text);
     c.restore();
   }
 
@@ -280,17 +308,22 @@ function renderFrontDetails(c, x, y, w, h, configState) {
     c.textAlign = 'center';
     c.textBaseline = 'middle';
     fitTextWidth(c, configState.text.timText, w * 0.42, 85, configState.text.fontRodina, '800');
-    c.strokeStyle = configState.text.farbaObrysu;
-    c.lineWidth = 16;
-    c.strokeText(configState.text.timText, centerX, y + h * 0.54);
-    c.fillStyle = configState.text.farbaTextu;
-    c.fillText(configState.text.timText, centerX, y + h * 0.54);
+    strokeAndFillText(c, configState.text.timText, centerX, y + h * 0.54 * 0.85, configState.text); // o 15% vyššie
     c.restore();
   }
 }
 
 function renderBackDetails(c, x, y, w, h, configState) {
   const centerX = x + w / 2;
+  const menoY = y + h * 0.28 * 0.8; // o 20% vyššie
+  const cisloY = y + h * 0.54 * 0.8; // o 20% vyššie
+
+  if (configState.loga.logoZadImg) {
+    try {
+      const s = 80;
+      c.drawImage(configState.loga.logoZadImg, centerX - s / 2, menoY - h * 0.10 - s / 2, s, s);
+    } catch (e) { /* obrázok sa ešte nenačítal */ }
+  }
 
   if (configState.text.zobrazitMeno && configState.text.menoHraca) {
     c.save();
@@ -298,11 +331,7 @@ function renderBackDetails(c, x, y, w, h, configState) {
     c.textBaseline = 'middle';
     const meno = configState.text.menoHraca.toUpperCase();
     fitTextWidth(c, meno, w * 0.42, 95, configState.text.fontRodina, 'bold');
-    c.strokeStyle = configState.text.farbaObrysu;
-    c.lineWidth = 16;
-    c.strokeText(meno, centerX, y + h * 0.28);
-    c.fillStyle = configState.text.farbaTextu;
-    c.fillText(meno, centerX, y + h * 0.28);
+    strokeAndFillText(c, meno, centerX, menoY, configState.text);
     c.restore();
   }
 
@@ -310,19 +339,22 @@ function renderBackDetails(c, x, y, w, h, configState) {
     c.save();
     c.textAlign = 'center';
     c.textBaseline = 'middle';
-    fitTextWidth(c, configState.text.cisloHraca, w * 0.5, 360, configState.text.fontRodina, 'bold');
-    c.strokeStyle = configState.text.farbaObrysu;
-    c.lineWidth = 32;
-    c.strokeText(configState.text.cisloHraca, centerX, y + h * 0.54);
-    c.fillStyle = configState.text.farbaTextu;
-    c.fillText(configState.text.cisloHraca, centerX, y + h * 0.54);
-    c.strokeStyle = configState.farby.akcent;
-    c.lineWidth = 6;
-    c.strokeText(configState.text.cisloHraca, centerX, y + h * 0.54);
+    fitTextWidth(c, configState.text.cisloHraca, w * 0.5, 414, configState.text.fontRodina, 'bold'); // 360 * 1.15
+    strokeAndFillText(c, configState.text.cisloHraca, centerX, cisloY, configState.text);
+    if (configState.text.obrysZapnuty !== false) {
+      c.lineJoin = 'round';
+      c.lineCap = 'round';
+      c.strokeStyle = configState.farby.akcent;
+      c.lineWidth = 6;
+      c.strokeText(configState.text.cisloHraca, centerX, cisloY);
+    }
     c.restore();
   }
 }
 
+// Generátor "blank" klubového znaku — zákazník napíše vlastný text (napr. "FC TORNAĽA"),
+// ktorý sa vykreslí do zvoleného tvaru (kruh/štít/erb/ovál). Ak má nahraté vlastné logo
+// (typErbu === 'custom'), použije sa namiesto generátora.
 function renderClubCrest(c, cx, cy, size, configState) {
   c.save();
   if (configState.loga.typErbu === 'custom' && configState.loga.vlastnyErbImg) {
@@ -334,63 +366,49 @@ function renderClubCrest(c, cx, cy, size, configState) {
   }
 
   c.translate(cx, cy);
+  const tvar = configState.loga.typErbu || 'kruh';
+
   c.fillStyle = '#ffffff';
   c.beginPath();
-  c.moveTo(0, -size * 0.5);
-  c.lineTo(size * 0.45, -size * 0.35);
-  c.lineTo(size * 0.45, size * 0.1);
-  c.bezierCurveTo(size * 0.45, size * 0.45, 0, size * 0.65, 0, size * 0.65);
-  c.bezierCurveTo(0, size * 0.65, -size * 0.45, size * 0.45, -size * 0.45, size * 0.1);
-  c.lineTo(-size * 0.45, -size * 0.35);
-  c.closePath();
+  if (tvar === 'stit' || tvar === 'erb') {
+    c.moveTo(0, -size * 0.5);
+    c.lineTo(size * 0.45, -size * 0.35);
+    c.lineTo(size * 0.45, size * 0.1);
+    c.bezierCurveTo(size * 0.45, size * 0.45, 0, size * 0.65, 0, size * 0.65);
+    c.bezierCurveTo(0, size * 0.65, -size * 0.45, size * 0.45, -size * 0.45, size * 0.1);
+    c.lineTo(-size * 0.45, -size * 0.35);
+    c.closePath();
+  } else if (tvar === 'ovál') {
+    c.ellipse(0, 0, size * 0.5, size * 0.38, 0, 0, Math.PI * 2);
+  } else {
+    c.arc(0, 0, size * 0.5, 0, Math.PI * 2);
+  }
   c.fill();
   c.strokeStyle = configState.farby.akcent;
   c.lineWidth = 6;
   c.stroke();
 
-  c.fillStyle = configState.farby.vzor;
-  c.beginPath();
-  c.arc(0, 0, size * 0.28, 0, Math.PI * 2);
-  c.fill();
+  if (tvar === 'erb') {
+    // dekoratívny vnútorný prstenec, aby sa "erb" vizuálne odlíšil od jednoduchého štítu
+    c.beginPath();
+    c.arc(0, 0, size * 0.34, 0, Math.PI * 2);
+    c.strokeStyle = configState.farby.vzor;
+    c.lineWidth = 4;
+    c.stroke();
+  }
 
-  c.fillStyle = '#ffffff';
-  c.font = `bold ${Math.floor(size * 0.35)}px sans-serif`;
+  c.fillStyle = configState.farby.vzor;
+  c.font = `900 ${Math.floor(size * 0.19)}px "${configState.text.fontRodina}", sans-serif`;
   c.textAlign = 'center';
   c.textBaseline = 'middle';
-  const symbol = configState.loga.typErbu === 'star' ? '⭐' : (configState.loga.typErbu === 'eagle' ? '🦅' : (configState.loga.typErbu === 'crown' ? '👑' : '🛡️'));
-  c.fillText(symbol, 0, 0);
-  c.restore();
-}
-
-function renderBrandLogo(c, cx, cy, configState) {
-  c.save();
-  c.translate(cx, cy);
-  c.fillStyle = configState.text.farbaTextu;
-  c.strokeStyle = configState.text.farbaObrysu;
-  c.lineWidth = 4;
-
-  if (configState.loga.brandIcon === 'swoosh') {
-    c.beginPath();
-    c.moveTo(-35, 10);
-    c.quadraticCurveTo(5, 25, 40, -20);
-    c.quadraticCurveTo(0, 5, -35, 10);
-    c.fill();
-    c.stroke();
-  } else if (configState.loga.brandIcon === 'geometric') {
-    c.beginPath();
-    c.moveTo(0, -25);
-    c.lineTo(25, 0);
-    c.lineTo(0, 25);
-    c.lineTo(-25, 0);
-    c.closePath();
-    c.fill();
-    c.stroke();
-  } else {
-    c.font = '900 30px "Chakra Petch", sans-serif';
-    c.textAlign = 'center';
-    c.textBaseline = 'middle';
-    c.fillText('SPZ', 0, 0);
+  const text = (configState.loga.erbText || 'FC').toUpperCase();
+  const maxW = size * (tvar === 'ovál' ? 0.85 : 0.7);
+  let fontSize = Math.floor(size * 0.19);
+  while (fontSize > 8 && c.measureText(text).width > maxW) {
+    fontSize -= 1;
+    c.font = `900 ${fontSize}px "${configState.text.fontRodina}", sans-serif`;
   }
+  c.fillText(text, 0, size * 0.02);
   c.restore();
 }
 

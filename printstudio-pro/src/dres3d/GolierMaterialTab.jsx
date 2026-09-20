@@ -25,6 +25,10 @@ export default function GolierMaterialTab({ configState, dostupneGoliere, materi
           </button>
         ))}
       </div>
+      <p className="text-[11px] text-slate-500">
+        V-výstrih zatiaľ nie je k dispozícii — golier je súčasť 3D strihu modelu, nie len farba,
+        takže potrebuje samostatný model s reálne vymodelovaným V-výstrihom.
+      </p>
 
       {materialy && materialy.length > 0 && (
         <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">

@@ -1,5 +1,5 @@
 // Statické vizuálne šablóny 3D konfigurátora dresov — vzory, goliere, preset palety,
-// rýchle farby, značkové logá a emoji erby. Nie sú to obchodné dáta (tie sú v Supabase),
+// rýchle farby a tvary klubového znaku. Nie sú to obchodné dáta (tie sú v Supabase),
 // len kresliace/UI šablóny prevzaté 1:1 z 3d_konfigurator_dresov.html.
 
 export const VSETKY_VZORY = [
@@ -14,10 +14,12 @@ export const VSETKY_VZORY = [
   { id: 'plain', nazov: 'Hladký Minimal', icon: 'M4 4h16v16H4z' },
 ];
 
+// Model má golier fyzicky vymodelovaný ako okrúhly (súčasť 3D strihu, nie len farba/textúra) —
+// V-výstrih by vyzeral rovnako okrúhlo, len prefarbený, čo by zákazníka zbytočne zmiatlo. Preto
+// je zatiaľ len jedna funkčná možnosť; V-výstrih pridáme až s modelom, ktorý ho má skutočne
+// vymodelovaný (viď poznámka pre Martina).
 export const VSETKY_GOLIERE = [
   { id: 'round', nazov: 'Okrúhly' },
-  { id: 'vneck', nazov: 'V-Výstrih' },
-  { id: 'ribbed', nazov: 'Rebrovaný' },
 ];
 
 export const PRESET_PALETY = [
@@ -29,17 +31,29 @@ export const PRESET_PALETY = [
 
 export const RYCHLE_FARBY = ['#ffffff', '#000000', '#dc2626', '#1e3a8a', '#2563eb', '#16a34a', '#facc15', '#f97316', '#9333ea', '#06b6d4'];
 
-export const BRAND_LOGA = [
-  { id: 'swoosh', nazov: 'Dynamic Speed Streak' },
-  { id: 'geometric', nazov: 'Apex Diamond' },
-  { id: 'spized', nazov: 'SPIZED Vector' },
+// Tvary pre generátor "blank" klubového znaku — zákazník napíše vlastný text (napr. "FC
+// TORNAĽA") a vyberie tvar, do ktorého sa text vykreslí. Nahrádza pôvodné emoji-erby.
+export const ERB_TVARY = [
+  { id: 'kruh', nazov: 'Kruh' },
+  { id: 'stit', nazov: 'Štít' },
+  { id: 'erb', nazov: 'Erb' },
+  { id: 'ovál', nazov: 'Ovál' },
 ];
 
-export const EMOJI_ERBY = [
-  { id: 'shield', nazov: 'Štít', emoji: '🛡️' },
-  { id: 'star', nazov: 'Hviezda', emoji: '⭐' },
-  { id: 'eagle', nazov: 'Orol', emoji: '🦅' },
-  { id: 'crown', nazov: 'Koruna', emoji: '👑' },
+// Pozície voliteľného čísla na hrudi — zákazník si vyberie, kam presne má číslo ísť, keďže
+// môže kolidovať so znakom na srdci alebo logom sponzora v strede.
+export const POZICIE_CISLA_VPREDU = [
+  { id: 'stred', nazov: 'V strede hrudi' },
+  { id: 'pod_erb', nazov: 'Pod znakom na srdci' },
+  { id: 'pod_logo', nazov: 'Pod logom v strede' },
+];
+
+// Pozície predného loga (logo_pred) — vždy zobrazené, len sa dá presunúť.
+export const POZICIE_LOGA_PRED = [
+  { id: 'zaklad', nazov: 'Oproti srdcu (pôvodné miesto)' },
+  { id: 'zaklad_vyssie', nazov: 'Oproti srdcu, vyššie (ak je pod ním číslo)' },
+  { id: 'stred', nazov: 'V strede hrudi' },
+  { id: 'stred_vyssie', nazov: 'V strede hrudi, vyššie' },
 ];
 
 export const VELKOSTI_FALLBACK = ['XS', 'S', 'M', 'L', 'XL', '2XL'];
@@ -62,19 +76,24 @@ export const DEFAULT_CONFIG_STATE = {
     zobrazitCislo: true,
     cisloVpredu: true,
     cisloVzadu: true,
+    cisloVpreduPozicia: 'stred',
     fontRodina: 'Teko',
     farbaTextu: '#ffffff',
     farbaObrysu: '#000000',
+    obrysZapnuty: true,
+    obrysHrubkaMm: 3,
     timText: 'FLY EMIRATES',
     zobrazitTimText: true,
   },
   loga: {
-    typErbu: 'shield',
+    typErbu: 'kruh',
+    erbText: 'FC TÍM',
     vlastnyErbImg: null,
     zobrazitErb: true,
-    brandIcon: 'swoosh',
-    zobrazitBrandLogo: true,
-    zobrazitOdznakRukav: true,
+    logoPredImg: null,
+    logoPredPozicia: 'zaklad',
+    logoZadImg: null,
+    rukavLoga: [],
   },
   golierTyp: 'round',
   materialKod: null,

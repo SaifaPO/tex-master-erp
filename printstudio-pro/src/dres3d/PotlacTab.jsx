@@ -1,4 +1,5 @@
 import React from 'react';
+import { POZICIE_CISLA_VPREDU } from './dresPresets';
 
 const FALLBACK_FONTY = ['Teko', 'Chakra Petch', 'Oswald', 'Inter'];
 
@@ -37,6 +38,27 @@ export default function PotlacTab({ configState, fonty, onZmenText }) {
 
       <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/80 space-y-3">
         <div className="flex items-center justify-between">
+          <span className="text-xs font-bold text-white uppercase tracking-wider">Obrys textu (Meno/Číslo/Nápis)</span>
+          <input type="checkbox" checked={configState.text.obrysZapnuty} onChange={(e) => onZmenText({ obrysZapnuty: e.target.checked })} className="w-4 h-4 rounded text-indigo-500 bg-slate-900 border-slate-700" />
+        </div>
+        {configState.text.obrysZapnuty && (
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[11px] text-slate-400">Hrúbka obrysu</label>
+              <span className="text-[11px] text-slate-300 font-semibold">{configState.text.obrysHrubkaMm} mm</span>
+            </div>
+            <input
+              type="range" min={1} max={8} step={0.5}
+              value={configState.text.obrysHrubkaMm}
+              onChange={(e) => onZmenText({ obrysHrubkaMm: Number(e.target.value) })}
+              className="w-full"
+            />
+          </div>
+        )}
+      </div>
+
+      <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/80 space-y-3">
+        <div className="flex items-center justify-between">
           <span className="text-xs font-bold text-white uppercase tracking-wider">Číslo dresu</span>
           <input type="checkbox" checked={configState.text.zobrazitCislo} onChange={(e) => onZmenText({ zobrazitCislo: e.target.checked })} className="w-4 h-4 rounded text-indigo-500 bg-slate-900 border-slate-700" />
         </div>
@@ -56,6 +78,18 @@ export default function PotlacTab({ configState, fonty, onZmenText }) {
             </label>
           </div>
         </div>
+        {configState.text.cisloVpredu && (
+          <div>
+            <label className="block text-[11px] text-slate-400 mb-1">Umiestnenie čísla vpredu</label>
+            <select
+              value={configState.text.cisloVpreduPozicia}
+              onChange={(e) => onZmenText({ cisloVpreduPozicia: e.target.value })}
+              className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white w-full focus:outline-none focus:border-indigo-500"
+            >
+              {POZICIE_CISLA_VPREDU.map(p => <option key={p.id} value={p.id}>{p.nazov}</option>)}
+            </select>
+          </div>
+        )}
       </div>
 
       <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/80 space-y-3">
