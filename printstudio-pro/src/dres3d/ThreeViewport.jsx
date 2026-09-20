@@ -263,8 +263,19 @@ function vytvorDresGeometriu(scene, textureCanvas) {
   // spôsobovalo vzorkovanie z nesprávnej/zrkadlenej časti plátna (skomolený text).
   canvasTexture.flipY = false;
 
+  // Skutočná normálová mapa látky z kúpeného modelu (švy, rebrovanie manžiet/lemu) — dáva
+  // jemný reliéf tkaniny namiesto úplne plochého povrchu. Nepoužíva sa aj priložená roughness
+  // mapa výrobcu, tá má napečené presvitanie PÔVODNÉHO textu "PLAYER 11" z ich ukážky, čo by
+  // pri inom mene/čísle vytváralo falošný "duch" starého textu.
+  const normalTexture = new THREE.TextureLoader().load('/models/jersey-normal.png');
+  normalTexture.wrapS = THREE.RepeatWrapping;
+  normalTexture.wrapT = THREE.RepeatWrapping;
+  normalTexture.flipY = false;
+
   const jerseyMaterial = new THREE.MeshStandardMaterial({
     map: canvasTexture,
+    normalMap: normalTexture,
+    normalScale: new THREE.Vector2(0.6, 0.6),
     roughness: 0.6,
     metalness: 0.05,
     side: THREE.DoubleSide,
