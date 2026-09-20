@@ -21,18 +21,55 @@ const PX_PER_MM = 1.75;
 
 // Obrys textu — pri niektorých fontoch (ostré serify/hroty) miter spoj vytvára "vystrelujúce"
 // hroty na rohoch písmen. Zaoblený spoj (round join/cap) tento efekt odstraňuje pre všetky
-// fonty. Obrys sa dá úplne vypnúť (obrysZapnuty) alebo mu nastaviť hrúbku v mm.
-function strokeAndFillText(c, text, x, y, textCfg) {
+// fonty. Obrys sa dá úplne vypnúť (obrysZapnuty) alebo mu nastaviť hrúbku v mm. `skala` (1 =
+// text v základnej veľkosti) hrúbku úmerne zmenší, keď sa text musel zmenšiť, aby sa zmestil —
+// inak by pri veľmi dlhom (a teda drobnom) texte bol nastavený obrys neprimerane hrubý a
+// nezodpovedal by nastavenej hodnote v mm.
+function strokeAndFillText(c, text, x, y, textCfg, skala = 1) {
   if (textCfg.obrysZapnuty !== false) {
     c.lineJoin = 'round';
     c.lineCap = 'round';
     c.miterLimit = 1;
-    c.lineWidth = Math.max(1, (textCfg.obrysHrubkaMm ?? 3) * PX_PER_MM);
+    c.lineWidth = Math.max(1, (textCfg.obrysHrubkaMm ?? 3) * PX_PER_MM * skala);
     c.strokeStyle = textCfg.farbaObrysu;
     c.strokeText(text, x, y);
   }
   c.fillStyle = textCfg.farbaTextu;
   c.fillText(text, x, y);
+}
+
+// Meno hráča je voľný text — zákazník doň môže napísať čokoľvek, aj celý dlhý názov klubu.
+// Jednoduché úmerné zmenšovanie by pri veľmi dlhom texte spravilo písmo neúmerne malé.
+// Namiesto toho: ak by muselo ísť pod ~60% základnej veľkosti a text sa dá rozdeliť podľa
+// medzery, prejde sa na dva riadky (obe rovnako veľké, podľa toho, ktorý riadok potrebuje
+// menšie písmo). Ak medzera v texte nie je (jedno dlhé slovo), zostáva jeden riadok zmenšený.
+function renderMenoText(c, text, centerX, centerY, maxWidth, baseFontPx, textCfg) {
+  const jedenRiadok = fitTextWidth(c, text, maxWidth, baseFontPx, textCfg.fontRodina, 'bold');
+  const MIN_JEDEN_RIADOK = baseFontPx * 0.6;
+  if (jedenRiadok >= MIN_JEDEN_RIADOK || !text.includes(' ')) {
+    strokeAndFillText(c, text, centerX, centerY, textCfg, jedenRiadok / baseFontPx);
+    return;
+  }
+
+  const slova = text.split(' ');
+  let najlepsiSplit = 1, najlepsiRozdiel = Infinity;
+  for (let i = 1; i < slova.length; i++) {
+    const l1 = slova.slice(0, i).join(' ').length;
+    const l2 = slova.slice(i).join(' ').length;
+    const rozdiel = Math.abs(l1 - l2);
+    if (rozdiel < najlepsiRozdiel) { najlepsiRozdiel = rozdiel; najlepsiSplit = i; }
+  }
+  const riadok1 = slova.slice(0, najlepsiSplit).join(' ');
+  const riadok2 = slova.slice(najlepsiSplit).join(' ');
+  const velkost1 = fitTextWidth(c, riadok1, maxWidth, baseFontPx * 0.8, textCfg.fontRodina, 'bold');
+  const velkost2 = fitTextWidth(c, riadok2, maxWidth, baseFontPx * 0.8, textCfg.fontRodina, 'bold');
+  const finalnaVelkost = Math.min(velkost1, velkost2);
+  const skala = finalnaVelkost / baseFontPx;
+  c.font = `bold ${finalnaVelkost}px "${textCfg.fontRodina}", sans-serif`;
+  const medzeraRiadkov = finalnaVelkost * 0.95;
+  strokeAndFillText(c, riadok1, centerX, centerY - medzeraRiadkov / 2, textCfg, skala);
+  c.font = `bold ${finalnaVelkost}px "${textCfg.fontRodina}", sans-serif`;
+  strokeAndFillText(c, riadok2, centerX, centerY + medzeraRiadkov / 2, textCfg, skala);
 }
 
 // Vykreslí obrázok so zachovaním pomeru strán (bez deformácie) tak, aby sa celý zmestil do
@@ -352,7 +389,8 @@ function renderFrontDetails(c, x, y, w, h, configState) {
   const logoPredX = logoPredPoz.startsWith('stred') ? centerX : x + w * 0.32;
   const logoPredY = logoPredPoz.endsWith('vyssie') ? y + h * 0.32 * 0.8 : y + h * 0.32;
   const logoPredFarba = kontrastnaFarba(configState.farby.zakladna);
-  const logoPredRozmery = drawTintedImageFit(c, logoPredVyrobcu, logoPredX, logoPredY, w * 0.28, h * 0.09, logoPredFarba);
+  // o 65% menšie (w*0.28*0.35, h*0.09*0.35)
+  const logoPredRozmery = drawTintedImageFit(c, logoPredVyrobcu, logoPredX, logoPredY, w * 0.098, h * 0.0315, logoPredFarba);
 
   if (configState.text.zobrazitCislo && configState.text.cisloVpredu && configState.text.cisloHraca) {
     const poz = configState.text.cisloVpreduPozicia || 'stred';
@@ -362,8 +400,9 @@ function renderFrontDetails(c, x, y, w, h, configState) {
     c.save();
     c.textAlign = 'center';
     c.textBaseline = 'middle';
-    fitTextWidth(c, configState.text.cisloHraca, w * 0.35, 127, configState.text.fontRodina, 'bold'); // 110 * 1.15
-    strokeAndFillText(c, configState.text.cisloHraca, cx, cy, configState.text);
+    const cisloBaseFont = 146; // 127 * 1.15
+    const cisloVelkost = fitTextWidth(c, configState.text.cisloHraca, w * 0.35, cisloBaseFont, configState.text.fontRodina, 'bold');
+    strokeAndFillText(c, configState.text.cisloHraca, cx, cy, configState.text, cisloVelkost / cisloBaseFont);
     c.restore();
   }
 
@@ -371,8 +410,9 @@ function renderFrontDetails(c, x, y, w, h, configState) {
     c.save();
     c.textAlign = 'center';
     c.textBaseline = 'middle';
-    fitTextWidth(c, configState.text.timText, w * 0.42, 85, configState.text.fontRodina, '800');
-    strokeAndFillText(c, configState.text.timText, centerX, y + h * 0.54 * 0.85, configState.text); // o 15% vyššie
+    const timBaseFont = 85;
+    const timVelkost = fitTextWidth(c, configState.text.timText, w * 0.42, timBaseFont, configState.text.fontRodina, '800');
+    strokeAndFillText(c, configState.text.timText, centerX, y + h * 0.54 * 0.85, configState.text, timVelkost / timBaseFont); // o 15% vyššie
     c.restore();
   }
 }
@@ -382,17 +422,19 @@ function renderBackDetails(c, x, y, w, h, configState) {
   const menoY = y + h * 0.28 * 0.8; // o 20% vyššie
   const cisloY = y + h * 0.54 * 0.8; // o 20% vyššie
 
-  // Logo výrobcu na krku vzadu — úplne fixné, zákazník doň nijako nezasahuje.
+  // Logo výrobcu na krku vzadu — úplne fixné, zákazník doň nijako nezasahuje. O 45% menšie
+  // (w*0.3*0.55, h*0.05*0.55).
   const logoZadFarba = kontrastnaFarba(configState.farby.zakladna);
-  drawTintedImageFit(c, logoZadVyrobcu, centerX, y + h * 0.06, w * 0.3, h * 0.05, logoZadFarba);
+  drawTintedImageFit(c, logoZadVyrobcu, centerX, y + h * 0.06, w * 0.165, h * 0.0275, logoZadFarba);
 
   if (configState.text.zobrazitMeno && configState.text.menoHraca) {
     c.save();
     c.textAlign = 'center';
     c.textBaseline = 'middle';
     const meno = configState.text.menoHraca.toUpperCase();
-    fitTextWidth(c, meno, w * 0.42, 95, configState.text.fontRodina, 'bold');
-    strokeAndFillText(c, meno, centerX, menoY, configState.text);
+    // o 15% väčšie (95->109) a o 30% širší priestor (0.42->0.546) — pri veľmi dlhom texte sa
+    // namiesto neúmerného zmenšenia prejde na dva riadky (renderMenoText).
+    renderMenoText(c, meno, centerX, menoY, w * 0.546, 109, configState.text);
     c.restore();
   }
 
@@ -400,13 +442,15 @@ function renderBackDetails(c, x, y, w, h, configState) {
     c.save();
     c.textAlign = 'center';
     c.textBaseline = 'middle';
-    fitTextWidth(c, configState.text.cisloHraca, w * 0.5, 414, configState.text.fontRodina, 'bold'); // 360 * 1.15
-    strokeAndFillText(c, configState.text.cisloHraca, centerX, cisloY, configState.text);
+    const cisloBaseFont = 476; // 414 * 1.15
+    const cisloVelkost = fitTextWidth(c, configState.text.cisloHraca, w * 0.5, cisloBaseFont, configState.text.fontRodina, 'bold');
+    const cisloSkala = cisloVelkost / cisloBaseFont;
+    strokeAndFillText(c, configState.text.cisloHraca, centerX, cisloY, configState.text, cisloSkala);
     if (configState.text.obrysZapnuty !== false) {
       c.lineJoin = 'round';
       c.lineCap = 'round';
       c.strokeStyle = configState.farby.akcent;
-      c.lineWidth = 6;
+      c.lineWidth = 6 * cisloSkala;
       c.strokeText(configState.text.cisloHraca, centerX, cisloY);
     }
     c.restore();
