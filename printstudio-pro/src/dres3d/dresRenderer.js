@@ -52,12 +52,42 @@ export function updateJerseyTexture(ctx, canvas, configState) {
   const predok = toPx(PANELY.predok, W, H);
   const zadok = toPx(PANELY.zadok, W, H);
 
-  renderPattern(ctx, predok.x, predok.y, predok.w, predok.h, false, configState);
-  renderPattern(ctx, zadok.x, zadok.y, zadok.w, zadok.h, true, configState);
-  renderSleeves(ctx, W, H, configState);
+  const maVlastnyVzor = configState.vzor === 'vlastny' && configState.vlastnyVzorObrazky;
+  if (maVlastnyVzor) {
+    renderVlastnyVzor(ctx, W, H, configState);
+  } else {
+    renderPattern(ctx, predok.x, predok.y, predok.w, predok.h, false, configState);
+    renderPattern(ctx, zadok.x, zadok.y, zadok.w, zadok.h, true, configState);
+  }
+  renderSleeves(ctx, W, H, configState, maVlastnyVzor);
   renderFrontDetails(ctx, predok.x, predok.y, predok.w, predok.h, configState);
   renderBackDetails(ctx, zadok.x, zadok.y, zadok.w, zadok.h, configState);
   renderCollarDecorations(ctx, W, H, configState);
+}
+
+// Vlastný (nahraný) vzor — 3 voliteľné PNG vrstvy s priehľadnosťou (základ/vzor/akcent),
+// pripravené adminom presne podľa šablóny rozloženia dresu (celé 2048×2048 plátno naraz,
+// vrátane rukávov — nie len predok/zadok). Každá vrstva sa vyfarbí zvolenou farbou danej zóny
+// (rovnaký princíp ako farebné vrstvy skladov v grafickom softvéri) a poskladá na seba.
+function renderVlastnyVzor(c, W, H, configState) {
+  const obr = configState.vlastnyVzorObrazky;
+  const vrstvy = [
+    { img: obr.zaklad, farba: configState.farby.zakladna },
+    { img: obr.vzor, farba: configState.farby.vzor },
+    { img: obr.akcent, farba: configState.farby.akcent },
+  ];
+  vrstvy.forEach(({ img, farba }) => {
+    if (!img) return;
+    const off = document.createElement('canvas');
+    off.width = W;
+    off.height = H;
+    const octx = off.getContext('2d');
+    octx.drawImage(img, 0, 0, W, H);
+    octx.globalCompositeOperation = 'source-in';
+    octx.fillStyle = farba;
+    octx.fillRect(0, 0, W, H);
+    c.drawImage(off, 0, 0);
+  });
 }
 
 function renderPattern(c, x, y, w, h, isBack, configState) {
@@ -180,16 +210,20 @@ function drawHex(c, cx, cy, r) {
 // Rukávy, manžety a spodný lem sú u tohto modelu (skutočný CLO3D strih) samostatné strihové
 // kusy s vlastnými UV oblasťami dole na plátne — presné súradnice zmerané priamo z UV dát
 // modelu (pozri PANELY vyššie), nie odhadnuté.
-function renderSleeves(c, W, H, configState) {
+function renderSleeves(c, W, H, configState, maVlastnyVzor) {
   const lavy = toPx(PANELY.rukavLavy, W, H);
   const pravy = toPx(PANELY.rukavPravy, W, H);
   const manzetaL = toPx(PANELY.manzetaLava, W, H);
   const manzetaP = toPx(PANELY.manzetaPrava, W, H);
   const lem = toPx(PANELY.lemDole, W, H);
 
-  c.fillStyle = configState.farby.rukava;
-  c.fillRect(lavy.x, lavy.y, lavy.w, lavy.h);
-  c.fillRect(pravy.x, pravy.y, pravy.w, pravy.h);
+  // Pri vlastnom nahranom vzore už rukávy vyfarbil renderVlastnyVzor (celé plátno naraz) —
+  // tu sa prekresľuje len manžeta/lem/odznak, aby sa neprekryl nahraný dizajn.
+  if (!maVlastnyVzor) {
+    c.fillStyle = configState.farby.rukava;
+    c.fillRect(lavy.x, lavy.y, lavy.w, lavy.h);
+    c.fillRect(pravy.x, pravy.y, pravy.w, pravy.h);
+  }
 
   c.fillStyle = configState.farby.golier;
   c.fillRect(manzetaL.x, manzetaL.y, manzetaL.w, manzetaL.h);

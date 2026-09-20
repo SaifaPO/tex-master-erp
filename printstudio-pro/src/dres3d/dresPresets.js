@@ -78,4 +78,6 @@ export const DEFAULT_CONFIG_STATE = {
   },
   golierTyp: 'round',
   materialKod: null,
+  vlastnyVzorId: null,
+  vlastnyVzorObrazky: null,
 };

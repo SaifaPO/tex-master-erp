@@ -108,6 +108,20 @@ export default function Dres3DApp({ supabase, produktId }) {
 
   const handleZmenLoga = (patch) => setConfigState(prev => ({ ...prev, loga: { ...prev.loga, ...patch } }));
 
+  const handleVlastnyVzor = (v) => {
+    const nacitajObr = (url) => new Promise((resolve) => {
+      if (!url) { resolve(null); return; }
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = url;
+    });
+    Promise.all([nacitajObr(v.zaklad_url), nacitajObr(v.vzor_url), nacitajObr(v.akcent_url)]).then(([zaklad, vzor, akcent]) => {
+      setConfigState(prev => ({ ...prev, vzor: 'vlastny', vlastnyVzorId: v.id, vlastnyVzorObrazky: { zaklad, vzor, akcent } }));
+    });
+  };
+
   const resetKonfiguraciu = () => {
     setConfigState(prev => ({ ...DEFAULT_CONFIG_STATE, materialKod: prev.materialKod }));
   };
@@ -168,7 +182,14 @@ export default function Dres3DApp({ supabase, produktId }) {
 
           <div className="flex-1 overflow-y-auto p-4 sm:p-6">
             {aktivnyTab === 'vzory' && (
-              <VzoryTab configState={configState} dostupneVzory={katalog.nastavenia?.dostupne_vzory} onVzor={(id) => setConfigState(p => ({ ...p, vzor: id }))} onPreset={handlePreset} />
+              <VzoryTab
+                configState={configState}
+                dostupneVzory={katalog.nastavenia?.dostupne_vzory}
+                vlastneVzory={katalog.vlastneVzory}
+                onVzor={(id) => setConfigState(p => ({ ...p, vzor: id, vlastnyVzorId: null, vlastnyVzorObrazky: null }))}
+                onVlastnyVzor={handleVlastnyVzor}
+                onPreset={handlePreset}
+              />
             )}
             {aktivnyTab === 'farby' && (
               <FarbyZonyTab configState={configState} onZmenFarbu={handleZmenFarbu} aktivnaZona={aktivnaZona} onZmenAktivnuZonu={setAktivnaZona} />

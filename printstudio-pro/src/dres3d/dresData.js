@@ -12,6 +12,7 @@ export async function nacitajDresKatalog(supabase, produktId) {
     { data: fonty },
     { data: grafiky },
     { data: zlavy },
+    { data: vlastneVzory },
   ] = await Promise.all([
     supabase.from('produkty').select('*').eq('id', produktId).single(),
     supabase.from('produkt_dres_nastavenia').select('*').eq('produkt_id', produktId).maybeSingle(),
@@ -21,6 +22,7 @@ export async function nacitajDresKatalog(supabase, produktId) {
     supabase.from('fonty').select('*').in('pouzitie', ['vsetko', 'meno', 'cislo', 'text']),
     supabase.from('grafiky').select('*').order('nazov'),
     supabase.from('dres_mnozstevne_zlavy').select('*').order('min_pocet'),
+    supabase.from('dres_vlastne_vzory').select('*').eq('aktivny', true).order('nazov'),
   ]);
 
   if (!produkt) throw new Error('Produkt sa nenašiel.');
@@ -36,5 +38,6 @@ export async function nacitajDresKatalog(supabase, produktId) {
     fonty: fonty || [],
     grafiky: grafiky || [],
     zlavy: zlavy || [],
+    vlastneVzory: vlastneVzory || [],
   };
 }

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Shirt, Percent, ClipboardList } from 'lucide-react';
+import { Shirt, Percent, ClipboardList, Palette } from 'lucide-react';
 import DresNastaveniaTab from './DresNastaveniaTab';
 import DresZlavyTab from './DresZlavyTab';
 import DresObjednavkyTab from './DresObjednavkyTab';
+import DresVlastneVzoryTab from './DresVlastneVzoryTab';
 
 // Admin pre 3D konfigurátor dresov (printstudio-pro/src/dres3d) — rovnaký vzor ako VlajkyAdmin.jsx.
 // Zámerne NEZAPOJENÉ do App.jsx (viď brief-claude-code-balik1.md / poznámka v pláne) —
@@ -11,6 +12,7 @@ import DresObjednavkyTab from './DresObjednavkyTab';
 // plus tlačidlo do navigácie s activeTab 'dres3d', rovnako ako existujúce pre 'vlajky'.
 const SUBTABS = [
   { id: 'nastavenia', label: 'Nastavenia dresu', icon: Shirt },
+  { id: 'vzory', label: 'Vlastné vzory', icon: Palette },
   { id: 'zlavy', label: 'Množstevné zľavy', icon: Percent },
   { id: 'objednavky', label: 'Objednávky', icon: ClipboardList },
 ];
@@ -41,6 +43,7 @@ export default function DresAdmin({ supabase }) {
 
       <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 shadow-xl">
         {subtab === 'nastavenia' && <DresNastaveniaTab supabase={supabase} />}
+        {subtab === 'vzory' && <DresVlastneVzoryTab supabase={supabase} />}
         {subtab === 'zlavy' && <DresZlavyTab supabase={supabase} />}
         {subtab === 'objednavky' && <DresObjednavkyTab supabase={supabase} />}
       </div>

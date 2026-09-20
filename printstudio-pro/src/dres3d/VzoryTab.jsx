@@ -1,7 +1,7 @@
 import React from 'react';
 import { VSETKY_VZORY, PRESET_PALETY } from './dresPresets';
 
-export default function VzoryTab({ configState, dostupneVzory, onVzor, onPreset }) {
+export default function VzoryTab({ configState, dostupneVzory, vlastneVzory, onVzor, onVlastnyVzor, onPreset }) {
   const vzory = VSETKY_VZORY.filter(v => !dostupneVzory || dostupneVzory.includes(v.id));
 
   return (
@@ -13,7 +13,7 @@ export default function VzoryTab({ configState, dostupneVzory, onVzor, onPreset 
 
       <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
         {vzory.map(v => {
-          const isActive = configState.vzor === v.id;
+          const isActive = configState.vzor !== 'vlastny' && configState.vzor === v.id;
           return (
             <button
               key={v.id}
@@ -28,6 +28,30 @@ export default function VzoryTab({ configState, dostupneVzory, onVzor, onPreset 
           );
         })}
       </div>
+
+      {vlastneVzory && vlastneVzory.length > 0 && (
+        <div className="pt-4 border-t border-slate-800">
+          <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-3">Vlastné dizajny</h4>
+          <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
+            {vlastneVzory.map(v => {
+              const isActive = configState.vzor === 'vlastny' && configState.vlastnyVzorId === v.id;
+              const nahlad = v.zaklad_url || v.vzor_url || v.akcent_url;
+              return (
+                <button
+                  key={v.id}
+                  onClick={() => onVlastnyVzor(v)}
+                  className={`p-2 sm:p-3 rounded-xl border text-center transition flex flex-col items-center gap-1.5 ${isActive ? 'border-indigo-500 bg-indigo-500/10 text-white' : 'border-slate-800 bg-slate-950 hover:border-slate-700 text-slate-400'}`}
+                >
+                  <div className="w-full aspect-square rounded-lg bg-slate-800 overflow-hidden flex items-center justify-center">
+                    {nahlad ? <img src={nahlad} alt={v.nazov} className="w-full h-full object-cover" /> : <span className="text-lg">🎨</span>}
+                  </div>
+                  <span className="text-[10px] sm:text-[11px] font-bold tracking-tight truncate w-full">{v.nazov}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="pt-4 border-t border-slate-800">
         <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-3">Rýchle farebné inšpirácie</h4>
