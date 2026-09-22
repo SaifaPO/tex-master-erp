@@ -182,9 +182,19 @@ function toPx(rect, W, H) {
   };
 }
 
+// Rozsah, o koľko max. sa dá logo odtiahnuť od základnej pozície (frakcia šírky/výšky
+// panelu, ktorému patrí) — bráni odtiahnutiu úplne mimo dielu pri ťahaní na 3D modeli.
+const MAX_OFFSET_FRAC = 0.4;
+export function orezOffset(v) {
+  return Math.max(-MAX_OFFSET_FRAC, Math.min(MAX_OFFSET_FRAC, v || 0));
+}
+
 export function updateJerseyTexture(ctx, canvas, configState) {
   const W = canvas.width;
   const H = canvas.height;
+  // Zbiera sa počas kreslenia (rovnaké súradnice, aké sa naozaj vykreslili) — použije sa v
+  // ThreeViewport na hit-test pri ťahaní loga priamo na 3D modeli myšou (pozri handleDragStart).
+  const regions = [];
 
   ctx.clearRect(0, 0, W, H);
   // Farby na drese pôsobili vyblednuto — mierne zvýšená sýtosť celej kresby (aplikuje sa na
@@ -204,10 +214,12 @@ export function updateJerseyTexture(ctx, canvas, configState) {
     renderPattern(ctx, predok.x, predok.y, predok.w, predok.h, false, configState);
     renderPattern(ctx, zadok.x, zadok.y, zadok.w, zadok.h, true, configState);
   }
-  renderSleeves(ctx, W, H, configState, maVlastnyVzor);
-  renderFrontDetails(ctx, predok.x, predok.y, predok.w, predok.h, configState);
+  renderSleeves(ctx, W, H, configState, maVlastnyVzor, regions);
+  renderFrontDetails(ctx, predok.x, predok.y, predok.w, predok.h, configState, regions);
   renderBackDetails(ctx, zadok.x, zadok.y, zadok.w, zadok.h, configState);
   renderCollarDecorations(ctx, W, H, configState);
+
+  return regions;
 }
 
 // Vlastný (nahraný) vzor — 3 voliteľné PNG vrstvy s priehľadnosťou (základ/vzor/akcent),
@@ -355,7 +367,7 @@ function drawHex(c, cx, cy, r) {
 // Rukávy, manžety a spodný lem sú u tohto modelu (skutočný CLO3D strih) samostatné strihové
 // kusy s vlastnými UV oblasťami dole na plátne — presné súradnice zmerané priamo z UV dát
 // modelu (pozri PANELY vyššie), nie odhadnuté.
-function renderSleeves(c, W, H, configState, maVlastnyVzor) {
+function renderSleeves(c, W, H, configState, maVlastnyVzor, regions) {
   const lavy = toPx(PANELY.rukavLavy, W, H);
   const pravy = toPx(PANELY.rukavPravy, W, H);
   const manzetaL = toPx(PANELY.manzetaLava, W, H);
@@ -395,36 +407,45 @@ function renderSleeves(c, W, H, configState, maVlastnyVzor) {
       return { logo, w: iw * scale, h: ih * scale };
     });
     const totalH = rozmery.reduce((s, r) => s + r.h, 0) + medzeraPx * Math.max(0, rozmery.length - 1);
-    const cx = panel.x + panel.w / 2;
+    const baseCx = panel.x + panel.w / 2;
     let cursorY = panel.y + panel.h / 2 - totalH / 2;
     rozmery.forEach(({ logo, w: lw, h: lh }) => {
-      const cy = cursorY + lh / 2;
+      const baseCy = cursorY + lh / 2;
+      // Doladenie ťahaním priamo na 3D modeli (offsetX/offsetY sú frakcie šírky/výšky rukáva)
+      // sa pripočíta k automaticky vypočítanej (naskladanej) pozícii.
+      const cx = baseCx + orezOffset(logo.offsetX) * panel.w;
+      const cy = baseCy + orezOffset(logo.offsetY) * panel.h;
       try { c.drawImage(logo.img, cx - lw / 2, cy - lh / 2, lw, lh); } catch (e) { /* obrázok sa ešte nenačítal */ }
+      if (regions) regions.push({ dragId: `rukav:${logo.id}`, cx, cy, w: lw, h: lh, panelW: panel.w, panelH: panel.h });
       cursorY += lh + medzeraPx;
     });
   });
 }
 
-function renderFrontDetails(c, x, y, w, h, configState) {
+function renderFrontDetails(c, x, y, w, h, configState, regions) {
   const centerX = x + w / 2;
-  const erbX = x + w * 0.68;
-  const erbY = y + h * 0.32;
+  const erbOffset = configState.loga.erbOffset || { x: 0, y: 0 };
+  const erbX = x + w * 0.68 + orezOffset(erbOffset.x) * w;
+  const erbY = y + h * 0.32 + orezOffset(erbOffset.y) * h;
   const erbSize = 116; // 80 * 1.2 o niečo štedrejšie, aby zväčšenie bolo naozaj vidieť aj pri vlastnom nahratom logu s okrajmi
   const cislo = configState.cislo || {};
   const medzeraPismen = configState.text.pismenaMedzeraPx || 0;
 
   if (configState.loga.zobrazitErb) {
     renderClubCrest(c, erbX, erbY, erbSize, configState);
+    if (regions) regions.push({ dragId: 'erb', cx: erbX, cy: erbY, w: erbSize, h: erbSize, panelW: w, panelH: h });
   }
 
   // Logo výrobcu vpredu — fixné, zákazník ho nemôže vypnúť ani nahradiť, len presunúť.
   // Dodané ako čierna kresba na priehľadnom pozadí, preto sa vždy prefarbí podľa podkladu.
   const logoPredPoz = configState.loga.logoPredPozicia || 'zaklad';
-  const logoPredX = logoPredPoz.startsWith('stred') ? centerX : x + w * 0.32;
-  const logoPredY = logoPredPoz.endsWith('vyssie') ? y + h * 0.32 * 0.8 : y + h * 0.32;
+  const logoPredOffset = configState.loga.logoPredOffset || { x: 0, y: 0 };
+  const logoPredX = (logoPredPoz.startsWith('stred') ? centerX : x + w * 0.32) + orezOffset(logoPredOffset.x) * w;
+  const logoPredY = (logoPredPoz.endsWith('vyssie') ? y + h * 0.32 * 0.8 : y + h * 0.32) + orezOffset(logoPredOffset.y) * h;
   const logoPredFarba = kontrastnaFarba(configState.farby.zakladna);
   // o 65% menšie ako pôvodne, potom ešte o 15% väčšie (w*0.098*1.15, h*0.0315*1.15)
   const logoPredRozmery = drawTintedImageFit(c, logoPredVyrobcu, logoPredX, logoPredY, w * 0.1127, h * 0.0362, logoPredFarba);
+  if (regions) regions.push({ dragId: 'logoPred', cx: logoPredX, cy: logoPredY, w: logoPredRozmery.w, h: logoPredRozmery.h, panelW: w, panelH: h });
 
   if (configState.text.zobrazitCislo && configState.text.cisloVpredu && configState.text.cisloHraca) {
     const poz = configState.text.cisloVpreduPozicia || 'stred';

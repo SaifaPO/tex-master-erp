@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, Trash2, ArrowUp, ArrowDown, Move } from 'lucide-react';
 import { ERB_TVARY, POZICIE_LOGA_PRED } from './dresPresets';
 
 const nacitajObrazok = (src, crossOrigin = false) => new Promise((resolve) => {
@@ -37,13 +37,15 @@ export default function LogaTab({ configState, grafiky, onZmenLoga }) {
     const img = await nacitajZoSuboru(file);
     if (!img) return;
     const poctStrana = rukavLoga.filter((l) => l.strana === strana).length;
-    const nove = { id: Date.now(), strana, img, velkost: 1, poradie: poctStrana };
+    const nove = { id: Date.now(), strana, img, velkost: 1, poradie: poctStrana, offsetX: 0, offsetY: 0 };
     onZmenLoga({ rukavLoga: [...rukavLoga, nove] });
   };
 
   const zmazRukavLogo = (id) => onZmenLoga({ rukavLoga: rukavLoga.filter((l) => l.id !== id) });
 
   const zmenVelkostRukavLogo = (id, velkost) => onZmenLoga({ rukavLoga: rukavLoga.map((l) => (l.id === id ? { ...l, velkost } : l)) });
+
+  const resetPoziciuRukavLogo = (id) => onZmenLoga({ rukavLoga: rukavLoga.map((l) => (l.id === id ? { ...l, offsetX: 0, offsetY: 0 } : l)) });
 
   const presunRukavLogo = (id, smer) => {
     const logo = rukavLoga.find((l) => l.id === id);
@@ -69,13 +71,21 @@ export default function LogaTab({ configState, grafiky, onZmenLoga }) {
         <p className="text-xs text-slate-400">Vytvorte si vlastný znak, logo a doplnkové logá na rukávoch.</p>
       </div>
 
+      <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-xl p-3 flex items-start gap-2">
+        <Move className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+        <p className="text-[11px] text-indigo-200 leading-snug">Tip: erb aj logá si môžete presunúť aj priamo ťahaním myšou na 3D modeli dresu.</p>
+      </div>
+
       <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/80 space-y-3">
         <div className="flex items-center justify-between">
           <div>
             <span className="text-xs font-bold text-white block">1. Klubový Znak (Na srdci)</span>
-            <span className="text-[10px] text-slate-400">Umiestnenie na ľavej hrudi</span>
+            <span className="text-[10px] text-slate-400">Presuňte ťahaním na modeli, alebo</span>
           </div>
-          <input type="checkbox" checked={configState.loga.zobrazitErb} onChange={(e) => onZmenLoga({ zobrazitErb: e.target.checked })} className="w-4 h-4 rounded text-indigo-500 bg-slate-900 border-slate-700" />
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => onZmenLoga({ erbOffset: { x: 0, y: 0 } })} title="Vrátiť na pôvodné miesto" className="text-[10px] text-slate-400 hover:text-white px-1.5 py-1 rounded border border-slate-700 hover:border-slate-500">Reset polohy</button>
+            <input type="checkbox" checked={configState.loga.zobrazitErb} onChange={(e) => onZmenLoga({ zobrazitErb: e.target.checked })} className="w-4 h-4 rounded text-indigo-500 bg-slate-900 border-slate-700" />
+          </div>
         </div>
 
         <label className="block text-[11px] text-slate-400 mb-1">Text v znaku (napr. názov klubu)</label>
@@ -123,11 +133,14 @@ export default function LogaTab({ configState, grafiky, onZmenLoga }) {
       </div>
 
       <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/80 space-y-3">
-        <div>
-          <span className="text-xs font-bold text-white block">2. Logo výrobcu</span>
-          <span className="text-[10px] text-slate-400">Vpredu aj na krku vzadu je vždy súčasť dizajnu — dá sa len presunúť (predné).</span>
+        <div className="flex items-center justify-between">
+          <div>
+            <span className="text-xs font-bold text-white block">2. Logo výrobcu</span>
+            <span className="text-[10px] text-slate-400">Vpredu aj na krku vzadu je vždy súčasť dizajnu — dá sa len presunúť (predné).</span>
+          </div>
+          <button type="button" onClick={() => onZmenLoga({ logoPredOffset: { x: 0, y: 0 } })} title="Vrátiť na pôvodné miesto" className="text-[10px] text-slate-400 hover:text-white px-1.5 py-1 rounded border border-slate-700 hover:border-slate-500 shrink-0">Reset polohy</button>
         </div>
-        <label className="block text-[11px] text-slate-400 mb-1">Umiestnenie predného loga</label>
+        <label className="block text-[11px] text-slate-400 mb-1">Umiestnenie predného loga (alebo ťahajte priamo na modeli)</label>
         <select
           value={configState.loga.logoPredPozicia}
           onChange={(e) => onZmenLoga({ logoPredPozicia: e.target.value })}
@@ -178,6 +191,7 @@ export default function LogaTab({ configState, grafiky, onZmenLoga }) {
                 />
                 <button onClick={() => presunRukavLogo(logo.id, -1)} className="text-slate-400 hover:text-white p-1"><ArrowUp className="w-3.5 h-3.5" /></button>
                 <button onClick={() => presunRukavLogo(logo.id, 1)} className="text-slate-400 hover:text-white p-1"><ArrowDown className="w-3.5 h-3.5" /></button>
+                <button onClick={() => resetPoziciuRukavLogo(logo.id)} title="Vrátiť na pôvodné miesto (ťahaním posunuté)" className="text-slate-400 hover:text-indigo-400 p-1"><Move className="w-3.5 h-3.5" /></button>
                 <button onClick={() => zmazRukavLogo(logo.id)} className="text-slate-400 hover:text-rose-400 p-1"><Trash2 className="w-3.5 h-3.5" /></button>
               </div>
             ))}

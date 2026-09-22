@@ -108,6 +108,21 @@ export default function Dres3DApp({ supabase, produktId }) {
 
   const handleZmenLoga = (patch) => setConfigState(prev => ({ ...prev, loga: { ...prev.loga, ...patch } }));
 
+  // Ťahanie loga/erbu priamo na 3D modeli (pozri ThreeViewport.jsx) — dragId identifikuje,
+  // ktorá položka sa práve presúva, x/y sú nové offsety (frakcie panelu, už orezané na
+  // rozumný rozsah v ThreeViewport).
+  const handleDragLogo = (dragId, x, y) => {
+    setConfigState(prev => {
+      if (dragId === 'erb') return { ...prev, loga: { ...prev.loga, erbOffset: { x, y } } };
+      if (dragId === 'logoPred') return { ...prev, loga: { ...prev.loga, logoPredOffset: { x, y } } };
+      if (dragId.startsWith('rukav:')) {
+        const id = Number(dragId.slice(6));
+        return { ...prev, loga: { ...prev.loga, rukavLoga: prev.loga.rukavLoga.map((l) => (l.id === id ? { ...l, offsetX: x, offsetY: y } : l)) } };
+      }
+      return prev;
+    });
+  };
+
   const handleZmenCislo = (patch) => setConfigState(prev => ({ ...prev, cislo: { ...prev.cislo, ...patch } }));
 
   const handleVlastnyVzor = (v) => {
@@ -161,7 +176,7 @@ export default function Dres3DApp({ supabase, produktId }) {
 
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
         <div className="p-2 lg:p-4 flex-1 flex min-h-0">
-          <ThreeViewport ref={viewportRef} configState={configState} />
+          <ThreeViewport ref={viewportRef} configState={configState} onDragLogo={handleDragLogo} />
         </div>
 
         <div className="w-full lg:w-[480px] xl:w-[520px] bg-slate-900 border-t lg:border-t-0 lg:border-l border-slate-800 flex flex-col h-[58vh] sm:h-[50vh] lg:h-auto min-h-0">

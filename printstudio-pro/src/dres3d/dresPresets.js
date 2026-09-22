@@ -106,6 +106,10 @@ export const DEFAULT_CONFIG_STATE = {
     // Logo výrobcu (predné aj na krku vzadu) je fixné — súbory public/models/logo-pred.png
     // a logo-zad.png, zákazník ho nemôže nahradiť ani vypnúť, len predné presunúť.
     logoPredPozicia: 'zaklad',
+    // Doladenie polohy ťahaním priamo na 3D modeli (pozri ThreeViewport.jsx) — pripočíta sa
+    // k základnej pozícii danej vyššie uvedeným dropdownom/výpočtom. {x:0,y:0} = bez posunu.
+    logoPredOffset: { x: 0, y: 0 },
+    erbOffset: { x: 0, y: 0 },
     rukavLoga: [],
     rukavMedzeraMm: 6,
   },

@@ -3,13 +3,13 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { RotateCcw, Camera } from 'lucide-react';
-import { updateJerseyTexture, logaVyrobcuReady } from './dresRenderer';
+import { updateJerseyTexture, logaVyrobcuReady, orezOffset } from './dresRenderer';
 
 // 3D náhľad dresu — vlastní celú Three.js scénu (kamera/svetlá/geometria/OrbitControls)
 // a offscreen 2D canvas s textúrou. Portované z init3D/setupLighting/createJerseyModel/
 // setViewAngle/captureSnapshotAndDownload v 3d_konfigurator_dresov.html, prepojené na React
 // cez konfigState prop namiesto globálneho mutovateľného stavu.
-const ThreeViewport = forwardRef(function ThreeViewport({ configState }, ref) {
+const ThreeViewport = forwardRef(function ThreeViewport({ configState, onDragLogo }, ref) {
   const containerRef = useRef(null);
   const textureCanvasRef = useRef(null);
   const sceneRef = useRef(null);
@@ -18,6 +18,17 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState }, ref) {
   const controlsRef = useRef(null);
   const canvasTextureRef = useRef(null);
   const lightsRef = useRef({});
+  // Ťahanie loga priamo na 3D modeli (pozri nižšie, pointerdown/move/up na renderer.domElement):
+  // jerseyMeshesRef = meshe, na ktoré sa raycastuje; dragRegionsRef = kde presne (v px na
+  // 2048×2048 plátne) sa práve nachádza ktoré logo — prepočíta sa pri každom prekreslení
+  // textúry; draggingRef = aktuálne prebiehajúci drag (null = žiadny).
+  const jerseyMeshesRef = useRef([]);
+  const dragRegionsRef = useRef([]);
+  const draggingRef = useRef(null);
+  const configStateRef = useRef(configState);
+  configStateRef.current = configState;
+  const onDragLogoRef = useRef(onDragLogo);
+  onDragLogoRef.current = onDragLogo;
   const [svetlo, setSvetlo] = useState('dark');
   const [autoRotate, setAutoRotate] = useState(false);
   const [aktivnyPohlad, setAktivnyPohlad] = useState('front');
@@ -74,7 +85,7 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState }, ref) {
     floor.receiveShadow = true;
     scene.add(floor);
 
-    const canvasTexture = vytvorDresGeometriu(scene, textureCanvasRef.current);
+    const canvasTexture = vytvorDresGeometriu(scene, textureCanvasRef.current, jerseyMeshesRef);
     canvasTextureRef.current = canvasTexture;
 
     let animId;
@@ -93,9 +104,85 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState }, ref) {
     };
     window.addEventListener('resize', onResize);
 
+    // Ťahanie loga/erbu priamo na 3D modeli — raycast z pozície myši na dres, prevod bodu
+    // dopadu na UV → px na 2048×2048 textúrovom plátne (rovnaká konvencia ako PANELY v
+    // dresRenderer.js, keďže canvasTexture.flipY=false zosúlaďuje smer V-osi s "raw" UV dátami
+    // modelu), a hit-test proti dragRegionsRef (posledné vykreslené pozície log/erbu).
+    const raycaster = new THREE.Raycaster();
+    const mouseNdc = new THREE.Vector2();
+    const bodNaTexture = (clientX, clientY) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouseNdc.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+      mouseNdc.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(mouseNdc, cameraRef.current);
+      const hits = raycaster.intersectObjects(jerseyMeshesRef.current, false);
+      if (hits.length === 0 || !hits[0].uv) return null;
+      const canvas = textureCanvasRef.current;
+      return { px: hits[0].uv.x * canvas.width, py: hits[0].uv.y * canvas.height };
+    };
+    const najdiRegion = (px, py) => {
+      let najdeny = null, najmensiaPlocha = Infinity;
+      for (const r of dragRegionsRef.current) {
+        const polW = r.w / 2, polH = r.h / 2;
+        if (px >= r.cx - polW && px <= r.cx + polW && py >= r.cy - polH && py <= r.cy + polH) {
+          const plocha = r.w * r.h;
+          if (plocha < najmensiaPlocha) { najmensiaPlocha = plocha; najdeny = r; }
+        }
+      }
+      return najdeny;
+    };
+    const ziskajAktualnyOffset = (dragId) => {
+      const loga = configStateRef.current.loga || {};
+      if (dragId === 'erb') return loga.erbOffset || { x: 0, y: 0 };
+      if (dragId === 'logoPred') return loga.logoPredOffset || { x: 0, y: 0 };
+      if (dragId.startsWith('rukav:')) {
+        const id = Number(dragId.slice(6));
+        const logo = (loga.rukavLoga || []).find((l) => l.id === id);
+        return { x: logo?.offsetX || 0, y: logo?.offsetY || 0 };
+      }
+      return { x: 0, y: 0 };
+    };
+    const onPointerDown = (e) => {
+      if (e.button !== undefined && e.button !== 0) return;
+      const bod = bodNaTexture(e.clientX, e.clientY);
+      if (!bod) return;
+      const region = najdiRegion(bod.px, bod.py);
+      if (!region) return;
+      draggingRef.current = {
+        dragId: region.dragId,
+        panelW: region.panelW,
+        panelH: region.panelH,
+        startPx: bod,
+        startOffset: ziskajAktualnyOffset(region.dragId),
+      };
+      controls.enabled = false;
+    };
+    const onPointerMove = (e) => {
+      const drag = draggingRef.current;
+      if (!drag) return;
+      const bod = bodNaTexture(e.clientX, e.clientY);
+      if (!bod) return;
+      const deltaFracX = (bod.px - drag.startPx.px) / drag.panelW;
+      const deltaFracY = (bod.py - drag.startPx.py) / drag.panelH;
+      const novyX = orezOffset(drag.startOffset.x + deltaFracX);
+      const novyY = orezOffset(drag.startOffset.y + deltaFracY);
+      onDragLogoRef.current?.(drag.dragId, novyX, novyY);
+    };
+    const onPointerUp = () => {
+      if (!draggingRef.current) return;
+      draggingRef.current = null;
+      controls.enabled = true;
+    };
+    renderer.domElement.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+
     return () => {
       cancelAnimationFrame(animId);
       window.removeEventListener('resize', onResize);
+      renderer.domElement.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
       controls.dispose();
       renderer.dispose();
       if (renderer.domElement.parentNode === container) container.removeChild(renderer.domElement);
@@ -115,7 +202,7 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState }, ref) {
       const canvas = textureCanvasRef.current;
       const ctx = canvas?.getContext('2d');
       if (!canvas || !ctx || !canvasTextureRef.current) return;
-      updateJerseyTexture(ctx, canvas, configState);
+      dragRegionsRef.current = updateJerseyTexture(ctx, canvas, configState) || [];
       canvasTextureRef.current.needsUpdate = true;
     });
     return () => { zrusene = true; };
@@ -128,7 +215,7 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState }, ref) {
       const canvas = textureCanvasRef.current;
       const ctx = canvas?.getContext('2d');
       if (!canvas || !ctx || !canvasTextureRef.current) return;
-      updateJerseyTexture(ctx, canvas, configState);
+      dragRegionsRef.current = updateJerseyTexture(ctx, canvas, configState) || [];
       canvasTextureRef.current.needsUpdate = true;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -272,7 +359,7 @@ function aplikujOsvetlenie(scene, lightsRef, renderer, type) {
 // necháva tak, ako je, a naša plátnová textúra sa nakreslí do rovnakého rozloženia, aké malo
 // pôvodné (referenčné) textúrové pozadie modelu (predok/zadok v ľavej/pravej polovici, rukávy
 // dole, lemy v úzkom pruhu úplne dole) — pozri dresRenderer.js.
-function vytvorDresGeometriu(scene, textureCanvas) {
+function vytvorDresGeometriu(scene, textureCanvas, jerseyMeshesRef) {
   const canvasTexture = new THREE.CanvasTexture(textureCanvas);
   canvasTexture.anisotropy = 16;
   canvasTexture.generateMipmaps = true;
@@ -325,6 +412,10 @@ function vytvorDresGeometriu(scene, textureCanvas) {
       odstranDuplicitneVrstvy(root);
       const povodneMeshe = [];
       root.traverse((child) => { if (child.isMesh) povodneMeshe.push(child); });
+      // Raycasting pri ťahaní loga (pozri hlavný useEffect vyššie) sa robí len proti týmto
+      // pôvodným (vonkajším, potlačeným) meshom — nie aj proti bielym "vnútorným" duplikátom
+      // pridaným nižšie, tie by pri pohľade cez otvor (golier/manžeta) mohli skresliť zásah.
+      if (jerseyMeshesRef) jerseyMeshesRef.current = povodneMeshe;
       povodneMeshe.forEach((child) => {
         child.material = jerseyMaterial;
         child.castShadow = true;
