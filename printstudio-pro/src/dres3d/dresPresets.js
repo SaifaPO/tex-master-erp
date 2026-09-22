@@ -82,8 +82,21 @@ export const DEFAULT_CONFIG_STATE = {
     farbaObrysu: '#000000',
     obrysZapnuty: true,
     obrysHrubkaMm: 3,
+    pismenaMedzeraPx: 0,
     timText: 'FLY EMIRATES',
     zobrazitTimText: true,
+    napisPodCislom: '',
+    zobrazitNapisPodCislom: false,
+  },
+  // Číslo dresu má vlastné, od mena/nápisov nezávislé farby — výplň + až dva samostatné obrysy
+  // (napr. biele číslo, čierny vnútorný obrys, farebný vonkajší obrys).
+  cislo: {
+    farbaVypln: '#ffffff',
+    farbaObrys1: '#000000',
+    obrys1HrubkaMm: 3,
+    zobrazitObrys2: false,
+    farbaObrys2: '#f59e0b',
+    obrys2HrubkaMm: 2,
   },
   loga: {
     typErbu: 'kruh',

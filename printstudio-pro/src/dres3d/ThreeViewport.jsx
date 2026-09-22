@@ -103,13 +103,22 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState }, ref) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Prekreslenie textúry pri každej zmene konfigurácie
+  // Prekreslenie textúry pri každej zmene konfigurácie. Google Font sa do prehliadača
+  // dotiahne až pri PRVOM skutočnom použití (canvas text ho nečaká) — bez tohto čakania by
+  // prvých pár prekreslení po prepnutí fontu ešte kreslilo starým/záložným písmom, kým sa font
+  // dotiahne, a zmena "naskočila" až o niekoľko klikov neskôr.
   useEffect(() => {
-    const canvas = textureCanvasRef.current;
-    const ctx = canvas?.getContext('2d');
-    if (!canvas || !ctx || !canvasTextureRef.current) return;
-    updateJerseyTexture(ctx, canvas, configState);
-    canvasTextureRef.current.needsUpdate = true;
+    let zrusene = false;
+    const font = configState.text.fontRodina;
+    Promise.resolve(document.fonts?.load?.(`bold 32px "${font}"`)).catch(() => {}).finally(() => {
+      if (zrusene) return;
+      const canvas = textureCanvasRef.current;
+      const ctx = canvas?.getContext('2d');
+      if (!canvas || !ctx || !canvasTextureRef.current) return;
+      updateJerseyTexture(ctx, canvas, configState);
+      canvasTextureRef.current.needsUpdate = true;
+    });
+    return () => { zrusene = true; };
   }, [configState]);
 
   // Fixné logá výrobcu (logo-pred.png/logo-zad.png) sa načítavajú asynchrónne — ak sa načítajú
@@ -291,7 +300,21 @@ function vytvorDresGeometriu(scene, textureCanvas) {
     normalScale: new THREE.Vector2(0.6, 0.6),
     roughness: 0.6,
     metalness: 0.05,
-    side: THREE.DoubleSide,
+    // FrontSide (nie DoubleSide) — vnútro dresu teraz kreslí samostatná biela "škrupina"
+    // (pozri nižšie), takže tu netreba kresliť aj zadné strany trojuholníkov potlačou.
+    side: THREE.FrontSide,
+  });
+
+  // Biele vnútro dresu — namiesto potlačenej textúry na zadných stranách tých istých
+  // trojuholníkov (čo by pri modeli bez skutočnej hrúbky látky spôsobilo blikanie/z-fighting,
+  // keďže vonkajšia aj vnútorná "vrstva" majú identickú geometriu). BackSide materiál sa
+  // vykresľuje len na stranách odvrátených od kamery, takže sa s vonkajším FrontSide materiálom
+  // nikdy neprekryje na tom istom pixli — vidno ho len cez skutočné otvory (golier, manžety, lem).
+  const interiorMaterial = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    roughness: 0.85,
+    metalness: 0,
+    side: THREE.BackSide,
   });
 
   const loader = new GLTFLoader();
@@ -300,11 +323,17 @@ function vytvorDresGeometriu(scene, textureCanvas) {
     (gltf) => {
       const root = gltf.scene;
       odstranDuplicitneVrstvy(root);
-      root.traverse((child) => {
-        if (!child.isMesh) return;
+      const povodneMeshe = [];
+      root.traverse((child) => { if (child.isMesh) povodneMeshe.push(child); });
+      povodneMeshe.forEach((child) => {
         child.material = jerseyMaterial;
         child.castShadow = true;
         child.receiveShadow = true;
+        const vnutro = new THREE.Mesh(child.geometry, interiorMaterial);
+        vnutro.position.copy(child.position);
+        vnutro.rotation.copy(child.rotation);
+        vnutro.scale.copy(child.scale);
+        child.parent.add(vnutro);
       });
 
       // Model prichádza vo vlastnej mierke/polohe — vycentrovanie a normalizácia na výšku ~2

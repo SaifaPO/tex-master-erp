@@ -108,6 +108,8 @@ export default function Dres3DApp({ supabase, produktId }) {
 
   const handleZmenLoga = (patch) => setConfigState(prev => ({ ...prev, loga: { ...prev.loga, ...patch } }));
 
+  const handleZmenCislo = (patch) => setConfigState(prev => ({ ...prev, cislo: { ...prev.cislo, ...patch } }));
+
   const handleVlastnyVzor = (v) => {
     const nacitajObr = (url) => new Promise((resolve) => {
       if (!url) { resolve(null); return; }
@@ -136,7 +138,7 @@ export default function Dres3DApp({ supabase, produktId }) {
   if (!katalog) return null;
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden relative bg-slate-950 min-h-[calc(100vh-64px)]">
+    <div className="flex-1 flex flex-col overflow-hidden relative bg-slate-950 h-[calc(100vh-64px)] min-h-0">
       <div className="w-full flex items-center justify-between gap-2 p-2.5 bg-slate-900/90 border-b border-slate-800 shrink-0 z-20">
         <span className="text-xs font-bold text-slate-300 truncate">{katalog.produkt.nazov}</span>
         <div className="flex items-center gap-1.5 ml-auto">
@@ -157,12 +159,12 @@ export default function Dres3DApp({ supabase, produktId }) {
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-        <div className="p-2 lg:p-4 flex-1 flex">
+      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
+        <div className="p-2 lg:p-4 flex-1 flex min-h-0">
           <ThreeViewport ref={viewportRef} configState={configState} />
         </div>
 
-        <div className="w-full lg:w-[480px] xl:w-[520px] bg-slate-900 border-t lg:border-t-0 lg:border-l border-slate-800 flex flex-col h-[58vh] sm:h-[50vh] lg:h-auto">
+        <div className="w-full lg:w-[480px] xl:w-[520px] bg-slate-900 border-t lg:border-t-0 lg:border-l border-slate-800 flex flex-col h-[58vh] sm:h-[50vh] lg:h-auto min-h-0">
           <div className="flex border-b border-slate-800 bg-slate-950/70 p-1.5 sm:p-2 gap-1 overflow-x-auto">
             {TABY.map(t => {
               const Icon = t.icon;
@@ -180,7 +182,7 @@ export default function Dres3DApp({ supabase, produktId }) {
             })}
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+          <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
             {aktivnyTab === 'vzory' && (
               <VzoryTab
                 configState={configState}
@@ -195,7 +197,7 @@ export default function Dres3DApp({ supabase, produktId }) {
               <FarbyZonyTab configState={configState} onZmenFarbu={handleZmenFarbu} aktivnaZona={aktivnaZona} onZmenAktivnuZonu={setAktivnaZona} />
             )}
             {aktivnyTab === 'text' && (
-              <PotlacTab configState={configState} fonty={katalog.fonty} onZmenText={handleZmenText} />
+              <PotlacTab configState={configState} fonty={katalog.fonty} onZmenText={handleZmenText} onZmenCislo={handleZmenCislo} />
             )}
             {aktivnyTab === 'loga' && (
               <LogaTab configState={configState} grafiky={katalog.grafiky} onZmenLoga={handleZmenLoga} />

@@ -60,8 +60,13 @@ export default function App() {
     return <Buffky supabase={supabase} />;
   }
 
+  const jeDres3D = aktualnyProduktId != null && produkty.find(p => p.id === aktualnyProduktId)?.typ_konfiguratora === '3d_dres';
+
   return (
-    <div className="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col">
+    // 3D dres konfigurátor je "app-like" na celú výšku obrazovky bez posúvania stránky (len
+    // vnútorný panel s nastaveniami sa posúva) — ostatné pohľady (katalóg, 2D dizajnér, metráž)
+    // naďalej normálne rastú a posúvajú celú stránku, preto majú vlastný (min-h-screen) obal.
+    <div className={jeDres3D ? 'bg-slate-50 text-slate-800 font-sans h-screen overflow-hidden flex flex-col' : 'bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col'}>
       <PbtHeader
         title="PrintStudio Pro"
         subtitle="Konfigurátor a tvorca potlače"

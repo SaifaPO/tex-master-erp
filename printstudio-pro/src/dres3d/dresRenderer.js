@@ -3,8 +3,10 @@
 // žiadny globálny stav, žiadna závislosť na DOM mimo dodaného 2D kontextu.
 
 // Poistka pre dlhý text (názov tímu, meno hráča) — zmenší font tak, aby sa zaručene zmestil
-// do bezpečnej šírky namiesto pretečenia mimo dielu.
-function fitTextWidth(c, text, maxWidth, baseFontPx, fontFamily, weight = 'bold') {
+// do bezpečnej šírky namiesto pretečenia mimo dielu. `medzeraPismenPx` (letter-spacing) sa
+// nastaví ešte pred meraním, aby sa do odhadu šírky počítala aj ona.
+function fitTextWidth(c, text, maxWidth, baseFontPx, fontFamily, weight = 'bold', medzeraPismenPx = 0) {
+  c.letterSpacing = `${medzeraPismenPx}px`;
   let size = baseFontPx;
   while (size > 18) {
     c.font = `${weight} ${size}px "${fontFamily}", sans-serif`;
@@ -38,16 +40,46 @@ function strokeAndFillText(c, text, x, y, textCfg, skala = 1) {
   c.fillText(text, x, y);
 }
 
+// Číslo dresu má vlastné farby nezávislé od mena/nápisov — výplň + až dva vrstvené obrysy
+// (klasický efekt "biele číslo, čierny vnútorný obrys, farebný vonkajší obrys"). Techniku
+// vrstvenia obrysov (od najširšieho po najužší, výplň naposledy navrchu) vyžaduje canvas API —
+// strokeText kreslí ťah vycentrovaný na obryse písmena, takže každá ďalšia (užšia) vrstva
+// prekryje vnútornú polovicu tej pod ňou a zostane viditeľný len prstenec correct šírky.
+function strokeAndFillCislo(c, text, x, y, cisloCfg, skala = 1) {
+  c.lineJoin = 'round';
+  c.lineCap = 'round';
+  c.miterLimit = 1;
+  const t1 = Math.max(0, (cisloCfg.obrys1HrubkaMm ?? 0)) * PX_PER_MM * skala;
+  const t2 = cisloCfg.zobrazitObrys2 ? Math.max(0, (cisloCfg.obrys2HrubkaMm ?? 0)) * PX_PER_MM * skala : 0;
+  if (t2 > 0) {
+    c.strokeStyle = cisloCfg.farbaObrys2;
+    c.lineWidth = 2 * (t1 + t2);
+    c.strokeText(text, x, y);
+  }
+  if (t1 > 0) {
+    c.strokeStyle = cisloCfg.farbaObrys1;
+    c.lineWidth = 2 * t1;
+    c.strokeText(text, x, y);
+  }
+  c.fillStyle = cisloCfg.farbaVypln;
+  c.fillText(text, x, y);
+}
+
 // Meno hráča je voľný text — zákazník doň môže napísať čokoľvek, aj celý dlhý názov klubu.
 // Jednoduché úmerné zmenšovanie by pri veľmi dlhom texte spravilo písmo neúmerne malé.
 // Namiesto toho: ak by muselo ísť pod ~60% základnej veľkosti a text sa dá rozdeliť podľa
 // medzery, prejde sa na dva riadky (obe rovnako veľké, podľa toho, ktorý riadok potrebuje
 // menšie písmo). Ak medzera v texte nie je (jedno dlhé slovo), zostáva jeden riadok zmenšený.
-function renderMenoText(c, text, centerX, centerY, maxWidth, baseFontPx, textCfg) {
-  const jedenRiadok = fitTextWidth(c, text, maxWidth, baseFontPx, textCfg.fontRodina, 'bold');
+// `spodnyOkrajY` je PEVNÝ bod, na ktorom vždy sedí SPODOK textu (jeden riadok alebo posledný
+// z dvoch) — vďaka tomu medzera medzi menom a číslom pod ním nikdy neskáče, nech je meno
+// akokoľvek dlhé/krátke alebo na jeden/dva riadky.
+function renderMenoText(c, text, centerX, spodnyOkrajY, maxWidth, baseFontPx, textCfg) {
+  const medzeraPismen = textCfg.pismenaMedzeraPx || 0;
+  const jedenRiadok = fitTextWidth(c, text, maxWidth, baseFontPx, textCfg.fontRodina, 'bold', medzeraPismen);
   const MIN_JEDEN_RIADOK = baseFontPx * 0.6;
+  c.textBaseline = 'alphabetic';
   if (jedenRiadok >= MIN_JEDEN_RIADOK || !text.includes(' ')) {
-    strokeAndFillText(c, text, centerX, centerY, textCfg, jedenRiadok / baseFontPx);
+    strokeAndFillText(c, text, centerX, spodnyOkrajY, textCfg, jedenRiadok / baseFontPx);
     return;
   }
 
@@ -61,15 +93,15 @@ function renderMenoText(c, text, centerX, centerY, maxWidth, baseFontPx, textCfg
   }
   const riadok1 = slova.slice(0, najlepsiSplit).join(' ');
   const riadok2 = slova.slice(najlepsiSplit).join(' ');
-  const velkost1 = fitTextWidth(c, riadok1, maxWidth, baseFontPx * 0.8, textCfg.fontRodina, 'bold');
-  const velkost2 = fitTextWidth(c, riadok2, maxWidth, baseFontPx * 0.8, textCfg.fontRodina, 'bold');
+  const velkost1 = fitTextWidth(c, riadok1, maxWidth, baseFontPx * 0.8, textCfg.fontRodina, 'bold', medzeraPismen);
+  const velkost2 = fitTextWidth(c, riadok2, maxWidth, baseFontPx * 0.8, textCfg.fontRodina, 'bold', medzeraPismen);
   const finalnaVelkost = Math.min(velkost1, velkost2);
   const skala = finalnaVelkost / baseFontPx;
+  const medzeraRiadkov = finalnaVelkost * 1.05;
   c.font = `bold ${finalnaVelkost}px "${textCfg.fontRodina}", sans-serif`;
-  const medzeraRiadkov = finalnaVelkost * 0.95;
-  strokeAndFillText(c, riadok1, centerX, centerY - medzeraRiadkov / 2, textCfg, skala);
+  strokeAndFillText(c, riadok1, centerX, spodnyOkrajY - medzeraRiadkov, textCfg, skala);
   c.font = `bold ${finalnaVelkost}px "${textCfg.fontRodina}", sans-serif`;
-  strokeAndFillText(c, riadok2, centerX, centerY + medzeraRiadkov / 2, textCfg, skala);
+  strokeAndFillText(c, riadok2, centerX, spodnyOkrajY, textCfg, skala);
 }
 
 // Vykreslí obrázok so zachovaním pomeru strán (bez deformácie) tak, aby sa celý zmestil do
@@ -378,6 +410,8 @@ function renderFrontDetails(c, x, y, w, h, configState) {
   const erbX = x + w * 0.68;
   const erbY = y + h * 0.32;
   const erbSize = 116; // 80 * 1.2 o niečo štedrejšie, aby zväčšenie bolo naozaj vidieť aj pri vlastnom nahratom logu s okrajmi
+  const cislo = configState.cislo || {};
+  const medzeraPismen = configState.text.pismenaMedzeraPx || 0;
 
   if (configState.loga.zobrazitErb) {
     renderClubCrest(c, erbX, erbY, erbSize, configState);
@@ -389,8 +423,8 @@ function renderFrontDetails(c, x, y, w, h, configState) {
   const logoPredX = logoPredPoz.startsWith('stred') ? centerX : x + w * 0.32;
   const logoPredY = logoPredPoz.endsWith('vyssie') ? y + h * 0.32 * 0.8 : y + h * 0.32;
   const logoPredFarba = kontrastnaFarba(configState.farby.zakladna);
-  // o 65% menšie (w*0.28*0.35, h*0.09*0.35)
-  const logoPredRozmery = drawTintedImageFit(c, logoPredVyrobcu, logoPredX, logoPredY, w * 0.098, h * 0.0315, logoPredFarba);
+  // o 65% menšie ako pôvodne, potom ešte o 15% väčšie (w*0.098*1.15, h*0.0315*1.15)
+  const logoPredRozmery = drawTintedImageFit(c, logoPredVyrobcu, logoPredX, logoPredY, w * 0.1127, h * 0.0362, logoPredFarba);
 
   if (configState.text.zobrazitCislo && configState.text.cisloVpredu && configState.text.cisloHraca) {
     const poz = configState.text.cisloVpreduPozicia || 'stred';
@@ -401,8 +435,8 @@ function renderFrontDetails(c, x, y, w, h, configState) {
     c.textAlign = 'center';
     c.textBaseline = 'middle';
     const cisloBaseFont = 146; // 127 * 1.15
-    const cisloVelkost = fitTextWidth(c, configState.text.cisloHraca, w * 0.35, cisloBaseFont, configState.text.fontRodina, 'bold');
-    strokeAndFillText(c, configState.text.cisloHraca, cx, cy, configState.text, cisloVelkost / cisloBaseFont);
+    const cisloVelkost = fitTextWidth(c, configState.text.cisloHraca, w * 0.35, cisloBaseFont, configState.text.fontRodina, 'bold', medzeraPismen);
+    strokeAndFillCislo(c, configState.text.cisloHraca, cx, cy, cislo, cisloVelkost / cisloBaseFont);
     c.restore();
   }
 
@@ -411,48 +445,57 @@ function renderFrontDetails(c, x, y, w, h, configState) {
     c.textAlign = 'center';
     c.textBaseline = 'middle';
     const timBaseFont = 85;
-    const timVelkost = fitTextWidth(c, configState.text.timText, w * 0.42, timBaseFont, configState.text.fontRodina, '800');
+    const timVelkost = fitTextWidth(c, configState.text.timText, w * 0.42, timBaseFont, configState.text.fontRodina, '800', medzeraPismen);
     strokeAndFillText(c, configState.text.timText, centerX, y + h * 0.54 * 0.85, configState.text, timVelkost / timBaseFont); // o 15% vyššie
+    c.restore();
+  }
+
+  if (configState.text.zobrazitNapisPodCislom && configState.text.napisPodCislom) {
+    c.save();
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    const podBaseFont = 85;
+    const podVelkost = fitTextWidth(c, configState.text.napisPodCislom, w * 0.42, podBaseFont, configState.text.fontRodina, '800', medzeraPismen);
+    strokeAndFillText(c, configState.text.napisPodCislom, centerX, y + h * 0.65, configState.text, podVelkost / podBaseFont);
     c.restore();
   }
 }
 
 function renderBackDetails(c, x, y, w, h, configState) {
   const centerX = x + w / 2;
-  const menoY = y + h * 0.28 * 0.8; // o 20% vyššie
-  const cisloY = y + h * 0.54 * 0.8; // o 20% vyššie
+  const cislo = configState.cislo || {};
+  const medzeraPismen = configState.text.pismenaMedzeraPx || 0;
 
-  // Logo výrobcu na krku vzadu — úplne fixné, zákazník doň nijako nezasahuje. O 45% menšie
-  // (w*0.3*0.55, h*0.05*0.55).
+  // Meno má PEVNÝ kotevný bod na spodku textu a číslo pod ním PEVNÝ kotevný bod na vrchu —
+  // medzera medzi nimi je vždy rovnaká (fixný GAP), nech je meno akokoľvek dlhé/krátke alebo
+  // na jeden/dva riadky. Predtým mali obe polia nezávislé stredové pozície, takže sa medzera
+  // medzi nimi menila podľa dĺžky mena.
+  const menoSpodokY = y + h * 0.34;
+  const GAP_PX = 16 * PX_PER_MM;
+  const cisloVrchY = menoSpodokY + GAP_PX;
+
+  // Logo výrobcu na krku vzadu — úplne fixné, zákazník doň nijako nezasahuje. O 45% menšie,
+  // potom ešte o 15% nižšie (y + h*0.06*1.15).
   const logoZadFarba = kontrastnaFarba(configState.farby.zakladna);
-  drawTintedImageFit(c, logoZadVyrobcu, centerX, y + h * 0.06, w * 0.165, h * 0.0275, logoZadFarba);
+  drawTintedImageFit(c, logoZadVyrobcu, centerX, y + h * 0.069, w * 0.165, h * 0.0275, logoZadFarba);
 
   if (configState.text.zobrazitMeno && configState.text.menoHraca) {
     c.save();
     c.textAlign = 'center';
-    c.textBaseline = 'middle';
     const meno = configState.text.menoHraca.toUpperCase();
     // o 15% väčšie (95->109) a o 30% širší priestor (0.42->0.546) — pri veľmi dlhom texte sa
     // namiesto neúmerného zmenšenia prejde na dva riadky (renderMenoText).
-    renderMenoText(c, meno, centerX, menoY, w * 0.546, 109, configState.text);
+    renderMenoText(c, meno, centerX, menoSpodokY, w * 0.546, 109, configState.text);
     c.restore();
   }
 
   if (configState.text.zobrazitCislo && configState.text.cisloVzadu && configState.text.cisloHraca) {
     c.save();
     c.textAlign = 'center';
-    c.textBaseline = 'middle';
+    c.textBaseline = 'top';
     const cisloBaseFont = 476; // 414 * 1.15
-    const cisloVelkost = fitTextWidth(c, configState.text.cisloHraca, w * 0.5, cisloBaseFont, configState.text.fontRodina, 'bold');
-    const cisloSkala = cisloVelkost / cisloBaseFont;
-    strokeAndFillText(c, configState.text.cisloHraca, centerX, cisloY, configState.text, cisloSkala);
-    if (configState.text.obrysZapnuty !== false) {
-      c.lineJoin = 'round';
-      c.lineCap = 'round';
-      c.strokeStyle = configState.farby.akcent;
-      c.lineWidth = 6 * cisloSkala;
-      c.strokeText(configState.text.cisloHraca, centerX, cisloY);
-    }
+    const cisloVelkost = fitTextWidth(c, configState.text.cisloHraca, w * 0.5, cisloBaseFont, configState.text.fontRodina, 'bold', medzeraPismen);
+    strokeAndFillCislo(c, configState.text.cisloHraca, centerX, cisloVrchY, cislo, cisloVelkost / cisloBaseFont);
     c.restore();
   }
 }
