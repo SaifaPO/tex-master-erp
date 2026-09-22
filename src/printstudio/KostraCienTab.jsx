@@ -47,6 +47,11 @@ function VysledokVC({ label, value, unit, decimals }) {
 // komentar pri SublimaciaCard).
 export default function KostraCienTab({ supabase }) {
   const [isLoading, setIsLoading] = useState(true);
+  // Ukladanie bolo doteraz "tiché" — pri chybe (napr. chýbajúci stĺpec v DB) sa lokálny stav
+  // nastavil OPTIMISTICKY ešte pred odpoveďou zo servera, takže hodnota v poli vyzerala uložená
+  // aj keď upsert zlyhal a nič sa reálne neuložilo (zistilo sa až pri ďalšom načítaní stránky).
+  // Teraz sa pri chybe zobrazí banner a pole sa vráti na poslednú naozaj uloženú hodnotu.
+  const [chybaUlozenia, setChybaUlozenia] = useState('');
   const [textilSub, setTextilSub] = useState(null);
   const [sublimaciaGarment, setSublimaciaGarment] = useState(null);
   const [rezany, setRezany] = useState(null);
@@ -87,35 +92,43 @@ export default function KostraCienTab({ supabase }) {
 
   useEffect(() => { nacitaj(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const ulozTextilSub = async (patch) => {
+  // Spoločný "bezpečný" save wrapper pre všetky karty nižšie — nastaví hodnotu hneď (pre plynulé
+  // písanie do polí), ale pri chybe zo servera ju vráti späť a ukáže prečo.
+  const ulozBezpecne = async (setter, predoslaHodnota, dalsiaHodnota, supabaseVolanie) => {
+    setter(dalsiaHodnota);
+    const { error } = await supabaseVolanie;
+    if (error) {
+      console.error('Uloženie zlyhalo:', error);
+      setChybaUlozenia(`Uloženie zlyhalo: ${error.message}`);
+      setter(predoslaHodnota);
+    } else if (chybaUlozenia) {
+      setChybaUlozenia('');
+    }
+  };
+
+  const ulozTextilSub = (patch) => {
     const next = { ...textilSub, ...patch };
-    setTextilSub(next);
-    await supabase.from('textil_naklady').upsert({ technologia: 'sublimacia', ...next });
+    ulozBezpecne(setTextilSub, textilSub, next, supabase.from('textil_naklady').upsert({ technologia: 'sublimacia', ...next }));
   };
-  const ulozSublimaciaGarment = async (patch) => {
+  const ulozSublimaciaGarment = (patch) => {
     const next = { ...sublimaciaGarment, ...patch };
-    setSublimaciaGarment(next);
-    await supabase.from('cennik_sublimacia_naklady').upsert({ id: 1, ...next });
+    ulozBezpecne(setSublimaciaGarment, sublimaciaGarment, next, supabase.from('cennik_sublimacia_naklady').upsert({ id: 1, ...next }));
   };
-  const ulozRezany = async (patch) => {
+  const ulozRezany = (patch) => {
     const next = { ...rezany, ...patch };
-    setRezany(next);
-    await supabase.from('cennik_rezany_transfer').upsert({ id: 1, ...next });
+    ulozBezpecne(setRezany, rezany, next, supabase.from('cennik_rezany_transfer').upsert({ id: 1, ...next }));
   };
-  const ulozDtf = async (patch) => {
+  const ulozDtf = (patch) => {
     const next = { ...dtf, ...patch };
-    setDtf(next);
-    await supabase.from('dtf_naklady').upsert({ id: 1, ...next });
+    ulozBezpecne(setDtf, dtf, next, supabase.from('dtf_naklady').upsert({ id: 1, ...next }));
   };
-  const ulozSietotlac = async (patch) => {
+  const ulozSietotlac = (patch) => {
     const next = { ...sietotlac, ...patch };
-    setSietotlac(next);
-    await supabase.from('cennik_sietotlac').upsert({ id: 1, ...next });
+    ulozBezpecne(setSietotlac, sietotlac, next, supabase.from('cennik_sietotlac').upsert({ id: 1, ...next }));
   };
-  const ulozVysivka = async (patch) => {
+  const ulozVysivka = (patch) => {
     const next = { ...vysivka, ...patch };
-    setVysivka(next);
-    await supabase.from('kostra_vysivka').upsert({ id: 1, ...next });
+    ulozBezpecne(setVysivka, vysivka, next, supabase.from('kostra_vysivka').upsert({ id: 1, ...next }));
   };
 
   const pridajFoliu = async () => {
@@ -234,6 +247,12 @@ export default function KostraCienTab({ supabase }) {
         <h2 className="text-xl font-bold text-white flex items-center gap-2"><Layers3 className="text-indigo-400 h-5 w-5" /> Kostra cien — výrobné náklady</h2>
         <p className="text-xs text-slate-400 mt-1">Jediné miesto na zadanie surových výrobných nákladov (materiál, farby, fólie, práca) pre všetky technológie. Karty <strong className="text-slate-200">Metráže</strong> a <strong className="text-slate-200">Potlače</strong> odtiaľto živo ťahajú výrobnú cenu (VC) — nič sa tam už neduplikuje.</p>
         <p className="text-[11px] text-amber-400/90 mt-2 bg-amber-950/20 border border-amber-900/40 rounded-lg px-3 py-2 inline-block">⚠️ Všetky ceny na tejto stránke (aj vstupy, aj vypočítané "VC" náhľady) sú <strong>BEZ DPH</strong> — je to interný náklad, nie predajná cena. DPH sa pripočíta až v Potlačiach/Metrážach (predajné sadzby) a v appkách, ktoré vidí zákazník.</p>
+        {chybaUlozenia && (
+          <p className="text-[11px] text-rose-300 mt-2 bg-rose-950/30 border border-rose-800/50 rounded-lg px-3 py-2 flex items-center justify-between gap-3">
+            <span>⚠️ {chybaUlozenia}</span>
+            <button onClick={() => setChybaUlozenia('')} className="text-rose-400 hover:text-white font-bold shrink-0">✕</button>
+          </p>
+        )}
       </div>
 
       {/* SUBLIMACIA */}

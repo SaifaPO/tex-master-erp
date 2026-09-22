@@ -113,20 +113,23 @@ export function vcVysivka(kostra, plochaCm2, ks) {
 }
 
 // Sietotlac — naklad za 1 konkretnu farbu (n-tu v poradi): kazda dalsia farba = dalsie sito +
-// farba so spotrebou klesajucou o 20% oproti predchadzajucej.
-export function nakladFarbySietotlac(kostra, velkostId, jeTmavy, n) {
+// farba so spotrebou klesajucou o 20% oproti predchadzajucej. Sito je naklad NA CELU ZAKAZKU
+// (pripravi sa raz, nie na kazdy kus znova) — rozpocitava sa preto rovnomerne na pocetKs, aby
+// vacsia objednavka mala nizsiu cenu na kus (bez tohto delenia by 1ks aj 500ks stali za sito
+// rovnako, co bolo povodnou pricinou, preco sa cena sietotlace vobec neznizovala pri odbere).
+export function nakladFarbySietotlac(kostra, velkostId, jeTmavy, n, pocetKs) {
   const sietotlac = kostra.sietotlac;
   const velkost = (kostra.sietotlacVelkosti || []).find(v => v.id === velkostId);
   const baseGramaz = velkost ? (parseFloat(jeTmavy ? velkost.spotreba_g_tmavy : velkost.spotreba_g_svetly) || 0) : 0;
   const gramazN = baseGramaz * Math.pow(0.8, n - 1);
   const farbaCena = ((parseFloat(sietotlac?.cena_farba_kg) || 0) / 1000) * gramazN;
-  const sitoCena = parseFloat(sietotlac?.naklad_sito_zakazka) || 0;
+  const sitoCena = (parseFloat(sietotlac?.naklad_sito_zakazka) || 0) / Math.max(1, pocetKs || 1);
   return { n, gramaz: gramazN, farbaCena, sitoCena, spolu: farbaCena + sitoCena };
 }
 // Rozpad nakladov po vsetkych farbach zakazky (na zobrazenie/kontrolu).
-export function vcSietotlacRozpad(kostra, velkostId, jeTmavy, pocetFarieb) {
+export function vcSietotlacRozpad(kostra, velkostId, jeTmavy, pocetFarieb, pocetKs) {
   const n = Math.max(1, pocetFarieb || 1);
-  return Array.from({ length: n }, (_, i) => nakladFarbySietotlac(kostra, velkostId, jeTmavy, i + 1));
+  return Array.from({ length: n }, (_, i) => nakladFarbySietotlac(kostra, velkostId, jeTmavy, i + 1, pocetKs));
 }
 // Elektrina karuselu (tlac cez sita) + fixacneho tunela (fixacia farby), oba flat cas na kus —
 // sietotlac (na rozdiel od ostatnych technologii) nema ziadny casovy rozmer v povodnom vzorci,
@@ -145,17 +148,22 @@ function pracaSietotlacFlat(kostra) {
   const celkovyCasMin = (parseFloat(sietotlac.cas_tlace_min) || 0) + (parseFloat(sietotlac.cas_fixacie_min) || 0);
   return (celkovyCasMin / 60) * (parseFloat(sietotlac.cena_prace_hod) || 0);
 }
-// Celkova VC za CELU zakazku (vsetky farby + manipulacia/cistenie + praca + elektrina strojov raz).
-export function vcSietotlacCelkom(kostra, velkostId, jeTmavy, pocetFarieb) {
+// Celkova VC za 1 KUS (vsetky farby + manipulacia + praca + elektrina strojov na kus) + cistenie
+// zakazky rozpocitane na pocetKs (rovnaky dovod ako pri site vyssie — jednorazovy naklad na celu
+// zakazku, nie na kazdy kus). pocetKs je VOLITELNY — bez neho (napr. stare volania) sa sito aj
+// cistenie spravaju ako doteraz (delia sa 1-timi, teda naplno na kazdy kus).
+export function vcSietotlacCelkom(kostra, velkostId, jeTmavy, pocetFarieb, pocetKs) {
   const sietotlac = kostra.sietotlac;
-  const rozpad = vcSietotlacRozpad(kostra, velkostId, jeTmavy, pocetFarieb);
-  return rozpad.reduce((s, r) => s + r.spolu, 0) + (parseFloat(sietotlac?.naklady_manipulacia) || 0) + (parseFloat(sietotlac?.naklad_cistenie_zakazka) || 0) + pracaSietotlacFlat(kostra) + elektrinaSietotlacFlat(kostra);
+  const rozpad = vcSietotlacRozpad(kostra, velkostId, jeTmavy, pocetFarieb, pocetKs);
+  const cistenieNaKus = (parseFloat(sietotlac?.naklad_cistenie_zakazka) || 0) / Math.max(1, pocetKs || 1);
+  return rozpad.reduce((s, r) => s + r.spolu, 0) + (parseFloat(sietotlac?.naklady_manipulacia) || 0) + cistenieNaKus + pracaSietotlacFlat(kostra) + elektrinaSietotlacFlat(kostra);
 }
 // VC len za 1. farbu (zakladna predajna sadzba, bez dalsich farieb — tie sa predavaju cez priplatok).
-export function vcSietotlacZaklad(kostra, velkostId, jeTmavy) {
+export function vcSietotlacZaklad(kostra, velkostId, jeTmavy, pocetKs) {
   const sietotlac = kostra.sietotlac;
-  const prva = nakladFarbySietotlac(kostra, velkostId, jeTmavy, 1);
-  return prva.spolu + (parseFloat(sietotlac?.naklady_manipulacia) || 0) + (parseFloat(sietotlac?.naklad_cistenie_zakazka) || 0) + pracaSietotlacFlat(kostra) + elektrinaSietotlacFlat(kostra);
+  const prva = nakladFarbySietotlac(kostra, velkostId, jeTmavy, 1, pocetKs);
+  const cistenieNaKus = (parseFloat(sietotlac?.naklad_cistenie_zakazka) || 0) / Math.max(1, pocetKs || 1);
+  return prva.spolu + (parseFloat(sietotlac?.naklady_manipulacia) || 0) + cistenieNaKus + pracaSietotlacFlat(kostra) + elektrinaSietotlacFlat(kostra);
 }
 export function plochaFormatuSietotlac(kostra, velkostId) {
   const velkost = (kostra.sietotlacVelkosti || []).find(v => v.id === velkostId);

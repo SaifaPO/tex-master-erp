@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { Banknote, Calculator, TrendingUp } from 'lucide-react';
-import { vypocitajCenuPotlace } from './cenotvorba';
 import { priceAt, marginAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 import { vcSublimaciaGarment as vcSublimaciaGarmentZo, vcDtfGarment as vcDtfGarmentZo, vcVysivka as vcVysivkaZo, nakladFarbySietotlac, vcSietotlacZaklad, plochaFormatuSietotlac, vcRezanyTransfer as vcRezanyTransferZo } from './vyrobneNaklady';
 
@@ -117,7 +116,6 @@ export default function PotlaceTab({ supabase }) {
     await supabase.from('cennik_folie').update(patch).eq('id', id);
   };
 
-  const cennikProKalkulacku = { sublimacia, dtf, sietotlac, folie, rezanyMinCena: rezany.min_cena };
   const plocha = Math.round((parseFloat(testW) || 0) * (parseFloat(testH) || 0) * 10) / 10;
   const ks = Math.max(1, parseInt(testKs) || 1);
 
@@ -131,11 +129,11 @@ export default function PotlaceTab({ supabase }) {
 
   const vybranaVelkost = sietotlacVelkosti.find(v => v.id === testVelkostId);
   const pocetFariebSiet = Math.max(1, parseInt(testFarby) || 1);
-  const sietotlacFarbyRozpad = vybranaVelkost ? Array.from({ length: pocetFariebSiet }, (_, i) => nakladFarbySietotlac(kostraLive, testVelkostId, testTmavyTextil, i + 1)) : [];
+  const sietotlacFarbyRozpad = vybranaVelkost ? Array.from({ length: pocetFariebSiet }, (_, i) => nakladFarbySietotlac(kostraLive, testVelkostId, testTmavyTextil, i + 1, ks)) : [];
   // VC pre zakladnu predajnu sadzbu (cena_cm2) je vzdy len za 1. farbu — dalsie farby sa predavaju
   // cez samostatny "priplatok za farbu" nizsie, nie namiesane do zakladnej sadzby.
-  const vcSietotlac = vybranaVelkost ? vcSietotlacZaklad(kostraLive, testVelkostId, testTmavyTextil) : 0;
-  const navrhPriplatokFarbaVC = vybranaVelkost ? nakladFarbySietotlac(kostraLive, testVelkostId, testTmavyTextil, 2).spolu : 0;
+  const vcSietotlac = vybranaVelkost ? vcSietotlacZaklad(kostraLive, testVelkostId, testTmavyTextil, ks) : 0;
+  const navrhPriplatokFarbaVC = vybranaVelkost ? nakladFarbySietotlac(kostraLive, testVelkostId, testTmavyTextil, 2, ks).spolu : 0;
   const plochaSietotlacCm2 = plochaFormatuSietotlac(kostraLive, testVelkostId);
 
   const vcRezany = vcRezanyTransferZo(kostraLive, testFoliaId, plocha);
@@ -288,8 +286,8 @@ export default function PotlaceTab({ supabase }) {
       {/* TESTOVACIA KALKULAČKA (predajnych cien) — porovnanie VŠETKÝCH technologii naraz */}
       <div className="bg-slate-950 rounded-2xl p-5 border border-indigo-900/40">
         <h3 className="font-bold text-sm text-white mb-1 flex items-center gap-1.5"><Calculator className="w-4 h-4 text-indigo-400" /> Testovacia kalkulačka predajnej ceny — porovnanie technológií</h3>
-        <p className="text-xs text-slate-400 mb-1">Zadaj rozmer, počet kusov, farby a hneď vidíš cenu pri KAŽDEJ technológii naraz (podľa aktuálne uložených predajných sadzieb vyššie).</p>
-        <p className="text-[11px] text-amber-400/80 mb-4">⚠️ Neoverené, či appka pre "vlastnú potlač" (Dizajner) k týmto sadzbám niekde pripočítava DPH — over si to, alebo mi daj vedieť, nech to preveríme spolu.</p>
+        <p className="text-xs text-slate-400 mb-1">Zadaj rozmer, počet kusov, farby a hneď vidíš cenu pri KAŽDEJ technológii — počíta sa naživo z výrobnej ceny (Kostra cien) × maržová krivka (Cenotvorba) pri PRESNE tomto počte kusov, takže cena na kus tu naozaj klesá pri väčšom odbere (nie je to už len uložená pevná €/cm² sadzba).</p>
+        <p className="text-[11px] text-slate-500 mb-4">Sieťotlač sa počíta pre <strong className="text-slate-300">zvolený formát vyššie</strong> ({vybranaVelkost ? vybranaVelkost.label : 'nevybraný formát'}), nie pre voľný rozmer Šírka/Výška — cena sita/farby závisí od konkrétneho, vopred zadaného formátu, nie od ľubovoľnej plochy.</p>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">
           <div><label className="text-xs text-slate-400">Šírka (cm)</label><input type="number" value={testW} onChange={(e) => setTestW(e.target.value)} className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white" /></div>
           <div><label className="text-xs text-slate-400">Výška (cm)</label><input type="number" value={testH} onChange={(e) => setTestH(e.target.value)} className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white" /></div>
@@ -310,18 +308,19 @@ export default function PotlaceTab({ supabase }) {
         <p className="text-xs text-slate-400 mb-2">Plocha motívu: <span className="text-white font-semibold">{plocha} cm²</span> × {ks} ks</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {[
-            { key: 'sublimacia', label: 'Sublimácia' },
-            { key: 'dtf', label: 'DTF' },
-            { key: 'sietotlac', label: 'Sieťotlač' },
-            { key: 'rezany', label: 'Rezaný transfer (flex)' },
-          ].map(({ key, label }) => {
-            const r = vypocitajCenuPotlace(cennikProKalkulacku, key, plocha, parseInt(testFarby) || 1, testTmavyTextil, testFoliaId);
+            { key: 'sublimacia', label: 'Sublimácia', vc: vcSublimacia, plochaZaklad: plocha },
+            { key: 'dtf', label: 'DTF', vc: vcDtf, plochaZaklad: plocha },
+            { key: 'sietotlac', label: 'Sieťotlač', vc: vcSietotlac, plochaZaklad: plochaSietotlacCm2 },
+            { key: 'rezany', label: 'Rezaný transfer (flex)', vc: vcRezany, plochaZaklad: plocha },
+          ].map(({ key, label, vc, plochaZaklad }) => {
+            const cena = priceAt(vc, ks, pricingConfig);
+            const marza = marginAt(vc, ks, pricingConfig);
             return (
               <div key={key} className="bg-slate-900 rounded-xl border border-slate-800 p-3">
                 <p className="text-xs font-bold text-slate-300 mb-1">{label}</p>
-                <p className="text-xl font-black text-emerald-400">{r.cena.toFixed(2)} €<span className="text-xs text-slate-500 font-normal"> /ks</span></p>
-                <p className="text-sm text-slate-400">{(r.cena * ks).toFixed(2)} € spolu za {ks}ks</p>
-                <p className="text-[10px] text-slate-600 mt-1">{r.vzorec}</p>
+                <p className="text-xl font-black text-emerald-400">{cena.toFixed(2)} €<span className="text-xs text-slate-500 font-normal"> /ks</span></p>
+                <p className="text-sm text-slate-400">{(cena * ks).toFixed(2)} € spolu za {ks}ks</p>
+                <p className="text-[10px] text-slate-600 mt-1">VC {vc.toFixed(3)}€ × marža {marza.toFixed(0)}%{plochaZaklad ? ` · ${plochaZaklad} cm²` : ''}</p>
               </div>
             );
           })}

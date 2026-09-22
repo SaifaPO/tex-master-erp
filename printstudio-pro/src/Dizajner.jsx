@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { fabric } from 'fabric';
 import { Trash2, Download, ShoppingBag, Type, Image as ImageIcon, Sparkles, Shirt as ShirtIcon, Trophy, CheckCircle2, Loader2 } from 'lucide-react';
 import { nacitajDetailProduktu, nacitajPersonalizacieVarianty, najblizsiPersonalizacnyVariant } from './produktData';
-import { nacitajCennik, vypocitajCenuPotlace } from './cenotvorba';
+import { nacitajCennik, vypocitajCenuPotlace as vypocitajCenuPotlaceZalozne } from './cenotvorba';
 import { getSessionId } from './supabaseClient';
 import { nacitajGoogleFonty } from './loadGoogleFonts';
 
@@ -99,6 +99,9 @@ export default function Dizajner({ supabase, produktId }) {
   const [quantity, setQuantity] = useState(1);
   const [selectedObj, setSelectedObj] = useState(null);
   const [liveSize, setLiveSize] = useState(null); // { w, h, presahuje }
+  const [prepocitavaCenu, setPrepocitavaCenu] = useState(false);
+  const cenaDebounceRef = useRef(null);
+  const cenaPoziadavkaIdRef = useRef(0);
   const [priceInfo, setPriceInfo] = useState({ cenaKus: 0, cenaPotlace: 0, total: 0 });
   const [cartConfirmation, setCartConfirmation] = useState(null);
   const [techPanelOpen, setTechPanelOpen] = useState(false);
@@ -242,17 +245,56 @@ export default function Dizajner({ supabase, produktId }) {
     setLiveSize({ w: wCm, h: hCm, presahuje: wCm > max.w || hCm > max.h });
   };
 
-  // Prepočíta cenu naprieč všetkými zónami (aktívna zóna sa berie živá z plátna, ostatné z uloženého stavu)
+  // Prepočíta cenu naprieč všetkými zónami (aktívna zóna sa berie živá z plátna, ostatné z uloženého
+  // stavu). Samotný výpočet (výrobná cena → maržová krivka podľa POČTU KUSOV) beží server-side v
+  // Edge Function `dizajner-price-preview` — jednak preto, aby anon klient nikdy nevidel surové
+  // výrobné náklady, jednak preto, aby cena na kus naozaj klesala pri väčšom odbere (predtým sa tu
+  // počítalo len z pevnej €/cm² sadzby bez ohľadu na množstvo). Debounce 350ms, aby sa pri ťahaní/
+  // preklikávaní nespúšťal request na každý jeden pixel/zmenu — `cenaPoziadavkaIdRef` zahodí
+  // odpoveď, ktorá medzitým zastarala (prišla novšia požiadavka skôr, než sa táto vrátila).
   const aktualizujCenu = () => {
     const p = produktRef.current;
     const canvas = fabricRef.current;
-    if (!p || !canvas || !cennik) return;
+    if (!p || !canvas) return;
     const tech = currentTechnologia || p.technologia;
     const jeTmavyTextil = !!p.colors.find(c => c.hex === currentColor)?.je_tmava;
     const { plocha, farby } = plochaAFarbyVsetkychZon();
-    const cenaPotlace = vypocitajCenuPotlace(cennik, tech, plocha, farby, jeTmavyTextil, currentFolia);
-    const cenaKus = Number(p.zakladna_cena) + cenaPotlace;
-    setPriceInfo({ cenaKus, cenaPotlace, total: cenaKus * quantity });
+
+    if (cenaDebounceRef.current) clearTimeout(cenaDebounceRef.current);
+    if (!plocha) {
+      cenaPoziadavkaIdRef.current += 1;
+      setPrepocitavaCenu(false);
+      const cenaKus = Number(p.zakladna_cena);
+      setPriceInfo({ cenaKus, cenaPotlace: 0, total: cenaKus * quantity });
+      return;
+    }
+
+    setPrepocitavaCenu(true);
+    const requestId = ++cenaPoziadavkaIdRef.current;
+    cenaDebounceRef.current = setTimeout(async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke('dizajner-price-preview', {
+          body: { tech, plochaCm2: plocha, pocetFarieb: farby, jeTmavyTextil, foliaId: currentFolia, pocetKs: quantity },
+        });
+        if (requestId !== cenaPoziadavkaIdRef.current) return;
+        if (error || !data?.cena) throw (error || new Error(data?.error || 'Cenu sa nepodarilo vypočítať.'));
+        const cenaPotlace = Number(data.cena.cenaPotlace) || 0;
+        const cenaKus = Number(p.zakladna_cena) + cenaPotlace;
+        setPriceInfo({ cenaKus, cenaPotlace, total: cenaKus * quantity });
+      } catch (e) {
+        console.error('Chyba pri výpočte ceny potlače (Edge Function) — používam záložnú pevnú sadzbu:', e);
+        // Záložka pre prípad, že Edge Function ešte nie je nasadená (nenasadzuje sa automaticky
+        // pri git push, treba ju ručne vložiť v Supabase Dashboard) alebo dočasne nedostupná —
+        // radšej stará (nie množstevne odstupňovaná) cena než 0 € v obchode.
+        if (requestId === cenaPoziadavkaIdRef.current && cennik) {
+          const cenaPotlace = vypocitajCenuPotlaceZalozne(cennik, tech, plocha, farby, jeTmavyTextil, currentFolia);
+          const cenaKus = Number(p.zakladna_cena) + cenaPotlace;
+          setPriceInfo({ cenaKus, cenaPotlace, total: cenaKus * quantity });
+        }
+      } finally {
+        if (requestId === cenaPoziadavkaIdRef.current) setPrepocitavaCenu(false);
+      }
+    }, 350);
   };
 
   // handlersRef.current musí vždy ukazovať na TÚTO (najnovšiu) verziu handlerov — pozri komentár vyššie pri handlersRef.
@@ -878,8 +920,8 @@ export default function Dizajner({ supabase, produktId }) {
         <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div>
-              <span className="text-xs text-slate-500 font-medium block">Cena za kus s potlačou</span>
-              <span className="text-2xl font-black text-slate-900">{priceInfo.cenaKus.toFixed(2)} €</span>
+              <span className="text-xs text-slate-500 font-medium block">Cena za kus s potlačou{prepocitavaCenu ? ' (prepočítavam…)' : ''}</span>
+              <span className={`text-2xl font-black text-slate-900 transition-opacity ${prepocitavaCenu ? 'opacity-50' : ''}`}>{priceInfo.cenaKus.toFixed(2)} €</span>
             </div>
             <div className="flex gap-3 w-full sm:w-auto">
               <div className="flex items-center border border-slate-200 rounded-xl bg-slate-50 p-1">
@@ -887,7 +929,7 @@ export default function Dizajner({ supabase, produktId }) {
                 <span className="w-12 text-center font-bold text-sm">{quantity} ks</span>
                 <button onClick={() => setQuantity(q => q + 1)} className="w-8 h-8 flex items-center justify-center text-slate-600 hover:bg-white rounded-lg font-bold text-sm transition">+</button>
               </div>
-              <button onClick={pridatDoKosika} disabled={isAddingToCart} className="flex-1 sm:flex-initial bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white px-6 py-3 rounded-xl font-bold text-sm transition flex items-center justify-center gap-2 shadow-sm">
+              <button onClick={pridatDoKosika} disabled={isAddingToCart || prepocitavaCenu} title={prepocitavaCenu ? 'Počkaj, prepočítava sa cena…' : undefined} className="flex-1 sm:flex-initial bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white px-6 py-3 rounded-xl font-bold text-sm transition flex items-center justify-center gap-2 shadow-sm">
                 {isAddingToCart ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShoppingBag className="w-4 h-4" />}<span>Pridať do košíka</span>
               </button>
             </div>

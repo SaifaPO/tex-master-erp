@@ -416,7 +416,7 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
     if (calcMethod === 'sublimacia') calcVc = vcSublimaciaGarment(kostra, calcPlocha);
     else if (calcMethod === 'dtf') calcVc = vcDtfGarment(kostra, calcPlocha);
     else if (calcMethod === 'vysivka') calcVc = vcVysivka(kostra, calcPlocha, calcKs);
-    else if (calcMethod === 'sietotlac') { calcVc = vcSietotlacCelkom(kostra, calc.velkostId, calc.tmavy, calcFarby); calcPlochaPouzita = plochaFormatuSietotlac(kostra, calc.velkostId); }
+    else if (calcMethod === 'sietotlac') { calcVc = vcSietotlacCelkom(kostra, calc.velkostId, calc.tmavy, calcFarby, calcKs); calcPlochaPouzita = plochaFormatuSietotlac(kostra, calc.velkostId); }
     else if (calcMethod === 'rezany') calcVc = vcRezanyTransfer(kostra, calc.foliaId, calcPlocha) * calcFarby;
   }
   const calcUnitPrice = kostra ? priceAt(calcVc, calcKs, kostra.pricingConfig) : 0;
