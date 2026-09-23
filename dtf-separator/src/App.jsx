@@ -4,6 +4,7 @@ import { renderHalftone } from './lib/halftone.js';
 import { generateLpiTestSheet } from './lib/testSheet.js';
 import { renderSeparation, DEFAULT_CHANNEL_ANGLES, CHANNEL_LABELS } from './lib/separation.js';
 import { renderDtgFullColor } from './lib/dtgFullColor.js';
+import { setPngDpi } from './lib/pngDpi.js';
 
 const ACCESS_CODE = import.meta.env.VITE_ACCESS_CODE || 'grafik2026';
 const STORAGE_KEY = 'dtf-sep-unlocked';
@@ -249,9 +250,12 @@ export default function App() {
     if (canvasWrapRef.current) drawCanvasRef(canvasWrapRef.current);
   }, [drawCanvasRef]);
 
-  const downloadCanvas = (canvas, suffix) => {
+  // dpi: fyzicka hustota, na aku ma byt PNG oznaceny (pHYs chunk) — bez nej program pri otvoreni
+  // predpoklada 72 DPI a vytlaci/zobrazi motiv v uplne inej fyzickej velkosti, nez pre aku bol
+  // raster (LPI) navrhnuty. Vzdy rovnaka hodnota ako outputDpi pouzity pri samotnom vykresleni.
+  const downloadCanvas = (canvas, suffix, dpi) => {
     const a = document.createElement('a');
-    a.href = canvas.toDataURL('image/png');
+    a.href = setPngDpi(canvas.toDataURL('image/png'), dpi);
     a.download = `${(fileName || 'separacia').replace(/\.[^.]+$/, '')}_${suffix}.png`;
     a.click();
   };
@@ -272,22 +276,22 @@ export default function App() {
             lpi, outputDpi, dotShape, algorithm, blackPoint, whitePoint, channelAngles,
             whiteBase: { enabled: whiteBaseEnabled, chokePx, threshold: whiteThreshold, previewBackground: previewBg }
           });
-          downloadCanvas(full.channels.c, 'C');
-          downloadCanvas(full.channels.m, 'M');
-          downloadCanvas(full.channels.y, 'Y');
-          downloadCanvas(full.channels.k, 'K');
-          if (full.white) downloadCanvas(full.white, 'White-underbase');
+          downloadCanvas(full.channels.c, 'C', outputDpi);
+          downloadCanvas(full.channels.m, 'M', outputDpi);
+          downloadCanvas(full.channels.y, 'Y', outputDpi);
+          downloadCanvas(full.channels.k, 'K', outputDpi);
+          if (full.white) downloadCanvas(full.white, 'White-underbase', outputDpi);
         } else if (mode === 'dtg') {
           const full = renderDtgFullColor(workingCanvas, {
             lpi, angleDeg, dotShape, algorithm, outputDpi, blackPoint, whitePoint, invert,
             backgroundRemoval: { enabled: bgRemovalEnabled, tolerance: bgTolerance, feather: bgFeather },
             whiteBase: { enabled: whiteBaseEnabled, chokePx, threshold: whiteThreshold }
           });
-          downloadCanvas(full.composite, `dtg_${lpi}lpi_${Math.round(angleDeg)}deg`);
-          if (full.white) downloadCanvas(full.white, 'White-underbase');
+          downloadCanvas(full.composite, `dtg_${lpi}lpi_${Math.round(angleDeg)}deg`, outputDpi);
+          if (full.white) downloadCanvas(full.white, 'White-underbase', outputDpi);
         } else {
           const result = renderHalftone(workingCanvas, { lpi, angleDeg, dotShape, algorithm, inkColor, outputDpi, blackPoint, whitePoint, invert });
-          downloadCanvas(result, `halftone_${lpi}lpi_${Math.round(angleDeg)}deg`);
+          downloadCanvas(result, `halftone_${lpi}lpi_${Math.round(angleDeg)}deg`, outputDpi);
         }
       } finally {
         setIsDownloading(false);
@@ -300,7 +304,7 @@ export default function App() {
   const handleDownloadTestSheet = () => {
     const sheet = generateLpiTestSheet({ dotShape, inkColor, outputDpi: 300 });
     const a = document.createElement('a');
-    a.href = sheet.toDataURL('image/png');
+    a.href = setPngDpi(sheet.toDataURL('image/png'), 300);
     a.download = 'lpi_test_sheet.png';
     a.click();
   };
