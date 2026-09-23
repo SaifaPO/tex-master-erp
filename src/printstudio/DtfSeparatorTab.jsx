@@ -1,14 +1,21 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Upload, Download, RefreshCw, SplitSquareHorizontal, Image as ImageIcon } from 'lucide-react';
+import { Upload, Download, RefreshCw, SplitSquareHorizontal, Image as ImageIcon, ZoomIn } from 'lucide-react';
 import { renderHalftone } from './dtfSeparator/lib/halftone.js';
 import { generateLpiTestSheet } from './dtfSeparator/lib/testSheet.js';
 import { renderSeparation, DEFAULT_CHANNEL_ANGLES, CHANNEL_LABELS } from './dtfSeparator/lib/separation.js';
 import { renderDtgFullColor } from './dtfSeparator/lib/dtgFullColor.js';
+import { setPngDpi } from './dtfSeparator/lib/pngDpi.js';
 
 // Predtym samostatna appka (dtf-separator/) s vlastnym Vercel deployom a provizornym zdielanym
-// prístupovým kódom — Martin ju nevedel najst, tak je teraz kartou priamo v PrintStudio Pro a
-// pristup rieši prihlásenie/role hlavného ERP (rovnako ako ostatne karty), ziadny passcode netreba.
+// pristupovym kodom — Martin ju nevedel najst, tak je teraz kartou priamo v PrintStudio Pro a
+// pristup riesi prihlasenie/role hlavneho ERP (rovnako ako ostatne karty), ziadny passcode netreba.
 const PREVIEW_MAX = 1000; // px na dlhsej strane, kvoli plynulemu live nahladu
+// Bezpecne pod typicky limit rozmerov canvasu v prehliadaci (cca 16384px) — nad touto hranicou
+// vieme, ze by uz mohlo dochadzat k tichemu zlyhaniu (drawImage/toDataURL nic nespravi, ziadna
+// chyba). Zaroven halftone/separacne funkcie bezia synchronne v JS, takze aj podstatne mensie
+// rozmery uz vedia trvat dlho — preto MAX_DIM_PX drzime bezpecnejsie nizsie, nie len tesne pod
+// limitom prehliadaca.
+const MAX_DIM_PX = 8000;
 
 const DOT_SHAPES = [
   { value: 'circle', label: 'Kruh' },
@@ -32,8 +39,19 @@ export default function DtfSeparatorTab() {
   const [workingCanvas, setWorkingCanvas] = useState(null); // full-res, po volitelnom prispôsobení na cieľovú veľkosť tlače — pouziva sa na render/export
   const [workingPreviewCanvas, setWorkingPreviewCanvas] = useState(null); // downscaly workingCanvas, pre plynuly live nahlad
   const [fileName, setFileName] = useState('');
-  const [viewMode, setViewMode] = useState('split'); // 'original' | 'separation' | 'split' (rezim 'spot')
+  // Porovnanie s originalom funguje rovnako vo VSETKYCH 3 rezimoch — buď ako split (posuvnik delí
+  // plátno na pôvodný/výsledný obrázok), alebo pridržaním myši/prsta priamo na náhľade (docasne
+  // ukaze cely original, "preblik" — pozri isPeeking nizsie).
+  const [compareEnabled, setCompareEnabled] = useState(true);
   const [splitPos, setSplitPos] = useState(50);
+  const [isPeeking, setIsPeeking] = useState(false);
+  const [sizeWarning, setSizeWarning] = useState('');
+  const [saturation, setSaturation] = useState(100); // % — 100 = bezo zmeny
+  const [magnifierEnabled, setMagnifierEnabled] = useState(false);
+  const [magnifierZoom, setMagnifierZoom] = useState(4);
+  const [magnifierPos, setMagnifierPos] = useState(null); // {x,y} v suradniciach nahladoveho canvasu, alebo null ked mys nie je nad nahladom
+  const magnifierCanvasRef = useRef(null);
+  const MAGNIFIER_SIZE = 190; // px okienka lupy
 
   const [mode, setMode] = useState('spot'); // 'spot' | 'cmyk' | 'dtg'
   const [lpi, setLpi] = useState(35);
@@ -63,6 +81,7 @@ export default function DtfSeparatorTab() {
   const [separationResult, setSeparationResult] = useState(null); // rezim 'cmyk' — { channels, white, composite }
   const [dtgResult, setDtgResult] = useState(null); // rezim 'dtg' — { composite, white, dotStencil }
   const [isRendering, setIsRendering] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const canvasWrapRef = useRef(null);
   const fileInputRef = useRef(null);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
@@ -85,25 +104,44 @@ export default function DtfSeparatorTab() {
   };
 
   // Volitelne prisposobenie na cielovu velkost tlace (jednoduche prevzorkovanie, NIE AI dokreslenie detailu) —
-  // prepocita sa vzdy, ked sa zmeni zdroj, cielova sirka alebo output DPI, a vyrobi z neho aj znizenu
-  // "pracovnu" verziu pre plynuly live nahlad.
+  // prepocita sa vzdy, ked sa zmeni zdroj, cielova sirka, output DPI alebo saturacia, a vyrobi
+  // z neho aj znizenu "pracovnu" verziu pre plynuly live nahlad.
   useEffect(() => {
-    if (!sourceCanvas) { setWorkingCanvas(null); setWorkingPreviewCanvas(null); return; }
-    let target = sourceCanvas;
+    if (!sourceCanvas) { setWorkingCanvas(null); setWorkingPreviewCanvas(null); setSizeWarning(''); return; }
+
+    let targetWidthPx = sourceCanvas.width;
+    let targetHeightPx = sourceCanvas.height;
     if (resizeEnabled && targetWidthCm > 0) {
-      const targetWidthPx = Math.max(1, Math.round((targetWidthCm / 2.54) * outputDpi));
-      if (targetWidthPx !== sourceCanvas.width) {
-        const scale = targetWidthPx / sourceCanvas.width;
-        const targetHeightPx = Math.max(1, Math.round(sourceCanvas.height * scale));
-        const resized = document.createElement('canvas');
-        resized.width = targetWidthPx;
-        resized.height = targetHeightPx;
-        const rctx = resized.getContext('2d');
-        rctx.imageSmoothingEnabled = true;
-        rctx.imageSmoothingQuality = 'high';
-        rctx.drawImage(sourceCanvas, 0, 0, targetWidthPx, targetHeightPx);
-        target = resized;
-      }
+      targetWidthPx = Math.max(1, Math.round((targetWidthCm / 2.54) * outputDpi));
+      const scale = targetWidthPx / sourceCanvas.width;
+      targetHeightPx = Math.max(1, Math.round(sourceCanvas.height * scale));
+    }
+    // Ak by vyslednÿ rozmer presiahol bezpecnu hranicu (velmi velka ciel. sirka pri vysokom DPI —
+    // presne pripad "zadal som 100cm a nic sa nedialo"), radsej ho automaticky zmensime a napiseme
+    // preco, nez aby spracovanie ticho zamrzlo alebo canvas ostal prazdny bez ziadnej hlasky.
+    let zmensene = false;
+    if (targetWidthPx > MAX_DIM_PX || targetHeightPx > MAX_DIM_PX) {
+      const zmensenie = MAX_DIM_PX / Math.max(targetWidthPx, targetHeightPx);
+      targetWidthPx = Math.max(1, Math.round(targetWidthPx * zmensenie));
+      targetHeightPx = Math.max(1, Math.round(targetHeightPx * zmensenie));
+      zmensene = true;
+    }
+    setSizeWarning(zmensene
+      ? `Požadovaná veľkosť by presiahla ${MAX_DIM_PX}px na dlhšej strane (limit prehliadača aj rozumný čas spracovania) — automaticky zmenšené na ${targetWidthPx}×${targetHeightPx}px. Skús nižšie Output DPI, ak potrebuješ zachovať presnú šírku v cm.`
+      : '');
+
+    let target = sourceCanvas;
+    const potrebujePrekreslenie = saturation !== 100 || targetWidthPx !== sourceCanvas.width || targetHeightPx !== sourceCanvas.height;
+    if (potrebujePrekreslenie) {
+      const resized = document.createElement('canvas');
+      resized.width = targetWidthPx;
+      resized.height = targetHeightPx;
+      const rctx = resized.getContext('2d');
+      rctx.imageSmoothingEnabled = true;
+      rctx.imageSmoothingQuality = 'high';
+      if (saturation !== 100) rctx.filter = `saturate(${saturation}%)`;
+      rctx.drawImage(sourceCanvas, 0, 0, targetWidthPx, targetHeightPx);
+      target = resized;
     }
     setWorkingCanvas(target);
 
@@ -117,7 +155,7 @@ export default function DtfSeparatorTab() {
     pctx.drawImage(target, 0, 0, prev.width, prev.height);
     prev._scale = scale;
     setWorkingPreviewCanvas(prev);
-  }, [sourceCanvas, resizeEnabled, targetWidthCm, outputDpi]);
+  }, [sourceCanvas, resizeEnabled, targetWidthCm, outputDpi, saturation]);
 
   // Live nahlad — prepocita sa (debounced) pri kazdej zmene parametra, na znizenom rozliseni kvoli rychlosti.
   useEffect(() => {
@@ -148,92 +186,133 @@ export default function DtfSeparatorTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workingPreviewCanvas, mode, lpi, angleDeg, dotShape, algorithm, inkColor, outputDpi, blackPoint, whitePoint, invert, channelAngles, whiteBaseEnabled, chokePx, whiteThreshold, previewBg, bgRemovalEnabled, bgTolerance, bgFeather]);
 
+  // "Po" vrstva zavisi od rezimu — pre spot je to jediny vysledok, pre cmyk/dtg podla toho, ktory
+  // kanal/nahlad je prave zvoleny. "Pred" je vzdy workingPreviewCanvas (povodny obrazok).
+  const afterLayer = mode === 'cmyk'
+    ? (separationResult && (channelView === 'composite' ? separationResult.composite : channelView === 'white' ? separationResult.white : separationResult.channels[channelView]))
+    : mode === 'dtg'
+    ? (dtgResult && (dtgView === 'white' ? dtgResult.white : dtgView === 'stencil' ? dtgResult.dotStencil : dtgResult.composite))
+    : previewResultCanvas;
+
   const drawCanvasRef = useCallback((node) => {
     if (!node || !workingPreviewCanvas) return;
     const ctx = node.getContext('2d');
     node.width = workingPreviewCanvas.width;
     node.height = workingPreviewCanvas.height;
     ctx.clearRect(0, 0, node.width, node.height);
-
-    if (mode === 'cmyk') {
-      ctx.fillStyle = previewBg;
-      ctx.fillRect(0, 0, node.width, node.height);
-      if (!separationResult) { ctx.drawImage(workingPreviewCanvas, 0, 0); return; }
-      const layer = channelView === 'composite' ? separationResult.composite
-        : channelView === 'white' ? separationResult.white
-        : separationResult.channels[channelView];
-      if (layer) ctx.drawImage(layer, 0, 0);
-      return;
-    }
-
-    if (mode === 'dtg') {
-      ctx.fillStyle = previewBg;
-      ctx.fillRect(0, 0, node.width, node.height);
-      if (!dtgResult) { ctx.drawImage(workingPreviewCanvas, 0, 0); return; }
-      const layer = dtgView === 'white' ? dtgResult.white : dtgView === 'stencil' ? dtgResult.dotStencil : dtgResult.composite;
-      if (layer) ctx.drawImage(layer, 0, 0);
-      return;
-    }
-
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = (mode === 'cmyk' || mode === 'dtg') ? previewBg : '#ffffff';
     ctx.fillRect(0, 0, node.width, node.height);
-    if (viewMode === 'original' || !previewResultCanvas) {
+
+    // Pridrzanie mysi/prsta ("preblik") vzdy ukaze cisty original, bez ohladu na split/vybrany kanal.
+    if (isPeeking || !afterLayer) {
       ctx.drawImage(workingPreviewCanvas, 0, 0);
-    } else if (viewMode === 'separation') {
-      ctx.drawImage(previewResultCanvas, 0, 0);
-    } else {
-      const splitX = Math.round((splitPos / 100) * node.width);
-      ctx.drawImage(workingPreviewCanvas, 0, 0, splitX, node.height, 0, 0, splitX, node.height);
-      ctx.drawImage(previewResultCanvas, splitX, 0, node.width - splitX, node.height, splitX, 0, node.width - splitX, node.height);
-      ctx.strokeStyle = '#6366f1';
-      ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(splitX, 0); ctx.lineTo(splitX, node.height); ctx.stroke();
+      return;
     }
-  }, [workingPreviewCanvas, previewResultCanvas, separationResult, dtgResult, viewMode, splitPos, mode, channelView, dtgView, previewBg]);
+    if (!compareEnabled) {
+      ctx.drawImage(afterLayer, 0, 0);
+      return;
+    }
+    const splitX = Math.round((splitPos / 100) * node.width);
+    ctx.drawImage(workingPreviewCanvas, 0, 0, splitX, node.height, 0, 0, splitX, node.height);
+    ctx.drawImage(afterLayer, splitX, 0, node.width - splitX, node.height, splitX, 0, node.width - splitX, node.height);
+    ctx.strokeStyle = '#6366f1';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(splitX, 0); ctx.lineTo(splitX, node.height); ctx.stroke();
+  }, [workingPreviewCanvas, afterLayer, isPeeking, compareEnabled, splitPos, mode, previewBg]);
 
   useEffect(() => {
     if (canvasWrapRef.current) drawCanvasRef(canvasWrapRef.current);
   }, [drawCanvasRef]);
 
-  const downloadCanvas = (canvas, suffix) => {
+  // Lupa — "permanentne priblizene okienko", ktore vzdy ukazuje priblizeny vyrez z toho miesta
+  // nahladu, kde je prave mys (alebo stred, kym sa mysou nepohlo) — bez tohto sa velkost bodiek
+  // (LPI) na malom zmensenom nahlade tazko posudi. imageSmoothingEnabled=false zamerne, aby sa
+  // videli ostre pixely/bodky, nie rozmazany priblizeny obraz.
+  useEffect(() => {
+    if (!magnifierEnabled) return;
+    const mc = magnifierCanvasRef.current;
+    const src = canvasWrapRef.current;
+    if (!mc || !src) return;
+    mc.width = MAGNIFIER_SIZE;
+    mc.height = MAGNIFIER_SIZE;
+    const mctx = mc.getContext('2d');
+    mctx.imageSmoothingEnabled = false;
+    mctx.clearRect(0, 0, MAGNIFIER_SIZE, MAGNIFIER_SIZE);
+    const pos = magnifierPos || { x: src.width / 2, y: src.height / 2 };
+    const srcSize = MAGNIFIER_SIZE / magnifierZoom;
+    const sx = Math.max(0, Math.min(src.width - srcSize, pos.x - srcSize / 2));
+    const sy = Math.max(0, Math.min(src.height - srcSize, pos.y - srcSize / 2));
+    mctx.drawImage(src, sx, sy, srcSize, srcSize, 0, 0, MAGNIFIER_SIZE, MAGNIFIER_SIZE);
+    mctx.strokeStyle = '#6366f1';
+    mctx.lineWidth = 2;
+    mctx.strokeRect(1, 1, MAGNIFIER_SIZE - 2, MAGNIFIER_SIZE - 2);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [magnifierEnabled, magnifierPos, magnifierZoom, drawCanvasRef]);
+
+  const onCanvasMouseMove = (e) => {
+    if (!magnifierEnabled) return;
+    const node = e.currentTarget;
+    const rect = node.getBoundingClientRect();
+    const scaleX = node.width / rect.width;
+    const scaleY = node.height / rect.height;
+    setMagnifierPos({ x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY });
+  };
+
+  // dpi: fyzicka hustota, na aku ma byt PNG oznaceny (pHYs chunk) — bez nej program pri otvoreni
+  // predpoklada 72 DPI a vytlaci/zobrazi motiv v uplne inej fyzickej velkosti, nez pre aku bol
+  // raster (LPI) navrhnuty. Vzdy rovnaka hodnota ako outputDpi pouzity pri samotnom vykresleni.
+  const downloadCanvas = (canvas, suffix, dpi) => {
     const a = document.createElement('a');
-    a.href = canvas.toDataURL('image/png');
+    a.href = setPngDpi(canvas.toDataURL('image/png'), dpi);
     a.download = `${(fileName || 'separacia').replace(/\.[^.]+$/, '')}_${suffix}.png`;
     a.click();
   };
 
+  // Renderovanie v plnom rozlíšení (na rozdiel od live náhľadu) je synchrónne a pri väčších
+  // obrázkoch vie trvať niekoľko sekúnd — bez zjavnej odozvy to vyzerá, akoby sa "nič nedialo".
+  // setIsDownloading(true) samo o sebe by sa neprekreslilo skôr, než hlavné vlákno zaneprázdni
+  // ťažký výpočet (React by stihol commitnúť, ale prehliadač by to nestihol vymaľovať) — preto sa
+  // samotný výpočet odloží o jeden tik (setTimeout 30ms), aby React/prehliadač stihli vykresliť
+  // spinner PRED tým, než sa vlákno zablokuje.
   const handleDownloadPng = () => {
     if (!workingCanvas) return;
-    if (mode === 'cmyk') {
-      const full = renderSeparation(workingCanvas, {
-        lpi, outputDpi, dotShape, algorithm, blackPoint, whitePoint, channelAngles,
-        whiteBase: { enabled: whiteBaseEnabled, chokePx, threshold: whiteThreshold, previewBackground: previewBg }
-      });
-      downloadCanvas(full.channels.c, 'C');
-      downloadCanvas(full.channels.m, 'M');
-      downloadCanvas(full.channels.y, 'Y');
-      downloadCanvas(full.channels.k, 'K');
-      if (full.white) downloadCanvas(full.white, 'White-underbase');
-      return;
-    }
-    if (mode === 'dtg') {
-      const full = renderDtgFullColor(workingCanvas, {
-        lpi, angleDeg, dotShape, algorithm, outputDpi, blackPoint, whitePoint, invert,
-        backgroundRemoval: { enabled: bgRemovalEnabled, tolerance: bgTolerance, feather: bgFeather },
-        whiteBase: { enabled: whiteBaseEnabled, chokePx, threshold: whiteThreshold }
-      });
-      downloadCanvas(full.composite, `dtg_${lpi}lpi_${Math.round(angleDeg)}deg`);
-      if (full.white) downloadCanvas(full.white, 'White-underbase');
-      return;
-    }
-    const result = renderHalftone(workingCanvas, { lpi, angleDeg, dotShape, algorithm, inkColor, outputDpi, blackPoint, whitePoint, invert });
-    downloadCanvas(result, `halftone_${lpi}lpi_${Math.round(angleDeg)}deg`);
+    setIsDownloading(true);
+    setTimeout(() => {
+      try {
+        if (mode === 'cmyk') {
+          const full = renderSeparation(workingCanvas, {
+            lpi, outputDpi, dotShape, algorithm, blackPoint, whitePoint, channelAngles,
+            whiteBase: { enabled: whiteBaseEnabled, chokePx, threshold: whiteThreshold, previewBackground: previewBg }
+          });
+          downloadCanvas(full.channels.c, 'C', outputDpi);
+          downloadCanvas(full.channels.m, 'M', outputDpi);
+          downloadCanvas(full.channels.y, 'Y', outputDpi);
+          downloadCanvas(full.channels.k, 'K', outputDpi);
+          if (full.white) downloadCanvas(full.white, 'White-underbase', outputDpi);
+        } else if (mode === 'dtg') {
+          const full = renderDtgFullColor(workingCanvas, {
+            lpi, angleDeg, dotShape, algorithm, outputDpi, blackPoint, whitePoint, invert,
+            backgroundRemoval: { enabled: bgRemovalEnabled, tolerance: bgTolerance, feather: bgFeather },
+            whiteBase: { enabled: whiteBaseEnabled, chokePx, threshold: whiteThreshold }
+          });
+          downloadCanvas(full.composite, `dtg_${lpi}lpi_${Math.round(angleDeg)}deg`, outputDpi);
+          if (full.white) downloadCanvas(full.white, 'White-underbase', outputDpi);
+        } else {
+          const result = renderHalftone(workingCanvas, { lpi, angleDeg, dotShape, algorithm, inkColor, outputDpi, blackPoint, whitePoint, invert });
+          downloadCanvas(result, `halftone_${lpi}lpi_${Math.round(angleDeg)}deg`, outputDpi);
+        }
+      } finally {
+        setIsDownloading(false);
+      }
+    }, 30);
   };
 
+  // Testovacia stranka je pevna kalibracna referencia — vzdy 300 DPI, bez ohladu na to, na ake
+  // Output DPI si aktualne nastavil svoj vlastny motiv v nastroji (ten sa sem uz nepremieta).
   const handleDownloadTestSheet = () => {
-    const sheet = generateLpiTestSheet({ dotShape, inkColor, outputDpi });
+    const sheet = generateLpiTestSheet({ dotShape, inkColor, outputDpi: 300 });
     const a = document.createElement('a');
-    a.href = sheet.toDataURL('image/png');
+    a.href = setPngDpi(sheet.toDataURL('image/png'), 300);
     a.download = 'lpi_test_sheet.png';
     a.click();
   };
@@ -261,32 +340,42 @@ export default function DtfSeparatorTab() {
           ) : (
             <>
               <div className="flex flex-wrap items-center gap-2 bg-slate-900 border border-slate-800 rounded-xl p-2">
-                {mode === 'spot' ? (
-                  <>
-                    {[['original', 'Original'], ['separation', 'Separácia'], ['split', 'Split View']].map(([v, label]) => (
-                      <button key={v} onClick={() => setViewMode(v)} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${viewMode === v ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}>{label}</button>
-                    ))}
-                    {viewMode === 'split' && (
-                      <div className="flex-1 flex items-center gap-2 px-2">
-                        <SplitSquareHorizontal className="h-4 w-4 text-slate-500" />
-                        <input type="range" min="0" max="100" value={splitPos} onChange={(e) => setSplitPos(Number(e.target.value))} className="flex-1" />
-                      </div>
-                    )}
-                  </>
-                ) : mode === 'dtg' ? (
+                {mode === 'dtg' ? (
                   DTG_VIEWS.map(v => (
                     <button key={v} onClick={() => setDtgView(v)} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${dtgView === v ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}>
                       {DTG_VIEW_LABELS[v]}
                     </button>
                   ))
-                ) : (
+                ) : mode === 'cmyk' ? (
                   CHANNEL_VIEWS.map(v => (
                     <button key={v} onClick={() => setChannelView(v)} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${channelView === v ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}>
                       {v === 'composite' ? 'Kompozit' : v === 'white' ? 'Biely podklad' : CHANNEL_LABELS[v]}
                     </button>
                   ))
+                ) : null}
+                <label className="flex items-center gap-1.5 text-xs font-bold text-slate-300 cursor-pointer">
+                  <input type="checkbox" checked={compareEnabled} onChange={(e) => setCompareEnabled(e.target.checked)} className="accent-indigo-600" />
+                  <SplitSquareHorizontal className="h-3.5 w-3.5 text-slate-500" /> Porovnať s originálom
+                </label>
+                {compareEnabled && (
+                  <input type="range" min="0" max="100" value={splitPos} onChange={(e) => setSplitPos(Number(e.target.value))} className="flex-1 min-w-[100px]" />
                 )}
                 {isRendering && <span className="text-[10px] text-indigo-400 flex items-center gap-1 ml-auto pr-2"><RefreshCw className="h-3 w-3 animate-spin" /> počítam...</span>}
+              </div>
+              <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-xl p-2">
+                <label className="flex items-center gap-1.5 text-xs font-bold text-slate-300 cursor-pointer">
+                  <input type="checkbox" checked={magnifierEnabled} onChange={(e) => { setMagnifierEnabled(e.target.checked); if (!e.target.checked) setMagnifierPos(null); }} className="accent-indigo-600" />
+                  <ZoomIn className="h-3.5 w-3.5 text-slate-500" /> Lupa
+                </label>
+                {magnifierEnabled && (
+                  <>
+                    <span className="text-[10px] text-slate-500 ml-1">zväčšenie:</span>
+                    {[2, 4, 8].map(z => (
+                      <button key={z} onClick={() => setMagnifierZoom(z)} className={`px-2 py-1 rounded text-[10px] font-bold ${magnifierZoom === z ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'}`}>{z}×</button>
+                    ))}
+                    <span className="text-[10px] text-slate-500 ml-auto">prejdi myšou nad náhľadom</span>
+                  </>
+                )}
               </div>
               {(mode === 'cmyk' || mode === 'dtg') && (
                 <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-xl p-2 text-xs text-slate-400">
@@ -297,14 +386,32 @@ export default function DtfSeparatorTab() {
                   <input type="color" value={previewBg} onChange={(e) => setPreviewBg(e.target.value)} className="h-6 w-8 bg-transparent border border-slate-700 rounded cursor-pointer" />
                 </div>
               )}
-              <div
-                onDragOver={(e) => { e.preventDefault(); setIsDraggingFile(true); }}
-                onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setIsDraggingFile(false); }}
-                onDrop={(e) => { e.preventDefault(); setIsDraggingFile(false); handleFile(e.dataTransfer.files?.[0]); }}
-                className={`rounded-xl overflow-hidden border-2 flex items-center justify-center transition-colors ${isDraggingFile ? 'border-dashed border-indigo-500 bg-indigo-950/20' : 'border-slate-800'}`}
-                style={{ backgroundColor: isDraggingFile ? undefined : ((mode === 'cmyk' || mode === 'dtg') ? previewBg : '#ffffff') }}
-              >
-                <canvas ref={(node) => { canvasWrapRef.current = node; drawCanvasRef(node); }} className="max-w-full h-auto" />
+              <p className="text-[10px] text-slate-600 -mt-1">💡 Podrž kliknuté priamo na náhľade — dočasne ukáže čistý originál (preblik), bez ohľadu na posuvník.</p>
+              <div className="flex flex-col sm:flex-row gap-3 items-start">
+                <div
+                  onDragOver={(e) => { e.preventDefault(); setIsDraggingFile(true); }}
+                  onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setIsDraggingFile(false); }}
+                  onDrop={(e) => { e.preventDefault(); setIsDraggingFile(false); handleFile(e.dataTransfer.files?.[0]); }}
+                  className={`rounded-xl overflow-hidden border-2 flex items-center justify-center flex-1 transition-colors ${isDraggingFile ? 'border-dashed border-indigo-500 bg-indigo-950/20' : 'border-slate-800'}`}
+                  style={{ backgroundColor: isDraggingFile ? undefined : ((mode === 'cmyk' || mode === 'dtg') ? previewBg : '#ffffff') }}
+                >
+                  <canvas
+                    ref={(node) => { canvasWrapRef.current = node; drawCanvasRef(node); }}
+                    onMouseDown={() => setIsPeeking(true)}
+                    onMouseUp={() => setIsPeeking(false)}
+                    onMouseLeave={() => { setIsPeeking(false); setMagnifierPos(null); }}
+                    onMouseMove={onCanvasMouseMove}
+                    onTouchStart={() => setIsPeeking(true)}
+                    onTouchEnd={() => setIsPeeking(false)}
+                    className="max-w-full h-auto cursor-pointer select-none"
+                  />
+                </div>
+                {magnifierEnabled && (
+                  <div className="shrink-0 bg-slate-950 border border-slate-800 rounded-xl p-2 mx-auto sm:mx-0">
+                    <canvas ref={magnifierCanvasRef} width={MAGNIFIER_SIZE} height={MAGNIFIER_SIZE} className="rounded-lg" style={{ backgroundColor: (mode === 'cmyk' || mode === 'dtg') ? previewBg : '#ffffff' }} />
+                    <p className="text-[10px] text-slate-500 text-center mt-1">{magnifierZoom}× lupa</p>
+                  </div>
+                )}
               </div>
               <button onClick={() => fileInputRef.current?.click()} className="text-xs text-slate-500 hover:text-slate-300 underline">Nahrať iný obrázok (alebo ho pretiahni na náhľad vyššie)</button>
               <input ref={fileInputRef} type="file" accept="image/png,image/jpeg" className="hidden" onChange={(e) => handleFile(e.target.files[0])} />
@@ -324,7 +431,18 @@ export default function DtfSeparatorTab() {
 
           <div>
             <label className="text-xs text-slate-400 flex justify-between mb-1"><span>LPI (veľkosť rastra)</span><span className="text-white font-mono">{lpi}</span></label>
-            <input type="range" min="15" max="55" value={lpi} onChange={(e) => setLpi(Number(e.target.value))} className="w-full" />
+            <input type="range" min="15" max="85" value={lpi} onChange={(e) => setLpi(Number(e.target.value))} className="w-full" />
+            <div className="mt-2 bg-slate-950 border border-slate-800 rounded-lg p-2.5 space-y-1.5">
+              <div className="flex flex-wrap gap-1.5">
+                <button onClick={() => setLpi(50)} className="text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded">Bavlna 45–55</button>
+                <button onClick={() => setLpi(75)} className="text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded">Hladký textil 65–85</button>
+                <button onClick={() => setLpi(60)} className="text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded">Foto 55–65</button>
+              </div>
+              <p className="text-[10px] text-slate-500 leading-relaxed">
+                Pri {lpi} LPI: odporúčané Output DPI ≈ <b className="text-slate-300">{Math.round(lpi * 2.5)}</b>, mesh sita (sieťotlač) ≈ <b className="text-slate-300">{Math.round(lpi * 4)}–{Math.round(lpi * 5)}</b>. Uhol 22,5° je bežne najčistejší (menej moaré).
+              </p>
+              <p className="text-[9px] text-slate-600">Orientačne podľa bežných odporúčaní v odbore (bavlna ~45–55, hladké/premium materiály ~65–85, fotorealistické motívy ~55–65 LPI) — vždy over vzorkou na skutočnej látke/site.</p>
+            </div>
           </div>
 
           {mode === 'spot' || mode === 'dtg' ? (
@@ -384,8 +502,17 @@ export default function DtfSeparatorTab() {
                     {workingCanvas && workingCanvas.width > sourceCanvas.width && ' Zväčšuje sa nad reálne rozlíšenie zdroja — ide o jednoduché prevzorkovanie (nie AI dokreslenie detailu), výsledok bude mäkší.'}
                   </p>
                 )}
+                {sizeWarning && (
+                  <p className="text-[10px] text-amber-400 bg-amber-950/30 border border-amber-900/50 rounded-lg px-2 py-1.5 mt-1.5 leading-relaxed">⚠️ {sizeWarning}</p>
+                )}
               </div>
             )}
+          </div>
+
+          <div className="border-t border-slate-800 pt-3 space-y-2">
+            <label className="text-xs text-slate-400 flex justify-between mb-1"><span>Sýtosť farieb (saturácia)</span><span className="text-white font-mono">{saturation}%</span></label>
+            <input type="range" min="0" max="250" step="5" value={saturation} onChange={(e) => setSaturation(Number(e.target.value))} className="w-full" />
+            <p className="text-[9px] text-slate-600">Halftonovanie niekedy obraz opticky vyplaví (pôsobí mdlo) — mierne zvýšenie sýtosti pred rastrovaním to vie kompenzovať. 100% = bezo zmeny.</p>
           </div>
 
           <div className="border-t border-slate-800 pt-3 space-y-3">
@@ -447,8 +574,10 @@ export default function DtfSeparatorTab() {
             </div>
           )}
 
-          <button onClick={handleDownloadPng} disabled={!workingCanvas} className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-bold py-2.5 rounded-lg text-sm flex items-center justify-center gap-2">
-            <Download className="h-4 w-4" /> {mode === 'cmyk' ? 'Stiahnuť vrstvy (C, M, Y, K, White)' : mode === 'dtg' ? 'Stiahnuť PNG (plnofarebné + biely podklad)' : 'Stiahnuť PNG (plné rozlíšenie)'}
+          <button onClick={handleDownloadPng} disabled={!workingCanvas || isDownloading} className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-bold py-2.5 rounded-lg text-sm flex items-center justify-center gap-2">
+            {isDownloading
+              ? <><RefreshCw className="h-4 w-4 animate-spin" /> Spracúvam v plnom rozlíšení…</>
+              : <><Download className="h-4 w-4" /> {mode === 'cmyk' ? 'Stiahnuť vrstvy (C, M, Y, K, White)' : mode === 'dtg' ? 'Stiahnuť PNG (plnofarebné + biely podklad)' : 'Stiahnuť PNG (plné rozlíšenie)'}</>}
           </button>
         </div>
       </div>

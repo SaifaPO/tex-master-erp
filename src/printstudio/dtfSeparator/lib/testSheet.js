@@ -2,6 +2,11 @@ import { renderHalftone } from './halftone.js';
 
 // Vygeneruje testovaciu stranku so vzorkami roznych LPI x uhlov, na strednom sedom tone (50%),
 // aby sa dalo priamou tlacou zistit, aky jemny raster tlaciaren/DTF folia realne zvladne.
+// outputDpi je zamerne VZDY 300 (nie z aktualneho nastavenia v nastroji) — testovacia stranka je
+// pevna kalibracna referencia, nemala by sa ticho zmenit len preto, ze si niekto pre svoj vlastny
+// motiv nastavil ine DPI. PNG je zamerne BEZ pozadia (priehladne) — cely list sa realne tlaci na
+// priehladnu DTF fóliu, takze plna biela plocha pod kazdou vzorkou by zbytocne miñala biely atrament
+// a skreslovala vizualne porovnanie hustoty rastra.
 export function generateLpiTestSheet({ lpis = [15, 25, 35, 45, 55], angles = [0, 15, 45], swatchSize = 260, outputDpi = 300, dotShape = 'circle', inkColor = '#000000' }) {
   const cols = angles.length;
   const rows = lpis.length;
@@ -14,8 +19,7 @@ export function generateLpiTestSheet({ lpis = [15, 25, 35, 45, 55], angles = [0,
   canvas.width = cellW * cols + padding + 160;
   canvas.height = cellH * rows + padding + 40;
   const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  // Ziadne fillRect pozadia — canvas ostava priehladny, kym sa doñ nieco explicitne nakresli.
   ctx.fillStyle = '#111827';
   ctx.font = 'bold 16px sans-serif';
   ctx.fillText('LPI test sheet — DTF/DTG separátor', padding, 24);
@@ -44,7 +48,7 @@ export function generateLpiTestSheet({ lpis = [15, 25, 35, 45, 55], angles = [0,
       const x = padding + 160 + ci * cellW;
       const halftoned = renderHalftone(src, {
         lpi, outputDpi, angleDeg: angle, dotShape, inkColor,
-        algorithm: 'am', blackPoint: 0, whitePoint: 255, invert: false, background: '#ffffff'
+        algorithm: 'am', blackPoint: 0, whitePoint: 255, invert: false, background: null
       });
       ctx.drawImage(halftoned, x, y);
       ctx.strokeStyle = '#d1d5db';
