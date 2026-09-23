@@ -166,16 +166,23 @@ Deno.serve(async (req) => {
 
     let vc = 0;
     let detaily: Record<string, unknown> = {};
+    let minCena = 0;
 
     if (tech === 'sublimacia') {
-      const [{ data: textilSub }, { data: sublimaciaGarment }] = await Promise.all([
+      const [{ data: textilSub }, { data: sublimaciaGarment }, { data: techRiadok }] = await Promise.all([
         supabase.from('textil_naklady').select('*').eq('technologia', 'sublimacia').maybeSingle(),
         supabase.from('cennik_sublimacia_naklady').select('*').eq('id', 1).maybeSingle(),
+        supabase.from('cennik_technologie').select('min_cena').eq('technologia', 'sublimacia').maybeSingle(),
       ]);
       vc = vcSublimaciaGarment(textilSub, sublimaciaGarment, metriky, plocha);
+      minCena = Number(techRiadok?.min_cena) || 0;
     } else if (tech === 'dtf') {
-      const { data: dtfNaklady } = await supabase.from('dtf_naklady').select('*').eq('id', 1).maybeSingle();
+      const [{ data: dtfNaklady }, { data: techRiadok }] = await Promise.all([
+        supabase.from('dtf_naklady').select('*').eq('id', 1).maybeSingle(),
+        supabase.from('cennik_technologie').select('min_cena').eq('technologia', 'dtf').maybeSingle(),
+      ]);
       vc = vcDtfGarment(dtfNaklady, metriky, plocha);
+      minCena = Number(techRiadok?.min_cena) || 0;
     } else if (tech === 'sietotlac') {
       const [{ data: sietotlac }, { data: velkosti }] = await Promise.all([
         supabase.from('cennik_sietotlac').select('*').eq('id', 1).maybeSingle(),
@@ -183,6 +190,7 @@ Deno.serve(async (req) => {
       ]);
       const format = najblizsiFormat(velkosti || [], plocha);
       vc = vcSietotlacCelkom(sietotlac, format, !!jeTmavyTextil, farby, ks, metriky);
+      minCena = Number(sietotlac?.min_cena) || 0;
       detaily = { formatPouzity: format?.label || null };
     } else if (tech === 'rezany') {
       const [{ data: rezany }, { data: folie }] = await Promise.all([
@@ -191,12 +199,15 @@ Deno.serve(async (req) => {
       ]);
       const folia = (folie || []).find((f: Riadok) => f.id === foliaId) || (folie || [])[0] || null;
       vc = vcRezanyTransfer(rezany, folia, metriky, plocha) * farby;
+      minCena = Number(rezany?.min_cena) || 0;
     } else {
       throw new Error(`Neznáma technológia: ${tech}`);
     }
 
-    const cenaPotlace = priceAt(vc, ks, pricingConfig);
-    const marzaPercent = Math.round(marginAt(vc, ks, pricingConfig));
+    // "min. cena úkonu" (Potlače) je FLOOR na cenu, nie na VC — bez neho pri lacných materiáloch
+    // (nízke VC) vracala maržová krivka len pár centov aj napriek vysokému percentu marže.
+    const cenaPotlace = Math.max(priceAt(vc, ks, pricingConfig), minCena);
+    const marzaPercent = vc > 0 ? Math.round(((cenaPotlace / vc) - 1) * 100) : 0;
 
     return odpoved({ cena: { cenaPotlace, vc: Math.round(vc * 1000) / 1000, marzaPercent, ...detaily } });
   } catch (e) {

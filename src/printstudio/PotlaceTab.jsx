@@ -308,13 +308,17 @@ export default function PotlaceTab({ supabase }) {
         <p className="text-xs text-slate-400 mb-2">Plocha motívu: <span className="text-white font-semibold">{plocha} cm²</span> × {ks} ks</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {[
-            { key: 'sublimacia', label: 'Sublimácia', vc: vcSublimacia, plochaZaklad: plocha },
-            { key: 'dtf', label: 'DTF', vc: vcDtf, plochaZaklad: plocha },
-            { key: 'sietotlac', label: 'Sieťotlač', vc: vcSietotlac, plochaZaklad: plochaSietotlacCm2 },
-            { key: 'rezany', label: 'Rezaný transfer (flex)', vc: vcRezany, plochaZaklad: plocha },
-          ].map(({ key, label, vc, plochaZaklad }) => {
-            const cena = priceAt(vc, ks, pricingConfig);
-            const marza = marginAt(vc, ks, pricingConfig);
+            { key: 'sublimacia', label: 'Sublimácia', vc: vcSublimacia, plochaZaklad: plocha, minCena: sublimacia.min_cena },
+            { key: 'dtf', label: 'DTF', vc: vcDtf, plochaZaklad: plocha, minCena: dtf.min_cena },
+            { key: 'sietotlac', label: 'Sieťotlač', vc: vcSietotlac, plochaZaklad: plochaSietotlacCm2, minCena: sietotlac.min_cena },
+            { key: 'rezany', label: 'Rezaný transfer (flex)', vc: vcRezany, plochaZaklad: plocha, minCena: rezany.min_cena },
+          ].map(({ key, label, vc, plochaZaklad, minCena }) => {
+            // "min. cena úkonu" (nastavená vyššie pri danej technológii) je FLOOR na skutočne
+            // účtovanú cenu — bez neho pri lacných materiáloch (nízke VC) maržová krivka vracala
+            // len pár centov aj napriek vysokému percentu marže (% z takmer ničoho je stále nič).
+            const cenaBezFloor = priceAt(vc, ks, pricingConfig);
+            const cena = Math.max(cenaBezFloor, minCena || 0);
+            const marza = vc > 0 ? ((cena / vc) - 1) * 100 : 0;
             return (
               <div key={key} className="bg-slate-900 rounded-xl border border-slate-800 p-3">
                 <p className="text-xs font-bold text-slate-300 mb-1">{label}</p>

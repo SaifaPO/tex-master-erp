@@ -7,7 +7,7 @@ import { mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 
 // Jeden spolocny fetch vsetkych Kostra cien tabuliek + pricing_config.
 export async function nacitajKostru(supabase) {
-  const [{ data: tSub }, { data: sGarment }, { data: dtfNak }, { data: sieto }, { data: sietoVel }, { data: rez }, { data: fol }, { data: vysNak }, { data: cfg }, { data: metriky }] = await Promise.all([
+  const [{ data: tSub }, { data: sGarment }, { data: dtfNak }, { data: sieto }, { data: sietoVel }, { data: rez }, { data: fol }, { data: vysNak }, { data: cfg }, { data: metriky }, { data: tech }] = await Promise.all([
     supabase.from('textil_naklady').select('*').eq('technologia', 'sublimacia').maybeSingle(),
     supabase.from('cennik_sublimacia_naklady').select('*').eq('id', 1).maybeSingle(),
     supabase.from('dtf_naklady').select('*').eq('id', 1).maybeSingle(),
@@ -18,6 +18,7 @@ export async function nacitajKostru(supabase) {
     supabase.from('kostra_vysivka').select('*').eq('id', 1).maybeSingle(),
     supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
     supabase.from('cost_metrics').select('*'),
+    supabase.from('cennik_technologie').select('*'),
   ]);
   return {
     textilSub: tSub || null,
@@ -30,7 +31,26 @@ export async function nacitajKostru(supabase) {
     vysivkaNaklady: vysNak || null,
     pricingConfig: cfg ? mapConfigFromDb(cfg) : DEFAULT_PRICING_CONFIG,
     costMetrics: metriky || [],
+    // Predajne "min. cena ukonu" sadzby (Potlace) — sublimacia/dtf su v cennik_technologie,
+    // sietotlac/rezany maju vlastne min_cena polia priamo vo svojich tabulkach vyssie.
+    minCenaSublimacia: (tech || []).find(t => t.technologia === 'sublimacia')?.min_cena ?? 0,
+    minCenaDtf: (tech || []).find(t => t.technologia === 'dtf')?.min_cena ?? 0,
+    minCenaVysivka: (tech || []).find(t => t.technologia === 'vysivka')?.min_cena ?? 0,
   };
+}
+
+// Minimalna cena ukonu (nastavena v Potlaciach) pre danu technologiu — pouzit vzdy AZ NA cenu
+// vratenu z priceAt(), nie na VC. Bez tohto floor-u vychadzala cena pri lacnych materialoch
+// (napr. sublimacia/DTF s nizkou spotrebou atramentu) niekedy absurdne nizko aj pri malom odbere,
+// lebo marzova krivka pocita len percenta z VC a pri VC pod ~0.5€ ostava aj pri vysokom % v
+// absolutnych eurach stale len pár centov.
+export function minCenaPotlace(kostra, tech) {
+  if (tech === 'sublimacia') return Number(kostra?.minCenaSublimacia) || 0;
+  if (tech === 'dtf') return Number(kostra?.minCenaDtf) || 0;
+  if (tech === 'vysivka') return Number(kostra?.minCenaVysivka) || 0;
+  if (tech === 'sietotlac') return Number(kostra?.sietotlac?.min_cena) || 0;
+  if (tech === 'rezany') return Number(kostra?.rezany?.min_cena) || 0;
+  return 0;
 }
 
 // €/hod prevadzky konkretneho zariadenia z registra (Financie -> Rezia firiem), na zaklade jeho

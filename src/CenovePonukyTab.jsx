@@ -4,7 +4,7 @@ import {
   Image as ImageIcon, Upload, Award, ListChecks, Clock, ShoppingCart, Loader2, Paperclip, Download
 } from 'lucide-react';
 import { priceAt, marginAt } from './printstudio/pricingEngine';
-import { nacitajKostru, vcSublimaciaGarment, vcDtfGarment, vcVysivka, vcSietotlacCelkom, plochaFormatuSietotlac, vcRezanyTransfer } from './printstudio/vyrobneNaklady';
+import { nacitajKostru, vcSublimaciaGarment, vcDtfGarment, vcVysivka, vcSietotlacCelkom, plochaFormatuSietotlac, vcRezanyTransfer, minCenaPotlace } from './printstudio/vyrobneNaklady';
 
 // --- Lokálne konštanty (duplicitne s App.jsx, aby tento súbor zostal samostatný) ---
 const TIER_LABELS = { standard: 'Standard', bronze: 'Bronze', silver: 'Silver', gold: 'Gold' };
@@ -419,8 +419,11 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
     else if (calcMethod === 'sietotlac') { calcVc = vcSietotlacCelkom(kostra, calc.velkostId, calc.tmavy, calcFarby, calcKs); calcPlochaPouzita = plochaFormatuSietotlac(kostra, calc.velkostId); }
     else if (calcMethod === 'rezany') calcVc = vcRezanyTransfer(kostra, calc.foliaId, calcPlocha) * calcFarby;
   }
-  const calcUnitPrice = kostra ? priceAt(calcVc, calcKs, kostra.pricingConfig) : 0;
-  const calcMarza = kostra ? marginAt(calcVc, calcKs, kostra.pricingConfig) : 0;
+  const calcUnitPrice = kostra ? Math.max(priceAt(calcVc, calcKs, kostra.pricingConfig), minCenaPotlace(kostra, calcMethod)) : 0;
+  // Zobrazena marza vychadza zo SKUTOCNE uctovanej ceny (po pripadnom floor-e "min. cena ukonu"),
+  // nie z holej krivky — inak by pri lacnych materialoch (floor casto zasiahne) ukazovala nizsie %
+  // marze, nez aku klient v skutocnosti plati.
+  const calcMarza = kostra && calcVc > 0 ? ((calcUnitPrice / calcVc) - 1) * 100 : 0;
   const vybranyFormatSietotlac = kostra?.sietotlacVelkosti.find(v => v.id === calc.velkostId);
   const vybranaFoliaRezany = kostra?.folie.find(f => f.id === calc.foliaId);
 
