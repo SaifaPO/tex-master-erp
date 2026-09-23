@@ -8,6 +8,12 @@ import { renderDtgFullColor } from './lib/dtgFullColor.js';
 const ACCESS_CODE = import.meta.env.VITE_ACCESS_CODE || 'grafik2026';
 const STORAGE_KEY = 'dtf-sep-unlocked';
 const PREVIEW_MAX = 1000; // px na dlhsej strane, kvoli plynulemu live nahladu
+// Bezpecne pod typicky limit rozmerov canvasu v prehliadaci (cca 16384px) — nad touto hranicou
+// vieme, ze by uz mohlo dochadzat k tichemu zlyhaniu (drawImage/toDataURL nic nespravi, ziadna
+// chyba). Zaroven halftone/separacne funkcie bezia synchronne v JS, takze aj podstatne mensie
+// rozmery uz vedia trvat dlho — preto MAX_DIM_PX drzime bezpecnejsie nizsie, nie len tesne pod
+// limitom prehliadaca.
+const MAX_DIM_PX = 8000;
 
 const DOT_SHAPES = [
   { value: 'circle', label: 'Kruh' },
@@ -64,8 +70,14 @@ export default function App() {
   const [workingCanvas, setWorkingCanvas] = useState(null); // full-res, po volitelnom prispôsobení na cieľovú veľkosť tlače — pouziva sa na render/export
   const [workingPreviewCanvas, setWorkingPreviewCanvas] = useState(null); // downscaly workingCanvas, pre plynuly live nahlad
   const [fileName, setFileName] = useState('');
-  const [viewMode, setViewMode] = useState('split'); // 'original' | 'separation' | 'split' (rezim 'spot')
+  // Porovnanie s originalom funguje teraz rovnako vo VSETKYCH 3 rezimoch (predtym len 'spot') —
+  // buď ako split (posuvnik delí plátno na pôvodný/výsledný obrázok), alebo pridržaním myši/prsta
+  // priamo na náhľade (docasne ukaze cely original, "preblik" — pozri isPeeking nizsie).
+  const [compareEnabled, setCompareEnabled] = useState(true);
   const [splitPos, setSplitPos] = useState(50);
+  const [isPeeking, setIsPeeking] = useState(false);
+  const [sizeWarning, setSizeWarning] = useState('');
+  const [saturation, setSaturation] = useState(100); // % — 100 = bezo zmeny
 
   const [mode, setMode] = useState('spot'); // 'spot' | 'cmyk' | 'dtg'
   const [lpi, setLpi] = useState(35);
@@ -95,6 +107,7 @@ export default function App() {
   const [separationResult, setSeparationResult] = useState(null); // rezim 'cmyk' — { channels, white, composite }
   const [dtgResult, setDtgResult] = useState(null); // rezim 'dtg' — { composite, white, dotStencil }
   const [isRendering, setIsRendering] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const canvasWrapRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -116,25 +129,44 @@ export default function App() {
   };
 
   // Volitelne prisposobenie na cielovu velkost tlace (jednoduche prevzorkovanie, NIE AI dokreslenie detailu) —
-  // prepocita sa vzdy, ked sa zmeni zdroj, cielova sirka alebo output DPI, a vyrobi z neho aj znizenu
-  // "pracovnu" verziu pre plynuly live nahlad.
+  // prepocita sa vzdy, ked sa zmeni zdroj, cielova sirka, output DPI alebo saturacia, a vyrobi
+  // z neho aj znizenu "pracovnu" verziu pre plynuly live nahlad.
   useEffect(() => {
-    if (!sourceCanvas) { setWorkingCanvas(null); setWorkingPreviewCanvas(null); return; }
-    let target = sourceCanvas;
+    if (!sourceCanvas) { setWorkingCanvas(null); setWorkingPreviewCanvas(null); setSizeWarning(''); return; }
+
+    let targetWidthPx = sourceCanvas.width;
+    let targetHeightPx = sourceCanvas.height;
     if (resizeEnabled && targetWidthCm > 0) {
-      const targetWidthPx = Math.max(1, Math.round((targetWidthCm / 2.54) * outputDpi));
-      if (targetWidthPx !== sourceCanvas.width) {
-        const scale = targetWidthPx / sourceCanvas.width;
-        const targetHeightPx = Math.max(1, Math.round(sourceCanvas.height * scale));
-        const resized = document.createElement('canvas');
-        resized.width = targetWidthPx;
-        resized.height = targetHeightPx;
-        const rctx = resized.getContext('2d');
-        rctx.imageSmoothingEnabled = true;
-        rctx.imageSmoothingQuality = 'high';
-        rctx.drawImage(sourceCanvas, 0, 0, targetWidthPx, targetHeightPx);
-        target = resized;
-      }
+      targetWidthPx = Math.max(1, Math.round((targetWidthCm / 2.54) * outputDpi));
+      const scale = targetWidthPx / sourceCanvas.width;
+      targetHeightPx = Math.max(1, Math.round(sourceCanvas.height * scale));
+    }
+    // Ak by vyslednÿ rozmer presiahol bezpecnu hranicu (velmi velka ciel. sirka pri vysokom DPI —
+    // presne pripad "zadal som 100cm a nic sa nedialo"), radsej ho automaticky zmensime a napiseme
+    // preco, nez aby spracovanie ticho zamrzlo alebo canvas ostal prazdny bez ziadnej hlasky.
+    let zmensene = false;
+    if (targetWidthPx > MAX_DIM_PX || targetHeightPx > MAX_DIM_PX) {
+      const zmensenie = MAX_DIM_PX / Math.max(targetWidthPx, targetHeightPx);
+      targetWidthPx = Math.max(1, Math.round(targetWidthPx * zmensenie));
+      targetHeightPx = Math.max(1, Math.round(targetHeightPx * zmensenie));
+      zmensene = true;
+    }
+    setSizeWarning(zmensene
+      ? `Požadovaná veľkosť by presiahla ${MAX_DIM_PX}px na dlhšej strane (limit prehliadača aj rozumný čas spracovania) — automaticky zmenšené na ${targetWidthPx}×${targetHeightPx}px. Skús nižšie Output DPI, ak potrebuješ zachovať presnú šírku v cm.`
+      : '');
+
+    let target = sourceCanvas;
+    const potrebujePrekreslenie = saturation !== 100 || targetWidthPx !== sourceCanvas.width || targetHeightPx !== sourceCanvas.height;
+    if (potrebujePrekreslenie) {
+      const resized = document.createElement('canvas');
+      resized.width = targetWidthPx;
+      resized.height = targetHeightPx;
+      const rctx = resized.getContext('2d');
+      rctx.imageSmoothingEnabled = true;
+      rctx.imageSmoothingQuality = 'high';
+      if (saturation !== 100) rctx.filter = `saturate(${saturation}%)`;
+      rctx.drawImage(sourceCanvas, 0, 0, targetWidthPx, targetHeightPx);
+      target = resized;
     }
     setWorkingCanvas(target);
 
@@ -148,7 +180,7 @@ export default function App() {
     pctx.drawImage(target, 0, 0, prev.width, prev.height);
     prev._scale = scale;
     setWorkingPreviewCanvas(prev);
-  }, [sourceCanvas, resizeEnabled, targetWidthCm, outputDpi]);
+  }, [sourceCanvas, resizeEnabled, targetWidthCm, outputDpi, saturation]);
 
   // Live nahlad — prepocita sa (debounced) pri kazdej zmene parametra, na znizenom rozliseni kvoli rychlosti.
   useEffect(() => {
@@ -179,48 +211,39 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workingPreviewCanvas, mode, lpi, angleDeg, dotShape, algorithm, inkColor, outputDpi, blackPoint, whitePoint, invert, channelAngles, whiteBaseEnabled, chokePx, whiteThreshold, previewBg, bgRemovalEnabled, bgTolerance, bgFeather]);
 
+  // "Po" vrstva zavisi od rezimu — pre spot je to jediny vysledok, pre cmyk/dtg podla toho, ktory
+  // kanal/nahlad je prave zvoleny. "Pred" je vzdy workingPreviewCanvas (povodny obrazok).
+  const afterLayer = mode === 'cmyk'
+    ? (separationResult && (channelView === 'composite' ? separationResult.composite : channelView === 'white' ? separationResult.white : separationResult.channels[channelView]))
+    : mode === 'dtg'
+    ? (dtgResult && (dtgView === 'white' ? dtgResult.white : dtgView === 'stencil' ? dtgResult.dotStencil : dtgResult.composite))
+    : previewResultCanvas;
+
   const drawCanvasRef = useCallback((node) => {
     if (!node || !workingPreviewCanvas) return;
     const ctx = node.getContext('2d');
     node.width = workingPreviewCanvas.width;
     node.height = workingPreviewCanvas.height;
     ctx.clearRect(0, 0, node.width, node.height);
-
-    if (mode === 'cmyk') {
-      ctx.fillStyle = previewBg;
-      ctx.fillRect(0, 0, node.width, node.height);
-      if (!separationResult) { ctx.drawImage(workingPreviewCanvas, 0, 0); return; }
-      const layer = channelView === 'composite' ? separationResult.composite
-        : channelView === 'white' ? separationResult.white
-        : separationResult.channels[channelView];
-      if (layer) ctx.drawImage(layer, 0, 0);
-      return;
-    }
-
-    if (mode === 'dtg') {
-      ctx.fillStyle = previewBg;
-      ctx.fillRect(0, 0, node.width, node.height);
-      if (!dtgResult) { ctx.drawImage(workingPreviewCanvas, 0, 0); return; }
-      const layer = dtgView === 'white' ? dtgResult.white : dtgView === 'stencil' ? dtgResult.dotStencil : dtgResult.composite;
-      if (layer) ctx.drawImage(layer, 0, 0);
-      return;
-    }
-
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = (mode === 'cmyk' || mode === 'dtg') ? previewBg : '#ffffff';
     ctx.fillRect(0, 0, node.width, node.height);
-    if (viewMode === 'original' || !previewResultCanvas) {
+
+    // Pridrzanie mysi/prsta ("preblik") vzdy ukaze cisty original, bez ohladu na split/vybrany kanal.
+    if (isPeeking || !afterLayer) {
       ctx.drawImage(workingPreviewCanvas, 0, 0);
-    } else if (viewMode === 'separation') {
-      ctx.drawImage(previewResultCanvas, 0, 0);
-    } else {
-      const splitX = Math.round((splitPos / 100) * node.width);
-      ctx.drawImage(workingPreviewCanvas, 0, 0, splitX, node.height, 0, 0, splitX, node.height);
-      ctx.drawImage(previewResultCanvas, splitX, 0, node.width - splitX, node.height, splitX, 0, node.width - splitX, node.height);
-      ctx.strokeStyle = '#6366f1';
-      ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(splitX, 0); ctx.lineTo(splitX, node.height); ctx.stroke();
+      return;
     }
-  }, [workingPreviewCanvas, previewResultCanvas, separationResult, dtgResult, viewMode, splitPos, mode, channelView, dtgView, previewBg]);
+    if (!compareEnabled) {
+      ctx.drawImage(afterLayer, 0, 0);
+      return;
+    }
+    const splitX = Math.round((splitPos / 100) * node.width);
+    ctx.drawImage(workingPreviewCanvas, 0, 0, splitX, node.height, 0, 0, splitX, node.height);
+    ctx.drawImage(afterLayer, splitX, 0, node.width - splitX, node.height, splitX, 0, node.width - splitX, node.height);
+    ctx.strokeStyle = '#6366f1';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(splitX, 0); ctx.lineTo(splitX, node.height); ctx.stroke();
+  }, [workingPreviewCanvas, afterLayer, isPeeking, compareEnabled, splitPos, mode, previewBg]);
 
   useEffect(() => {
     if (canvasWrapRef.current) drawCanvasRef(canvasWrapRef.current);
@@ -233,32 +256,43 @@ export default function App() {
     a.click();
   };
 
+  // Renderovanie v plnom rozlíšení (na rozdiel od live náhľadu) je synchrónne a pri väčších
+  // obrázkoch vie trvať niekoľko sekúnd — bez zjavnej odozvy to vyzerá, akoby sa "nič nedialo".
+  // setIsDownloading(true) samo o sebe by sa neprekreslilo skôr, než hlavné vlákno zaneprázdni
+  // ťažký výpočet (React by stihol commitnúť, ale prehliadač by to nestihol vymaľovať) — preto sa
+  // samotný výpočet odloží o jeden tik (setTimeout 30ms), aby React/prehliadač stihli vykresliť
+  // spinner PRED tým, než sa vlákno zablokuje.
   const handleDownloadPng = () => {
     if (!workingCanvas) return;
-    if (mode === 'cmyk') {
-      const full = renderSeparation(workingCanvas, {
-        lpi, outputDpi, dotShape, algorithm, blackPoint, whitePoint, channelAngles,
-        whiteBase: { enabled: whiteBaseEnabled, chokePx, threshold: whiteThreshold, previewBackground: previewBg }
-      });
-      downloadCanvas(full.channels.c, 'C');
-      downloadCanvas(full.channels.m, 'M');
-      downloadCanvas(full.channels.y, 'Y');
-      downloadCanvas(full.channels.k, 'K');
-      if (full.white) downloadCanvas(full.white, 'White-underbase');
-      return;
-    }
-    if (mode === 'dtg') {
-      const full = renderDtgFullColor(workingCanvas, {
-        lpi, angleDeg, dotShape, algorithm, outputDpi, blackPoint, whitePoint, invert,
-        backgroundRemoval: { enabled: bgRemovalEnabled, tolerance: bgTolerance, feather: bgFeather },
-        whiteBase: { enabled: whiteBaseEnabled, chokePx, threshold: whiteThreshold }
-      });
-      downloadCanvas(full.composite, `dtg_${lpi}lpi_${Math.round(angleDeg)}deg`);
-      if (full.white) downloadCanvas(full.white, 'White-underbase');
-      return;
-    }
-    const result = renderHalftone(workingCanvas, { lpi, angleDeg, dotShape, algorithm, inkColor, outputDpi, blackPoint, whitePoint, invert });
-    downloadCanvas(result, `halftone_${lpi}lpi_${Math.round(angleDeg)}deg`);
+    setIsDownloading(true);
+    setTimeout(() => {
+      try {
+        if (mode === 'cmyk') {
+          const full = renderSeparation(workingCanvas, {
+            lpi, outputDpi, dotShape, algorithm, blackPoint, whitePoint, channelAngles,
+            whiteBase: { enabled: whiteBaseEnabled, chokePx, threshold: whiteThreshold, previewBackground: previewBg }
+          });
+          downloadCanvas(full.channels.c, 'C');
+          downloadCanvas(full.channels.m, 'M');
+          downloadCanvas(full.channels.y, 'Y');
+          downloadCanvas(full.channels.k, 'K');
+          if (full.white) downloadCanvas(full.white, 'White-underbase');
+        } else if (mode === 'dtg') {
+          const full = renderDtgFullColor(workingCanvas, {
+            lpi, angleDeg, dotShape, algorithm, outputDpi, blackPoint, whitePoint, invert,
+            backgroundRemoval: { enabled: bgRemovalEnabled, tolerance: bgTolerance, feather: bgFeather },
+            whiteBase: { enabled: whiteBaseEnabled, chokePx, threshold: whiteThreshold }
+          });
+          downloadCanvas(full.composite, `dtg_${lpi}lpi_${Math.round(angleDeg)}deg`);
+          if (full.white) downloadCanvas(full.white, 'White-underbase');
+        } else {
+          const result = renderHalftone(workingCanvas, { lpi, angleDeg, dotShape, algorithm, inkColor, outputDpi, blackPoint, whitePoint, invert });
+          downloadCanvas(result, `halftone_${lpi}lpi_${Math.round(angleDeg)}deg`);
+        }
+      } finally {
+        setIsDownloading(false);
+      }
+    }, 30);
   };
 
   const handleDownloadTestSheet = () => {
@@ -289,30 +323,25 @@ export default function App() {
           ) : (
             <>
               <div className="flex flex-wrap items-center gap-2 bg-slate-900 border border-slate-800 rounded-xl p-2">
-                {mode === 'spot' ? (
-                  <>
-                    {[['original', 'Original'], ['separation', 'Separácia'], ['split', 'Split View']].map(([v, label]) => (
-                      <button key={v} onClick={() => setViewMode(v)} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${viewMode === v ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}>{label}</button>
-                    ))}
-                    {viewMode === 'split' && (
-                      <div className="flex-1 flex items-center gap-2 px-2">
-                        <SplitSquareHorizontal className="h-4 w-4 text-slate-500" />
-                        <input type="range" min="0" max="100" value={splitPos} onChange={(e) => setSplitPos(Number(e.target.value))} className="flex-1" />
-                      </div>
-                    )}
-                  </>
-                ) : mode === 'dtg' ? (
+                {mode === 'dtg' ? (
                   DTG_VIEWS.map(v => (
                     <button key={v} onClick={() => setDtgView(v)} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${dtgView === v ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}>
                       {DTG_VIEW_LABELS[v]}
                     </button>
                   ))
-                ) : (
+                ) : mode === 'cmyk' ? (
                   CHANNEL_VIEWS.map(v => (
                     <button key={v} onClick={() => setChannelView(v)} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${channelView === v ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}>
                       {v === 'composite' ? 'Kompozit' : v === 'white' ? 'Biely podklad' : CHANNEL_LABELS[v]}
                     </button>
                   ))
+                ) : null}
+                <label className="flex items-center gap-1.5 text-xs font-bold text-slate-300 cursor-pointer">
+                  <input type="checkbox" checked={compareEnabled} onChange={(e) => setCompareEnabled(e.target.checked)} className="accent-indigo-600" />
+                  <SplitSquareHorizontal className="h-3.5 w-3.5 text-slate-500" /> Porovnať s originálom
+                </label>
+                {compareEnabled && (
+                  <input type="range" min="0" max="100" value={splitPos} onChange={(e) => setSplitPos(Number(e.target.value))} className="flex-1 min-w-[100px]" />
                 )}
                 {isRendering && <span className="text-[10px] text-indigo-400 flex items-center gap-1 ml-auto pr-2"><RefreshCw className="h-3 w-3 animate-spin" /> počítam...</span>}
               </div>
@@ -325,8 +354,17 @@ export default function App() {
                   <input type="color" value={previewBg} onChange={(e) => setPreviewBg(e.target.value)} className="h-6 w-8 bg-transparent border border-slate-700 rounded cursor-pointer" />
                 </div>
               )}
+              <p className="text-[10px] text-slate-600 -mt-1">💡 Podrž kliknuté priamo na náhľade — dočasne ukáže čistý originál (preblik), bez ohľadu na posuvník.</p>
               <div className="rounded-xl overflow-hidden border border-slate-800 flex items-center justify-center" style={{ backgroundColor: (mode === 'cmyk' || mode === 'dtg') ? previewBg : '#ffffff' }}>
-                <canvas ref={(node) => { canvasWrapRef.current = node; drawCanvasRef(node); }} className="max-w-full h-auto" />
+                <canvas
+                  ref={(node) => { canvasWrapRef.current = node; drawCanvasRef(node); }}
+                  onMouseDown={() => setIsPeeking(true)}
+                  onMouseUp={() => setIsPeeking(false)}
+                  onMouseLeave={() => setIsPeeking(false)}
+                  onTouchStart={() => setIsPeeking(true)}
+                  onTouchEnd={() => setIsPeeking(false)}
+                  className="max-w-full h-auto cursor-pointer select-none"
+                />
               </div>
               <button onClick={() => fileInputRef.current?.click()} className="text-xs text-slate-500 hover:text-slate-300 underline">Nahrať iný obrázok</button>
               <input ref={fileInputRef} type="file" accept="image/png,image/jpeg" className="hidden" onChange={(e) => handleFile(e.target.files[0])} />
@@ -406,8 +444,17 @@ export default function App() {
                     {workingCanvas && workingCanvas.width > sourceCanvas.width && ' Zväčšuje sa nad reálne rozlíšenie zdroja — ide o jednoduché prevzorkovanie (nie AI dokreslenie detailu), výsledok bude mäkší.'}
                   </p>
                 )}
+                {sizeWarning && (
+                  <p className="text-[10px] text-amber-400 bg-amber-950/30 border border-amber-900/50 rounded-lg px-2 py-1.5 mt-1.5 leading-relaxed">⚠️ {sizeWarning}</p>
+                )}
               </div>
             )}
+          </div>
+
+          <div className="border-t border-slate-800 pt-3 space-y-2">
+            <label className="text-xs text-slate-400 flex justify-between mb-1"><span>Sýtosť farieb (saturácia)</span><span className="text-white font-mono">{saturation}%</span></label>
+            <input type="range" min="0" max="250" step="5" value={saturation} onChange={(e) => setSaturation(Number(e.target.value))} className="w-full" />
+            <p className="text-[9px] text-slate-600">Halftonovanie niekedy obraz opticky vyplaví (pôsobí mdlo) — mierne zvýšenie sýtosti pred rastrovaním to vie kompenzovať. 100% = bezo zmeny.</p>
           </div>
 
           <div className="border-t border-slate-800 pt-3 space-y-3">
@@ -469,8 +516,10 @@ export default function App() {
             </div>
           )}
 
-          <button onClick={handleDownloadPng} disabled={!workingCanvas} className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-bold py-2.5 rounded-lg text-sm flex items-center justify-center gap-2">
-            <Download className="h-4 w-4" /> {mode === 'cmyk' ? 'Stiahnuť vrstvy (C, M, Y, K, White)' : mode === 'dtg' ? 'Stiahnuť PNG (plnofarebné + biely podklad)' : 'Stiahnuť PNG (plné rozlíšenie)'}
+          <button onClick={handleDownloadPng} disabled={!workingCanvas || isDownloading} className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-bold py-2.5 rounded-lg text-sm flex items-center justify-center gap-2">
+            {isDownloading
+              ? <><RefreshCw className="h-4 w-4 animate-spin" /> Spracúvam v plnom rozlíšení…</>
+              : <><Download className="h-4 w-4" /> {mode === 'cmyk' ? 'Stiahnuť vrstvy (C, M, Y, K, White)' : mode === 'dtg' ? 'Stiahnuť PNG (plnofarebné + biely podklad)' : 'Stiahnuť PNG (plné rozlíšenie)'}</>}
           </button>
         </div>
       </div>
