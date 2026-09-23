@@ -16,6 +16,7 @@ import ZastavyAdmin from './ZastavyAdmin';
 import DresAdmin from './DresAdmin';
 import KalkulackaTlaceTab from './KalkulackaTlaceTab';
 import PredajnyCennikTab from './PredajnyCennikTab';
+import ManualyTab from './ManualyTab';
 import CelenkyTab from './CelenkyTab';
 import BuffkyTab from './BuffkyTab';
 import DtfSeparatorTab from './DtfSeparatorTab';
@@ -40,6 +41,7 @@ const SUBTABS = [
   { id: 'potlace', label: 'Potlače', icon: Banknote },
   { id: 'kalkulacka-tlace', label: 'Kalkulačka tlače (Cen. ponuky)', icon: ShoppingCart },
   { id: 'predajny-cennik', label: 'Predajný cenník (tlač A4)', icon: Printer },
+  { id: 'manualy', label: 'Manuály (tlač A4)', icon: Flag },
   { id: 'shopify', label: 'Shopify prepojenie', icon: ShoppingBag },
   { id: 'vlajky', label: 'Vlajky', icon: Flag, appUrl: `${PRINTSTUDIO_BASE_URL}/?typ=zastava` },
   { id: 'beachvlajky', label: 'Beachvlajky', icon: Waves, appUrl: `${PRINTSTUDIO_BASE_URL}/?typ=beachflag` },
@@ -100,6 +102,7 @@ export default function PrintStudioAdmin({ supabase }) {
         {subtab === 'potlace' && <PotlaceTab supabase={supabase} />}
         {subtab === 'kalkulacka-tlace' && <KalkulackaTlaceTab supabase={supabase} />}
         {subtab === 'predajny-cennik' && <PredajnyCennikTab supabase={supabase} />}
+        {subtab === 'manualy' && <ManualyTab supabase={supabase} />}
         {subtab === 'shopify' && <ShopifyTab supabase={supabase} />}
         {subtab === 'vlajky' && <ZastavyAdmin supabase={supabase} />}
         {subtab === 'beachvlajky' && <VlajkyAdmin supabase={supabase} />}
