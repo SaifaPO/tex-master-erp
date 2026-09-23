@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Banknote, Calculator, TrendingUp } from 'lucide-react';
 import { priceAt, marginAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
-import { vcSublimaciaGarment as vcSublimaciaGarmentZo, vcDtfGarment as vcDtfGarmentZo, vcVysivka as vcVysivkaZo, nakladFarbySietotlac, vcSietotlacZaklad, plochaFormatuSietotlac, vcRezanyTransfer as vcRezanyTransferZo } from './vyrobneNaklady';
+import { vcSublimaciaGarment as vcSublimaciaGarmentZo, vcDtfGarment as vcDtfGarmentZo, vcVysivka as vcVysivkaZo, nakladFarbySietotlac, vcSietotlacZaklad, plochaFormatuSietotlac, vcRezanyTransfer as vcRezanyTransferZo, vcLaserRezanie as vcLaserRezaniaZo } from './vyrobneNaklady';
 
 const inputCls = 'w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white';
 const labelCls = 'text-xs text-slate-400 font-medium';
@@ -34,6 +34,8 @@ export default function PotlaceTab({ supabase }) {
   const [sietotlac, setSietotlac] = useState({ cena_cm2: 0, cena_cm2_tmavy: 0, min_cena: 0, priplatok_farba: 0, cena_farba_kg: 0, naklady_manipulacia: 0, naklad_sito_zakazka: 0, naklad_cistenie_zakazka: 0, odporucany_min_ks: 30 });
   const [rezany, setRezany] = useState({ min_cena: 0, cena_prace_hod: 0, cas_rezania_min: 0, cas_vylupovania_min: 0, cas_nazehlovania_min: 0, naklady_manipulacia: 0, sirka_vyuzitelna_cm: 49 });
   const [folie, setFolie] = useState([]);
+  const [laser, setLaser] = useState({ min_cena: 0, cena_prace_hod: 0, naklady_manipulacia: 0, laser_zariadenie_id: null });
+  const [laserHrubky, setLaserHrubky] = useState([]);
 
   const [pricingConfig, setPricingConfig] = useState(DEFAULT_PRICING_CONFIG);
   const [textilSub, setTextilSub] = useState(null);
@@ -49,10 +51,11 @@ export default function PotlaceTab({ supabase }) {
   const [testTmavyTextil, setTestTmavyTextil] = useState(false);
   const [testFoliaId, setTestFoliaId] = useState(null);
   const [testVelkostId, setTestVelkostId] = useState(null);
+  const [testHrubkaId, setTestHrubkaId] = useState(null);
 
   const nacitaj = async () => {
     setIsLoading(true);
-    const [{ data: tech }, { data: sieto }, { data: fol }, { data: rez }, { data: cfg }, { data: tSub }, { data: sGarment }, { data: dtfNak }, { data: vysNak }, { data: sietoVel }] = await Promise.all([
+    const [{ data: tech }, { data: sieto }, { data: fol }, { data: rez }, { data: cfg }, { data: tSub }, { data: sGarment }, { data: dtfNak }, { data: vysNak }, { data: sietoVel }, { data: laserNak }, { data: laserHrub }] = await Promise.all([
       supabase.from('cennik_technologie').select('*'),
       supabase.from('cennik_sietotlac').select('*').eq('id', 1).maybeSingle(),
       supabase.from('cennik_folie').select('*').order('id'),
@@ -63,6 +66,8 @@ export default function PotlaceTab({ supabase }) {
       supabase.from('dtf_naklady').select('*').eq('id', 1).maybeSingle(),
       supabase.from('kostra_vysivka').select('*').eq('id', 1).maybeSingle(),
       supabase.from('cennik_sietotlac_velkosti').select('*').order('poradie'),
+      supabase.from('cennik_laser_rezanie').select('*').eq('id', 1).maybeSingle(),
+      supabase.from('cennik_laser_hrubky').select('*').order('poradie'),
     ]);
     const subRow = (tech || []).find(t => t.technologia === 'sublimacia');
     const dtfRow = (tech || []).find(t => t.technologia === 'dtf');
@@ -81,6 +86,9 @@ export default function PotlaceTab({ supabase }) {
     setVysivkaNaklady(vysNak || null);
     setSietotlacVelkosti(sietoVel || []);
     if ((sietoVel || []).length > 0) setTestVelkostId(sietoVel[0].id);
+    if (laserNak) setLaser({ min_cena: laserNak.min_cena || 0, cena_prace_hod: laserNak.cena_prace_hod || 0, naklady_manipulacia: laserNak.naklady_manipulacia || 0, laser_zariadenie_id: laserNak.laser_zariadenie_id || null });
+    setLaserHrubky(laserHrub || []);
+    if ((laserHrub || []).length > 0) setTestHrubkaId(laserHrub[0].id);
     setIsLoading(false);
   };
 
@@ -115,13 +123,22 @@ export default function PotlaceTab({ supabase }) {
     setFolie(f => f.map(x => x.id === id ? { ...x, ...patch } : x));
     await supabase.from('cennik_folie').update(patch).eq('id', id);
   };
+  const ulozLaser = async (patch) => {
+    const next = { ...laser, ...patch };
+    setLaser(next);
+    await supabase.from('cennik_laser_rezanie').upsert({ id: 1, ...next });
+  };
+  const upravHrubku = async (id, patch) => {
+    setLaserHrubky(h => h.map(x => x.id === id ? { ...x, ...patch } : x));
+    await supabase.from('cennik_laser_hrubky').update(patch).eq('id', id);
+  };
 
   const plocha = Math.round((parseFloat(testW) || 0) * (parseFloat(testH) || 0) * 10) / 10;
   const ks = Math.max(1, parseInt(testKs) || 1);
 
   // --- Vyrobne ceny (VC) — vzorce zdielane s Cenovymi ponukami cez vyrobneNaklady.js, nic sa tu
   // uz nezaduva duplicitne (viackrat sposobilo nezhodu cien medzi appkami).
-  const kostraLive = { textilSub, sublimaciaGarment, dtf: dtfNaklady, sietotlac, sietotlacVelkosti, rezany, folie, vysivkaNaklady };
+  const kostraLive = { textilSub, sublimaciaGarment, dtf: dtfNaklady, sietotlac, sietotlacVelkosti, rezany, folie, vysivkaNaklady, laserRezanie: laser, laserHrubky, costMetrics: [] };
 
   const vcSublimacia = vcSublimaciaGarmentZo(kostraLive, plocha);
   const vcDtf = vcDtfGarmentZo(kostraLive, plocha);
@@ -137,6 +154,9 @@ export default function PotlaceTab({ supabase }) {
   const plochaSietotlacCm2 = plochaFormatuSietotlac(kostraLive, testVelkostId);
 
   const vcRezany = vcRezanyTransferZo(kostraLive, testFoliaId, plocha);
+
+  const vybranaHrubka = laserHrubky.find(h => h.id === testHrubkaId);
+  const vcLaser = testHrubkaId ? vcLaserRezaniaZo(kostraLive, testHrubkaId, plocha) : 0;
 
   if (isLoading) return <p className="text-sm text-slate-500">Načítavam…</p>;
 
@@ -266,6 +286,37 @@ export default function PotlaceTab({ supabase }) {
         <NakladovyVysledok vc={vcRezany} ks={ks} config={pricingConfig} plochaCm2={plocha} onPouzit={(cena) => testFoliaId && upravFoliu(testFoliaId, { cena_cm2: Number(cena.toFixed(4)) })} disabled={plocha === 0 || !testFoliaId} />
       </div>
 
+      {/* LASEROVÉ REZANIE */}
+      <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-5">
+        <h3 className="font-bold text-sm text-white mb-1">Laserové rezanie dielcov</h3>
+        <p className="text-xs text-slate-400 mb-3">Predajná cena = plocha (cm²) × sadzba pre danú hrúbku látky (min. cena úkonu).</p>
+        <div className="max-w-xs mb-3">
+          <label className={labelCls}>Minimálna cena úkonu (€)</label>
+          <input type="number" step="0.5" value={laser.min_cena} onChange={(e) => ulozLaser({ min_cena: parseFloat(e.target.value) || 0 })} className={inputCls} />
+        </div>
+        <p className={kostraNoteCls}>Čas rezania podľa hrúbky, práca operátora, manipulácia a priradený laser sa nastavujú v <strong>Kostra cien → Laserové rezanie</strong>. Tu len nastav predajnú sadzbu (€/cm²) pre každú hrúbku:</p>
+        <div className="space-y-2 mb-4">
+          {laserHrubky.map(h => (
+            <div key={h.id} className="flex items-center gap-2">
+              <span className="flex-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-slate-300">{h.label}</span>
+              <div className="flex items-center gap-1 text-xs text-slate-400 shrink-0">
+                <input type="number" step="0.001" value={h.cena_cm2} onChange={(e) => upravHrubku(h.id, { cena_cm2: parseFloat(e.target.value) || 0 })} className="w-20 px-2 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /> €/cm² predaj
+              </div>
+            </div>
+          ))}
+          {laserHrubky.length === 0 && <p className="text-xs text-slate-500">Zatiaľ žiadne hrúbky (pridaj v Kostra cien).</p>}
+        </div>
+        {laserHrubky.length > 0 && (
+          <div className="mb-3 max-w-xs">
+            <label className={labelCls}>Hrúbka pre výpočet</label>
+            <select value={testHrubkaId || ''} onChange={(e) => setTestHrubkaId(parseInt(e.target.value))} className={inputCls}>
+              {laserHrubky.map(h => <option key={h.id} value={h.id}>{h.label}</option>)}
+            </select>
+          </div>
+        )}
+        <NakladovyVysledok vc={vcLaser} ks={ks} config={pricingConfig} plochaCm2={plocha} onPouzit={(cena) => testHrubkaId && upravHrubku(testHrubkaId, { cena_cm2: Number(cena.toFixed(4)) })} disabled={plocha === 0 || !testHrubkaId} />
+      </div>
+
       {/* VÝŠIVKA */}
       <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-5">
         <h3 className="font-bold text-sm text-white mb-1">Výšivka</h3>
@@ -306,12 +357,13 @@ export default function PotlaceTab({ supabase }) {
           <button onClick={() => setTestTmavyTextil(true)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold border-2 transition ${testTmavyTextil ? 'border-indigo-500 bg-indigo-950/40 text-indigo-300' : 'border-slate-700 text-slate-400'}`}>Tmavý</button>
         </div>
         <p className="text-xs text-slate-400 mb-2">Plocha motívu: <span className="text-white font-semibold">{plocha} cm²</span> × {ks} ks</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
           {[
             { key: 'sublimacia', label: 'Sublimácia', vc: vcSublimacia, plochaZaklad: plocha, minCena: sublimacia.min_cena },
             { key: 'dtf', label: 'DTF', vc: vcDtf, plochaZaklad: plocha, minCena: dtf.min_cena },
             { key: 'sietotlac', label: 'Sieťotlač', vc: vcSietotlac, plochaZaklad: plochaSietotlacCm2, minCena: sietotlac.min_cena },
             { key: 'rezany', label: 'Rezaný transfer (flex)', vc: vcRezany, plochaZaklad: plocha, minCena: rezany.min_cena },
+            { key: 'laser', label: `Laserové rezanie${vybranaHrubka ? ` (${vybranaHrubka.label})` : ''}`, vc: vcLaser, plochaZaklad: plocha, minCena: laser.min_cena },
           ].map(({ key, label, vc, plochaZaklad, minCena }) => {
             // "min. cena úkonu" (nastavená vyššie pri danej technológii) je FLOOR na skutočne
             // účtovanú cenu — bez neho pri lacných materiáloch (nízke VC) maržová krivka vracala

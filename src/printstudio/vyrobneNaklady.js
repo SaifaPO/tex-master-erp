@@ -7,7 +7,7 @@ import { mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 
 // Jeden spolocny fetch vsetkych Kostra cien tabuliek + pricing_config.
 export async function nacitajKostru(supabase) {
-  const [{ data: tSub }, { data: sGarment }, { data: dtfNak }, { data: sieto }, { data: sietoVel }, { data: rez }, { data: fol }, { data: vysNak }, { data: cfg }, { data: metriky }, { data: tech }] = await Promise.all([
+  const [{ data: tSub }, { data: sGarment }, { data: dtfNak }, { data: sieto }, { data: sietoVel }, { data: rez }, { data: fol }, { data: vysNak }, { data: cfg }, { data: metriky }, { data: tech }, { data: laser }, { data: laserHrub }] = await Promise.all([
     supabase.from('textil_naklady').select('*').eq('technologia', 'sublimacia').maybeSingle(),
     supabase.from('cennik_sublimacia_naklady').select('*').eq('id', 1).maybeSingle(),
     supabase.from('dtf_naklady').select('*').eq('id', 1).maybeSingle(),
@@ -19,6 +19,8 @@ export async function nacitajKostru(supabase) {
     supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
     supabase.from('cost_metrics').select('*'),
     supabase.from('cennik_technologie').select('*'),
+    supabase.from('cennik_laser_rezanie').select('*').eq('id', 1).maybeSingle(),
+    supabase.from('cennik_laser_hrubky').select('*').order('poradie'),
   ]);
   return {
     textilSub: tSub || null,
@@ -31,6 +33,8 @@ export async function nacitajKostru(supabase) {
     vysivkaNaklady: vysNak || null,
     pricingConfig: cfg ? mapConfigFromDb(cfg) : DEFAULT_PRICING_CONFIG,
     costMetrics: metriky || [],
+    laserRezanie: laser || null,
+    laserHrubky: laserHrub || [],
     // Predajne "min. cena ukonu" sadzby (Potlace) — sublimacia/dtf su v cennik_technologie,
     // sietotlac/rezany maju vlastne min_cena polia priamo vo svojich tabulkach vyssie.
     minCenaSublimacia: (tech || []).find(t => t.technologia === 'sublimacia')?.min_cena ?? 0,
@@ -50,6 +54,7 @@ export function minCenaPotlace(kostra, tech) {
   if (tech === 'vysivka') return Number(kostra?.minCenaVysivka) || 0;
   if (tech === 'sietotlac') return Number(kostra?.sietotlac?.min_cena) || 0;
   if (tech === 'rezany') return Number(kostra?.rezany?.min_cena) || 0;
+  if (tech === 'laser') return Number(kostra?.laserRezanie?.min_cena) || 0;
   return 0;
 }
 
@@ -218,4 +223,17 @@ export function vcRezanyTransfer(kostra, foliaId, plochaCm2) {
   const lisEurHod = elektrinaZariadeniaEurZaHod(kostra.costMetrics, rezany?.transferovy_lis_zariadenie_id);
   const elektrinaLisFlat = lisEurHod * ((parseFloat(rezany?.cas_nazehlovania_min) || 0) / 60);
   return material + (parseFloat(rezany?.naklady_manipulacia) || 0) + pracaFlat + pracaCm2 + elektrinaPloterCm2 + elektrinaLisFlat;
+}
+
+// Laserove rezanie vlastnych dielcov zo zakazkovej latky (nie potlac) — cas rezania zavisi od
+// hrubky/typu latky (rozne materialy sa reznu roznou rychlostou), preto sa zadava per-hrubka,
+// rovnaky princip ako Rezany transfer vyssie (cas v min/cm², nasobi sa celou plochou dielca).
+export function vcLaserRezanie(kostra, hrubkaId, plochaCm2) {
+  const laser = kostra.laserRezanie;
+  const hrubka = (kostra.laserHrubky || []).find(h => h.id === hrubkaId);
+  const casRezaniaMinCm2 = hrubka ? (parseFloat(hrubka.cas_rezania_min_cm2) || 0) : 0;
+  const praca = casRezaniaMinCm2 / 60 * (parseFloat(laser?.cena_prace_hod) || 0) * plochaCm2;
+  const laserEurHod = elektrinaZariadeniaEurZaHod(kostra.costMetrics, laser?.laser_zariadenie_id);
+  const elektrina = laserEurHod * (casRezaniaMinCm2 / 60) * plochaCm2;
+  return (parseFloat(laser?.naklady_manipulacia) || 0) + praca + elektrina;
 }

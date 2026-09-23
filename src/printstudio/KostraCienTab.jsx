@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Layers3, Plus, Trash2 } from 'lucide-react';
-import { elektrinaZariadeniaEurZaHod, vcSietotlacCelkom } from './vyrobneNaklady';
+import { elektrinaZariadeniaEurZaHod, vcSietotlacCelkom, vcLaserRezanie } from './vyrobneNaklady';
 
 const inputCls = 'w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white';
 const labelCls = 'text-xs text-slate-400 font-medium';
@@ -60,12 +60,14 @@ export default function KostraCienTab({ supabase }) {
   const [sietotlac, setSietotlac] = useState(null);
   const [sietotlacVelkosti, setSietotlacVelkosti] = useState([]);
   const [vysivka, setVysivka] = useState(null);
+  const [laserRezanie, setLaserRezanie] = useState(null);
+  const [laserHrubky, setLaserHrubky] = useState([]);
   const [materials, setMaterials] = useState([]);
   const [costMetrics, setCostMetrics] = useState([]);
 
   const nacitaj = async () => {
     setIsLoading(true);
-    const [{ data: tn }, { data: sg }, { data: rez }, { data: fol }, { data: dtfN }, { data: siet }, { data: sietVel }, { data: vys }, { data: mats }, { data: metriky }] = await Promise.all([
+    const [{ data: tn }, { data: sg }, { data: rez }, { data: fol }, { data: dtfN }, { data: siet }, { data: sietVel }, { data: vys }, { data: mats }, { data: metriky }, { data: laser }, { data: laserHrub }] = await Promise.all([
       supabase.from('textil_naklady').select('*').eq('technologia', 'sublimacia').maybeSingle(),
       supabase.from('cennik_sublimacia_naklady').select('*').eq('id', 1).maybeSingle(),
       supabase.from('cennik_rezany_transfer').select('*').eq('id', 1).maybeSingle(),
@@ -76,6 +78,8 @@ export default function KostraCienTab({ supabase }) {
       supabase.from('kostra_vysivka').select('*').eq('id', 1).maybeSingle(),
       supabase.from('materials').select('id, name, unit').order('name'),
       supabase.from('cost_metrics').select('id, name, category, value, power_kw, vykon_za_hodinu').order('name'),
+      supabase.from('cennik_laser_rezanie').select('*').eq('id', 1).maybeSingle(),
+      supabase.from('cennik_laser_hrubky').select('*').order('poradie'),
     ]);
     setTextilSub(tn || { technologia: 'sublimacia', cena_papier_bm: 0, cena_ochranny_papier_bm: 0, cena_atrament_l: 0, spotreba_atrament_ml_m2: 0, cena_prace_hod: 0, rychlost_m_hod: 1 });
     setMaterials(mats || []);
@@ -87,6 +91,8 @@ export default function KostraCienTab({ supabase }) {
     setSietotlac(siet || { id: 1, cena_farba_kg: 0, naklady_manipulacia: 0, naklad_sito_zakazka: 0, naklad_cistenie_zakazka: 0, odporucany_min_ks: 30, cena_prace_hod: 0, cas_tlace_min_tmavy: 0 });
     setSietotlacVelkosti(sietVel || []);
     setVysivka(vys || { id: 1, cena_digitalizacia: 0, cena_vysivky_cm2: 0 });
+    setLaserRezanie(laser || { id: 1, naklady_manipulacia: 0, cena_prace_hod: 0, laser_zariadenie_id: null, min_cena: 0 });
+    setLaserHrubky(laserHrub || []);
     setIsLoading(false);
   };
 
@@ -130,6 +136,24 @@ export default function KostraCienTab({ supabase }) {
     const next = { ...vysivka, ...patch };
     ulozBezpecne(setVysivka, vysivka, next, supabase.from('kostra_vysivka').upsert({ id: 1, ...next }));
   };
+  const ulozLaser = (patch) => {
+    const next = { ...laserRezanie, ...patch };
+    ulozBezpecne(setLaserRezanie, laserRezanie, next, supabase.from('cennik_laser_rezanie').upsert({ id: 1, ...next }));
+  };
+
+  const pridajHrubku = async () => {
+    const { data, error } = await supabase.from('cennik_laser_hrubky').insert({ label: 'Nová hrúbka', cas_rezania_min_cm2: 0, cena_cm2: 0, poradie: laserHrubky.length }).select().single();
+    if (!error && data) setLaserHrubky(h => [...h, data]);
+  };
+  const upravHrubku = async (id, patch) => {
+    setLaserHrubky(h => h.map(x => x.id === id ? { ...x, ...patch } : x));
+    await supabase.from('cennik_laser_hrubky').update(patch).eq('id', id);
+  };
+  const zmazHrubku = async (id) => {
+    if (!window.confirm('Zmazať túto hrúbku?')) return;
+    setLaserHrubky(h => h.filter(x => x.id !== id));
+    await supabase.from('cennik_laser_hrubky').delete().eq('id', id);
+  };
 
   const pridajFoliu = async () => {
     const { data, error } = await supabase.from('cennik_folie').insert({ nazov: 'Nová fólia', cena_cm2: 0.15, naklad_bm: 0 }).select().single();
@@ -159,7 +183,7 @@ export default function KostraCienTab({ supabase }) {
     await supabase.from('cennik_sietotlac_velkosti').delete().eq('id', id);
   };
 
-  if (isLoading || !textilSub || !sublimaciaGarment || !rezany || !dtf || !sietotlac || !vysivka) {
+  if (isLoading || !textilSub || !sublimaciaGarment || !rezany || !dtf || !sietotlac || !vysivka || !laserRezanie) {
     return <p className="text-sm text-slate-500">Načítavam…</p>;
   }
 
@@ -240,6 +264,11 @@ export default function KostraCienTab({ supabase }) {
   // Vysivka
   const vysivkaRefKs = 10;
   const vcVysivka = (vysivka.cena_digitalizacia || 0) / vysivkaRefKs + (vysivka.cena_vysivky_cm2 || 0) * REF_PLOCHA_CM2;
+
+  // Laserove rezanie — VC nahlad pri prvej hrubke a referencnej ploche.
+  const kostraLaserPreview = { laserRezanie, laserHrubky, costMetrics };
+  const prvaHrubka = laserHrubky[0];
+  const vcLaser = prvaHrubka ? vcLaserRezanie(kostraLaserPreview, prvaHrubka.id, REF_PLOCHA_CM2) : 0;
 
   return (
     <div className="space-y-6">
@@ -564,7 +593,46 @@ export default function KostraCienTab({ supabase }) {
         <p className="text-[11px] text-slate-500 -mt-2">≈ {(vcVysivka / REF_PLOCHA_CM2).toFixed(4)} €/cm² priemerne pri tejto ploche</p>
       </div>
 
-      <p className="text-[11px] text-slate-500 italic">Laser a ostatné vlastné stroje (rezanie/vysekávanie) sa už nenastavujú tu — sú súčasťou registra zariadení vo Financiách → Réžia firiem, kde majú elektrinu aj výkon (jednotky/hod) pohromade s ostatnými nákladmi firmy.</p>
+      {/* LASEROVE REZANIE */}
+      <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-5">
+        <h3 className="font-bold text-sm text-white mb-3">6. Laserové rezanie dielcov</h3>
+        <p className="text-[11px] text-slate-500 mb-2">Nacenenie vlastného vyrezaného tvaru z látky pre zákazníka (nie potlač) — rýchlosť rezania závisí od hrúbky/typu látky, preto sa čas zadáva samostatne pre každú hrúbku nižšie (min/cm², rovnaký princíp ako pri Rezanom transfere). Elektrinu lasera berie zo zariadenia priradeného nižšie (register Financie → Réžia firiem).</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3 bg-slate-950 rounded-xl border border-slate-800 mb-3">
+          <Field label="Manipulácia (€/ks)" value={laserRezanie.naklady_manipulacia} step="0.01" onChange={(v) => ulozLaser({ naklady_manipulacia: v })} />
+          <Field label="Práca operátora (€/hod)" value={laserRezanie.cena_prace_hod} step="0.5" onChange={(v) => ulozLaser({ cena_prace_hod: v })} />
+          <Field label="Min. cena úkonu (€)" value={laserRezanie.min_cena} step="0.5" onChange={(v) => ulozLaser({ min_cena: v })} />
+        </div>
+        <div className="max-w-md mb-4">
+          <label className={labelCls}>Laser (podľa času rezania)</label>
+          <select value={laserRezanie.laser_zariadenie_id || ''} onChange={(e) => ulozLaser({ laser_zariadenie_id: e.target.value || null })} className={inputCls}>
+            <option value="">— nepriradené —</option>
+            {zariadenia.map(z => (<option key={z.id} value={z.id}>{z.name}{z.power_kw ? ` (${z.power_kw}kW)` : ''}</option>))}
+          </select>
+        </div>
+        <div className="flex items-center justify-between mb-2">
+          <label className={labelCls}>Hrúbky látky — čas rezania (predajná sadzba sa nastavuje v karte Potlače)</label>
+          <button onClick={pridajHrubku} className="text-xs text-indigo-400 font-semibold hover:text-indigo-300 flex items-center gap-1"><Plus className="w-3.5 h-3.5" /> Pridať hrúbku</button>
+        </div>
+        <div className="space-y-2">
+          {laserHrubky.map(h => (
+            <div key={h.id} className="flex flex-wrap items-center gap-2 bg-slate-950/40 rounded-lg p-2">
+              <input type="text" value={h.label} onChange={(e) => upravHrubku(h.id, { label: e.target.value })} className="flex-1 min-w-[160px] px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" />
+              <div className="flex items-center gap-1 text-xs text-slate-400 shrink-0">
+                <input type="number" step="0.005" value={h.cas_rezania_min_cm2 || 0} onChange={(e) => upravHrubku(h.id, { cas_rezania_min_cm2: parseFloat(e.target.value) || 0 })} className="w-24 px-2 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /> min/cm²
+              </div>
+              <button onClick={() => zmazHrubku(h.id)} className="text-slate-400 hover:text-rose-400 p-1.5 shrink-0 ml-auto"><Trash2 className="w-4 h-4" /></button>
+              <span className="text-[11px] text-slate-500 w-full">{casNaCm2Hint(h.cas_rezania_min_cm2, REF_PLOCHA_CM2)}</span>
+            </div>
+          ))}
+          {laserHrubky.length === 0 && <p className="text-xs text-slate-500">Zatiaľ žiadne hrúbky látky.</p>}
+        </div>
+        {prvaHrubka && (
+          <>
+            <VysledokVC label={`VC pri "${prvaHrubka.label}", ${REF_PLOCHA_CM2}cm² (10×10cm)`} value={vcLaser} unit="€/ks" />
+            <p className="text-[11px] text-slate-500 -mt-2">≈ {(vcLaser / REF_PLOCHA_CM2).toFixed(4)} €/cm² priemerne pri tejto ploche</p>
+          </>
+        )}
+      </div>
     </div>
   );
 }
