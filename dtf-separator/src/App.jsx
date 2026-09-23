@@ -295,8 +295,10 @@ export default function App() {
     }, 30);
   };
 
+  // Testovacia stranka je pevna kalibracna referencia — vzdy 300 DPI, bez ohladu na to, na ake
+  // Output DPI si aktualne nastavil svoj vlastny motiv v nastroji (ten sa sem uz nepremieta).
   const handleDownloadTestSheet = () => {
-    const sheet = generateLpiTestSheet({ dotShape, inkColor, outputDpi });
+    const sheet = generateLpiTestSheet({ dotShape, inkColor, outputDpi: 300 });
     const a = document.createElement('a');
     a.href = sheet.toDataURL('image/png');
     a.download = 'lpi_test_sheet.png';
