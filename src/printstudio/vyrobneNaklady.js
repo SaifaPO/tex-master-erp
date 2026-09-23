@@ -151,21 +151,32 @@ export function vcSietotlacRozpad(kostra, velkostId, jeTmavy, pocetFarieb, pocet
   const n = Math.max(1, pocetFarieb || 1);
   return Array.from({ length: n }, (_, i) => nakladFarbySietotlac(kostra, velkostId, jeTmavy, i + 1, pocetKs));
 }
+// Na tmavy textil sa tlaci svetlou/bielou farbou, ktora potrebuje 2 vrstvy (prekrytie), preto
+// tlac na tmavy textil trva podstatne dlhsie ako na svetly (podla Martina cca 2x) — cas_tlace_min
+// je preto teraz SVETLY textil (povodne jedine, flat pole), cas_tlace_min_tmavy je NOVE volitelne
+// pole pre tmavy textil. Bez vyplnenia (0/prazdne) sa pouzije rovnaka hodnota ako pre svetly —
+// spatne kompatibilne, kym ho Martin v Kostra cien nevyplni.
+function casTlaceMinPre(sietotlac, jeTmavy) {
+  const svetly = parseFloat(sietotlac?.cas_tlace_min) || 0;
+  if (!jeTmavy) return svetly;
+  const tmavy = parseFloat(sietotlac?.cas_tlace_min_tmavy) || 0;
+  return tmavy > 0 ? tmavy : svetly;
+}
 // Elektrina karuselu (tlac cez sita) + fixacneho tunela (fixacia farby), oba flat cas na kus —
 // sietotlac (na rozdiel od ostatnych technologii) nema ziadny casovy rozmer v povodnom vzorci,
 // preto su cas_tlace_min/cas_fixacie_min NOVE polia (default 0 = spatna kompatibilita).
-function elektrinaSietotlacFlat(kostra) {
+function elektrinaSietotlacFlat(kostra, jeTmavy) {
   const sietotlac = kostra.sietotlac;
   if (!sietotlac) return 0;
   const karuselEurHod = elektrinaZariadeniaEurZaHod(kostra.costMetrics, sietotlac.karusel_zariadenie_id);
   const tunelEurHod = elektrinaZariadeniaEurZaHod(kostra.costMetrics, sietotlac.fixacny_tunel_zariadenie_id);
-  return karuselEurHod * ((parseFloat(sietotlac.cas_tlace_min) || 0) / 60) + tunelEurHod * ((parseFloat(sietotlac.cas_fixacie_min) || 0) / 60);
+  return karuselEurHod * (casTlaceMinPre(sietotlac, jeTmavy) / 60) + tunelEurHod * ((parseFloat(sietotlac.cas_fixacie_min) || 0) / 60);
 }
 // Praca operatora (obsluha karuselu + tunela), flat cas na kus — samostatne od elektriny strojov.
-function pracaSietotlacFlat(kostra) {
+function pracaSietotlacFlat(kostra, jeTmavy) {
   const sietotlac = kostra.sietotlac;
   if (!sietotlac) return 0;
-  const celkovyCasMin = (parseFloat(sietotlac.cas_tlace_min) || 0) + (parseFloat(sietotlac.cas_fixacie_min) || 0);
+  const celkovyCasMin = casTlaceMinPre(sietotlac, jeTmavy) + (parseFloat(sietotlac.cas_fixacie_min) || 0);
   return (celkovyCasMin / 60) * (parseFloat(sietotlac.cena_prace_hod) || 0);
 }
 // Celkova VC za 1 KUS (vsetky farby + manipulacia + praca + elektrina strojov na kus) + cistenie
@@ -176,14 +187,14 @@ export function vcSietotlacCelkom(kostra, velkostId, jeTmavy, pocetFarieb, pocet
   const sietotlac = kostra.sietotlac;
   const rozpad = vcSietotlacRozpad(kostra, velkostId, jeTmavy, pocetFarieb, pocetKs);
   const cistenieNaKus = (parseFloat(sietotlac?.naklad_cistenie_zakazka) || 0) / Math.max(1, pocetKs || 1);
-  return rozpad.reduce((s, r) => s + r.spolu, 0) + (parseFloat(sietotlac?.naklady_manipulacia) || 0) + cistenieNaKus + pracaSietotlacFlat(kostra) + elektrinaSietotlacFlat(kostra);
+  return rozpad.reduce((s, r) => s + r.spolu, 0) + (parseFloat(sietotlac?.naklady_manipulacia) || 0) + cistenieNaKus + pracaSietotlacFlat(kostra, jeTmavy) + elektrinaSietotlacFlat(kostra, jeTmavy);
 }
 // VC len za 1. farbu (zakladna predajna sadzba, bez dalsich farieb — tie sa predavaju cez priplatok).
 export function vcSietotlacZaklad(kostra, velkostId, jeTmavy, pocetKs) {
   const sietotlac = kostra.sietotlac;
   const prva = nakladFarbySietotlac(kostra, velkostId, jeTmavy, 1, pocetKs);
   const cistenieNaKus = (parseFloat(sietotlac?.naklad_cistenie_zakazka) || 0) / Math.max(1, pocetKs || 1);
-  return prva.spolu + (parseFloat(sietotlac?.naklady_manipulacia) || 0) + cistenieNaKus + pracaSietotlacFlat(kostra) + elektrinaSietotlacFlat(kostra);
+  return prva.spolu + (parseFloat(sietotlac?.naklady_manipulacia) || 0) + cistenieNaKus + pracaSietotlacFlat(kostra, jeTmavy) + elektrinaSietotlacFlat(kostra, jeTmavy);
 }
 export function plochaFormatuSietotlac(kostra, velkostId) {
   const velkost = (kostra.sietotlacVelkosti || []).find(v => v.id === velkostId);

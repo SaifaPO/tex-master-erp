@@ -84,7 +84,7 @@ export default function KostraCienTab({ supabase }) {
     setRezany(rez || { id: 1, cena_prace_hod: 0, cas_rezania_min: 0, cas_vylupovania_min: 0, cas_nazehlovania_min: 0, naklady_manipulacia: 0, sirka_folie_cm: 50, sirka_vyuzitelna_cm: 49 });
     setFolie(fol || []);
     setDtf(dtfN || { id: 1, cena_cmyk_kg: 0, spotreba_cmyk_m2: 0, cena_biela_kg: 0, spotreba_biela_m2: 0, cena_lepidlo_kg: 0, spotreba_lepidlo_m2: 0, cena_prace_hod: 0, cena_folie_bm: 0, rychlost_tlace_m_hod: 1, naklady_manipulacia: 0, cas_nazehlovania_min: 0 });
-    setSietotlac(siet || { id: 1, cena_farba_kg: 0, naklady_manipulacia: 0, naklad_sito_zakazka: 0, naklad_cistenie_zakazka: 0, odporucany_min_ks: 30, cena_prace_hod: 0 });
+    setSietotlac(siet || { id: 1, cena_farba_kg: 0, naklady_manipulacia: 0, naklad_sito_zakazka: 0, naklad_cistenie_zakazka: 0, odporucany_min_ks: 30, cena_prace_hod: 0, cas_tlace_min_tmavy: 0 });
     setSietotlacVelkosti(sietVel || []);
     setVysivka(vys || { id: 1, cena_digitalizacia: 0, cena_vysivky_cm2: 0 });
     setIsLoading(false);
@@ -499,7 +499,7 @@ export default function KostraCienTab({ supabase }) {
                 {zariadenia.map(z => (<option key={z.id} value={z.id}>{z.name}{z.power_kw ? ` (${z.power_kw}kW)` : ''}</option>))}
               </select>
             </div>
-            <Field label="Čas tlače (min/ks)" value={sietotlac.cas_tlace_min} step="0.1" onChange={(v) => ulozSietotlac({ cas_tlace_min: v })} hint={casFlatHint(sietotlac.cas_tlace_min)} />
+            <Field label="Čas tlače — svetlý textil (min/ks)" value={sietotlac.cas_tlace_min} step="0.05" onChange={(v) => ulozSietotlac({ cas_tlace_min: v })} hint={casFlatHint(sietotlac.cas_tlace_min)} />
             <div>
               <label className={labelCls}>Fixačný tunel</label>
               <select value={sietotlac.fixacny_tunel_zariadenie_id || ''} onChange={(e) => ulozSietotlac({ fixacny_tunel_zariadenie_id: e.target.value || null })} className={inputCls}>
@@ -508,6 +508,7 @@ export default function KostraCienTab({ supabase }) {
               </select>
             </div>
             <Field label="Čas fixácie (min/ks)" value={sietotlac.cas_fixacie_min} step="0.1" onChange={(v) => ulozSietotlac({ cas_fixacie_min: v })} hint={casFlatHint(sietotlac.cas_fixacie_min)} />
+            <Field label="Čas tlače — tmavý textil (min/ks)" value={sietotlac.cas_tlace_min_tmavy} step="0.05" onChange={(v) => ulozSietotlac({ cas_tlace_min_tmavy: v })} hint={`${casFlatHint(sietotlac.cas_tlace_min_tmavy)} — na tmavý textil sa ťahajú 2 vrstvy farby, preto trvá dlhšie; nevyplnené = rovnaký čas ako svetlý`} />
           </div>
           {(sietotlac.karusel_zariadenie_id || sietotlac.fixacny_tunel_zariadenie_id) && (
             <VysledokVC label="Elektrina karusel+tunel" value={sietotlacElektrinaFlat} unit="€/ks" />
@@ -539,11 +540,13 @@ export default function KostraCienTab({ supabase }) {
           const prvyFormat = sietotlacVelkosti[0];
           const vc1 = vcSietotlacCelkom(kostraPreview, prvyFormat.id, false, 1);
           const vc3 = vcSietotlacCelkom(kostraPreview, prvyFormat.id, false, 3);
+          const vc1Tmavy = vcSietotlacCelkom(kostraPreview, prvyFormat.id, true, 1);
           return (
             <div className="mt-3">
               <p className="text-[11px] text-slate-500 mb-1">Náhľad pri formáte "{prvyFormat.label}", svetlý textil:</p>
               <VysledokVC label="VC pri 1 farbe" value={vc1} unit="€/ks" />
               <VysledokVC label="VC pri 3 farbách" value={vc3} unit="€/ks" />
+              <VysledokVC label="VC pri 1 farbe — tmavý textil" value={vc1Tmavy} unit="€/ks" />
             </div>
           );
         })()}

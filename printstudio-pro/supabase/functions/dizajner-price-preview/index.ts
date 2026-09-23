@@ -114,11 +114,16 @@ function vcSietotlacCelkom(
     farbySpolu += farbaCena + sitoCena;
   }
   const cistenieNaKus = (parseFloat(sietotlac.naklad_cistenie_zakazka) || 0) / Math.max(1, pocetKs || 1);
-  const celkovyCasMin = (parseFloat(sietotlac.cas_tlace_min) || 0) + (parseFloat(sietotlac.cas_fixacie_min) || 0);
+  // Na tmavy textil sa tlaci svetlou/bielou farbou v 2 vrstvach (prekrytie) — tlac trva podstatne
+  // dlhsie ako na svetly textil (cas_tlace_min_tmavy, ak vyplnene; inak spadne na svetly cas).
+  const casTlaceSvetly = parseFloat(sietotlac.cas_tlace_min) || 0;
+  const casTlaceTmavy = parseFloat(sietotlac.cas_tlace_min_tmavy) || 0;
+  const casTlace = jeTmavy ? (casTlaceTmavy > 0 ? casTlaceTmavy : casTlaceSvetly) : casTlaceSvetly;
+  const celkovyCasMin = casTlace + (parseFloat(sietotlac.cas_fixacie_min) || 0);
   const praca = (celkovyCasMin / 60) * (parseFloat(sietotlac.cena_prace_hod) || 0);
   const karuselEurHod = elektrinaZariadeniaEurZaHod(costMetrics, sietotlac.karusel_zariadenie_id);
   const tunelEurHod = elektrinaZariadeniaEurZaHod(costMetrics, sietotlac.fixacny_tunel_zariadenie_id);
-  const elektrina = karuselEurHod * ((parseFloat(sietotlac.cas_tlace_min) || 0) / 60) + tunelEurHod * ((parseFloat(sietotlac.cas_fixacie_min) || 0) / 60);
+  const elektrina = karuselEurHod * (casTlace / 60) + tunelEurHod * ((parseFloat(sietotlac.cas_fixacie_min) || 0) / 60);
   return farbySpolu + (parseFloat(sietotlac.naklady_manipulacia) || 0) + cistenieNaKus + praca + elektrina;
 }
 
