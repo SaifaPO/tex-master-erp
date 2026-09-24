@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Database, HardDrive, RefreshCw } from 'lucide-react';
 
 // Zname buckety pouzivane naprieč appkou (src/App.jsx, CenovePonukyTab.jsx, PredajnyCennikTab.jsx,
@@ -33,6 +33,25 @@ async function velkostBucketu(supabase, bucket, cesta = '') {
   return { bytes, pocetSuborov };
 }
 
+const GB = 1024 ** 3;
+
+// Progres-bar zaplnenia — farba podla blizkosti k limitu (zelena/zltá/cervena), nezobrazi sa
+// vobec, ak limit este nie je zadany (limitGb <= 0), aby nemyslelo 0% miesto "neznamy limit".
+function BarZaplnenia({ bytes, limitGb }) {
+  if (!limitGb || limitGb <= 0) return null;
+  const limitBytes = limitGb * GB;
+  const percent = Math.min(100, (bytes / limitBytes) * 100);
+  const farba = percent >= 90 ? 'bg-rose-500' : percent >= 70 ? 'bg-amber-500' : 'bg-emerald-500';
+  return (
+    <div className="mt-2">
+      <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
+        <div className={`h-full ${farba} transition-all`} style={{ width: `${percent}%` }} />
+      </div>
+      <span className="text-[11px] text-slate-500">{percent.toFixed(1)}% z {limitGb} GB</span>
+    </div>
+  );
+}
+
 // Orientacny prehlad vyuzitia Supabase projektu (databaza + storage buckety) — nie je to presna
 // kopia fakturacneho dashboardu Supabase (ten pocita aj zalohy/indexy/WAL navyse), ale da sa z toho
 // vidiet, ci sa nieco blizi k limitu a KTORY bucket/tabulka realne zabera miesto.
@@ -42,6 +61,19 @@ export default function UloziskoTab({ supabase }) {
   const [isLoading, setIsLoading] = useState(false);
   const [chyba, setChyba] = useState('');
   const [naposledy, setNaposledy] = useState(null);
+  const [limity, setLimity] = useState({ limit_db_gb: 0, limit_storage_gb: 0 });
+
+  useEffect(() => {
+    supabase.from('ulozisko_limity').select('*').eq('id', 1).maybeSingle().then(({ data }) => {
+      if (data) setLimity({ limit_db_gb: data.limit_db_gb || 0, limit_storage_gb: data.limit_storage_gb || 0 });
+    });
+  }, [supabase]);
+
+  const ulozLimit = async (patch) => {
+    const next = { ...limity, ...patch };
+    setLimity(next);
+    await supabase.from('ulozisko_limity').upsert({ id: 1, ...next });
+  };
 
   const prepocitaj = async () => {
     setIsLoading(true);
@@ -89,12 +121,23 @@ export default function UloziskoTab({ supabase }) {
             <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-5">
               <span className="text-xs text-slate-400 font-medium flex items-center gap-1.5"><Database className="w-3.5 h-3.5" /> Databáza (tabuľky, dáta)</span>
               <div className="text-3xl font-extrabold text-white mt-1">{formatBytes(dbBytes)}</div>
+              <BarZaplnenia bytes={dbBytes} limitGb={limity.limit_db_gb} />
+              <div className="flex items-center gap-1.5 mt-2">
+                <span className="text-[11px] text-slate-500">Limit planu (GB):</span>
+                <input key={limity.limit_db_gb} type="number" step="0.1" defaultValue={limity.limit_db_gb || ''} onBlur={(e) => ulozLimit({ limit_db_gb: parseFloat(e.target.value) || 0 })} placeholder="napr. 8" className="w-20 px-2 py-1 bg-slate-950 border border-slate-800 rounded text-xs text-white" />
+              </div>
             </div>
             <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-5">
               <span className="text-xs text-slate-400 font-medium flex items-center gap-1.5"><HardDrive className="w-3.5 h-3.5" /> Úložisko súborov (spolu)</span>
               <div className="text-3xl font-extrabold text-white mt-1">{formatBytes(celkovyStorageBytes)}</div>
+              <BarZaplnenia bytes={celkovyStorageBytes} limitGb={limity.limit_storage_gb} />
+              <div className="flex items-center gap-1.5 mt-2">
+                <span className="text-[11px] text-slate-500">Limit planu (GB):</span>
+                <input key={limity.limit_storage_gb} type="number" step="0.1" defaultValue={limity.limit_storage_gb || ''} onBlur={(e) => ulozLimit({ limit_storage_gb: parseFloat(e.target.value) || 0 })} placeholder="napr. 100" className="w-20 px-2 py-1 bg-slate-950 border border-slate-800 rounded text-xs text-white" />
+              </div>
             </div>
           </div>
+          <p className="text-[11px] text-slate-600 -mt-2">Limit planu nájdeš v Supabase Dashboarde → Settings → Billing (alebo Usage) — zadaj ho raz, appka si ho odteraz pamätá.</p>
 
           <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-5">
             <h3 className="font-bold text-sm text-white mb-3">Rozpis podľa priečinka (bucket)</h3>
