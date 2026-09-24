@@ -55,11 +55,14 @@ function kategoriaIcon(kategoria) {
 // v Cenníku potlače (CennikTab.jsx → vcDtf). Zámerne NEpoužívame predajnú sadzbu DTF
 // (cennik_technologie.dtf) — tá už má v sebe maržu aj minimálnu cenu úkonu pre bežnú zákazku,
 // čo pri malej položke (napr. 4×10cm číslo) dá výrazne nadhodnotenú "výrobnú" cenu.
+const DTF_ROLL_WIDTH_CM = 56;
 function cenaZDtf(sirkaCm, vyskaCm, dtfNaklady) {
   if (!dtfNaklady || !sirkaCm || !vyskaCm) return null;
   const n = dtfNaklady;
   const plochaM2 = (Number(sirkaCm) * Number(vyskaCm)) / 10000;
+  const filmM2 = (parseFloat(n.cena_folie_bm) || 0) / (DTF_ROLL_WIDTH_CM / 100);
   const material = plochaM2 * (
+    filmM2 +
     (parseFloat(n.cena_cmyk_kg) || 0) * (parseFloat(n.spotreba_cmyk_m2) || 0) +
     (parseFloat(n.cena_biela_kg) || 0) * (parseFloat(n.spotreba_biela_m2) || 0) +
     (parseFloat(n.cena_lepidlo_kg) || 0) * (parseFloat(n.spotreba_lepidlo_m2) || 0)

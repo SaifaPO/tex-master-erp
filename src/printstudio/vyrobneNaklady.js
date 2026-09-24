@@ -114,7 +114,9 @@ export function vcDtfGarment(kostra, plochaCm2) {
   const n = kostra.dtf;
   if (!n) return 0;
   const plochaM2 = plochaCm2 / 10000;
+  const filmM2 = (parseFloat(n.cena_folie_bm) || 0) / (DTF_ROLL_WIDTH_CM / 100); // €/bm -> €/m2 cez sirku pasu
   const material = plochaM2 * (
+    filmM2 +
     (parseFloat(n.cena_cmyk_kg) || 0) * (parseFloat(n.spotreba_cmyk_m2) || 0) +
     (parseFloat(n.cena_biela_kg) || 0) * (parseFloat(n.spotreba_biela_m2) || 0) +
     (parseFloat(n.cena_lepidlo_kg) || 0) * (parseFloat(n.spotreba_lepidlo_m2) || 0)

@@ -254,7 +254,7 @@ export default function KostraCienTab({ supabase }) {
   const vcDtfMetrazBm = (dtfFilmM2 + dtfGlueM2 + dtfCmykM2 + dtfWhiteM2 + dtfLaborM2) * 0.56 + dtfElektrinaMetrazBm;
 
   // DTF — potlac textilu (presne rovnaky vzorec ako vcDtf v CennikTab.jsx)
-  const dtfMaterialM2 = dtfCmykM2 + dtfWhiteM2 + dtfGlueM2;
+  const dtfMaterialM2 = dtfFilmM2 + dtfCmykM2 + dtfWhiteM2 + dtfGlueM2;
   const dtfGarmentPraca = ((dtf.cas_nazehlovania_min || 0) / 60) * (dtf.cena_prace_hod || 0);
   const dtfDlzkaBmGarment = REF_PLOCHA_CM2 / (56 * 100);
   const dtfElektrinaGarmentTlacTunel = dtfDlzkaBmGarment * (dtfTlaciarenEurHod / Math.max(0.01, dtf.rychlost_tlace_m_hod || 1) + dtfTunelEurHod / Math.max(0.01, dtf.rychlost_tunela_m_hod || 1));
