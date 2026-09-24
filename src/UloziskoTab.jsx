@@ -109,6 +109,18 @@ export default function UloziskoTab({ supabase }) {
         </button>
       </div>
 
+      <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4 flex flex-wrap items-center gap-x-6 gap-y-2">
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-slate-400">Limit databázy (GB):</span>
+          <input key={limity.limit_db_gb} type="number" step="0.1" defaultValue={limity.limit_db_gb || ''} onBlur={(e) => ulozLimit({ limit_db_gb: parseFloat(e.target.value) || 0 })} placeholder="napr. 0.5" className="w-20 px-2 py-1 bg-slate-950 border border-slate-800 rounded text-xs text-white" />
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-slate-400">Limit úložiska súborov (GB):</span>
+          <input key={limity.limit_storage_gb} type="number" step="0.1" defaultValue={limity.limit_storage_gb || ''} onBlur={(e) => ulozLimit({ limit_storage_gb: parseFloat(e.target.value) || 0 })} placeholder="napr. 1" className="w-20 px-2 py-1 bg-slate-950 border border-slate-800 rounded text-xs text-white" />
+        </div>
+        <span className="text-[11px] text-slate-600">Nájdeš v Supabase Dashboarde → Settings → Billing/Usage. Zadaj raz, appka si to pamätá.</span>
+      </div>
+
       {chyba && <p className="text-xs text-rose-400 bg-rose-950/30 border border-rose-900/40 rounded-lg p-3">{chyba}</p>}
 
       {dbBytes === null && !isLoading && !chyba && (
@@ -122,22 +134,13 @@ export default function UloziskoTab({ supabase }) {
               <span className="text-xs text-slate-400 font-medium flex items-center gap-1.5"><Database className="w-3.5 h-3.5" /> Databáza (tabuľky, dáta)</span>
               <div className="text-3xl font-extrabold text-white mt-1">{formatBytes(dbBytes)}</div>
               <BarZaplnenia bytes={dbBytes} limitGb={limity.limit_db_gb} />
-              <div className="flex items-center gap-1.5 mt-2">
-                <span className="text-[11px] text-slate-500">Limit planu (GB):</span>
-                <input key={limity.limit_db_gb} type="number" step="0.1" defaultValue={limity.limit_db_gb || ''} onBlur={(e) => ulozLimit({ limit_db_gb: parseFloat(e.target.value) || 0 })} placeholder="napr. 8" className="w-20 px-2 py-1 bg-slate-950 border border-slate-800 rounded text-xs text-white" />
-              </div>
             </div>
             <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-5">
               <span className="text-xs text-slate-400 font-medium flex items-center gap-1.5"><HardDrive className="w-3.5 h-3.5" /> Úložisko súborov (spolu)</span>
               <div className="text-3xl font-extrabold text-white mt-1">{formatBytes(celkovyStorageBytes)}</div>
               <BarZaplnenia bytes={celkovyStorageBytes} limitGb={limity.limit_storage_gb} />
-              <div className="flex items-center gap-1.5 mt-2">
-                <span className="text-[11px] text-slate-500">Limit planu (GB):</span>
-                <input key={limity.limit_storage_gb} type="number" step="0.1" defaultValue={limity.limit_storage_gb || ''} onBlur={(e) => ulozLimit({ limit_storage_gb: parseFloat(e.target.value) || 0 })} placeholder="napr. 100" className="w-20 px-2 py-1 bg-slate-950 border border-slate-800 rounded text-xs text-white" />
-              </div>
             </div>
           </div>
-          <p className="text-[11px] text-slate-600 -mt-2">Limit planu nájdeš v Supabase Dashboarde → Settings → Billing (alebo Usage) — zadaj ho raz, appka si ho odteraz pamätá.</p>
 
           <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-5">
             <h3 className="font-bold text-sm text-white mb-3">Rozpis podľa priečinka (bucket)</h3>
