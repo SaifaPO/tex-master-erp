@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
 import { QRCodeSVG } from 'qrcode.react';
@@ -6,6 +6,7 @@ import { encode as encodeBySquare, CurrencyCode, PaymentOptions } from 'bysquare
 import { Html5Qrcode } from 'html5-qrcode';
 import CenovePonukyTab from './CenovePonukyTab';
 import PrintStudioAdmin from './printstudio/PrintStudioAdmin';
+import GlobalSearchPalette from './GlobalSearchPalette';
 import { nacitajKostru, vcSublimaciaGarment, vcSublimaciaGarmentRozpis, vcRezanyTransfer, vcSietotlacCelkom, vcSietotlacRozpad } from './printstudio/vyrobneNaklady';
 import { priceAt } from './printstudio/pricingEngine';
 import {
@@ -1324,7 +1325,10 @@ export default function App() {
   const matrixTableWrapRef = useRef(null);
   const [plannerViewMode, setPlannerViewMode] = useState('matrix');
 
-  const [currentUser, setCurrentUser] = useState(null); 
+  const [isSearchPaletteOpen, setIsSearchPaletteOpen] = useState(false);
+  const [printstudioJumpTarget, setPrintstudioJumpTarget] = useState(null);
+
+  const [currentUser, setCurrentUser] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [pendingScanCode] = useState(() => {
     try { return new URLSearchParams(window.location.search).get('scan'); } catch { return null; }
@@ -2049,6 +2053,84 @@ export default function App() {
     if (stored !== undefined) return stored;
     return FALLBACK_ACL[action]?.[role] || false;
   };
+
+  // Globálne vyhľadávanie (Ctrl+K) — Ctrl/Cmd+K nikde inde v appke nie je obsadené.
+  useEffect(() => {
+    const handler = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsSearchPaletteOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  // Index kariet/podzáložiek pre Ctrl+K — každá položka sa tu overuje rovnakými podmienkami
+  // (canSeeTab/hasPermission/role==='master'), aké gatujú tlačidlá v hlavnej navigácii nižšie,
+  // aby vyhľadávanie neprezradilo existenciu sekcií, ktoré daná rola nesmie vidieť.
+  const searchIndex = useMemo(() => {
+    if (!currentUser) return [];
+    const role = currentUser.role;
+    const norm = (s) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    const push = (list, label, breadcrumb, visible, onSelect, keywords = '') => {
+      if (!visible) return;
+      list.push({ id: `${breadcrumb || ''}::${label}`, label, breadcrumb, onSelect, searchText: norm(`${label} ${breadcrumb || ''} ${keywords}`) });
+    };
+    const entries = [];
+
+    push(entries, 'Plánovacia Matica', null, canSeeTab(role, 'planner'), () => { setActiveTab('planner'); setPlannerViewMode('matrix'); });
+    push(entries, 'Riadkový Zoznam', 'Plánovacia Matica', canSeeTab(role, 'planner'), () => { setActiveTab('planner'); setPlannerViewMode('rows'); });
+    push(entries, 'Rozvrh Zamestnancov', 'Plánovacia Matica', canSeeTab(role, 'planner') && hasPermission('manage_profiles'), () => { setActiveTab('planner'); setPlannerViewMode('staffing'); });
+    push(entries, 'Konfigurátor Zákaziek', null, canSeeTab(role, 'orders'), () => setActiveTab('orders'));
+    push(entries, 'Katalóg Produktov', null, canSeeTab(role, 'catalog'), () => setActiveTab('catalog'));
+
+    const stanice = [
+      ['grafik', 'Grafika'], ['strihanie', 'Strihanie & Kompletáž'], ['transfer', 'Transfer tlač'],
+      ['sietotlac', 'Sieťotlač'], ['laser', 'Laser'], ['sublimacia', 'Sublimácia'], ['sitie', 'Šitie'], ['balenie', 'Balenie'],
+    ];
+    const isolatedVisible = canSeeTab(role, 'isolated-station');
+    push(entries, 'Samostatné Dielne', null, isolatedVisible, () => setActiveTab('isolated-station'));
+    stanice.forEach(([id, label]) => push(entries, label, 'Samostatné Dielne', isolatedVisible, () => { setActiveTab('isolated-station'); setActiveStationFilter(id); }));
+
+    push(entries, 'Sklad', null, canSeeTab(role, 'materials'), () => setActiveTab('materials'));
+    push(entries, 'Zamestnanci & Práva', null, canSeeTab(role, 'profiles'), () => setActiveTab('profiles'));
+    push(entries, 'Čítačka QR', null, canSeeTab(role, 'qr-terminal'), () => setActiveTab('qr-terminal'));
+    push(entries, 'Prehľady', null, hasPermission('view_reports') && canSeeTab(role, 'reports'), () => setActiveTab('reports'));
+    push(entries, 'Dashboard Grafikov', null, canSeeTab(role, 'designers'), () => setActiveTab('designers'));
+    push(entries, 'Problémy', null, (hasPermission('view_reports') || role === 'sales') && canSeeTab(role, 'problems'), () => setActiveTab('problems'));
+    push(entries, 'História Zákaziek', null, canSeeTab(role, 'archive'), () => setActiveTab('archive'));
+    push(entries, 'Cestovné príkazy', null, canSeeTab(role, 'cestaky'), () => setActiveTab('cestaky'));
+    push(entries, 'Kniha jázd', null, canSeeTab(role, 'kniha-jazd'), () => setActiveTab('kniha-jazd'));
+    push(entries, 'Manuál', null, canSeeTab(role, 'manual'), () => setActiveTab('manual'));
+
+    const financeVisible = hasPermission('view_finance') && canSeeTab(role, 'invoices');
+    push(entries, 'Financie', null, financeVisible, () => { setActiveTab('invoices'); setFinanceSubTab('overview'); });
+    const financeSub = [
+      ['overview', 'Prehľad'], ['queue', 'Fronta pre účtovníka'], ['invoices', 'Faktúry'], ['cash', 'Pokladňa'],
+      ['bank', 'Banka'], ['journal', 'Účtovný denník'], ['assets', 'Majetok'], ['customers', 'Zákazníci'],
+      ['ai', 'AI Asistent'],
+    ];
+    financeSub.forEach(([id, label]) => push(entries, label, 'Financie', financeVisible, () => { setActiveTab('invoices'); setFinanceSubTab(id); }));
+    push(entries, 'Medzifiremné (ATAK↔PBT)', 'Financie', financeVisible && role === 'master', () => { setActiveTab('invoices'); setFinanceSubTab('intercompany'); });
+    push(entries, 'Réžia firiem', 'Financie', financeVisible && role === 'master', () => { setActiveTab('invoices'); setFinanceSubTab('overhead'); });
+    push(entries, 'Cenové ponuky', null, hasPermission('view_finance') && canSeeTab(role, 'quotes'), () => setActiveTab('quotes'));
+
+    const psVisible = role === 'master';
+    push(entries, 'PrintStudio Pro', null, psVisible, () => { setActiveTab('printstudio'); setPrintstudioJumpTarget('produkty'); });
+    const psSub = [
+      ['kategorie', 'Kategórie'], ['produkty', 'Produkty (Blanks)'], ['farby', 'Farby'], ['fonty', 'Fonty'],
+      ['grafiky', 'Grafiky (Design)'], ['mockupy', 'Fotky produktov'], ['cenotvorba', 'Cenotvorba (marže)'],
+      ['kostra-cien', 'Kostra cien'], ['metraze', 'Metráže'], ['potlace', 'Potlače'],
+      ['kalkulacka-tlace', 'Kalkulačka tlače (Cen. ponuky)'], ['predajny-cennik', 'Predajný cenník (tlač A4)'],
+      ['manualy', 'Manuály (tlač A4)'], ['shopify', 'Shopify prepojenie'], ['vlajky', 'Vlajky'],
+      ['beachvlajky', 'Beachvlajky'], ['dresy', 'Výroba dresov'], ['celenky', 'Čelenky'], ['buffky', 'Buffky'],
+      ['dtf-separator', 'DTF/DTG Separátor'], ['ulozisko', 'Úložisko'],
+    ];
+    psSub.forEach(([id, label]) => push(entries, label, 'PrintStudio Pro', psVisible, () => { setActiveTab('printstudio'); setPrintstudioJumpTarget(id); }));
+
+    return entries;
+  }, [currentUser, acl]);
 
   // --- PRIHLÁSENIE / ODHLÁSENIE ---
   // --- SUPABASE AUTH: registrácia, prihlásenie a MFA pre Master/Supervisor/Obchodníka ---
@@ -6157,13 +6239,17 @@ export default function App() {
 
   return (
     <div className="min-h-screen print:min-h-0 bg-slate-900 text-slate-100 font-sans flex flex-col antialiased">
-      
+      <GlobalSearchPalette isOpen={isSearchPaletteOpen} onClose={() => setIsSearchPaletteOpen(false)} entries={searchIndex} />
+
       <div className="bg-slate-950 border-b border-indigo-950 px-4 py-2 flex flex-col md:flex-row justify-between items-center gap-3 text-xs text-slate-300 print:hidden">
         <div className="flex items-center gap-2">
           <Shield className="h-4 w-4 text-indigo-400" />
           <span className="font-bold">Prihlásený: {currentUser.firstName} {currentUser.lastName} ({currentUser.role.toUpperCase()})</span>
         </div>
         <div className="flex flex-wrap gap-1.5 items-center">
+          <button onClick={() => setIsSearchPaletteOpen(true)} className="px-3 py-1 rounded-md font-bold border bg-slate-900 text-slate-300 border-slate-800 hover:text-white hover:border-indigo-700 flex items-center gap-1.5">
+            <Search className="h-3.5 w-3.5" /> Hľadať <span className="hidden sm:inline text-[10px] text-slate-500 font-normal ml-0.5">(Ctrl+K)</span>
+          </button>
           {problemReports.filter(p => p.status === 'open').length > 0 && hasPermission('view_reports') && (
             <button onClick={() => setActiveTab('problems')} className="px-3 py-1 rounded-md font-bold border bg-rose-600 text-white border-rose-500 animate-pulse flex items-center gap-1.5">
               <AlertTriangle className="h-3.5 w-3.5" /> {problemReports.filter(p => p.status === 'open').length} nevyriešených problémov
@@ -7934,7 +8020,7 @@ export default function App() {
         )}
 
         {activeTab === 'printstudio' && currentUser.role === 'master' && (
-          <PrintStudioAdmin supabase={supabase} />
+          <PrintStudioAdmin supabase={supabase} initialSubtab={printstudioJumpTarget} />
         )}
 
         {activeTab === 'isolated-station' && (

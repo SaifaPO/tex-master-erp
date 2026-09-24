@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Tag, Box, Palette, Type, Image as ImageIcon, Banknote, Camera, ShoppingBag, Flag, Shirt, Calculator, Waves, ShoppingCart, ExternalLink, Layers3, Ruler, Printer, Circle, Wind, Grid3x3 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Tag, Box, Palette, Type, Image as ImageIcon, Banknote, Camera, ShoppingBag, Flag, Shirt, Calculator, Waves, ShoppingCart, ExternalLink, Layers3, Ruler, Printer, Circle, Wind, Grid3x3, HardDrive } from 'lucide-react';
 import KategorieTab from './KategorieTab';
 import ProduktyTab from './ProduktyTab';
 import FarbyTab from './FarbyTab';
@@ -20,6 +20,7 @@ import ManualyTab from './ManualyTab';
 import CelenkyTab from './CelenkyTab';
 import BuffkyTab from './BuffkyTab';
 import DtfSeparatorTab from './DtfSeparatorTab';
+import UloziskoTab from '../UloziskoTab';
 
 // Vsetky Shopify konfiguratory (dotlac na tricka, DTF metraz, vlajky/beachvlajky, vyroba dresov)
 // zoskupene pod jednou kartou "PrintStudio Pro" v hlavnom ERP navigacii — namiesto samostatnych kariet.
@@ -49,11 +50,18 @@ const SUBTABS = [
   { id: 'celenky', label: 'Čelenky', icon: Circle, appUrl: `${PRINTSTUDIO_BASE_URL}/?typ=celenka` },
   { id: 'buffky', label: 'Buffky', icon: Wind, appUrl: `${PRINTSTUDIO_BASE_URL}/?typ=buffka` },
   { id: 'dtf-separator', label: 'DTF/DTG Separátor', icon: Grid3x3 },
+  { id: 'ulozisko', label: 'Úložisko', icon: HardDrive },
 ];
 
-export default function PrintStudioAdmin({ supabase }) {
+export default function PrintStudioAdmin({ supabase, initialSubtab }) {
   const [subtab, setSubtab] = useState('produkty');
   const activeAppUrl = SUBTABS.find(t => t.id === subtab)?.appUrl;
+
+  // initialSubtab prichadza z globalneho vyhladavania (Ctrl+K) — meni sa nonce v tabId
+  // aby sa da "skocit" aj opakovane na tu istu podzalozku.
+  useEffect(() => {
+    if (initialSubtab) setSubtab(initialSubtab);
+  }, [initialSubtab]);
 
   if (!supabase) {
     return <p className="text-sm text-rose-400">Supabase klient nie je nakonfigurovaný (chýbajú VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).</p>;
@@ -110,6 +118,7 @@ export default function PrintStudioAdmin({ supabase }) {
         {subtab === 'celenky' && <CelenkyTab supabase={supabase} />}
         {subtab === 'buffky' && <BuffkyTab supabase={supabase} />}
         {subtab === 'dtf-separator' && <DtfSeparatorTab supabase={supabase} />}
+        {subtab === 'ulozisko' && <UloziskoTab supabase={supabase} />}
       </div>
     </div>
   );
