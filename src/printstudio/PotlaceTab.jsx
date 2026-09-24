@@ -26,6 +26,21 @@ function NakladovyVysledok({ vc, ks, config, plochaCm2, jednotka, onPouzit, disa
   );
 }
 
+// Navrh minimalnej ceny ukonu = VC pri najnizsej (podlahovej) marzi z marzovej krivky — teda cena,
+// pod ktorou by sa uz nepredavalo ani pri najvacsom odbere. Len navrh (tlacidlo "Pouzit"), pole
+// ostava vzdy rucne editovatelne — Martin moze chciet vyssie minimum z logistickych dovodov.
+function NavrhMinCeny({ vc, config, onPouzit }) {
+  if (!vc || vc <= 0) return null;
+  const floor = config.marginFloor;
+  const navrh = Math.round(vc * (1 + floor / 100) * 100) / 100;
+  return (
+    <div className="mt-1.5 flex items-center flex-wrap gap-x-2 gap-y-1 text-[11px] text-slate-500">
+      <span>Pri najnižšej marži ({floor.toFixed(0)}%) vychádza <strong className="text-slate-300">{navrh.toFixed(2)}€</strong> — pri veľkých počtoch si to dobre prekontroluj.</span>
+      <button type="button" onClick={() => onPouzit(navrh)} className="shrink-0 text-indigo-400 hover:text-indigo-300 font-semibold underline underline-offset-2">Použiť</button>
+    </div>
+  );
+}
+
 export default function PotlaceTab({ supabase }) {
   const [isLoading, setIsLoading] = useState(true);
   const [sublimacia, setSublimacia] = useState({ cena_cm2: 0, min_cena: 0 });
@@ -183,7 +198,7 @@ export default function PotlaceTab({ supabase }) {
         <h3 className="font-bold text-sm text-white mb-1">Sublimácia</h3>
         <div className="grid grid-cols-2 gap-3 max-w-md mb-3">
           <div><label className={labelCls}>Predajná sadzba (€/cm²)</label><input type="number" step="0.001" value={sublimacia.cena_cm2} onChange={(e) => ulozSublimacia({ cena_cm2: parseFloat(e.target.value) || 0 })} className={inputCls} /></div>
-          <div><label className={labelCls}>Minimálna cena úkonu (€)</label><input type="number" step="0.1" value={sublimacia.min_cena} onChange={(e) => ulozSublimacia({ min_cena: parseFloat(e.target.value) || 0 })} className={inputCls} /></div>
+          <div><label className={labelCls}>Minimálna cena úkonu (€)</label><input type="number" step="0.1" value={sublimacia.min_cena} onChange={(e) => ulozSublimacia({ min_cena: parseFloat(e.target.value) || 0 })} className={inputCls} /><NavrhMinCeny vc={vcSublimacia} config={pricingConfig} onPouzit={(v) => ulozSublimacia({ min_cena: v })} /></div>
         </div>
         <p className={kostraNoteCls}>Výrobné náklady sa berú živo z <strong>Kostra cien → Sublimácia → Potlač na tričká</strong>.</p>
         <NakladovyVysledok vc={vcSublimacia} ks={ks} config={pricingConfig} plochaCm2={plocha} onPouzit={(cena) => ulozSublimacia({ cena_cm2: Number(cena.toFixed(4)) })} disabled={plocha === 0} />
@@ -194,7 +209,7 @@ export default function PotlaceTab({ supabase }) {
         <h3 className="font-bold text-sm text-white mb-1">Digitálny transfer (DTF)</h3>
         <div className="grid grid-cols-2 gap-3 max-w-md mb-3">
           <div><label className={labelCls}>Predajná sadzba (€/cm²)</label><input type="number" step="0.001" value={dtf.cena_cm2} onChange={(e) => ulozDtf({ cena_cm2: parseFloat(e.target.value) || 0 })} className={inputCls} /></div>
-          <div><label className={labelCls}>Minimálna cena úkonu (€)</label><input type="number" step="0.1" value={dtf.min_cena} onChange={(e) => ulozDtf({ min_cena: parseFloat(e.target.value) || 0 })} className={inputCls} /></div>
+          <div><label className={labelCls}>Minimálna cena úkonu (€)</label><input type="number" step="0.1" value={dtf.min_cena} onChange={(e) => ulozDtf({ min_cena: parseFloat(e.target.value) || 0 })} className={inputCls} /><NavrhMinCeny vc={vcDtf} config={pricingConfig} onPouzit={(v) => ulozDtf({ min_cena: v })} /></div>
         </div>
         {!dtfNaklady ? (
           <p className="text-xs text-amber-400">Výrobné náklady DTF ešte nie sú vyplnené (Kostra cien → DTF).</p>
@@ -213,7 +228,7 @@ export default function PotlaceTab({ supabase }) {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-3xl mb-3">
           <div><label className={labelCls}>Sadzba — svetlý (€/cm²)</label><input type="number" step="0.001" value={sietotlac.cena_cm2} onChange={(e) => ulozSietotlac({ cena_cm2: parseFloat(e.target.value) || 0 })} className={inputCls} /></div>
           <div><label className={labelCls}>Sadzba — tmavý (€/cm²)</label><input type="number" step="0.001" value={sietotlac.cena_cm2_tmavy} onChange={(e) => ulozSietotlac({ cena_cm2_tmavy: parseFloat(e.target.value) || 0 })} className={inputCls} /></div>
-          <div><label className={labelCls}>Minimálna cena úkonu (€)</label><input type="number" step="0.1" value={sietotlac.min_cena} onChange={(e) => ulozSietotlac({ min_cena: parseFloat(e.target.value) || 0 })} className={inputCls} /></div>
+          <div><label className={labelCls}>Minimálna cena úkonu (€)</label><input type="number" step="0.1" value={sietotlac.min_cena} onChange={(e) => ulozSietotlac({ min_cena: parseFloat(e.target.value) || 0 })} className={inputCls} /><NavrhMinCeny vc={vcSietotlac} config={pricingConfig} onPouzit={(v) => ulozSietotlac({ min_cena: v })} /></div>
           <div><label className={labelCls}>Príplatok za ďalšiu farbu (€)</label><input type="number" step="0.1" value={sietotlac.priplatok_farba} onChange={(e) => ulozSietotlac({ priplatok_farba: parseFloat(e.target.value) || 0 })} className={inputCls} /></div>
         </div>
         <p className="text-[11px] text-slate-500 mb-2">💡 Odporúčaná minimálna zákazka: <strong className="text-slate-300">{sietotlac.odporucany_min_ks} ks</strong> (menšie objednávky sú možné, len drahšie na kus kvôli sitám — nastavuje sa v Kostra cien).</p>
@@ -262,6 +277,7 @@ export default function PotlaceTab({ supabase }) {
         <div className="max-w-xs mb-3">
           <label className={labelCls}>Minimálna cena úkonu (€)</label>
           <input type="number" step="0.1" value={rezany.min_cena} onChange={(e) => ulozRezany({ min_cena: parseFloat(e.target.value) || 0 })} className={inputCls} />
+          <NavrhMinCeny vc={vcRezany} config={pricingConfig} onPouzit={(v) => ulozRezany({ min_cena: v })} />
         </div>
         <p className={kostraNoteCls}>Časy rezania/vyľupovania/nažehlovania, manipulácia a náklad materiálu na typ fólie sa nastavujú v <strong>Kostra cien → Rezaný transfer</strong>. Tu len nastav predajnú sadzbu (€/cm²) pre každý typ:</p>
         <div className="space-y-2 mb-4">
@@ -293,6 +309,7 @@ export default function PotlaceTab({ supabase }) {
         <div className="max-w-xs mb-3">
           <label className={labelCls}>Minimálna cena úkonu (€)</label>
           <input type="number" step="0.5" value={laser.min_cena} onChange={(e) => ulozLaser({ min_cena: parseFloat(e.target.value) || 0 })} className={inputCls} />
+          <NavrhMinCeny vc={vcLaser} config={pricingConfig} onPouzit={(v) => ulozLaser({ min_cena: v })} />
         </div>
         <p className={kostraNoteCls}>Čas rezania podľa hrúbky, práca operátora, manipulácia a priradený laser sa nastavujú v <strong>Kostra cien → Laserové rezanie</strong>. Tu len nastav predajnú sadzbu (€/cm²) pre každú hrúbku:</p>
         <div className="space-y-2 mb-4">
@@ -322,7 +339,7 @@ export default function PotlaceTab({ supabase }) {
         <h3 className="font-bold text-sm text-white mb-1">Výšivka</h3>
         <div className="grid grid-cols-2 gap-3 max-w-md mb-3">
           <div><label className={labelCls}>Predajná sadzba (€/cm²)</label><input type="number" step="0.001" value={vysivka.cena_cm2} onChange={(e) => ulozVysivka({ cena_cm2: parseFloat(e.target.value) || 0 })} className={inputCls} /></div>
-          <div><label className={labelCls}>Minimálna cena úkonu (€)</label><input type="number" step="0.1" value={vysivka.min_cena} onChange={(e) => ulozVysivka({ min_cena: parseFloat(e.target.value) || 0 })} className={inputCls} /></div>
+          <div><label className={labelCls}>Minimálna cena úkonu (€)</label><input type="number" step="0.1" value={vysivka.min_cena} onChange={(e) => ulozVysivka({ min_cena: parseFloat(e.target.value) || 0 })} className={inputCls} /><NavrhMinCeny vc={vcVysivka} config={pricingConfig} onPouzit={(v) => ulozVysivka({ min_cena: v })} /></div>
         </div>
         {!vysivkaNaklady ? (
           <p className="text-xs text-amber-400">Výrobné náklady výšivky ešte nie sú vyplnené (Kostra cien → Výšivka).</p>
