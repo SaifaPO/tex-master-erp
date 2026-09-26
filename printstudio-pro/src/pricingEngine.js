@@ -28,3 +28,6 @@ export const mapConfigFromDb = (r) => ({
 // Cenotvorba), sem sa len cita. Predtym mal kazdy modul vlastnu nezavislu kopiu v *_nastavenia,
 // co sa raz rozislo (Buffky 15% namiesto 23%) — odteraz jeden zdroj pravdy.
 export const DEFAULT_PRICING_CONFIG = { coefA: 300, coefB: 54, marginFloor: 30, coefP: 1.3, qtyAtFloor: 1000, dphPercent: 23 };
+
+// Odberove hladiny zobrazene v tabulkach mnozstevnych zliav (Celenky/Buffky/DTF metraz/Textilna metraz).
+export const QUANTITY_LEVELS = [1, 10, 25, 50, 100, 250, 500, 1000];

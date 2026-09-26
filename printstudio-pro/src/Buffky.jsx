@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ShoppingCart, CreditCard, Gift } from 'lucide-react';
 import PbtHeader from './PbtHeader';
-import { priceAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
+import { priceAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG, QUANTITY_LEVELS } from './pricingEngine';
 import { initBuffkyEngine } from './buffky/buffkyEngine';
 
 const BUCKET = 'print-designs';
@@ -371,9 +371,9 @@ export default function Buffky({ supabase, onSpat }) {
             <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl space-y-1.5">
               <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
                 <span className="text-xs font-bold text-slate-200">Cena</span>
-                <span className="text-[10px] font-normal text-cyan-300 bg-cyan-500/10 px-2 py-1 rounded-full">s DPH {dphPercent}%</span>
+                <span className="text-[10px] font-normal text-cyan-300 bg-cyan-500/10 px-2 py-1 rounded-full">sadzba DPH {dphPercent}%</span>
               </div>
-              <RowSum label="Cena za kus" value={`${cenaKus.toFixed(2)} €`} />
+              <RowSum label="Cena za kus (bez DPH)" value={`${cenaKus.toFixed(2)} €`} />
               <RowSum label="Doprava" value={`${shippingFee.toFixed(2)} €`} />
               {expressFee > 0 && <RowSum label="Príplatok expres" value={`${expressFee.toFixed(2)} €`} />}
               <RowSum label="Cena bez DPH" value={`${grandTotalBezDph.toFixed(2)} €`} />
@@ -403,6 +403,37 @@ export default function Buffky({ supabase, onSpat }) {
           </div>
         </div>
       </main>
+
+      <div className="max-w-7xl w-full mx-auto p-3 sm:p-4">
+        <div className="bg-slate-900 border border-slate-800 p-4 sm:p-6 rounded-2xl shadow-sm">
+          <h3 className="text-sm font-bold text-white mb-1">Množstevné zľavy</h3>
+          <p className="text-[11px] text-slate-500 mb-3">Ceny v tabuľke sú bez DPH.</p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-slate-800 text-slate-500 font-semibold">
+                  <th className="p-2.5">Počet ks</th><th className="p-2.5">Cena €/ks (bez DPH)</th><th className="p-2.5">Zľava</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {QUANTITY_LEVELS.map(level => {
+                  const rate = priceAt(nakladKs, level, pricingConfig);
+                  const base = priceAt(nakladKs, QUANTITY_LEVELS[0], pricingConfig);
+                  const discount = base > 0 ? Math.round(((base - rate) / base) * 100) : 0;
+                  const isCurrent = pocetKs >= level && (level === QUANTITY_LEVELS[QUANTITY_LEVELS.length - 1] || pocetKs < QUANTITY_LEVELS[QUANTITY_LEVELS.indexOf(level) + 1]);
+                  return (
+                    <tr key={level} className={isCurrent ? 'bg-cyan-500/10 font-semibold' : ''}>
+                      <td className="p-2.5 text-slate-300">od {level} ks {isCurrent && <span className="ml-1 text-[10px] bg-cyan-600 text-white px-2 py-0.5 rounded-full">Váš odber</span>}</td>
+                      <td className="p-2.5 font-mono font-bold text-white">{rate.toFixed(2)} €</td>
+                      <td className={`p-2.5 font-mono ${discount > 0 ? 'text-emerald-400' : 'text-slate-500'}`}>{discount > 0 ? `-${discount}%` : 'Základ'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
