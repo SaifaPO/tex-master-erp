@@ -7,7 +7,7 @@ const ROLL_WIDTH_CM = 56;
 const MARGIN_CM = 0.5;
 // Referencne urovne (bm) len pre "Prehlad mnozstevnych zliav" nizsie — samotny vypocet ceny
 // funguje pre lubovolnu (aj neceloriselnu) dlzku, toto je len ilustracna tabulka.
-const BM_PREVIEW_LEVELS = [1, 5, 10, 25, 50, 100];
+const BM_PREVIEW_LEVELS = [1, 5, 10, 25, 50, 100, 200, 500, 1000];
 
 function vypocitajJednuOrientaciu(itemWidthCm, itemHeightCm, qty) {
   const effectiveWidth = Math.min(itemWidthCm, ROLL_WIDTH_CM);
