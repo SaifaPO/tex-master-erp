@@ -60,7 +60,10 @@ export default function App() {
     return <Buffky supabase={supabase} />;
   }
 
-  const jeDres3D = aktualnyProduktId != null && produkty.find(p => p.id === aktualnyProduktId)?.typ_konfiguratora === '3d_dres';
+  const vybranyProdukt = aktualnyProduktId != null ? produkty.find(p => p.id === aktualnyProduktId) : null;
+  const jeDres3D = vybranyProdukt?.typ_konfiguratora === '3d_dres';
+  const jeCelenkaProdukt = vybranyProdukt?.typ_konfiguratora === 'celenka';
+  const jeBuffkaProdukt = vybranyProdukt?.typ_konfiguratora === 'buffka';
 
   return (
     // 3D dres konfigurátor je "app-like" na celú výšku obrazovky bez posúvania stránky (len
@@ -87,8 +90,12 @@ export default function App() {
       />
 
       {aktualnyProduktId != null ? (
-        produkty.find(p => p.id === aktualnyProduktId)?.typ_konfiguratora === '3d_dres' ? (
+        jeDres3D ? (
           <Dres3DApp supabase={supabase} produktId={aktualnyProduktId} />
+        ) : jeCelenkaProdukt ? (
+          <Celenky supabase={supabase} />
+        ) : jeBuffkaProdukt ? (
+          <Buffky supabase={supabase} />
         ) : (
           <Dizajner supabase={supabase} produktId={aktualnyProduktId} />
         )
