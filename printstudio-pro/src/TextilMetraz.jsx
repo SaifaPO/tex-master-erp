@@ -477,13 +477,13 @@ export default function TextilMetraz({ supabase, onSpat }) {
           <div className="bg-slate-900 text-white p-5 rounded-2xl shadow-xl space-y-3">
             <h3 className="text-sm font-bold flex items-center justify-between border-b border-slate-800 pb-3">
               <span>Súhrn objednávky</span>
-              <span className="text-[10px] font-normal text-indigo-300 bg-indigo-500/10 px-2 py-1 rounded-full">s DPH {pricingConfig.dphPercent}%</span>
+              <span className="text-[10px] font-normal text-indigo-300 bg-indigo-500/10 px-2 py-1 rounded-full">sadzba DPH {pricingConfig.dphPercent}%</span>
             </h3>
             <div className="space-y-2 text-xs text-slate-300">
               <Row label="Technológia" value={technologia === 'sublimacia' ? 'Sublimácia' : 'Digitálna bavlna'} />
               <Row label="Úroveň služby" value={sluzbaRezim === 'len_papier' ? 'Len sublimačný papier' : sluzbaRezim === 'na_nas_material' ? 'Potlač aj látka od nás' : 'Potlač na váš materiál'} small />
-              <Row label="Sadzba potlače" value={`${baseRate.toFixed(2)} €/bm`} />
-              {vybranyMaterial && <Row label={`Látka: ${vybranyMaterial.nazov}`} value={`${fabricRate.toFixed(2)} €/bm`} />}
+              <Row label="Sadzba potlače (bez DPH)" value={`${baseRate.toFixed(2)} €/bm`} />
+              {vybranyMaterial && <Row label={`Látka: ${vybranyMaterial.nazov} (bez DPH)`} value={`${fabricRate.toFixed(2)} €/bm`} />}
               <Row label="Objednaná dĺžka metráže" value={`${totalLengthBm.toFixed(2)} bm`} highlight />
               <Row label="Tlačová plocha" value={`${totalM2.toFixed(2)} m²`} />
               <Row label="Príplatok za expres" value={`${expressFee.toFixed(2)} €`} />
@@ -509,12 +509,13 @@ export default function TextilMetraz({ supabase, onSpat }) {
       </div>
 
       <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm">
-        <h3 className="text-sm font-bold text-slate-900 mb-3">Množstevné zľavy — {technologia === 'sublimacia' ? 'Sublimácia' : 'Digitálna bavlna'} (šírka 160cm)</h3>
+        <h3 className="text-sm font-bold text-slate-900 mb-1">Množstevné zľavy — {technologia === 'sublimacia' ? 'Sublimácia' : 'Digitálna bavlna'} (šírka 160cm)</h3>
+        <p className="text-[11px] text-slate-400 mb-3">Ceny v tabuľke sú bez DPH.</p>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="border-b border-slate-100 text-slate-400 font-semibold">
-                <th className="p-2.5">Metráž</th><th className="p-2.5">Cena €/bm</th><th className="p-2.5">Prepočet €/m²</th><th className="p-2.5">Zľava</th>
+                <th className="p-2.5">Metráž</th><th className="p-2.5">Cena €/bm (bez DPH)</th><th className="p-2.5">Prepočet €/m²</th><th className="p-2.5">Zľava</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
