@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Plus, Edit2, Trash2, Flag, ChevronDown, ChevronUp } from 'lucide-react';
 
 const VELKOSTI = ['S', 'M', 'L', 'XL'];
-const PRAZDNY_ROZMER = { viewbox: '0 0 210 430', cut_path: '', safe_path: '', spotreba_m2: '' };
+const PRAZDNY_ROZMER = { viewbox: '0 0 210 430', cut_path: '', bleed_path: '', safe_path: '', spotreba_m2: '' };
 
 // viewBox uz obsahuje presny rozmer plachty (sirka×vyska v cm, format "minX minY sirka vyska"),
 // takze spotrebu materialu vieme dopocitat priamo z neho namiesto rucneho zadavania — plocha
@@ -74,7 +74,7 @@ export default function VlajkaTvaryTab({ supabase }) {
       const viewbox = row ? row.viewbox : PRAZDNY_ROZMER.viewbox;
       // Ak spotreba chyba, rovno ju predvyplnime z viewBoxu — Martin ju uz nemusi zadavat rucne.
       const spotreba = row?.spotreba_m2 ?? spotrebaZViewboxu(viewbox) ?? '';
-      map[v] = row ? { viewbox: row.viewbox, cut_path: row.cut_path, safe_path: row.safe_path, spotreba_m2: spotreba } : { ...PRAZDNY_ROZMER, spotreba_m2: spotreba };
+      map[v] = row ? { viewbox: row.viewbox, cut_path: row.cut_path, bleed_path: row.bleed_path || '', safe_path: row.safe_path, spotreba_m2: spotreba } : { ...PRAZDNY_ROZMER, spotreba_m2: spotreba };
     });
     setRozmery(map);
   };
@@ -87,7 +87,7 @@ export default function VlajkaTvaryTab({ supabase }) {
     setUkladamRozmery(true);
     const riadky = VELKOSTI
       .filter(v => rozmery[v]?.cut_path?.trim() && rozmery[v]?.safe_path?.trim())
-      .map(v => ({ tvar_id: tvarId, velkost: v, viewbox: rozmery[v].viewbox || '0 0 210 430', cut_path: rozmery[v].cut_path.trim(), safe_path: rozmery[v].safe_path.trim(), spotreba_m2: rozmery[v].spotreba_m2 === '' ? null : parseFloat(rozmery[v].spotreba_m2) || 0 }));
+      .map(v => ({ tvar_id: tvarId, velkost: v, viewbox: rozmery[v].viewbox || '0 0 210 430', cut_path: rozmery[v].cut_path.trim(), bleed_path: rozmery[v].bleed_path?.trim() || null, safe_path: rozmery[v].safe_path.trim(), spotreba_m2: rozmery[v].spotreba_m2 === '' ? null : parseFloat(rozmery[v].spotreba_m2) || 0 }));
     await supabase.from('vlajka_tvar_rozmery').upsert(riadky, { onConflict: 'tvar_id,velkost' });
     setUkladamRozmery(false);
   };
@@ -97,7 +97,7 @@ export default function VlajkaTvaryTab({ supabase }) {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-white flex items-center gap-2"><Flag className="text-indigo-400 h-5 w-5" /> Tvary vlajok</h2>
-          <p className="text-xs text-slate-400 mt-1">Pre každý tvar nastav orezovú (červená) a bezpečnú (zelená) krivku ako SVG "d" cestu — zvlášť pre S/M/L/XL. Živý náhľad ti ukáže, či cesta dáva zmysel. "Spotreba materiálu" (m²) je nutná na dopočítanie ceny z vybraného materiálu (Vlajky → Materiály) — bez nej sa cena tejto veľkosti nedá vypočítať.</p>
+          <p className="text-xs text-slate-400 mt-1">Pre každý tvar nastav orezovú (červená), spadávkovú (oranžová, 5cm mimo orezu) a bezpečnú (zelená, 4cm dovnútra) krivku ako SVG "d" cestu — zvlášť pre S/M/L/XL. Živý náhľad ti ukáže, či cesta dáva zmysel. "Spotreba materiálu" (m²) je nutná na dopočítanie ceny z vybraného materiálu (Vlajky → Materiály) — bez nej sa cena tejto veľkosti nedá vypočítať.</p>
         </div>
         <button onClick={otvorNovy} className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-xl text-sm font-semibold transition">
           <Plus className="w-4 h-4" /> Pridať tvar
@@ -161,20 +161,25 @@ export default function VlajkaTvaryTab({ supabase }) {
                         </div>
                         <div className="w-full aspect-[210/430] bg-white rounded-lg overflow-hidden flex items-center justify-center">
                           <svg viewBox={r.viewbox} className="w-full h-full">
+                            {r.bleed_path && <path d={r.bleed_path} stroke="#f59e0b" strokeWidth="2" fill="none" strokeDasharray="6 4" />}
                             {r.cut_path && <path d={r.cut_path} stroke="#ef4444" strokeWidth="2" fill="none" strokeDasharray="6 4" />}
                             {r.safe_path && <path d={r.safe_path} stroke="#10b981" strokeWidth="1.5" fill="none" strokeDasharray="3 3" />}
                           </svg>
                         </div>
                         <div>
-                          <label className="text-[10px] text-slate-500">viewBox</label>
+                          <label className="text-[10px] text-slate-500">viewBox (musí mať miesto aj na spadávku okolo orezu)</label>
                           <input value={r.viewbox} onChange={(e) => zmenRozmer(v, 'viewbox', e.target.value)} className="w-full px-2 py-1 bg-slate-950 border border-slate-800 rounded text-[10px] text-white font-mono" />
                         </div>
                         <div>
-                          <label className="text-[10px] text-slate-500">orezová (červená) cesta</label>
+                          <label className="text-[10px] text-slate-500">orezová (červená) cesta — presný tvar vlajky</label>
                           <textarea value={r.cut_path} onChange={(e) => zmenRozmer(v, 'cut_path', e.target.value)} rows={2} className="w-full px-2 py-1 bg-slate-950 border border-slate-800 rounded text-[10px] text-white font-mono" />
                         </div>
                         <div>
-                          <label className="text-[10px] text-slate-500">bezpečná (zelená) cesta</label>
+                          <label className="text-[10px] text-amber-500">spadávka (oranžová) cesta — 5cm mimo orezu, pre potlač bez bielych okrajov</label>
+                          <textarea value={r.bleed_path} onChange={(e) => zmenRozmer(v, 'bleed_path', e.target.value)} rows={2} className="w-full px-2 py-1 bg-slate-950 border border-slate-800 rounded text-[10px] text-white font-mono" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-500">bezpečná (zelená) cesta — 4cm dovnútra od orezu</label>
                           <textarea value={r.safe_path} onChange={(e) => zmenRozmer(v, 'safe_path', e.target.value)} rows={2} className="w-full px-2 py-1 bg-slate-950 border border-slate-800 rounded text-[10px] text-white font-mono" />
                         </div>
                         <div>
@@ -191,7 +196,7 @@ export default function VlajkaTvaryTab({ supabase }) {
                               );
                             })()}
                           </div>
-                          <p className="text-[9px] text-slate-600 mt-0.5">Automaticky dopočítané zo šírky×výšky viewBoxu — kľudne prepíš ručne, ak sa reálna spotreba líši.</p>
+                          <p className="text-[9px] text-slate-600 mt-0.5">Návrh počíta zo šírky×výšky viewBoxu — keďže viewBox teraz zahŕňa aj okraj na spadávku, návrh bude nadhodnotený. Spoľahni sa radšej na skutočný rozmer vlajky, nie na toto tlačidlo.</p>
                         </div>
                       </div>
                     );

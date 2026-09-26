@@ -92,6 +92,10 @@ export default function BeachflagApp({ supabase }) {
     canvas.setDimensions({ width: w, height: h });
 
     canvas.getObjects().filter(o => o.isMaskOverlay).forEach(o => canvas.remove(o));
+    if (rozmer.bleed_path) {
+      const bleedPath = new fabric.Path(rozmer.bleed_path, { stroke: '#f59e0b', strokeWidth: 2, fill: 'transparent', strokeDashArray: [6, 4], selectable: false, evented: false, isMaskOverlay: true });
+      canvas.add(bleedPath);
+    }
     const cutPath = new fabric.Path(rozmer.cut_path, { stroke: '#ef4444', strokeWidth: 2, fill: 'transparent', strokeDashArray: [6, 4], selectable: false, evented: false, isMaskOverlay: true });
     const safePath = new fabric.Path(rozmer.safe_path, { stroke: '#10b981', strokeWidth: 1.5, fill: 'transparent', strokeDashArray: [3, 3], selectable: false, evented: false, isMaskOverlay: true });
     canvas.add(cutPath);
