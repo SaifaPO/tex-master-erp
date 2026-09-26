@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Edit2, Trash2, Palette } from 'lucide-react';
+import { Plus, Edit2, Trash2, Palette, GripVertical } from 'lucide-react';
 
 // Odhadne, či je farba "tmavá" (relevantné pre sieťotlač — na tmavý textil treba 2 vrstvy farby).
 // Len návrh — admin ho vie v každom prípade prebiť checkboxom.
@@ -20,10 +20,11 @@ export default function FarbyTab({ supabase }) {
   const [jeTmava, setJeTmava] = useState(false);
   const [jeBiela, setJeBiela] = useState(false);
   const [error, setError] = useState('');
+  const [tahaneId, setTahaneId] = useState(null);
 
   const nacitaj = async () => {
     setIsLoading(true);
-    const { data } = await supabase.from('farby').select('*').order('id');
+    const { data } = await supabase.from('farby').select('*').order('poradie').order('id');
     setFarby(data || []);
     setIsLoading(false);
   };
@@ -56,12 +57,27 @@ export default function FarbyTab({ supabase }) {
     nacitaj();
   };
 
+  // Drag-and-drop presúvanie kariet — po pustení sa cele novo usporiadane poradie ulozi naraz
+  // (jednoduchsie a spolahlivejsie nez pocitat len okolite zmeny).
+  const presunFarbu = async (cielovyId) => {
+    if (tahaneId == null || tahaneId === cielovyId) return;
+    const zdrojIdx = farby.findIndex(f => f.id === tahaneId);
+    const cielIdx = farby.findIndex(f => f.id === cielovyId);
+    if (zdrojIdx === -1 || cielIdx === -1) return;
+    const preusporiadane = [...farby];
+    const [presuvana] = preusporiadane.splice(zdrojIdx, 1);
+    preusporiadane.splice(cielIdx, 0, presuvana);
+    setFarby(preusporiadane);
+    setTahaneId(null);
+    await supabase.from('farby').upsert(preusporiadane.map((f, i) => ({ id: f.id, poradie: i })));
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-white flex items-center gap-2"><Palette className="text-indigo-400 h-5 w-5" /> Farby</h2>
-          <p className="text-xs text-slate-400 mt-1">Globálna paleta farieb textilu, z ktorej si produkty vyberajú svoje dostupné farby.</p>
+          <p className="text-xs text-slate-400 mt-1">Globálna paleta farieb textilu, z ktorej si produkty vyberajú svoje dostupné farby. Karty vieš potiahnutím (drag &amp; drop) preusporiadať podľa vlastnej logiky (napr. zoskupiť podľa odtieňov).</p>
         </div>
         <button onClick={otvorNovu} className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-xl text-sm font-semibold transition">
           <Plus className="w-4 h-4" /> Pridať farbu
@@ -102,7 +118,16 @@ export default function FarbyTab({ supabase }) {
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
           {farby.map(f => (
-            <div key={f.id} className="bg-slate-900 rounded-xl border border-slate-800 p-3 flex items-center gap-3">
+            <div
+              key={f.id}
+              draggable
+              onDragStart={() => setTahaneId(f.id)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => presunFarbu(f.id)}
+              onDragEnd={() => setTahaneId(null)}
+              className={`bg-slate-900 rounded-xl border p-3 flex items-center gap-3 cursor-grab active:cursor-grabbing transition ${tahaneId === f.id ? 'opacity-40 border-indigo-500' : 'border-slate-800'}`}
+            >
+              <GripVertical className="w-4 h-4 text-slate-600 shrink-0" />
               <span className="w-9 h-9 rounded-full border border-slate-700 shrink-0" style={{ background: f.hex }}></span>
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-sm text-white truncate">{f.nazov}</div>
