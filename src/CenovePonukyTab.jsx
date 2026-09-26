@@ -55,7 +55,7 @@ const mapDocumentFromDb = (r) => ({ id: r.id, category: r.category || 'Iné', na
 
 const mapQuoteFromDb = (r) => ({ id: r.id, offerNumber: r.offer_number, quoteDate: r.quote_date, customerName: r.customer_name || '', customerEmail: r.customer_email || '', title: r.title || '', total: r.total || 0, status: r.status || 'Odoslaná', data: r.data || {} });
 
-const mapCompanyFromDb = (r) => ({ id: r.id, name: r.name || '', address: r.address || '', ico: r.ico || '', dic: r.dic || '', icDph: r.ic_dph || '', email: r.email || '', phone: r.phone || '', logoUrl: r.logo_url || '', logoScale: r.logo_scale ?? 100, headingFont: r.heading_font || 'default', signatureName: r.signature_name || '', signatureRole: r.signature_role || '', sortOrder: r.sort_order || 0 });
+const mapCompanyFromDb = (r) => ({ id: r.id, name: r.name || '', address: r.address || '', ico: r.ico || '', dic: r.dic || '', icDph: r.ic_dph || '', email: r.email || '', phone: r.phone || '', logoUrl: r.logo_url || '', logoScale: r.logo_scale ?? 100, headingFont: r.heading_font || 'default', signatureName: r.signature_name || '', signatureRole: r.signature_role || '', zobrazitNazovPriLogu: r.zobrazit_nazov_pri_logu ?? true, sortOrder: r.sort_order || 0 });
 
 
 function escapeHtml(str) {
@@ -267,7 +267,7 @@ function buildEmailHtml(form, company, attachedDocuments = []) {
     <td>
       <table border="0" cellspacing="0" cellpadding="0"><tr>
         ${logoHtml ? `<td valign="middle" style="padding-right:12px;">${logoHtml}</td>` : ''}
-        <td valign="middle"><div style="color:#ffffff;font-size:20px;font-weight:800;font-family:${headingFontCfg.family};letter-spacing:0.3px;">${escapeHtml(companyName)}</div></td>
+        ${company.zobrazitNazovPriLogu !== false ? `<td valign="middle"><div style="color:#ffffff;font-size:20px;font-weight:800;font-family:${headingFontCfg.family};letter-spacing:0.3px;">${escapeHtml(companyName)}</div></td>` : ''}
       </tr></table>
     </td>
     <td align="right" valign="middle">
@@ -315,7 +315,6 @@ function buildEmailHtml(form, company, attachedDocuments = []) {
         ${form.repPhone && form.repEmail ? ' &nbsp;|&nbsp; ' : ''}
         ${form.repEmail ? `<a href="mailto:${escapeHtml(form.repEmail)}" style="color:#4F46E5;text-decoration:none;">${escapeHtml(form.repEmail)}</a>` : ''}
       </div>
-      ${company.signatureName ? `<div style="font-size:11px;color:#94A3B8;margin-top:10px;">Za spoločnosť: <strong style="color:#475569;">${escapeHtml(company.signatureName)}</strong>${company.signatureRole ? `, ${escapeHtml(company.signatureRole)}` : ''}</div>` : ''}
     </td></tr>
   </table>
 </td></tr>
@@ -467,7 +466,7 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
   const updateCompanyField = async (id, field, value) => {
     setCompanies(prev => prev.map(c => c.id === id ? { ...c, [field]: value } : c));
     if (!supabase) return;
-    const dbField = { name: 'name', address: 'address', ico: 'ico', dic: 'dic', icDph: 'ic_dph', email: 'email', phone: 'phone', logoUrl: 'logo_url', logoScale: 'logo_scale', headingFont: 'heading_font', signatureName: 'signature_name', signatureRole: 'signature_role' }[field];
+    const dbField = { name: 'name', address: 'address', ico: 'ico', dic: 'dic', icDph: 'ic_dph', email: 'email', phone: 'phone', logoUrl: 'logo_url', logoScale: 'logo_scale', headingFont: 'heading_font', signatureName: 'signature_name', signatureRole: 'signature_role', zobrazitNazovPriLogu: 'zobrazit_nazov_pri_logu' }[field];
     if (!dbField) return;
     await supabase.from('quote_companies').update({ [dbField]: value }).eq('id', id);
   };
@@ -655,7 +654,14 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
               <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-400">Vystavovateľ ponuky</h3>
               <div className="flex gap-2">
                 {companies.map(c => (
-                  <button key={c.id} onClick={() => updateForm({ companyId: c.id })} className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg border text-xs font-bold ${form.companyId === c.id ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-600'}`}>
+                  <button key={c.id} onClick={() => updateForm({
+                    companyId: c.id,
+                    // Kazda firma moze mat ineho oficialneho podpisujuceho (Firmy -> Podpis) — pri
+                    // vybere firmy sa meno/funkcia automaticky prepnu na jej podpis, ak je nastaveny
+                    // (inak ostava predvolene meno prihlaseneho uzivatela). Da sa aj tak rucne prepisat.
+                    repName: c.signatureName || (currentUser ? `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() : form.repName),
+                    repRole: c.signatureRole || currentUser?.position || form.repRole,
+                  })} className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg border text-xs font-bold ${form.companyId === c.id ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-600'}`}>
                     {c.logoUrl ? <img src={c.logoUrl} alt={c.name} className="h-5 max-w-[70px] object-contain" /> : <span>{c.name || c.id.toUpperCase()}</span>}
                   </button>
                 ))}
@@ -1068,6 +1074,11 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
                   </div>
                 </div>
                 <div><label className={labelCls}>Názov firmy</label><input type="text" defaultValue={c.name} onBlur={(e) => updateCompanyField(c.id, 'name', e.target.value)} className={inputCls} /></div>
+                <label className="flex items-center gap-2 text-xs text-slate-300">
+                  <input type="checkbox" checked={c.zobrazitNazovPriLogu !== false} onChange={(e) => updateCompanyField(c.id, 'zobrazitNazovPriLogu', e.target.checked)} className="rounded bg-slate-950 border-slate-700" />
+                  Zobraziť názov firmy vedľa loga v hlavičke
+                </label>
+                <p className="text-[9px] text-slate-600 -mt-1.5">Vypni, ak logo už obsahuje názov firmy napevno (napr. ATAK) — plný právny názov sa aj tak vždy zobrazí v pätičke ponuky.</p>
                 <div>
                   <label className={labelCls}>Font názvu firmy v ponuke</label>
                   <select defaultValue={c.headingFont || 'default'} onChange={(e) => updateCompanyField(c.id, 'headingFont', e.target.value)} className={inputCls}>
