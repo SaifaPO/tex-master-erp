@@ -358,11 +358,20 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
 
   const [form, setForm] = useState(() => emptyForm({
     repName: currentUser ? `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() : '',
-    repRole: currentUser?.position || '',
+    // Titul pre ponuky (Zamestnanci -> Titul pre cenove ponuky) ma prednost pred beznou pozicioiu —
+    // niekto moze mat operacnu poziciu inu, nez akym titulom ma oficialne podpisovat ponuky.
+    repRole: currentUser?.titulProPonuky || currentUser?.position || '',
     repPhone: currentUser?.phone || '',
     repEmail: currentUser?.email || '',
     vatRate: companySettings?.defaultVatRate ?? 23,
   }));
+
+  // Bezna rola (nie master) smie vystavovat ponuky len za svoju vlastnu firmu (Zamestnanci -> Firma);
+  // Master vidi a vybera vsetky firmy bez obmedzenia (rovnaky princip ako inde v appke).
+  const dostupneFirmyProRolu = (zoznamFiriem) => {
+    if (currentUser?.role === 'master' || !currentUser?.company) return zoznamFiriem;
+    return zoznamFiriem.filter(c => c.id.toLowerCase() === String(currentUser.company).toLowerCase());
+  };
 
   useEffect(() => {
     if (!supabase) { setLoading(false); return; }
@@ -383,10 +392,12 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
     })();
   }, [supabase]);
 
-  // Predvyber prvu firmu (vystavovatela) hned ako sa nacita zoznam, ak este ziadna nie je zvolena.
+  // Predvyber firmu (vystavovatela) hned ako sa nacita zoznam, ak este ziadna nie je zvolena —
+  // prednostne vlastnu firmu prihlaseneho zamestnanca (Zamestnanci -> Firma), inak prvu v poradi.
   useEffect(() => {
     if (companies.length > 0 && !form.companyId) {
-      setForm(prev => prev.companyId ? prev : { ...prev, companyId: companies[0].id });
+      const vlastna = companies.find(c => c.id.toLowerCase() === String(currentUser?.company || '').toLowerCase());
+      setForm(prev => prev.companyId ? prev : { ...prev, companyId: (vlastna || companies[0]).id });
     }
   }, [companies]);
 
@@ -653,19 +664,13 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
             <div className="space-y-3 border-b border-slate-800 pb-4">
               <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-400">Vystavovateľ ponuky</h3>
               <div className="flex gap-2">
-                {companies.map(c => (
-                  <button key={c.id} onClick={() => updateForm({
-                    companyId: c.id,
-                    // Kazda firma moze mat ineho oficialneho podpisujuceho (Firmy -> Podpis) — pri
-                    // vybere firmy sa meno/funkcia automaticky prepnu na jej podpis, ak je nastaveny
-                    // (inak ostava predvolene meno prihlaseneho uzivatela). Da sa aj tak rucne prepisat.
-                    repName: c.signatureName || (currentUser ? `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() : form.repName),
-                    repRole: c.signatureRole || currentUser?.position || form.repRole,
-                  })} className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg border text-xs font-bold ${form.companyId === c.id ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-600'}`}>
+                {dostupneFirmyProRolu(companies).map(c => (
+                  <button key={c.id} onClick={() => updateForm({ companyId: c.id })} className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg border text-xs font-bold ${form.companyId === c.id ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-600'}`}>
                     {c.logoUrl ? <img src={c.logoUrl} alt={c.name} className="h-5 max-w-[70px] object-contain" /> : <span>{c.name || c.id.toUpperCase()}</span>}
                   </button>
                 ))}
                 {companies.length === 0 && <p className="text-[11px] text-slate-500">Firmy nie sú nastavené — spusti migráciu a doplň ich v záložke „Firmy“.</p>}
+                {companies.length > 0 && dostupneFirmyProRolu(companies).length === 0 && <p className="text-[11px] text-amber-500">Tvojmu profilu nie je priradená firma (Zamestnanci → Firma) — požiadaj Mastera o nastavenie.</p>}
               </div>
             </div>
 
@@ -1095,10 +1100,6 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
                 <div className="grid grid-cols-2 gap-2">
                   <div><label className={labelCls}>E-mail</label><input type="email" defaultValue={c.email} onBlur={(e) => updateCompanyField(c.id, 'email', e.target.value)} className={inputCls} /></div>
                   <div><label className={labelCls}>Telefón</label><input type="text" defaultValue={c.phone} onBlur={(e) => updateCompanyField(c.id, 'phone', e.target.value)} className={inputCls} /></div>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div><label className={labelCls}>Podpis — meno</label><input type="text" defaultValue={c.signatureName} onBlur={(e) => updateCompanyField(c.id, 'signatureName', e.target.value)} className={inputCls} placeholder="napr. Ing. Ján Novák" /></div>
-                  <div><label className={labelCls}>Podpis — funkcia</label><input type="text" defaultValue={c.signatureRole} onBlur={(e) => updateCompanyField(c.id, 'signatureRole', e.target.value)} className={inputCls} placeholder="konateľ" /></div>
                 </div>
               </div>
             ))}

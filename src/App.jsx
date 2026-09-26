@@ -247,7 +247,7 @@ const ALL_ROLES = ['master', 'supervisor', 'sales', 'employee', 'uctovnik', 'sof
 const ROLE_LABELS = { master: 'Master', supervisor: 'Supervisor', sales: 'Obchodník', employee: 'Zamestnanec', uctovnik: 'Účtovník', sofer: 'Šofér', predajna: 'Predajňa' };
 // Úzke role vidia len vymenované karty v hornom menu; role bez záznamu tu (master/supervisor/sales/employee) vidia všetko ako doteraz.
 const ROLE_TAB_ALLOWLIST = {
-  uctovnik: ['invoices', 'quotes', 'materials', 'reports', 'manual'],
+  uctovnik: ['invoices', 'materials', 'reports', 'manual'],
   sofer: ['cestaky', 'kniha-jazd', 'manual'],
   predajna: ['orders', 'planner', 'manual']
 };
@@ -271,7 +271,9 @@ const FALLBACK_ACL = {
   view_reports: { master: true, supervisor: true, sales: false, employee: false, uctovnik: true, sofer: false, predajna: false },
   // Financie (predtym zdielalo pravo s create_order) — teraz samostatne, aby uctovnik mohol vidiet
   // Financie bez toho, aby mohol vytvarat vyrobne zakazky.
-  view_finance: { master: true, supervisor: true, sales: true, employee: false, uctovnik: true, sofer: false, predajna: false }
+  view_finance: { master: true, supervisor: true, sales: true, employee: false, uctovnik: true, sofer: false, predajna: false },
+  // Cenove ponuky — pristup len pre majitelov/konatelov a obchodnikov (nie ucotvnik/vyroba/sofer).
+  create_quotes: { master: true, supervisor: false, sales: true, employee: false, uctovnik: false, sofer: false, predajna: false }
 };
 
 const mapMaterialFromDb = (r) => ({ id: r.id, name: r.name, color: r.color, colorHex: r.color_hex || '', width: r.width, weight: r.weight, pricePerM: r.price_per_m, qty: r.qty, unit: r.unit, minQty: r.min_qty, warehouseId: r.warehouse_id || 'sklad-1', manufacturer: r.manufacturer || '', productType: r.product_type || '', deliveryNoteNumber: r.delivery_note_number || '', deliveryNoteDate: r.delivery_note_date || '', zakazkaOdberatel: r.zakazka_odberatel || '', history: r.history || [] });
@@ -287,8 +289,8 @@ const mapTierToDb = (t) => ({ id: t.id, name: t.name, fit: t.fit, ventilation: t
 // bežný select, ani cez Realtime — pozri migration_bezpecnost_pin_a_hesla.sql). Namiesto surovej hodnoty
 // appka pracuje len s booleovskými príznakmi has_password/has_pin/has_signup_token z pohľadu employees_public.
 // PIN sa odteraz overuje a nastavuje výlučne cez Edge Functions (verify-station-pin, employee-pin).
-const mapEmployeeFromDb = (r) => ({ id: r.id, firstName: r.first_name, lastName: r.last_name, birthday: r.birthday, nameday: r.nameday, entryDate: r.entry_date, role: r.role, position: r.position, hasPassword: !!r.has_password, phone: r.phone || '', email: r.email || '', avatar: r.avatar || '', hasPin: !!r.has_pin, authUserId: r.auth_user_id || '', hasSignupToken: !!r.has_signup_token, signupTokenExpires: r.signup_token_expires || null, company: r.company || '', mzdaHruba: r.mzda_hruba ?? null, socialnePoistenie: r.socialne_poistenie ?? null, zdravotnePoistenie: r.zdravotne_poistenie ?? null });
-const mapEmployeeToDb = (e) => ({ id: e.id, first_name: e.firstName, last_name: e.lastName, birthday: e.birthday, nameday: e.nameday, entry_date: e.entryDate, role: e.role, position: e.position, phone: e.phone || null, email: e.email || null, avatar: e.avatar || null, auth_user_id: e.authUserId || null, company: e.company || null, mzda_hruba: e.mzdaHruba === '' || e.mzdaHruba == null ? null : parseFloat(e.mzdaHruba), socialne_poistenie: e.socialnePoistenie === '' || e.socialnePoistenie == null ? null : parseFloat(e.socialnePoistenie), zdravotne_poistenie: e.zdravotnePoistenie === '' || e.zdravotnePoistenie == null ? null : parseFloat(e.zdravotnePoistenie) });
+const mapEmployeeFromDb = (r) => ({ id: r.id, firstName: r.first_name, lastName: r.last_name, birthday: r.birthday, nameday: r.nameday, entryDate: r.entry_date, role: r.role, position: r.position, hasPassword: !!r.has_password, phone: r.phone || '', email: r.email || '', avatar: r.avatar || '', hasPin: !!r.has_pin, authUserId: r.auth_user_id || '', hasSignupToken: !!r.has_signup_token, signupTokenExpires: r.signup_token_expires || null, company: r.company || '', titulProPonuky: r.titul_pre_ponuky || '', mzdaHruba: r.mzda_hruba ?? null, socialnePoistenie: r.socialne_poistenie ?? null, zdravotnePoistenie: r.zdravotne_poistenie ?? null });
+const mapEmployeeToDb = (e) => ({ id: e.id, first_name: e.firstName, last_name: e.lastName, birthday: e.birthday, nameday: e.nameday, entry_date: e.entryDate, role: e.role, position: e.position, phone: e.phone || null, email: e.email || null, avatar: e.avatar || null, auth_user_id: e.authUserId || null, company: e.company || null, titul_pre_ponuky: e.titulProPonuky || null, mzda_hruba: e.mzdaHruba === '' || e.mzdaHruba == null ? null : parseFloat(e.mzdaHruba), socialne_poistenie: e.socialnePoistenie === '' || e.socialnePoistenie == null ? null : parseFloat(e.socialnePoistenie), zdravotne_poistenie: e.zdravotnePoistenie === '' || e.zdravotnePoistenie == null ? null : parseFloat(e.zdravotnePoistenie) });
 
 const mapOrderFromDb = (r) => ({ id: r.id, customer: r.customer, createdAt: r.created_at, deliveryDate: r.scheduled_day, driveLink: r.drive_link, notes: r.notes, paymentType: r.payment_type || 'faktura', items: r.items || [], orderLog: r.order_log || [], legacyOrderNumber: r.legacy_order_number || '', companyBrand: r.company_brand || 'ATAK', orderNumber: r.order_number || '', accountingStatus: r.accounting_status || null, lastModifiedAt: r.last_modified_at || null, lastModifiedNote: r.last_modified_note || '', variableSymbol: r.variable_symbol || '', expectedAmount: r.expected_amount ?? null, variableSymbolConfirmed: !!r.variable_symbol_confirmed, attachments: r.attachments || [] });
 const mapOrderToDb = (o) => ({ id: o.id, customer: o.customer, created_at: o.createdAt, scheduled_day: o.deliveryDate, drive_link: o.driveLink, notes: o.notes, payment_type: o.paymentType, items: o.items, order_log: o.orderLog || [], legacy_order_number: o.legacyOrderNumber || null, company_brand: o.companyBrand || 'ATAK', order_number: o.orderNumber || null, accounting_status: o.accountingStatus || null, last_modified_at: o.lastModifiedAt || null, last_modified_note: o.lastModifiedNote || null, variable_symbol: o.variableSymbol || null, expected_amount: o.expectedAmount ?? null, variable_symbol_confirmed: o.variableSymbolConfirmed ?? false, attachments: o.attachments || [] });
@@ -2114,7 +2116,7 @@ export default function App() {
     financeSub.forEach(([id, label]) => push(entries, label, 'Financie', financeVisible, () => { setActiveTab('invoices'); setFinanceSubTab(id); }));
     push(entries, 'Medzifiremné (ATAK↔PBT)', 'Financie', financeVisible && role === 'master', () => { setActiveTab('invoices'); setFinanceSubTab('intercompany'); });
     push(entries, 'Réžia firiem', 'Financie', financeVisible && role === 'master', () => { setActiveTab('invoices'); setFinanceSubTab('overhead'); });
-    push(entries, 'Cenové ponuky', null, hasPermission('view_finance') && canSeeTab(role, 'quotes'), () => setActiveTab('quotes'));
+    push(entries, 'Cenové ponuky', null, hasPermission('create_quotes') && canSeeTab(role, 'quotes'), () => setActiveTab('quotes'));
 
     const psVisible = role === 'master';
     push(entries, 'PrintStudio Pro', null, psVisible, () => { setActiveTab('printstudio'); setPrintstudioJumpTarget('produkty'); });
@@ -6352,7 +6354,7 @@ export default function App() {
               {hasPermission('view_finance') && canSeeTab(currentUser.role, 'invoices') && (
                 <button onClick={() => setActiveTab('invoices')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'invoices' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><FileEdit className="h-3.5 w-3.5" /> Financie{orders.filter(o => o.accountingStatus === 'pending_review').length > 0 && <span className="bg-amber-500 text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full ml-1">{orders.filter(o => o.accountingStatus === 'pending_review').length}</span>}</button>
               )}
-              {hasPermission('view_finance') && canSeeTab(currentUser.role, 'quotes') && (
+              {hasPermission('create_quotes') && canSeeTab(currentUser.role, 'quotes') && (
                 <button onClick={() => setActiveTab('quotes')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'quotes' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><FileText className="h-3.5 w-3.5" /> Cenové ponuky</button>
               )}
               {canSeeTab(currentUser.role, 'archive') && (
@@ -9374,6 +9376,11 @@ export default function App() {
                               <option value="PBT">PBT</option>
                               <option value="ADY">ADY</option>
                             </select>
+                          </div>
+                          <div>
+                            <label className="text-slate-400 block mb-0.5">Titul pre cenové ponuky</label>
+                            <input type="text" value={editingEmployee.titulProPonuky || ''} onChange={(e) => setEditingEmployee({ ...editingEmployee, titulProPonuky: e.target.value })} placeholder={editingEmployee.position || 'napr. konateľ'} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" />
+                            <p className="text-[9px] text-slate-600 mt-0.5">Ak sa má na cenových ponukách zobrazovať iný titul než "Pozícia" vyššie (napr. pozícia "Výrobný majster", ale na ponukách má stáť "konateľ"). Prázdne = použije sa Pozícia.</p>
                           </div>
                           <div>
                             <label className="text-slate-400 block mb-0.5">Mzda hrubá (€/mes.)</label>
