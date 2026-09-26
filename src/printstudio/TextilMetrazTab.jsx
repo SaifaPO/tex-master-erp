@@ -13,6 +13,14 @@ const NAKLADY_DEFAULT = {
   sublimacia: { cena_papier_bm: 0.95, cena_ochranny_papier_bm: 0.30, cena_atrament_l: 38, spotreba_atrament_ml_m2: 12, cena_prace_hod: 18, rychlost_m_hod: 15 },
   bavlna: { cena_primer_l: 22, spotreba_primer_ml_m2: 25, cena_atrament_l: 65, spotreba_atrament_ml_m2: 18, cena_prace_hod: 20, rychlost_m_hod: 8 },
 };
+// Bonusove percentualne body navyse k zakladnej marzi — MUSIA byt zhodne s TextilMetraz.jsx
+// (zakaznicka appka) a textil-metraz-create-draft-order (Edge Function, autoritativny prepocet).
+const BONUS_LEN_TLAC = 10; // "na vas material" — len tlac + nazehlenie na latku zakaznika, bez latky
+const BONUS_LEN_PAPIER = 0; // "len papier" — najlacnejsia z 3 urovni sluzby (ziadne nazehlenie, ziadna latka)
+function priceAtBonus(cost, qty, cfg, bonusBodov) {
+  return Math.round(cost * (1 + (marginAt(cost, qty, cfg) + bonusBodov) / 100) * 100) / 100;
+}
+
 const NASTAVENIA_DEFAULT = {
   shopify_variant_id: '', jednotka_cena_eur: 0.05, cena_doprava: 4.9, priplatok_expres_percent: 10, minimalna_cena_objednavky: 8,
   limit_expres_bm_sublimacia: 60, limit_standard_bm_sublimacia: 150,
@@ -153,33 +161,46 @@ export default function TextilMetrazTab({ supabase }) {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-6 bg-slate-900/60 rounded-2xl border border-teal-900/40 p-5">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="font-bold text-sm text-white">1. Sublimácia — vstupné náklady</h3>
-            <span className="text-xs font-mono text-teal-400">Náklad: <strong>{nakladBmSub.toFixed(2)} €/bm</strong></span>
+            <h3 className="font-bold text-sm text-white">1. Sublimácia — vstupné náklady (aj samotný papier)</h3>
+            <span className="text-xs font-mono text-teal-400">Náklad tlače: <strong>{nakladBmSub.toFixed(2)} €/bm</strong></span>
           </div>
           <p className="text-[11px] text-amber-400/90 bg-amber-950/20 border border-amber-900/30 rounded-lg p-2 mb-3">Vstupné náklady sa teraz zadávajú v karte <strong>Kostra cien → Sublimácia</strong> (spoločné so sublimáciou na tričká, aby sa nezadávali dvakrát). Tu je len prehľad aktuálnych hodnôt.</p>
           <div className="space-y-1.5 text-xs text-slate-400">
             <div className="flex justify-between p-2 bg-slate-950 rounded-lg border border-slate-800"><span>Sublimačný papier</span><span className="text-white font-mono">{Number(naklady.sublimacia.cena_papier_bm).toFixed(2)} €/bm</span></div>
             <div className="flex justify-between p-2 bg-slate-950 rounded-lg border border-slate-800"><span>Ochranný kalandr. papier</span><span className="text-white font-mono">{Number(naklady.sublimacia.cena_ochranny_papier_bm).toFixed(2)} €/bm</span></div>
-            <div className="flex justify-between p-2 bg-slate-950 rounded-lg border border-slate-800"><span>Sublimačný atrament CMYK</span><span className="text-white font-mono">{Number(naklady.sublimacia.cena_atrament_l).toFixed(2)} €/l • {Number(naklady.sublimacia.spotreba_atrament_ml_m2).toFixed(1)} ml/m²</span></div>
+            <div className="flex justify-between p-2 bg-slate-950 rounded-lg border border-slate-800"><span>Sublimačný atrament CMYK (pigmenty)</span><span className="text-white font-mono">{Number(naklady.sublimacia.cena_atrament_l).toFixed(2)} €/l • {Number(naklady.sublimacia.spotreba_atrament_ml_m2).toFixed(1)} ml/m²</span></div>
             <div className="flex justify-between p-2 bg-slate-950 rounded-lg border border-slate-800"><span>Operátor + kalander</span><span className="text-white font-mono">{Number(naklady.sublimacia.cena_prace_hod).toFixed(2)} €/hod</span></div>
             <div className="flex justify-between p-2 bg-slate-950 rounded-lg border border-teal-900/40">
               <span>Rýchlosť tlače+fixácie (len metráž)</span>
               <span className="text-white font-mono">{Number(naklady.sublimacia.rychlost_m_hod).toFixed(1)} bm/hod</span>
             </div>
+            <p className="text-[10px] text-slate-500 pt-1">Doprava, príplatok expres a DPH sú spoločné pre celú Textilnú metráž — nastavujú sa v sekcii "Doprava, expres a kapacitné limity" vyššie.</p>
           </div>
-          <div className="pt-3 mt-3 border-t border-slate-800 space-y-1.5">
-            <span className="text-xs font-semibold text-slate-300 block mb-1">Predajná cena (jednotný maržový vzorec z Cenotvorby):</span>
-            {BM_PREVIEW_LEVELS.map(level => {
-              const rate = priceAt(nakladBmSub, level, pricingConfig);
-              const marginPct = Math.round(marginAt(nakladBmSub, level, pricingConfig));
-              return (
-                <div key={level} className="p-2 bg-slate-950 rounded-lg border border-slate-800 flex flex-wrap items-center gap-3 text-xs">
-                  <span className="text-slate-400 w-16">od {level} bm</span>
-                  <span className="text-white font-mono font-bold">{rate.toFixed(2)} €/bm</span>
-                  <span className={`font-mono font-bold ${marginPct > 30 ? 'text-emerald-400' : 'text-amber-400'}`}>{marginPct}% marža</span>
-                </div>
-              );
-            })}
+          <div className="pt-3 mt-3 border-t border-slate-800">
+            <span className="text-xs font-semibold text-slate-300 block mb-2">Predajná cena podľa úrovne služby (jednotný maržový vzorec z Cenotvorby):</span>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-800 text-slate-500 font-semibold">
+                    <th className="py-1.5 pr-2">od bm</th>
+                    <th className="py-1.5 pr-2">📄 Len papier</th>
+                    <th className="py-1.5 pr-2">Na váš materiál</th>
+                    <th className="py-1.5 pr-2">Na náš materiál (tlač)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {BM_PREVIEW_LEVELS.map(level => (
+                    <tr key={level}>
+                      <td className="py-1.5 pr-2 text-slate-400">{level}</td>
+                      <td className="py-1.5 pr-2 font-mono font-bold text-white">{priceAtBonus(nakladBmSub, level, pricingConfig, BONUS_LEN_PAPIER).toFixed(2)} €</td>
+                      <td className="py-1.5 pr-2 font-mono font-bold text-white">{priceAtBonus(nakladBmSub, level, pricingConfig, BONUS_LEN_TLAC).toFixed(2)} €</td>
+                      <td className="py-1.5 pr-2 font-mono font-bold text-white">{priceAt(nakladBmSub, level, pricingConfig).toFixed(2)} €<span className="text-slate-500 font-normal"> + látka</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-[10px] text-slate-500 mt-2">"Na náš materiál" = táto sadzba tlače + samostatná cena zvolenej látky (karta Materiály vyššie) — spolu tvoria konečnú cenu za bm.</p>
           </div>
         </div>
 
