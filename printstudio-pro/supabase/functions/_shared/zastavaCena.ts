@@ -5,7 +5,7 @@
 // zmene vzorca uprav VSETKY tri miesta rovnako. Zdroj pravdy: erp-marzovy-modul-specifikacia.md.
 
 export interface PricingConfig {
-  coefA: number; coefB: number; marginFloor: number; coefP: number; qtyAtFloor: number; dphPercent: number;
+  coefA: number; coefB: number; marginFloor: number; coefP: number; cielovaHodnotaZakazky: number; dphPercent: number;
 }
 
 function baseMargin(cost: number, cfg: PricingConfig) {
@@ -16,7 +16,7 @@ function baseMargin(cost: number, cfg: PricingConfig) {
 function marginAt(cost: number, qty: number, cfg: PricingConfig) {
   const base = baseMargin(cost, cfg);
   const q = Math.max(qty, 1);
-  const qm = Math.max(cfg.qtyAtFloor, 2);
+  const qm = Math.max(cfg.cielovaHodnotaZakazky / Math.max(cost, 0.05), 2);
   const t = Math.max(0, 1 - Math.log10(q) / Math.log10(qm));
   const decay = Math.pow(t, cfg.coefP);
   return cfg.marginFloor + (base - cfg.marginFloor) * decay;

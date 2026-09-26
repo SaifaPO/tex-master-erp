@@ -13,10 +13,16 @@ export function baseMargin(cost, cfg) {
   const m = cfg.coefA - cfg.coefB * Math.log(c);
   return Math.min(Math.max(m, cfg.marginFloor), 450);
 }
+// Pocet kusov, pri ktorom uz zakazka dosahuje "cielovu hodnotu velkej zakazky" (€, Cenotvorba) —
+// draha polozka (vysoke cost) dosiahne tuto hranicu uz pri par stovkach ks, lacna az pri tisickach,
+// namiesto rovnakeho pevneho poctu kusov pre vsetko (povodne qtyAtFloor).
+export function qtyAtFloorFor(cost, cfg) {
+  return Math.max(cfg.cielovaHodnotaZakazky / Math.max(cost, 0.05), 2);
+}
 export function marginAt(cost, qty, cfg) {
   const base = baseMargin(cost, cfg);
   const q = Math.max(qty, 1);
-  const qm = Math.max(cfg.qtyAtFloor, 2);
+  const qm = qtyAtFloorFor(cost, cfg);
   const t = Math.max(0, 1 - Math.log10(q) / Math.log10(qm));
   const decay = Math.pow(t, cfg.coefP);
   return cfg.marginFloor + (base - cfg.marginFloor) * decay;
@@ -68,7 +74,7 @@ export const QTY_PRESETS = [1, 5, 10, 25, 50, 100, 250, 500, 1000];
 
 export const mapConfigFromDb = (r) => ({
   coefA: Number(r.coef_a), coefB: Number(r.coef_b), marginFloor: Number(r.margin_floor),
-  coefP: Number(r.coef_p), qtyAtFloor: Number(r.qty_at_floor), capMarginTarget: Number(r.cap_margin_target ?? 0),
+  coefP: Number(r.coef_p), cielovaHodnotaZakazky: Number(r.cielova_hodnota_zakazky ?? 25000), capMarginTarget: Number(r.cap_margin_target ?? 0),
   wholesaleDiscountPercent: Number(r.wholesale_discount_percent ?? 15),
   dphPercent: Number(r.dph_percent ?? 23),
   cenaMinutySitia: Number(r.cena_minuty_sitia ?? 0),
@@ -76,7 +82,7 @@ export const mapConfigFromDb = (r) => ({
   sadzbaRvMin: Number(r.sadzba_rv_min ?? 0.3),
 });
 export const mapConfigToDb = (c) => ({
-  coef_a: c.coefA, coef_b: c.coefB, margin_floor: c.marginFloor, coef_p: c.coefP, qty_at_floor: c.qtyAtFloor,
+  coef_a: c.coefA, coef_b: c.coefB, margin_floor: c.marginFloor, coef_p: c.coefP, cielova_hodnota_zakazky: c.cielovaHodnotaZakazky,
   cap_margin_target: c.capMarginTarget ?? 0, wholesale_discount_percent: c.wholesaleDiscountPercent ?? 15,
   dph_percent: c.dphPercent ?? 23,
   cena_minuty_sitia: c.cenaMinutySitia ?? 0,
@@ -88,4 +94,4 @@ export const mapConfigToDb = (c) => ({
 // Edge Functions). Predtym mal kazdy modul (DTF/Textil/Zastava/Beachflag/Celenky/Buffky) vlastnu
 // nezavislu kopiu v *_nastavenia — jedna z nich sa raz omylom rozisla (Buffky 15% namiesto 23%).
 // Odteraz sa DPH nastavuje LEN tu (zalozka Cenotvorba) a vsade inde sa len cita.
-export const DEFAULT_PRICING_CONFIG = { coefA: 300, coefB: 54, marginFloor: 30, coefP: 1.3, qtyAtFloor: 1000, capMarginTarget: 0, wholesaleDiscountPercent: 15, dphPercent: 23, cenaMinutySitia: 0, cenaStrihania100cm2: 0, sadzbaRvMin: 0.3 };
+export const DEFAULT_PRICING_CONFIG = { coefA: 300, coefB: 54, marginFloor: 30, coefP: 1.3, cielovaHodnotaZakazky: 25000, capMarginTarget: 0, wholesaleDiscountPercent: 15, dphPercent: 23, cenaMinutySitia: 0, cenaStrihania100cm2: 0, sadzbaRvMin: 0.3 };

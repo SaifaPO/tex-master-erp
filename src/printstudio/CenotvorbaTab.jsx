@@ -211,8 +211,9 @@ export default function CenotvorbaTab({ supabase }) {
             <input type="number" step="0.1" value={config.coefP} onChange={e => setConfig({ ...config, coefP: parseFloat(e.target.value) || 0 })} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white text-sm" />
           </div>
           <div>
-            <label className="block text-[11px] text-slate-400 mb-1">Ks pri podlahe marže</label>
-            <input type="number" step="1" value={config.qtyAtFloor} onChange={e => setConfig({ ...config, qtyAtFloor: parseInt(e.target.value, 10) || 1 })} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white text-sm" />
+            <label className="block text-[11px] text-slate-400 mb-1">Cieľová hodnota veľkej zákazky (€)</label>
+            <input type="number" step="500" value={config.cielovaHodnotaZakazky} onChange={e => setConfig({ ...config, cielovaHodnotaZakazky: parseFloat(e.target.value) || 1 })} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white text-sm" />
+            <p className="text-[10px] text-slate-500 mt-1">Počet ks pri podlahovej marži sa dopočíta ako táto hodnota ÷ výrobná cena kusu — drahá položka (napr. dres) dosiahne podlahu už pri pár stovkách ks, lacná (napr. čelenka) až pri tisíckach.</p>
           </div>
           <div>
             <label className="block text-[11px] text-emerald-400 mb-1 font-semibold">DPH (%) — platí pre všetky konfigurátory</label>

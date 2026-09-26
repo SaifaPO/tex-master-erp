@@ -10,7 +10,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface PricingConfig { coefA: number; coefB: number; marginFloor: number; coefP: number; qtyAtFloor: number; dphPercent: number; }
+interface PricingConfig { coefA: number; coefB: number; marginFloor: number; coefP: number; cielovaHodnotaZakazky: number; dphPercent: number; }
 
 function baseMargin(cost: number, cfg: PricingConfig) {
   const c = Math.max(cost, 0.05);
@@ -20,7 +20,7 @@ function baseMargin(cost: number, cfg: PricingConfig) {
 function marginAt(cost: number, qty: number, cfg: PricingConfig) {
   const base = baseMargin(cost, cfg);
   const q = Math.max(qty, 1);
-  const qm = Math.max(cfg.qtyAtFloor, 2);
+  const qm = Math.max(cfg.cielovaHodnotaZakazky / Math.max(cost, 0.05), 2);
   const t = Math.max(0, 1 - Math.log10(q) / Math.log10(qm));
   const decay = Math.pow(t, cfg.coefP);
   return cfg.marginFloor + (base - cfg.marginFloor) * decay;
@@ -72,8 +72,8 @@ Deno.serve(async (req) => {
     if (!nastavenia) throw new Error('Nastavenia čeleniek sa nenašli.');
 
     const pricingConfig: PricingConfig = cfg
-      ? { coefA: Number(cfg.coef_a), coefB: Number(cfg.coef_b), marginFloor: Number(cfg.margin_floor), coefP: Number(cfg.coef_p), qtyAtFloor: Number(cfg.qty_at_floor), dphPercent: Number(cfg.dph_percent ?? 23) }
-      : { coefA: 300, coefB: 54, marginFloor: 30, coefP: 1.3, qtyAtFloor: 1000, dphPercent: 23 };
+      ? { coefA: Number(cfg.coef_a), coefB: Number(cfg.coef_b), marginFloor: Number(cfg.margin_floor), coefP: Number(cfg.coef_p), cielovaHodnotaZakazky: Number(cfg.cielova_hodnota_zakazky ?? 25000), dphPercent: Number(cfg.dph_percent ?? 23) }
+      : { coefA: 300, coefB: 54, marginFloor: 30, coefP: 1.3, cielovaHodnotaZakazky: 25000, dphPercent: 23 };
 
     const nakladKs = Number(nak.naklad_ks) || 0;
     const cenaKus = priceAt(nakladKs, ks, pricingConfig);

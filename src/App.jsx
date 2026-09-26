@@ -1641,7 +1641,7 @@ export default function App() {
           supabase.from('help_requests').select('*').order('created_at', { ascending: false }).limit(200),
           supabase.from('intercompany_rates').select('*'),
           supabase.from('intercompany_closed_periods').select('*'),
-          supabase.from('pricing_config').select('cena_minuty_sitia, cena_strihania_100cm2, sadzba_rv_min, coef_a, coef_b, margin_floor, coef_p, qty_at_floor').eq('id', 1).maybeSingle(),
+          supabase.from('pricing_config').select('cena_minuty_sitia, cena_strihania_100cm2, sadzba_rv_min, coef_a, coef_b, margin_floor, coef_p, cielova_hodnota_zakazky').eq('id', 1).maybeSingle(),
           supabase.from('krajcirky').select('*').order('poradie').order('id'),
           supabase.from('vyrobna_kapacita_nastavenia').select('*').eq('id', 1).maybeSingle()
         ]);
@@ -1695,7 +1695,7 @@ export default function App() {
         setSadzbaRvMin(pricingConfigRes.error || !pricingConfigRes.data || pricingConfigRes.data.sadzba_rv_min == null ? 0.3 : Number(pricingConfigRes.data.sadzba_rv_min));
         if (!pricingConfigRes.error && pricingConfigRes.data) {
           const pc = pricingConfigRes.data;
-          if (pc.coef_a != null) setMarginCurveConfig({ coefA: Number(pc.coef_a), coefB: Number(pc.coef_b), marginFloor: Number(pc.margin_floor), coefP: Number(pc.coef_p), qtyAtFloor: Number(pc.qty_at_floor) });
+          if (pc.coef_a != null) setMarginCurveConfig({ coefA: Number(pc.coef_a), coefB: Number(pc.coef_b), marginFloor: Number(pc.margin_floor), coefP: Number(pc.coef_p), cielovaHodnotaZakazky: Number(pc.cielova_hodnota_zakazky ?? 25000) });
         }
         setKrajcirky(krajcirkyRes.error ? [] : (krajcirkyRes.data || []));
         if (kapacitaRes.data) setVyrobnaKapacitaNastavenia(kapacitaRes.data);

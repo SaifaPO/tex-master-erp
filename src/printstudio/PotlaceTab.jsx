@@ -178,7 +178,9 @@ export default function PotlaceTab({ supabase }) {
   // len nahlad ceny pri KONKRETNE zadanom rozmere/pocte, cim vacsi, tym vyssi navrh minima — co
   // je presny opak zmyslu "minima": napr. pri sietotlaci pri 1ks vychadzalo cele sito na 1 kus,
   // pri rezanom transfere pri 10x10cm motiv, ktory realne moze byt aj len drobna gulicka).
-  const velkyPocet = pricingConfig.qtyAtFloor || 1000;
+  // Pevna velka referencna hodnota (nezavisla od marzovej krivky) — cielom je len amortizovat
+  // jednorazove naklady na zakazku (sito/digitalizacia) takmer na nulu, nie modelovat realny odber.
+  const velkyPocet = 10000;
   const vcSublimaciaPodlaha = vcSublimaciaGarmentZo(kostraLive, 0);
   const vcDtfPodlaha = vcDtfGarmentZo(kostraLive, 0);
   const vcSietotlacPodlaha = vybranaVelkost ? vcSietotlacZaklad(kostraLive, testVelkostId, testTmavyTextil, velkyPocet) : 0;
