@@ -78,12 +78,13 @@ export default function ParametreTab({ katalog, tvarKod, velkostKod, materialKod
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {katalog.stoziare.map(s => {
             const active = s.kod === stoziarKod;
+            const cenaPreVelkost = s.ceny?.[velkostKod] ?? 0;
             return (
               <div key={s.kod} onClick={() => onStoziar(s.kod)} className={`p-3 rounded-xl border cursor-pointer transition-all ${active ? 'border-indigo-600 bg-indigo-50/80 ring-2 ring-indigo-500 text-indigo-900 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'}`}>
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-xs">{s.nazov}</span>
                 </div>
-                <span className="text-xs font-bold text-indigo-600 block">{s.cena > 0 ? `+${Number(s.cena).toFixed(2)} €` : 'V cene'}</span>
+                <span className="text-xs font-bold text-indigo-600 block">{cenaPreVelkost > 0 ? `+${cenaPreVelkost.toFixed(2)} €` : 'V cene'}</span>
                 {s.popis && <p className="text-[10px] text-slate-500 mt-0.5">{s.popis}</p>}
               </div>
             );

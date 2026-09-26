@@ -35,7 +35,7 @@ function priceAt(cost: number, qty: number, cfg: PricingConfig) {
 interface VlajkaCenaVstup {
   nakladMaterial: number;
   dokoncenie: { cena: number } | null;
-  stoziar: { cena: number } | null;
+  cenaStoziara: number;
   doplnky: { cena: number; mnozstvo: number }[];
   expresne: boolean;
   pocetKs: number;
@@ -43,12 +43,11 @@ interface VlajkaCenaVstup {
   pricingConfig: PricingConfig;
 }
 
-function vypocitajCenuVlajky({ nakladMaterial, dokoncenie, stoziar, doplnky, expresne, pocetKs, nastavenia, pricingConfig }: VlajkaCenaVstup) {
+function vypocitajCenuVlajky({ nakladMaterial, dokoncenie, cenaStoziara, doplnky, expresne, pocetKs, nastavenia, pricingConfig }: VlajkaCenaVstup) {
   const ks = Math.max(1, Number(pocetKs) || 1);
   const cenaMaterialKus = priceAt(Number(nakladMaterial) || 0, ks, pricingConfig);
   const cenaDokoncenia = Number(dokoncenie?.cena) || 0;
-  const cenaStoziara = Number(stoziar?.cena) || 0;
-  const zaklad = cenaMaterialKus + cenaDokoncenia + cenaStoziara;
+  const zaklad = cenaMaterialKus + cenaDokoncenia + (Number(cenaStoziara) || 0);
 
   const doplnkySpolu = (doplnky || []).reduce((sum, d) => sum + (Number(d.cena) || 0) * (Number(d.mnozstvo) || 0), 0);
 
@@ -81,6 +80,16 @@ async function resolveNakladM2(supabase: ReturnType<typeof createClient>, materi
   return (Number(sklad.price_per_m) || 0) / (Number(sklad.width) / 100);
 }
 
+// Cena stoziara sa lisi podla velkosti vlajky (vacsia vlajka = dlhsi/pevnejsi stoziar) —
+// vlajka_stoziare.cena (flat) je uz nepouzivane, nahradza ho vlajka_stoziare_ceny per velkost.
+async function resolveStoziarCena(supabase: ReturnType<typeof createClient>, stoziarKod: string | null, velkostKod: string) {
+  if (!stoziarKod) return 0;
+  const { data: st } = await supabase.from('vlajka_stoziare').select('id').eq('kod', stoziarKod).maybeSingle();
+  if (!st) return 0;
+  const { data: cenaRow } = await supabase.from('vlajka_stoziare_ceny').select('cena').eq('stoziar_id', st.id).eq('velkost', velkostKod).maybeSingle();
+  return Number(cenaRow?.cena) || 0;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -100,12 +109,13 @@ Deno.serve(async (req) => {
     if (!tvarKod || !velkostKod) throw new Error('Chýba tvar alebo veľkosť vlajky.');
     if (!materialKod) throw new Error('Chýba materiál.');
 
-    const [{ data: tvar }, { data: velkost }, { data: material }, { data: dokoncenie }, { data: stoziar }, { data: doplnkyDb }, { data: nastavenia }, { data: cfg }] = await Promise.all([
+    const [{ data: tvar }, { data: velkost }, { data: material }, { data: dokoncenie }, { data: stoziar }, cenaStoziara, { data: doplnkyDb }, { data: nastavenia }, { data: cfg }] = await Promise.all([
       supabase.from('vlajka_tvary').select('*').eq('kod', tvarKod).maybeSingle(),
       supabase.from('vlajka_velkosti').select('*').eq('kod', velkostKod).maybeSingle(),
       supabase.from('vlajka_materialy').select('*').eq('kod', materialKod).eq('aktivny', true).maybeSingle(),
       dokoncenieKod ? supabase.from('vlajka_dokoncenie').select('*').eq('kod', dokoncenieKod).maybeSingle() : Promise.resolve({ data: null }),
       stoziarKod ? supabase.from('vlajka_stoziare').select('*').eq('kod', stoziarKod).maybeSingle() : Promise.resolve({ data: null }),
+      resolveStoziarCena(supabase, stoziarKod, velkostKod),
       supabase.from('vlajka_doplnky').select('*'),
       supabase.from('vlajka_nastavenia').select('*').eq('id', 1).maybeSingle(),
       supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
@@ -131,7 +141,7 @@ Deno.serve(async (req) => {
     const nakladMaterial = Number(rozmer.spotreba_m2) * nakladM2Material;
 
     const cena = vypocitajCenuVlajky({
-      nakladMaterial, dokoncenie, stoziar,
+      nakladMaterial, dokoncenie, cenaStoziara,
       doplnky: doplnkyVypocet,
       pricingConfig,
       expresne: !!expresne,

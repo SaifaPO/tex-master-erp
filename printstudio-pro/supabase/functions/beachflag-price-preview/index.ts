@@ -27,6 +27,16 @@ async function resolveNakladM2(supabase: ReturnType<typeof createClient>, materi
   return (Number(sklad.price_per_m) || 0) / (Number(sklad.width) / 100);
 }
 
+// Cena stoziara sa lisi podla velkosti vlajky (vacsia vlajka = dlhsi/pevnejsi stoziar) —
+// vlajka_stoziare.cena (flat) je uz nepouzivane, nahradza ho vlajka_stoziare_ceny per velkost.
+async function resolveStoziarCena(supabase: ReturnType<typeof createClient>, stoziarKod: string | null, velkostKod: string) {
+  if (!stoziarKod) return 0;
+  const { data: st } = await supabase.from('vlajka_stoziare').select('id').eq('kod', stoziarKod).maybeSingle();
+  if (!st) return 0;
+  const { data: cenaRow } = await supabase.from('vlajka_stoziare_ceny').select('cena').eq('stoziar_id', st.id).eq('velkost', velkostKod).maybeSingle();
+  return Number(cenaRow?.cena) || 0;
+}
+
 interface PricingConfig { coefA: number; coefB: number; marginFloor: number; coefP: number; cielovaHodnotaZakazky: number; dphPercent: number; }
 
 function baseMargin(cost: number, cfg: PricingConfig) {
@@ -64,11 +74,11 @@ Deno.serve(async (req) => {
     if (!tvarKod || !velkostKod) throw new Error('Chýba tvar alebo veľkosť vlajky.');
     if (!materialKod) throw new Error('Chýba materiál.');
 
-    const [{ data: tvar }, { data: material }, { data: dokoncenie }, { data: stoziar }, { data: doplnkyDb }, { data: nastavenia }, { data: cfg }] = await Promise.all([
+    const [{ data: tvar }, { data: material }, { data: dokoncenie }, cenaStoziara, { data: doplnkyDb }, { data: nastavenia }, { data: cfg }] = await Promise.all([
       supabase.from('vlajka_tvary').select('id').eq('kod', tvarKod).maybeSingle(),
       supabase.from('vlajka_materialy').select('naklad_m2, sklad_material_id').eq('kod', materialKod).eq('aktivny', true).maybeSingle(),
       dokoncenieKod ? supabase.from('vlajka_dokoncenie').select('cena').eq('kod', dokoncenieKod).maybeSingle() : Promise.resolve({ data: null }),
-      stoziarKod ? supabase.from('vlajka_stoziare').select('cena').eq('kod', stoziarKod).maybeSingle() : Promise.resolve({ data: null }),
+      resolveStoziarCena(supabase, stoziarKod, velkostKod),
       supabase.from('vlajka_doplnky').select('*'),
       supabase.from('vlajka_nastavenia').select('*').eq('id', 1).maybeSingle(),
       supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
@@ -96,7 +106,6 @@ Deno.serve(async (req) => {
     const marzaPercent = Math.round(marginAt(nakladMaterial, ks, pricingConfig));
 
     const cenaDokoncenia = Number(dokoncenie?.cena) || 0;
-    const cenaStoziara = Number(stoziar?.cena) || 0;
     const zaklad = cenaMaterialKus + cenaDokoncenia + cenaStoziara;
 
     const doplnkySpolu = doplnkyVypocet.reduce((sum, d) => sum + d.cena * d.mnozstvo, 0);
