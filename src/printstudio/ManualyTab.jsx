@@ -30,11 +30,13 @@ const I = {
   sparkle: () => <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={ic}><path d="M32 8 L36 26 L54 30 L36 34 L32 52 L28 34 L10 30 L28 26 Z" /></svg>,
   image: () => <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={ic}><rect x="10" y="14" width="44" height="34" rx="3" /><circle cx="22" cy="26" r="4" /><path d="M12 44 l14-14 10 10 8-8 16 16" /></svg>,
   flagIcon: () => <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={ic}><path d="M14 6 v52" /><path d="M14 10 h32 l-8 10 8 10 h-32" /></svg>,
-  feather: () => <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={ic}><path d="M46 10 C30 12 16 28 14 54 C40 52 54 38 50 12 Z" /><path d="M18 50 L46 12" /></svg>,
-  tear: () => <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={ic}><path d="M32 8 C18 26 12 38 16 48 a16 16 0 0 0 32 0 C52 38 46 26 32 8 Z" /></svg>,
-  blade: () => <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={ic}><path d="M26 6 C40 10 46 26 40 56 C24 54 16 40 20 18 C21 12 23 8 26 6 Z" /></svg>,
-  basicFlag: () => <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={ic}><path d="M18 6 h28 v52 c-14 0-14-4-28-4 Z" /></svg>,
-  wing: () => <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={ic}><path d="M40 6 C20 10 10 26 14 56 C34 52 48 36 46 12 Z" /><path d="M16 40 C24 38 32 30 36 20" opacity="0.55" /></svg>,
+  // Presne strihove tvary (cut_path pre velkost M) priamo z vlajka_tvar_rozmery, nie priblizna
+  // ikona — Martin 2026-09-27 chcel presne take tvary, ake su v skutocnej appke.
+  feather: () => <svg viewBox="0 0 70 260" fill="currentColor" className={ic}><path d="M 65,162.68 L 65,5 L 58.88,6.82 L 53.17,8.88 L 47.87,11.17 L 42.96,13.66 L 38.43,16.34 L 34.26,19.2 L 30.43,22.22 L 26.94,25.39 L 23.78,28.68 L 20.91,32.1 L 18.34,35.61 L 17.16,37.39 L 15,41.02 L 13.1,44.71 L 12.24,46.57 L 10.69,50.33 L 9.37,54.1 L 7.76,59.76 L 6.58,65.39 L 5.77,70.92 L 5.28,76.32 L 5.07,81.51 L 5,97.32 L 5,255 L 11.12,253.18 L 14.03,252.18 L 19.53,250 L 22.13,248.83 L 27.04,246.34 L 29.35,245.02 L 33.7,242.25 L 35.74,240.8 L 39.57,237.78 L 41.35,236.21 L 44.68,232.98 L 46.22,231.32 L 49.09,227.9 L 50.41,226.16 L 52.84,222.61 L 53.95,220.8 L 55.98,217.14 L 57.76,213.43 L 59.31,209.67 L 60,207.79 L 61.22,204.01 L 62.24,200.24 L 63.07,196.48 L 64,190.91 L 64.43,187.26 L 64.72,183.68 L 64.93,178.49 L 65,162.68 Z" /></svg>,
+  tear: () => <svg viewBox="0 0 102.5 225.03" fill="currentColor" className={ic}><path d="M 5,220.03 L 8.28,220.03 L 97.5,42.45 L 96.94,38.69 L 96.14,34.42 L 95.4,31.05 L 94.52,27.76 L 93.79,25.51 L 92.73,22.93 L 91.68,20.76 L 90.49,18.67 L 88.96,16.41 L 87.45,14.55 L 85.78,12.82 L 84.09,11.36 L 82.1,9.93 L 80.02,8.71 L 77.85,7.69 L 75.62,6.85 L 73.32,6.19 L 70.98,5.68 L 68.59,5.33 L 66.18,5.11 L 63.27,5 L 60.27,5.05 L 57.83,5.21 L 55.48,5.48 L 53.2,5.85 L 51,6.32 L 48.87,6.89 L 45.81,7.93 L 43.85,8.74 L 41.95,9.65 L 40.12,10.66 L 37.48,12.33 L 35.79,13.56 L 34.16,14.88 L 32.57,16.29 L 30.28,18.55 L 28.82,20.17 L 26.7,22.74 L 25.33,24.55 L 23.35,27.42 L 21.45,30.45 L 20.02,32.91 L 17.31,38.18 L 16,41.06 L 14.78,43.98 L 12.47,50.31 L 11,55.05 L 9.72,59.84 L 8.51,65.07 L 7.49,70.37 L 6.7,75.37 L 5.99,81.03 L 5.52,86.08 L 5.17,91.78 L 5,99.37 L 5,220.03 Z" /></svg>,
+  blade: () => <svg viewBox="0 0 70 260" fill="currentColor" className={ic}><path d="M 5,255 L 9.5,255 L 12.05,252.6 L 14.81,250.29 L 17.75,248.09 L 21.92,245.34 L 25.21,243.42 L 28.64,241.63 L 33.38,239.46 L 37.04,238.01 L 40.77,236.72 L 44.55,235.6 L 48.38,234.64 L 50.94,234.11 L 54.8,233.47 L 58.64,233.02 L 62.47,232.77 L 65,232.72 L 65,5 L 58.88,6.82 L 53.17,8.88 L 47.87,11.17 L 42.96,13.66 L 38.43,16.34 L 34.26,19.2 L 30.43,22.22 L 26.94,25.39 L 23.78,28.68 L 20.91,32.1 L 18.34,35.61 L 17.16,37.39 L 15,41.02 L 13.1,44.71 L 12.24,46.57 L 10.69,50.33 L 9.37,54.1 L 7.76,59.76 L 6.58,65.39 L 5.77,70.92 L 5.28,76.32 L 5.07,81.51 L 5,97.32 L 5,255 Z" /></svg>,
+  basicFlag: () => <svg viewBox="0 0 70 260" fill="currentColor" className={ic}><path d="M 5,255 L 65,254.98 L 65,5 L 58.88,6.82 L 53.17,8.88 L 47.87,11.17 L 42.96,13.66 L 38.43,16.34 L 34.26,19.2 L 30.43,22.22 L 26.94,25.39 L 23.78,28.68 L 20.91,32.1 L 18.34,35.61 L 17.16,37.39 L 15,41.02 L 13.1,44.71 L 12.24,46.57 L 10.69,50.33 L 9.37,54.1 L 7.76,59.76 L 6.58,65.39 L 5.77,70.92 L 5.28,76.32 L 5.07,81.51 L 5,97.32 L 5,255 Z" /></svg>,
+  wing: () => <svg viewBox="0 0 70 220" fill="currentColor" className={ic}><path d="M 65,37.68 L 64.93,35.44 L 64.58,32.16 L 64.18,30.03 L 63.35,26.94 L 62.65,24.96 L 61.39,22.1 L 59.89,19.41 L 58.16,16.89 L 56.23,14.57 L 54.1,12.46 L 51.8,10.58 L 50.17,9.46 L 47.6,8 L 45.81,7.17 L 43.01,6.17 L 41.09,5.66 L 38.12,5.17 L 36.08,5.02 L 33.37,5.05 L 30.62,5.36 L 28.48,5.79 L 25.88,6.56 L 23.38,7.58 L 20.99,8.82 L 18.72,10.28 L 16.59,11.95 L 14.6,13.81 L 12.42,16.28 L 11.32,17.84 L 10.06,20.12 L 9.14,22.16 L 8.12,24.93 L 6.91,29.07 L 6,33.34 L 5.4,37.53 L 5.2,39.82 L 5.11,41.97 L 5,80.52 L 5,215 L 10.18,214.88 L 14.89,214.46 L 19.33,213.73 L 23.3,212.74 L 27.38,211.37 L 30.82,209.89 L 34.26,208.05 L 35.93,207.01 L 37.88,205.67 L 41.18,203.03 L 42.99,201.37 L 44.75,199.63 L 48.05,195.93 L 51.02,192.03 L 53.58,188.02 L 55.62,184.18 L 57.47,180.04 L 59.13,175.52 L 60.32,171.61 L 61.39,167.39 L 62.33,162.86 L 62.94,159.23 L 63.64,154.06 L 64.06,149.93 L 64.51,144.06 L 64.74,139.36 L 64.94,130.96 L 65,113.69 L 65,37.68 Z" /></svg>,
   poleNone: () => <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={ic}><path d="M32 4 v56" /></svg>,
   poleBasic: () => <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={ic}><path d="M32 4 v56" /><path d="M24 10 h16" /><path d="M20 60 h24" /></svg>,
   polePro: () => <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={ic}><path d="M32 4 v56" /><path d="M22 10 h20" /><path d="M18 60 h28" /><circle cx="32" cy="32" r="4" opacity="0.6" /></svg>,
@@ -143,9 +145,7 @@ function BeachvlajkyPoster() {
   return (
     <div>
       <div className="bg-gradient-to-r from-orange-600 to-red-700 text-white rounded-t-2xl p-8 -m-8 mb-6">
-        <div className="text-[11px] font-bold tracking-widest uppercase opacity-85 mb-1.5">PrintStudio Pro · Konfigurátor</div>
         <h1 className="text-3xl font-black mb-1.5">Ako objednať beachvlajku</h1>
-        <p className="text-sm opacity-90 max-w-md">Krok za krokom presne podľa poradia v online konfigurátore.</p>
       </div>
 
       <Step num="1" title="Tvar" accent="bg-orange-600">
@@ -169,7 +169,7 @@ function BeachvlajkyPoster() {
             ))}
           </tbody>
         </table>
-        <p className="text-[11px] text-slate-500">Ceny "od" sú pre tvary Blade/Basic/Feather bez konštrukcie a podstavca — Wing a Wave majú mierne inú spotrebu materiálu, appka dopočíta presne. Plus výber materiálu z knižnice podľa účelu použitia.</p>
+        <p className="text-[11px] text-slate-500">Rozmery a ceny "od" platia pre tvary <b>Basic, Blade a Feather</b> (bez konštrukcie a podstavca). Plus výber materiálu z knižnice podľa účelu použitia.</p>
       </Step>
 
       <Step num="3" title="Opracovanie okrajov a konštrukcia" accent="bg-orange-600">
@@ -211,9 +211,11 @@ function BeachvlajkyPoster() {
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 mt-6 pt-4 text-[11px] text-slate-500 font-semibold">
         <div className="flex items-center gap-2"><span className="w-4 h-4 text-orange-600"><I.bolt /></span>Dodanie: 10 pracovných dní štandard / 5 dní expres (+10 %)</div>
-        <div className="flex items-center gap-2"><span className="w-4 h-4 text-orange-600"><I.cart /></span>Cena sa prepočítava naživo podľa počtu kusov</div>
       </div>
-      <p className="text-[11px] text-slate-400 text-center mt-3">Zákazník si vie navrhnúť beachvlajku aj sám doma cez appku na <b className="text-slate-600">pbtprint.sk</b>.</p>
+      <div className="flex items-center justify-center gap-3 mt-4 pt-4 border-t border-slate-100">
+        <QRCodeSVG value="https://shop.pbtprint.sk/apps/dtf-metraz?typ=beachflag" size={72} level="M" />
+        <p className="text-[11px] text-slate-500 max-w-[200px]">Navrhni si beachvlajku sám — naskenuj a otvor konfigurátor na <b className="text-slate-700">pbtprint.sk</b>.</p>
+      </div>
     </div>
   );
 }
