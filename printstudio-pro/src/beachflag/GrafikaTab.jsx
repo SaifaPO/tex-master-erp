@@ -1,15 +1,14 @@
 import React, { useState } from 'react';
-import { Palette, Type, Image as ImageIcon, Sparkles, Loader2 } from 'lucide-react';
+import { Palette, Type, Image as ImageIcon, Sparkles } from 'lucide-react';
 import LayersPanel from './LayersPanel';
 
 export default function GrafikaTab({
   katalog, bgColor, onBgColor, pantoneNote, onPantoneNote,
   customText, onCustomTextChange, onPridajText,
-  onUploadObrazok, onAiGenerate, aiGenerating, aiError,
+  onUploadObrazok,
   canvas, canvasVersion,
   onSpat, onDalej,
 }) {
-  const [aiPrompt, setAiPrompt] = useState('');
   const [pantoneFilter, setPantoneFilter] = useState('');
 
   const filtrovanePantone = katalog.pantone.filter(p =>
@@ -67,21 +66,19 @@ export default function GrafikaTab({
 
       <LayersPanel canvas={canvas} />
 
-      <div className="bg-gradient-to-r from-indigo-900 via-purple-900 to-slate-900 text-white p-4 sm:p-5 rounded-2xl shadow-md border border-indigo-700/50 space-y-3">
+      <div className="bg-gradient-to-r from-indigo-900 via-purple-900 to-slate-900 text-white p-4 sm:p-5 rounded-2xl shadow-md border border-indigo-700/50 space-y-2">
         <div className="flex items-center gap-2">
           <Sparkles className="w-5 h-5 text-indigo-300" />
           <div>
-            <h4 className="font-bold text-sm text-indigo-100">AI grafický pomocník</h4>
-            <p className="text-[11px] text-indigo-300">Vygenerujte si originálne pozadie alebo vzor pre vašu vlajku</p>
+            <h4 className="font-bold text-sm text-indigo-100">Nemáte grafiku? Vytvorte si ju zadarmo</h4>
+            <p className="text-[11px] text-indigo-300">Napíšte si svoj nápad (napr. "letná plážová vlna, tropické palmy") do niektorého z bezplatných AI nástrojov a výsledok si sem nahrajte tlačidlom vyššie.</p>
           </div>
         </div>
-        <div className="flex flex-col sm:flex-row gap-2">
-          <input type="text" value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} placeholder="napr. Letná plážová vlna, tropické palmy a slnečné lúče…" className="flex-1 text-xs px-3 py-2.5 bg-slate-800/90 text-white border border-indigo-500/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-          <button onClick={() => onAiGenerate(aiPrompt)} disabled={aiGenerating || !aiPrompt.trim()} className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 disabled:opacity-50 text-white font-bold text-xs px-4 py-2.5 rounded-xl flex items-center justify-center gap-2">
-            {aiGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} Vygenerovať
-          </button>
+        <div className="flex flex-wrap gap-2 pt-1">
+          {[{ n: 'Google Gemini', u: 'https://gemini.google.com' }, { n: 'ChatGPT', u: 'https://chatgpt.com' }, { n: 'Microsoft Copilot Designer', u: 'https://copilot.microsoft.com/images/create' }].map(t => (
+            <a key={t.n} href={t.u} target="_blank" rel="noopener noreferrer" className="text-[11px] font-semibold bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg">{t.n} ↗</a>
+          ))}
         </div>
-        {aiError && <p className="text-xs text-rose-300">{aiError}</p>}
       </div>
 
       <div className="pt-4 border-t border-slate-100 flex justify-between">

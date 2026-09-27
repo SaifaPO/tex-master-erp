@@ -3,7 +3,6 @@ import { fabric } from 'fabric';
 import { Flag, Eye } from 'lucide-react';
 import PbtHeader from '../PbtHeader';
 import { nacitajVlajkaKatalog } from './vlajkaData';
-import { getSessionId } from '../supabaseClient';
 import ParametreTab from './ParametreTab';
 import GrafikaTab from './GrafikaTab';
 import DoplnkyTab from './DoplnkyTab';
@@ -39,8 +38,6 @@ export default function BeachflagApp({ supabase }) {
   const [cenaNacitava, setCenaNacitava] = useState(false);
   const [cenaChyba, setCenaChyba] = useState('');
 
-  const [aiGenerating, setAiGenerating] = useState(false);
-  const [aiError, setAiError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [techPanel, setTechPanel] = useState('');
@@ -194,34 +191,6 @@ export default function BeachflagApp({ supabase }) {
     reader.readAsDataURL(file);
   };
 
-  const aiGenerate = async (prompt) => {
-    if (!prompt.trim() || !supabase) return;
-    setAiGenerating(true);
-    setAiError('');
-    try {
-      const { data, error } = await supabase.functions.invoke('ai-generate-motif', { body: { prompt: prompt.trim(), sessionId: getSessionId() } });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      await new Promise((resolve, reject) => {
-        fabric.Image.fromURL(data.previewUrl, (img) => {
-          if (!img) { reject(new Error('Motív sa nepodarilo načítať.')); return; }
-          const canvas = fabricRef.current;
-          img.scaleToWidth(logicalSizeRef.current.w);
-          img.set({ left: 0, top: 0, selectable: true, ...OBJEKT_ZAKLAD });
-          canvas.add(img);
-          canvas.sendToBack(img);
-          canvas.getObjects().filter(o => o.isMaskOverlay).forEach(o => canvas.bringToFront(o));
-          canvas.renderAll();
-          resolve();
-        });
-      });
-    } catch (e) {
-      setAiError(e.message || 'AI generovanie zlyhalo.');
-    } finally {
-      setAiGenerating(false);
-    }
-  };
-
   const zmenMnozstvoDoplnku = (kod, delta, max = 10) => {
     setDoplnkyMnozstva(m => {
       const next = Math.max(0, Math.min(max, (m[kod] || 0) + delta));
@@ -302,7 +271,7 @@ export default function BeachflagApp({ supabase }) {
         {krok === 'grafika' && (
           <GrafikaTab katalog={katalog} bgColor={bgColor} onBgColor={setBgColor} pantoneNote={pantoneNote} onPantoneNote={setPantoneNote}
             customText={customText} onCustomTextChange={setCustomText} onPridajText={pridajText}
-            onUploadObrazok={uploadObrazok} onAiGenerate={aiGenerate} aiGenerating={aiGenerating} aiError={aiError}
+            onUploadObrazok={uploadObrazok}
             canvas={fabricRef.current} canvasVersion={canvasVersion}
             onSpat={() => setKrok('parametre')} onDalej={() => setKrok('doplnky')} />
         )}
