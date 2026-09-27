@@ -42,10 +42,13 @@ export default function ParametreTab({ katalog, tvarKod, velkostKod, materialKod
           {katalog.materialy.map(m => {
             const active = m.kod === materialKod;
             return (
-              <div key={m.kod} onClick={() => onMaterial(m.kod)} className={`p-3 rounded-xl border cursor-pointer transition-all ${active ? 'border-indigo-600 bg-indigo-50/80 ring-2 ring-indigo-500 text-indigo-900 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'}`}>
-                <span className="font-bold text-xs block">{m.nazov}</span>
-                {m.popis && <p className="text-[11px] text-slate-500 mt-0.5">{m.popis}</p>}
-                {m.pouzitie && <p className="text-[10px] text-slate-400 mt-0.5">{m.pouzitie}</p>}
+              <div key={m.kod} onClick={() => onMaterial(m.kod)} className={`p-3 rounded-xl border cursor-pointer transition-all flex gap-3 ${active ? 'border-indigo-600 bg-indigo-50/80 ring-2 ring-indigo-500 text-indigo-900 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'}`}>
+                {m.obrazok_url && <img src={m.obrazok_url} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />}
+                <div className="min-w-0">
+                  <span className="font-bold text-xs block">{m.nazov}</span>
+                  {m.popis && <p className="text-[11px] text-slate-500 mt-0.5">{m.popis}</p>}
+                  {m.pouzitie && <p className="text-[10px] text-slate-400 mt-0.5">{m.pouzitie}</p>}
+                </div>
               </div>
             );
           })}
@@ -60,6 +63,7 @@ export default function ParametreTab({ katalog, tvarKod, velkostKod, materialKod
             const active = d.kod === dokoncenieKod;
             return (
               <div key={d.kod} onClick={() => onDokoncenie(d.kod)} className={`p-3 rounded-xl border cursor-pointer flex items-center gap-3 transition-all ${active ? 'border-indigo-600 bg-indigo-50/80 ring-2 ring-indigo-500 text-indigo-900 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'}`}>
+                {d.obrazok_url && <img src={d.obrazok_url} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-xs truncate">{d.nazov}</span>
@@ -81,6 +85,7 @@ export default function ParametreTab({ katalog, tvarKod, velkostKod, materialKod
             const cenaPreVelkost = s.ceny?.[velkostKod] ?? 0;
             return (
               <div key={s.kod} onClick={() => onStoziar(s.kod)} className={`p-3 rounded-xl border cursor-pointer transition-all ${active ? 'border-indigo-600 bg-indigo-50/80 ring-2 ring-indigo-500 text-indigo-900 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'}`}>
+                {s.obrazok_url && <img src={s.obrazok_url} alt="" className="w-full h-16 rounded-lg object-cover mb-1.5" />}
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-xs">{s.nazov}</span>
                 </div>
@@ -105,6 +110,7 @@ export default function ParametreTab({ katalog, tvarKod, velkostKod, materialKod
             const vhodny = nastavenie?.vhodny !== false;
             return (
               <div key={p.kod} onClick={() => onPodstavec(p.kod)} className={`p-3 rounded-xl border cursor-pointer transition-all ${active ? 'border-indigo-600 bg-indigo-50/80 ring-2 ring-indigo-500 text-indigo-900 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'}`}>
+                {p.obrazok_url && <img src={p.obrazok_url} alt="" className="w-full h-16 rounded-lg object-cover mb-1.5" />}
                 <span className="font-bold text-xs">{p.nazov}</span>
                 <span className="text-xs font-bold text-indigo-600 block">{nastavenie?.cena > 0 ? `+${nastavenie.cena.toFixed(2)} €` : 'V cene'}</span>
                 {p.popis && <p className="text-[10px] text-slate-500 mt-0.5">{p.popis}</p>}

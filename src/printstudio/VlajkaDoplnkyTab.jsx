@@ -1,7 +1,30 @@
-import React, { useEffect, useState } from 'react';
-import { Plus, Trash2, Package, ChevronDown, ChevronUp } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Plus, Trash2, Package, ChevronDown, ChevronUp, ImagePlus } from 'lucide-react';
+import { nahrajObrazokDoplnku } from './nahrajObrazok';
 
 const VELKOSTI = ['S', 'M', 'L', 'XL'];
+
+// Mala fotka + tlacidlo na nahratie/vymenu — pouzite vo vsetkych sekciach nizsie, aby zakaznik
+// videl realnu fotku podstavca/prutu/doplnku namiesto len textu.
+function FotoUpload({ url, onNahraj }) {
+  const inputRef = useRef(null);
+  const [nahravam, setNahravam] = useState(false);
+  const vyber = async (e) => {
+    const subor = e.target.files?.[0];
+    e.target.value = '';
+    if (!subor) return;
+    setNahravam(true);
+    try { await onNahraj(subor); } catch (err) { window.alert('Nahratie zlyhalo: ' + err.message); }
+    setNahravam(false);
+  };
+  return (
+    <div className="flex items-center gap-1.5 shrink-0">
+      {url ? <img src={url} alt="" className="w-9 h-9 rounded-lg object-cover border border-slate-700" /> : <div className="w-9 h-9 rounded-lg border border-dashed border-slate-700 flex items-center justify-center text-slate-600"><ImagePlus className="w-4 h-4" /></div>}
+      <button type="button" onClick={() => inputRef.current?.click()} disabled={nahravam} title="Nahrať fotku" className="text-[10px] text-indigo-400 hover:text-indigo-300 font-semibold disabled:opacity-50">{nahravam ? '…' : (url ? 'Vymeniť' : 'Nahrať foto')}</button>
+      <input ref={inputRef} type="file" accept="image/*" onChange={vyber} className="hidden" />
+    </div>
+  );
+}
 
 export default function VlajkaDoplnkyTab({ supabase }) {
   return (
@@ -64,6 +87,7 @@ function JednoduchaSekcia({ supabase, tabulka, nazovSekcie, popisSekcie, maMaxMn
           <table className="w-full text-sm">
             <thead className="bg-slate-950/60 text-slate-500 text-xs uppercase tracking-wide">
               <tr>
+                <th className="text-left px-4 py-2.5">Foto</th>
                 <th className="text-left px-4 py-2.5">Kód</th>
                 <th className="text-left px-4 py-2.5">Názov</th>
                 <th className="text-left px-4 py-2.5">Cena (€)</th>
@@ -75,6 +99,7 @@ function JednoduchaSekcia({ supabase, tabulka, nazovSekcie, popisSekcie, maMaxMn
             <tbody>
               {riadky.map(r => (
                 <tr key={r.id} className="border-t border-slate-800">
+                  <td className="px-4 py-2"><FotoUpload url={r.obrazok_url} onNahraj={async (subor) => uprav(r.id, { obrazok_url: await nahrajObrazokDoplnku(supabase, subor) })} /></td>
                   <td className="px-4 py-2"><input type="text" value={r.kod} onChange={(e) => uprav(r.id, { kod: e.target.value })} className="w-28 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white font-mono" /></td>
                   <td className="px-4 py-2"><input type="text" value={r.nazov} onChange={(e) => uprav(r.id, { nazov: e.target.value })} className="w-48 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /></td>
                   <td className="px-4 py-2"><input type="number" step="0.5" value={r.cena} onChange={(e) => uprav(r.id, { cena: parseFloat(e.target.value) || 0 })} className="w-20 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /></td>
@@ -83,7 +108,7 @@ function JednoduchaSekcia({ supabase, tabulka, nazovSekcie, popisSekcie, maMaxMn
                   <td className="px-4 py-2 text-right"><button onClick={() => zmaz(r.id)} className="text-slate-400 hover:text-rose-400 p-1"><Trash2 className="w-4 h-4" /></button></td>
                 </tr>
               ))}
-              {riadky.length === 0 && <tr><td colSpan={6} className="text-center text-slate-500 py-6 text-sm">Zatiaľ žiadne položky.</td></tr>}
+              {riadky.length === 0 && <tr><td colSpan={7} className="text-center text-slate-500 py-6 text-sm">Zatiaľ žiadne položky.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -152,6 +177,7 @@ function StoziareSekcia({ supabase }) {
             <div key={r.id} className="border-b border-slate-800 last:border-b-0">
               <div className="flex items-center gap-2 px-4 py-2.5">
                 <button onClick={() => rozbal(r.id)} className="text-slate-500 hover:text-white shrink-0">{rozbaleny === r.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
+                <FotoUpload url={r.obrazok_url} onNahraj={async (subor) => uprav(r.id, { obrazok_url: await nahrajObrazokDoplnku(supabase, subor) })} />
                 <input type="text" value={r.kod} onChange={(e) => uprav(r.id, { kod: e.target.value })} className="w-28 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white font-mono" />
                 <input type="text" value={r.nazov} onChange={(e) => uprav(r.id, { nazov: e.target.value })} className="w-48 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" />
                 <input type="text" value={r.popis || ''} onChange={(e) => uprav(r.id, { popis: e.target.value })} placeholder="Popis" className="flex-1 min-w-[120px] px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white" />
@@ -254,6 +280,7 @@ function PodstavceSekcia({ supabase }) {
             <div key={r.id} className="border-b border-slate-800 last:border-b-0">
               <div className="flex items-center gap-2 px-4 py-2.5">
                 <button onClick={() => rozbal(r.id)} className="text-slate-500 hover:text-white shrink-0">{rozbaleny === r.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
+                <FotoUpload url={r.obrazok_url} onNahraj={async (subor) => uprav(r.id, { obrazok_url: await nahrajObrazokDoplnku(supabase, subor) })} />
                 <input type="text" value={r.kod} onChange={(e) => uprav(r.id, { kod: e.target.value })} className="w-28 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white font-mono" />
                 <input type="text" value={r.nazov} onChange={(e) => uprav(r.id, { nazov: e.target.value })} className="w-48 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" />
                 <input type="text" value={r.popis || ''} onChange={(e) => uprav(r.id, { popis: e.target.value })} placeholder="Popis" className="flex-1 min-w-[120px] px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white" />

@@ -1,5 +1,26 @@
-import React, { useEffect, useState } from 'react';
-import { Layers, Plus, Trash2, RefreshCw, AlertTriangle } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Layers, Plus, Trash2, RefreshCw, AlertTriangle, ImagePlus } from 'lucide-react';
+import { nahrajObrazokDoplnku } from './nahrajObrazok';
+
+function FotoUpload({ url, onNahraj }) {
+  const inputRef = useRef(null);
+  const [nahravam, setNahravam] = useState(false);
+  const vyber = async (e) => {
+    const subor = e.target.files?.[0];
+    e.target.value = '';
+    if (!subor) return;
+    setNahravam(true);
+    try { await onNahraj(subor); } catch (err) { window.alert('Nahratie zlyhalo: ' + err.message); }
+    setNahravam(false);
+  };
+  return (
+    <div className="flex items-center gap-1.5 shrink-0">
+      {url ? <img src={url} alt="" className="w-9 h-9 rounded-lg object-cover border border-slate-700" /> : <div className="w-9 h-9 rounded-lg border border-dashed border-slate-700 flex items-center justify-center text-slate-600"><ImagePlus className="w-4 h-4" /></div>}
+      <button type="button" onClick={() => inputRef.current?.click()} disabled={nahravam} title="Nahrať fotku" className="text-[10px] text-indigo-400 hover:text-indigo-300 font-semibold disabled:opacity-50">{nahravam ? '…' : (url ? 'Vymeniť' : 'Nahrať foto')}</button>
+      <input ref={inputRef} type="file" accept="image/*" onChange={vyber} className="hidden" />
+    </div>
+  );
+}
 
 // Prepocita cenu €/m2 z realneho skladoveho materialu (cena za bezny meter / sirka rolky v cm).
 // Vracia null, ak sklad. material nema vyplnenu sirku (width) — bez nej sa neda bm -> m2 previest.
@@ -82,6 +103,7 @@ export default function VlajkaMaterialyTab({ supabase }) {
           return (
             <div key={m.id} className="bg-slate-900 border border-slate-800 rounded-xl p-3 space-y-2">
               <div className="flex flex-wrap items-center gap-2">
+                <FotoUpload url={m.obrazok_url} onNahraj={async (subor) => uprav(m.id, { obrazok_url: await nahrajObrazokDoplnku(supabase, subor) })} />
                 <input type="text" value={m.nazov} onChange={(e) => uprav(m.id, { nazov: e.target.value })} placeholder="Názov" className="flex-1 min-w-[160px] px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" />
                 <div className="flex items-center gap-1 text-xs text-slate-400 shrink-0">
                   <input type="number" step="0.1" value={m.naklad_m2} disabled={jePrepojeny && !chybaSirka} onChange={(e) => uprav(m.id, { naklad_m2: parseFloat(e.target.value) || 0 })} className="w-24 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white disabled:opacity-60" /> € náklad/m²
