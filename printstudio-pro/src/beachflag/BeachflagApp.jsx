@@ -28,6 +28,7 @@ export default function BeachflagApp({ supabase }) {
   const [materialKod, setMaterialKod] = useState('');
   const [dokoncenieKod, setDokoncenieKod] = useState('');
   const [stoziarKod, setStoziarKod] = useState('');
+  const [podstavecKod, setPodstavecKod] = useState('');
   const [doplnkyMnozstva, setDoplnkyMnozstva] = useState({});
   const [bgColor, setBgColor] = useState('#ffffff');
   const [pantoneNote, setPantoneNote] = useState('');
@@ -63,6 +64,8 @@ export default function BeachflagApp({ supabase }) {
         setMaterialKod(data.materialy[0]?.kod || '');
         setDokoncenieKod(data.dokoncenie[0]?.kod || '');
         setStoziarKod(data.stoziare[0]?.kod || '');
+        // Podstavec je volitelny (zakaznik moze mat vlastny, alebo montuje na stenu) — bez
+        // predvyberu, na rozdiel od stoziara/materialu, ktore su vzdy potrebne.
       } catch (e) {
         setLoadError(e.message || 'Katalóg sa nepodarilo načítať.');
       }
@@ -116,7 +119,7 @@ export default function BeachflagApp({ supabase }) {
     setCenaChyba('');
     const t = setTimeout(async () => {
       const { data, error } = await supabase.functions.invoke('beachflag-price-preview', {
-        body: { tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, doplnky, pocetKs, expresne },
+        body: { tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnky, pocetKs, expresne },
       });
       setCenaNacitava(false);
       if (error) { setCenaChyba(error.message); return; }
@@ -124,7 +127,7 @@ export default function BeachflagApp({ supabase }) {
       setCena(data.cena);
     }, 400);
     return () => clearTimeout(t);
-  }, [supabase, katalog, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, doplnkyMnozstva, pocetKs, expresne]);
+  }, [supabase, katalog, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnkyMnozstva, pocetKs, expresne]);
 
   const pridajText = () => {
     const canvas = fabricRef.current;
@@ -212,7 +215,7 @@ export default function BeachflagApp({ supabase }) {
 
       const payload = {
         designId,
-        tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod,
+        tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod,
         doplnky: doplnkyVybrane,
         farbaHex: bgColor,
         farbaPoznamka: pantoneNote,
@@ -251,8 +254,8 @@ export default function BeachflagApp({ supabase }) {
         </div>
 
         {krok === 'parametre' && (
-          <ParametreTab katalog={katalog} tvarKod={tvarKod} velkostKod={velkostKod} materialKod={materialKod} dokoncenieKod={dokoncenieKod} stoziarKod={stoziarKod}
-            onTvar={setTvarKod} onVelkost={setVelkostKod} onMaterial={setMaterialKod} onDokoncenie={setDokoncenieKod} onStoziar={setStoziarKod}
+          <ParametreTab katalog={katalog} tvarKod={tvarKod} velkostKod={velkostKod} materialKod={materialKod} dokoncenieKod={dokoncenieKod} stoziarKod={stoziarKod} podstavecKod={podstavecKod}
+            onTvar={setTvarKod} onVelkost={setVelkostKod} onMaterial={setMaterialKod} onDokoncenie={setDokoncenieKod} onStoziar={setStoziarKod} onPodstavec={setPodstavecKod}
             onDalej={() => setKrok('grafika')} />
         )}
         {krok === 'grafika' && (

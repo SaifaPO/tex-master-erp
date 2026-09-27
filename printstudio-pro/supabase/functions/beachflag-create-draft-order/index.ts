@@ -36,6 +36,7 @@ interface VlajkaCenaVstup {
   nakladMaterial: number;
   dokoncenie: { cena: number } | null;
   cenaStoziara: number;
+  cenaPodstavca: number;
   doplnky: { cena: number; mnozstvo: number }[];
   expresne: boolean;
   pocetKs: number;
@@ -43,11 +44,11 @@ interface VlajkaCenaVstup {
   pricingConfig: PricingConfig;
 }
 
-function vypocitajCenuVlajky({ nakladMaterial, dokoncenie, cenaStoziara, doplnky, expresne, pocetKs, nastavenia, pricingConfig }: VlajkaCenaVstup) {
+function vypocitajCenuVlajky({ nakladMaterial, dokoncenie, cenaStoziara, cenaPodstavca, doplnky, expresne, pocetKs, nastavenia, pricingConfig }: VlajkaCenaVstup) {
   const ks = Math.max(1, Number(pocetKs) || 1);
   const cenaMaterialKus = priceAt(Number(nakladMaterial) || 0, ks, pricingConfig);
   const cenaDokoncenia = Number(dokoncenie?.cena) || 0;
-  const zaklad = cenaMaterialKus + cenaDokoncenia + (Number(cenaStoziara) || 0);
+  const zaklad = cenaMaterialKus + cenaDokoncenia + (Number(cenaStoziara) || 0) + (Number(cenaPodstavca) || 0);
 
   const doplnkySpolu = (doplnky || []).reduce((sum, d) => sum + (Number(d.cena) || 0) * (Number(d.mnozstvo) || 0), 0);
 
@@ -90,6 +91,15 @@ async function resolveStoziarCena(supabase: ReturnType<typeof createClient>, sto
   return Number(cenaRow?.cena) || 0;
 }
 
+// Podstavec je volitelny, samostatna tabulka (nazov pre zaznam objednavky sa cita zvlast nizsie).
+async function resolvePodstavecCena(supabase: ReturnType<typeof createClient>, podstavecKod: string | null, velkostKod: string) {
+  if (!podstavecKod) return 0;
+  const { data: p } = await supabase.from('vlajka_podstavce').select('id').eq('kod', podstavecKod).maybeSingle();
+  if (!p) return 0;
+  const { data: cenaRow } = await supabase.from('vlajka_podstavce_ceny').select('cena').eq('podstavec_id', p.id).eq('velkost', velkostKod).maybeSingle();
+  return Number(cenaRow?.cena) || 0;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -101,7 +111,7 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json();
     const {
-      designId, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod,
+      designId, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod,
       doplnky = [], farbaHex, farbaPoznamka, textNaVlajke,
       expresne = false, pocetKs = 1, nahladUrl,
     } = body;
@@ -109,13 +119,15 @@ Deno.serve(async (req) => {
     if (!tvarKod || !velkostKod) throw new Error('Chýba tvar alebo veľkosť vlajky.');
     if (!materialKod) throw new Error('Chýba materiál.');
 
-    const [{ data: tvar }, { data: velkost }, { data: material }, { data: dokoncenie }, { data: stoziar }, cenaStoziara, { data: doplnkyDb }, { data: nastavenia }, { data: cfg }] = await Promise.all([
+    const [{ data: tvar }, { data: velkost }, { data: material }, { data: dokoncenie }, { data: stoziar }, cenaStoziara, { data: podstavec }, cenaPodstavca, { data: doplnkyDb }, { data: nastavenia }, { data: cfg }] = await Promise.all([
       supabase.from('vlajka_tvary').select('*').eq('kod', tvarKod).maybeSingle(),
       supabase.from('vlajka_velkosti').select('*').eq('kod', velkostKod).maybeSingle(),
       supabase.from('vlajka_materialy').select('*').eq('kod', materialKod).eq('aktivny', true).maybeSingle(),
       dokoncenieKod ? supabase.from('vlajka_dokoncenie').select('*').eq('kod', dokoncenieKod).maybeSingle() : Promise.resolve({ data: null }),
       stoziarKod ? supabase.from('vlajka_stoziare').select('*').eq('kod', stoziarKod).maybeSingle() : Promise.resolve({ data: null }),
       resolveStoziarCena(supabase, stoziarKod, velkostKod),
+      podstavecKod ? supabase.from('vlajka_podstavce').select('*').eq('kod', podstavecKod).maybeSingle() : Promise.resolve({ data: null }),
+      resolvePodstavecCena(supabase, podstavecKod, velkostKod),
       supabase.from('vlajka_doplnky').select('*'),
       supabase.from('vlajka_nastavenia').select('*').eq('id', 1).maybeSingle(),
       supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
@@ -141,7 +153,7 @@ Deno.serve(async (req) => {
     const nakladMaterial = Number(rozmer.spotreba_m2) * nakladM2Material;
 
     const cena = vypocitajCenuVlajky({
-      nakladMaterial, dokoncenie, cenaStoziara,
+      nakladMaterial, dokoncenie, cenaStoziara, cenaPodstavca,
       doplnky: doplnkyVypocet,
       pricingConfig,
       expresne: !!expresne,
@@ -162,6 +174,7 @@ Deno.serve(async (req) => {
       _material: material.nazov,
       _opracovanie: dokoncenie?.nazov || '',
       _stoziar: stoziar?.nazov || '',
+      _podstavec: podstavec?.nazov || '',
       _doplnky: doplnkyVypocet.map((d) => `${d.mnozstvo}× ${d.nazov}`).join(', '),
       _farba_hex: farbaHex || '',
       _farba_poznamka: farbaPoznamka || '',

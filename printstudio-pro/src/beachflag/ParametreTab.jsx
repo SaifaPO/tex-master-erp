@@ -1,7 +1,7 @@
 import React from 'react';
-import { Shapes, Ruler, Scissors, GripVertical, Layers } from 'lucide-react';
+import { Shapes, Ruler, Scissors, GripVertical, Layers, TriangleAlert } from 'lucide-react';
 
-export default function ParametreTab({ katalog, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, onTvar, onVelkost, onMaterial, onDokoncenie, onStoziar, onDalej }) {
+export default function ParametreTab({ katalog, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, onTvar, onVelkost, onMaterial, onDokoncenie, onStoziar, onPodstavec, onDalej }) {
   return (
     <div className="p-4 sm:p-6 space-y-6">
       <div>
@@ -86,6 +86,32 @@ export default function ParametreTab({ katalog, tvarKod, velkostKod, materialKod
                 </div>
                 <span className="text-xs font-bold text-indigo-600 block">{cenaPreVelkost > 0 ? `+${cenaPreVelkost.toFixed(2)} €` : 'V cene'}</span>
                 {s.popis && <p className="text-[10px] text-slate-500 mt-0.5">{s.popis}</p>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
+        <label className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-3"><Layers className="w-4 h-4 text-indigo-600" /> 6. Podstavec (voliteľné)</label>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div onClick={() => onPodstavec('')} className={`p-3 rounded-xl border cursor-pointer transition-all ${!podstavecKod ? 'border-indigo-600 bg-indigo-50/80 ring-2 ring-indigo-500 text-indigo-900 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'}`}>
+            <span className="font-bold text-xs">Bez podstavca</span>
+            <span className="text-xs font-bold text-indigo-600 block">V cene</span>
+          </div>
+          {katalog.podstavce.map(p => {
+            const active = p.kod === podstavecKod;
+            const nastavenie = p.ceny?.[velkostKod];
+            const vhodny = nastavenie?.vhodny !== false;
+            return (
+              <div key={p.kod} onClick={() => onPodstavec(p.kod)} className={`p-3 rounded-xl border cursor-pointer transition-all ${active ? 'border-indigo-600 bg-indigo-50/80 ring-2 ring-indigo-500 text-indigo-900 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'}`}>
+                <span className="font-bold text-xs">{p.nazov}</span>
+                <span className="text-xs font-bold text-indigo-600 block">{nastavenie?.cena > 0 ? `+${nastavenie.cena.toFixed(2)} €` : 'V cene'}</span>
+                {p.popis && <p className="text-[10px] text-slate-500 mt-0.5">{p.popis}</p>}
+                {!vhodny && (
+                  <p className="text-[10px] text-amber-600 font-semibold mt-1 flex items-start gap-1"><TriangleAlert className="w-3 h-3 shrink-0 mt-0.5" /> Neodporúča sa pre túto veľkosť</p>
+                )}
+                {nastavenie?.poznamka && <p className="text-[10px] text-slate-500 mt-0.5 italic">{nastavenie.poznamka}</p>}
               </div>
             );
           })}

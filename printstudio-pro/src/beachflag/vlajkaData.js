@@ -7,6 +7,7 @@ export async function nacitajVlajkaKatalog(supabase) {
     { data: dokoncenie },
     { data: stoziare },
     { data: doplnky },
+    { data: podstavce },
     { data: pantone },
     { data: nastaveniaRow },
   ] = await Promise.all([
@@ -17,6 +18,7 @@ export async function nacitajVlajkaKatalog(supabase) {
     supabase.from('vlajka_dokoncenie').select('*').eq('aktivny', true).order('poradie').order('id'),
     supabase.from('vlajka_stoziare').select('*, vlajka_stoziare_ceny(*)').eq('aktivny', true).order('poradie').order('id'),
     supabase.from('vlajka_doplnky').select('*').eq('aktivny', true).order('poradie').order('id'),
+    supabase.from('vlajka_podstavce').select('*, vlajka_podstavce_ceny(*)').eq('aktivny', true).order('poradie').order('id'),
     supabase.from('vlajka_pantone').select('*').order('poradie').order('id'),
     supabase.from('vlajka_nastavenia').select('*').eq('id', 1).maybeSingle(),
   ]);
@@ -34,6 +36,10 @@ export async function nacitajVlajkaKatalog(supabase) {
       ceny: Object.fromEntries((s.vlajka_stoziare_ceny || []).map(c => [c.velkost, Number(c.cena) || 0])),
     })),
     doplnky: doplnky || [],
+    podstavce: (podstavce || []).map(p => ({
+      ...p,
+      ceny: Object.fromEntries((p.vlajka_podstavce_ceny || []).map(c => [c.velkost, { cena: Number(c.cena) || 0, vhodny: c.vhodny !== false, poznamka: c.poznamka || '' }])),
+    })),
     pantone: pantone || [],
     nastavenia: nastaveniaRow || { dph_percent: 23, expresny_priplatok_percent: 10 },
   };
