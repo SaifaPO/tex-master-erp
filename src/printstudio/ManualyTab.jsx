@@ -152,7 +152,7 @@ function BeachvlajkyPoster() {
         <OptGrid cols="grid-cols-3 sm:grid-cols-5">
           <Opt icon={I.blade} t="Blade (Čepeľ)" tone="text-orange-700" />
           <Opt icon={I.basicFlag} t="Basic" tone="text-orange-700" />
-          <Opt icon={I.wing} t="Wing (Krídlo)" d="len M/L/XL" tone="text-orange-700" />
+          <Opt icon={I.wing} t="Wing (Krídlo)" tone="text-orange-700" />
           <Opt icon={I.tear} t="Wave (Slza)" tone="text-orange-700" />
           <Opt icon={I.feather} t="Feather (Pierko)" tone="text-orange-700" />
         </OptGrid>
@@ -228,7 +228,6 @@ const QA = [
   { q: 'Rýchle šablóny pri vlajkách sú fixné balíčky?', no: true, a: <>Len predvyplnia bežnú kombináciu doplnkov, zákazník ich potom môže ľubovoľne upraviť. Neber ich ako uzavretý produkt s vlastnou cenou.</> },
   { q: '"Expresné vyhotovenie" garantuje dodanie do 24/48 h od objednávky?', no: true, a: <>Nie — štandard je <b>10 pracovných dní</b>, expres <b>5 dní (+10 %)</b>, a lehota beží <b>od schválenia grafického návrhu/tlačových podkladov</b>, nie od momentu objednávky. Vždy to zákazníkovi vysvetli vopred.</> },
   { q: 'Štátna vlajka pri objednávke znamená, že sa nedá pridať vlastné logo?', no: true, a: <>Nesprávne. Štátna vlajka je len podklad (nahrádza jednofarebné pozadie) — logo/text sa dá pridať navyše cez grafický editor rovnako ako pri inom podklade.</> },
-  { q: 'Beachvlajka tvaru Wing v malej (S) veľkosti — dá sa objednať?', no: true, a: <>Zatiaľ nie — Wing (Krídlo) je k dispozícii len v M/L/XL. Pre malú veľkosť ponúkni iný tvar (Blade, Basic, Wave, Feather).</> },
 ];
 
 function ObchodniciManual() {
@@ -253,7 +252,7 @@ function ObchodniciManual() {
         <div className="border border-slate-200 rounded-xl p-4">
           <span className="inline-block bg-orange-50 text-orange-700 text-[10px] font-extrabold uppercase tracking-wide px-2 py-1 rounded mb-2">Beachvlajky</span>
           <ul className="text-xs space-y-1.5 text-slate-700">
-            <li><b>Tvary</b> — Blade, Basic, Wing (len M/L/XL), Wave, Feather</li>
+            <li><b>Tvary</b> — Blade, Basic, Wing, Wave, Feather (všetky v S/M/L/XL)</li>
             <li><b>Veľkosti</b> — S 17,82€ / M 23,22€ / L 31,76€ / XL 43,35€ (od, s DPH)</li>
             <li><b>Konštrukcia</b> — bez / basic 15-21€ / PRO 17-23€ (podľa veľkosti)</li>
             <li><b>Podstavce</b> — krížový, platňa, tŕň, vodný vak (1 na výber, ceny podľa veľkosti)</li>
