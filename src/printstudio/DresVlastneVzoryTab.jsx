@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { Plus, Trash2, Palette, Loader2 } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Plus, Trash2, Palette, Loader2, Download } from 'lucide-react';
+import { CANVAS_SIZE, nakresliSablonu } from './dresSablonaData';
 
 const BUCKET = 'grafiky';
 const PREFIX = 'dres-vzory';
@@ -18,6 +19,26 @@ export default function DresVlastneVzoryTab({ supabase }) {
   const [subory, setSubory] = useState({ zaklad: null, vzor: null, akcent: null });
   const [error, setError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const nahladRef = useRef(null);
+
+  useEffect(() => {
+    if (nahladRef.current) nakresliSablonu(nahladRef.current.getContext('2d'), CANVAS_SIZE);
+  }, []);
+
+  const stiahniSablonu = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = CANVAS_SIZE;
+    canvas.height = CANVAS_SIZE;
+    nakresliSablonu(canvas.getContext('2d'), CANVAS_SIZE);
+    canvas.toBlob((blob) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'dres-sablona-rozlozenia.png';
+      a.click();
+      URL.revokeObjectURL(url);
+    }, 'image/png');
+  };
 
   const nacitaj = async () => {
     setIsLoading(true);
@@ -92,6 +113,17 @@ export default function DresVlastneVzoryTab({ supabase }) {
         </div>
         <button onClick={otvorForm} className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-xl text-sm font-semibold transition shrink-0">
           <Plus className="w-4 h-4" /> Pridať vzor
+        </button>
+      </div>
+
+      <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+        <canvas ref={nahladRef} width={CANVAS_SIZE} height={CANVAS_SIZE} className="w-28 h-28 rounded-lg border border-slate-700 bg-slate-950 shrink-0" />
+        <div className="flex-1">
+          <h3 className="font-bold text-sm text-white mb-1">Šablóna rozloženia dresu (pre grafika)</h3>
+          <p className="text-xs text-slate-400">Presné rozmiestnenie strihových dielov (predok/zadok/rukávy/manžety/lem/golier) na ploche 2048×2048 px — grafik si ju importuje ako vodiacu vrstvu v Photoshope/Illustratore a podľa nej pripraví 3 PNG vrstvy (základ/vzor/akcent) s priehľadným pozadím presne na správnych miestach.</p>
+        </div>
+        <button onClick={stiahniSablonu} className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-white px-3.5 py-2 rounded-xl text-sm font-semibold transition shrink-0">
+          <Download className="w-4 h-4" /> Stiahnuť šablónu (PNG)
         </button>
       </div>
 
