@@ -161,9 +161,9 @@ export default function VlajkaTvaryTab({ supabase }) {
                         </div>
                         <div className="w-full aspect-[210/430] bg-white rounded-lg overflow-hidden flex items-center justify-center">
                           <svg viewBox={r.viewbox} className="w-full h-full">
-                            {r.bleed_path && <path d={r.bleed_path} stroke="#f59e0b" strokeWidth="2" fill="none" strokeDasharray="6 4" />}
-                            {r.cut_path && <path d={r.cut_path} stroke="#ef4444" strokeWidth="2" fill="none" strokeDasharray="6 4" />}
-                            {r.safe_path && <path d={r.safe_path} stroke="#10b981" strokeWidth="1.5" fill="none" strokeDasharray="3 3" />}
+                            {r.bleed_path && <path d={r.bleed_path} stroke="#f59e0b" strokeWidth="1" fill="none" strokeDasharray="3 2" />}
+                            {r.cut_path && <path d={r.cut_path} stroke="#ef4444" strokeWidth="1" fill="none" strokeDasharray="3 2" />}
+                            {r.safe_path && <path d={r.safe_path} stroke="#10b981" strokeWidth="0.75" fill="none" strokeDasharray="1.5 1.5" />}
                           </svg>
                         </div>
                         <div>
