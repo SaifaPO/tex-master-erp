@@ -3,7 +3,6 @@ import { fabric } from 'fabric';
 import { Flag, Eye } from 'lucide-react';
 import PbtHeader from '../PbtHeader';
 import { nacitajZastavaKatalog } from './zastavaData';
-import { getSessionId } from '../supabaseClient';
 import RozmeryTab from './RozmeryTab';
 import GrafikaTab from '../beachflag/GrafikaTab';
 import StatnaVlajkaPicker from './StatnaVlajkaPicker';
@@ -42,8 +41,6 @@ export default function ZastavaApp({ supabase }) {
   const [expresne, setExpresne] = useState(false);
   const [pocetKs, setPocetKs] = useState(1);
 
-  const [aiGenerating, setAiGenerating] = useState(false);
-  const [aiError, setAiError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
@@ -239,34 +236,6 @@ export default function ZastavaApp({ supabase }) {
     reader.readAsDataURL(file);
   };
 
-  const aiGenerate = async (prompt) => {
-    if (!prompt.trim() || !supabase) return;
-    setAiGenerating(true);
-    setAiError('');
-    try {
-      const { data, error } = await supabase.functions.invoke('ai-generate-motif', { body: { prompt: prompt.trim(), sessionId: getSessionId() } });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      await new Promise((resolve, reject) => {
-        fabric.Image.fromURL(data.previewUrl, (img) => {
-          if (!img) { reject(new Error('Motív sa nepodarilo načítať.')); return; }
-          const canvas = fabricRef.current;
-          img.scaleToWidth(canvas.getWidth());
-          img.set({ left: 0, top: 0, selectable: true, cornerColor: '#4f46e5', cornerSize: 8, transparentCorners: false });
-          canvas.add(img);
-          canvas.sendToBack(img);
-          canvas.getObjects().filter(o => o.isSafeGuide).forEach(o => canvas.bringToFront(o));
-          canvas.renderAll();
-          resolve();
-        });
-      });
-    } catch (e) {
-      setAiError(e.message || 'AI generovanie zlyhalo.');
-    } finally {
-      setAiGenerating(false);
-    }
-  };
-
   const vyberStatnuVlajku = async (nazov, url) => {
     const canvas = fabricRef.current;
     if (!canvas) return;
@@ -406,7 +375,7 @@ export default function ZastavaApp({ supabase }) {
             <GrafikaTab
               katalog={katalog} bgColor={bgColor} onBgColor={setBgColor} pantoneNote={pantoneNote} onPantoneNote={setPantoneNote}
               customText={customText} onCustomTextChange={setCustomText} onPridajText={pridajText}
-              onUploadObrazok={uploadObrazok} onAiGenerate={aiGenerate} aiGenerating={aiGenerating} aiError={aiError}
+              onUploadObrazok={uploadObrazok}
               onSpat={() => setKrok('rozmery')} onDalej={() => setKrok('doplnky')}
             />
           </div>
