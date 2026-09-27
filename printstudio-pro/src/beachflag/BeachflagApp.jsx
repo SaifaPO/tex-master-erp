@@ -48,8 +48,26 @@ export default function BeachflagApp({ supabase }) {
   const canvasElRef = useRef(null);
   const fabricRef = useRef(null);
   const katalogRef = useRef(null);
+  const logicalSizeRef = useRef(DEFAULT_VIEWBOX); // aktualna velkost platna v cm (logicke suradnice, nezavisle od zoomu)
+  const previewBoxRef = useRef(null);
+  const [previewBoxSize, setPreviewBoxSize] = useState({ w: 320, h: 420 });
+  const [userZoom, setUserZoom] = useState(1); // dodatocne priblizenie nad ramec auto-fit, ovlada zakaznik (+/-)
+  const [canvasVersion, setCanvasVersion] = useState(0); // pretiahne novy render do GrafikaTab, ked sa fabric platno prvykrat vytvori
 
   useEffect(() => { katalogRef.current = katalog; }, [katalog]);
+
+  // Nahladovy box sa prisposobi realnej sirke/vyske svojho kontajnera (rovnaky vzor ako Zastava/
+  // beachflag ma navyse zoom vrstvu - viz efekt nizsie - lebo cut/bleed/safe cesty su ulozene v
+  // pevnych cm suradniciach z viewboxu, plátno sa preto nesmie len "natiahnut" na velkost boxu).
+  useEffect(() => {
+    const el = previewBoxRef.current;
+    if (!el) return;
+    const update = () => setPreviewBoxSize({ w: Math.max(180, el.clientWidth - 16), h: Math.max(240, el.clientHeight - 16) });
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [isLoading]);
 
   useEffect(() => {
     let zrusene = false;
@@ -79,11 +97,17 @@ export default function BeachflagApp({ supabase }) {
     if (isLoading || !canvasElRef.current || fabricRef.current) return;
     const canvas = new fabric.Canvas(canvasElRef.current, { backgroundColor: bgColor });
     fabricRef.current = canvas;
+    setCanvasVersion(v => v + 1); // GrafikaTab (vrstvy/inspektor) caka, kym instancia existuje
     return () => { canvas.dispose(); fabricRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading]);
 
-  // Prekreslí orezovú (červená) a bezpečnú (zelená) masku podľa aktuálneho tvaru + veľkosti
+  // Prekreslí orezovú (červená) a bezpečnú (zelená) masku podľa aktuálneho tvaru + veľkosti a
+  // priblizi platno na maximum dostupneho miesta v nahladovom boxe (predtym malo platno pevnu
+  // velkost = cislo z viewboxu v cm, takze S vlajka bola na obrazovke drobna a XL velka - zle sa
+  // na malej kreslila grafika). Logicke suradnice objektov (text/logo/masky) ostavaju v cm z
+  // viewboxu nezmenene — mení sa len fabric "zoom" (viewportTransform), takze existujuce
+  // pozicie/cesty netreba prepocitavat.
   useEffect(() => {
     const canvas = fabricRef.current;
     const k = katalogRef.current;
@@ -92,19 +116,25 @@ export default function BeachflagApp({ supabase }) {
     const rozmer = tvar?.rozmery?.[velkostKod];
     if (!rozmer) return;
     const { w, h } = parseViewbox(rozmer.viewbox);
-    canvas.setDimensions({ width: w, height: h });
+    logicalSizeRef.current = { w, h };
+    const autoFit = Math.min(previewBoxSize.w / w, previewBoxSize.h / h);
+    const zoom = autoFit * userZoom;
+    canvas.setZoom(zoom);
+    canvas.setDimensions({ width: w * zoom, height: h * zoom });
 
     canvas.getObjects().filter(o => o.isMaskOverlay).forEach(o => canvas.remove(o));
+    // Hrubka ciar je v RIADKOVYCH (cm) jednotkach, nie fyzickych px — pri velkom priblizeni
+    // (velky zoom) sa 2cm cesta zobrazovala neprimerane hrubo, znizene na cca 2-4mm.
     if (rozmer.bleed_path) {
-      const bleedPath = new fabric.Path(rozmer.bleed_path, { stroke: '#f59e0b', strokeWidth: 2, fill: 'transparent', strokeDashArray: [6, 4], selectable: false, evented: false, isMaskOverlay: true });
+      const bleedPath = new fabric.Path(rozmer.bleed_path, { stroke: '#f59e0b', strokeWidth: 0.4, fill: 'transparent', strokeDashArray: [1.2, 0.8], selectable: false, evented: false, isMaskOverlay: true });
       canvas.add(bleedPath);
     }
-    const cutPath = new fabric.Path(rozmer.cut_path, { stroke: '#ef4444', strokeWidth: 2, fill: 'transparent', strokeDashArray: [6, 4], selectable: false, evented: false, isMaskOverlay: true });
-    const safePath = new fabric.Path(rozmer.safe_path, { stroke: '#10b981', strokeWidth: 1.5, fill: 'transparent', strokeDashArray: [3, 3], selectable: false, evented: false, isMaskOverlay: true });
+    const cutPath = new fabric.Path(rozmer.cut_path, { stroke: '#ef4444', strokeWidth: 0.4, fill: 'transparent', strokeDashArray: [1.2, 0.8], selectable: false, evented: false, isMaskOverlay: true });
+    const safePath = new fabric.Path(rozmer.safe_path, { stroke: '#10b981', strokeWidth: 0.3, fill: 'transparent', strokeDashArray: [0.6, 0.6], selectable: false, evented: false, isMaskOverlay: true });
     canvas.add(cutPath);
     canvas.add(safePath);
     canvas.renderAll();
-  }, [tvarKod, velkostKod, katalog]);
+  }, [tvarKod, velkostKod, katalog, previewBoxSize, userZoom, canvasVersion]);
 
   useEffect(() => {
     fabricRef.current?.setBackgroundColor(bgColor, () => fabricRef.current?.renderAll());
@@ -129,10 +159,20 @@ export default function BeachflagApp({ supabase }) {
     return () => clearTimeout(t);
   }, [supabase, katalog, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnkyMnozstva, pocetKs, expresne]);
 
+  // snapAngle/snapThreshold = vstavana fabric funkcia, otacanie tahanim za rohovy uchyt "zaskoci"
+  // na najblizsi nasobok 45° (v okruhu 5°) — presne ako pytal Martin, bez vlastnej implementacie.
+  const OBJEKT_ZAKLAD = { cornerColor: '#4f46e5', cornerSize: 8, transparentCorners: false, snapAngle: 45, snapThreshold: 5 };
+
   const pridajText = () => {
     const canvas = fabricRef.current;
     if (!canvas || !customText.trim()) return;
-    const text = new fabric.Text(customText.trim(), { left: 40, top: 100, fontFamily: 'Arial', fill: '#000000', fontSize: 24, cornerColor: '#4f46e5', cornerSize: 8, transparentCorners: false });
+    const { w, h } = logicalSizeRef.current;
+    const fontSize = Math.max(4, h * 0.05); // cm — cca 5% vysky vlajky, citatelne z dialky
+    const text = new fabric.Text(customText.trim(), {
+      left: w * 0.15, top: h * 0.1, fontFamily: 'Arial', fill: '#000000', fontSize,
+      stroke: '#ffffff', strokeWidth: 0, // obrys pripraveny, ale neviditelny kym ho zakaznik nezapne v inspektore
+      ...OBJEKT_ZAKLAD,
+    });
     canvas.add(text);
     canvas.setActiveObject(text);
     setCustomText('');
@@ -141,11 +181,12 @@ export default function BeachflagApp({ supabase }) {
   const uploadObrazok = (file) => {
     const canvas = fabricRef.current;
     if (!canvas || !file) return;
+    const { w, h } = logicalSizeRef.current;
     const reader = new FileReader();
     reader.onload = (e) => {
       fabric.Image.fromURL(e.target.result, (img) => {
-        img.scaleToWidth(Math.min(120, canvas.getWidth() * 0.5));
-        img.set({ left: 40, top: 80, cornerColor: '#4f46e5', cornerSize: 8, transparentCorners: false });
+        img.scaleToWidth(Math.min(w * 0.5, w - 10));
+        img.set({ left: w * 0.25, top: h * 0.08, ...OBJEKT_ZAKLAD });
         canvas.add(img);
         canvas.setActiveObject(img);
       });
@@ -165,8 +206,8 @@ export default function BeachflagApp({ supabase }) {
         fabric.Image.fromURL(data.previewUrl, (img) => {
           if (!img) { reject(new Error('Motív sa nepodarilo načítať.')); return; }
           const canvas = fabricRef.current;
-          img.scaleToWidth(canvas.getWidth());
-          img.set({ left: 0, top: 0, selectable: true, cornerColor: '#4f46e5', cornerSize: 8, transparentCorners: false });
+          img.scaleToWidth(logicalSizeRef.current.w);
+          img.set({ left: 0, top: 0, selectable: true, ...OBJEKT_ZAKLAD });
           canvas.add(img);
           canvas.sendToBack(img);
           canvas.getObjects().filter(o => o.isMaskOverlay).forEach(o => canvas.bringToFront(o));
@@ -262,6 +303,7 @@ export default function BeachflagApp({ supabase }) {
           <GrafikaTab katalog={katalog} bgColor={bgColor} onBgColor={setBgColor} pantoneNote={pantoneNote} onPantoneNote={setPantoneNote}
             customText={customText} onCustomTextChange={setCustomText} onPridajText={pridajText}
             onUploadObrazok={uploadObrazok} onAiGenerate={aiGenerate} aiGenerating={aiGenerating} aiError={aiError}
+            canvas={fabricRef.current} canvasVersion={canvasVersion}
             onSpat={() => setKrok('parametre')} onDalej={() => setKrok('doplnky')} />
         )}
         {krok === 'doplnky' && (
@@ -278,10 +320,16 @@ export default function BeachflagApp({ supabase }) {
             <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2"><Eye className="w-4 h-4 text-indigo-600" /> Živý náhľad vlajky</h3>
             <span className="text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono flex items-center gap-1"><Flag className="w-3 h-3" /> {tvarKod} · {velkostKod}</span>
           </div>
-          <div className="relative bg-slate-100 rounded-xl border border-slate-300 p-2 flex items-center justify-center min-h-[380px] sm:min-h-[440px] overflow-hidden" onContextMenu={(e) => e.preventDefault()}>
+          <div ref={previewBoxRef} className="relative bg-slate-100 rounded-xl border border-slate-300 p-2 flex items-center justify-center min-h-[380px] sm:min-h-[440px] overflow-auto" onContextMenu={(e) => e.preventDefault()}>
             <canvas ref={canvasElRef} className="shadow-md rounded" />
           </div>
-          <p className="mt-3 text-[11px] text-slate-500">Červená čiara je orez, zelená je bezpečná zóna.</p>
+          <div className="flex items-center justify-center gap-2 mt-2">
+            <button type="button" onClick={() => setUserZoom(z => Math.max(0.5, Math.round((z - 0.25) * 100) / 100))} className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm">−</button>
+            <span className="text-[11px] text-slate-500 font-mono w-12 text-center">{Math.round(userZoom * 100)}%</span>
+            <button type="button" onClick={() => setUserZoom(z => Math.min(4, Math.round((z + 0.25) * 100) / 100))} className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm">+</button>
+            {userZoom !== 1 && <button type="button" onClick={() => setUserZoom(1)} className="text-[11px] text-indigo-600 hover:text-indigo-700 font-semibold ml-1">Resetovať</button>}
+          </div>
+          <p className="mt-2 text-[11px] text-slate-500">Červená čiara je orez, zelená je bezpečná zóna.</p>
           {techPanel && (
             <details className="mt-3">
               <summary className="text-[11px] text-slate-400 cursor-pointer">Technický detail</summary>

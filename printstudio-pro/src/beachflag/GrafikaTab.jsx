@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { Palette, Type, Image as ImageIcon, Sparkles, Loader2 } from 'lucide-react';
+import LayersPanel from './LayersPanel';
 
 export default function GrafikaTab({
   katalog, bgColor, onBgColor, pantoneNote, onPantoneNote,
   customText, onCustomTextChange, onPridajText,
   onUploadObrazok, onAiGenerate, aiGenerating, aiError,
+  canvas, canvasVersion,
   onSpat, onDalej,
 }) {
   const [aiPrompt, setAiPrompt] = useState('');
@@ -62,6 +64,8 @@ export default function GrafikaTab({
           </label>
         </div>
       </div>
+
+      <LayersPanel canvas={canvas} />
 
       <div className="bg-gradient-to-r from-indigo-900 via-purple-900 to-slate-900 text-white p-4 sm:p-5 rounded-2xl shadow-md border border-indigo-700/50 space-y-3">
         <div className="flex items-center gap-2">
