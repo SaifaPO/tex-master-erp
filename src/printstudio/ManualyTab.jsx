@@ -32,6 +32,7 @@ const I = {
   feather: () => <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={ic}><path d="M46 10 C30 12 16 28 14 54 C40 52 54 38 50 12 Z" /><path d="M18 50 L46 12" /></svg>,
   tear: () => <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={ic}><path d="M32 8 C18 26 12 38 16 48 a16 16 0 0 0 32 0 C52 38 46 26 32 8 Z" /></svg>,
   blade: () => <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={ic}><path d="M26 6 C40 10 46 26 40 56 C24 54 16 40 20 18 C21 12 23 8 26 6 Z" /></svg>,
+  basicFlag: () => <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={ic}><path d="M18 6 h28 v52 c-14 0-14-4-28-4 Z" /></svg>,
   wing: () => <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={ic}><path d="M40 6 C20 10 10 26 14 56 C34 52 48 36 46 12 Z" /><path d="M16 40 C24 38 32 30 36 20" opacity="0.55" /></svg>,
   poleNone: () => <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={ic}><path d="M32 4 v56" /></svg>,
   poleBasic: () => <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={ic}><path d="M32 4 v56" /><path d="M24 10 h16" /><path d="M20 60 h24" /></svg>,
@@ -88,7 +89,11 @@ function VlajkyPoster() {
         <p className="text-[11px] text-slate-500 mb-2.5">Plus výber materiálu podľa účelu použitia (interiér/exteriér, priesvitnosť, hmotnosť).</p>
         <div className="flex gap-2.5 bg-amber-50 border border-amber-300 rounded-xl p-3">
           <div className="w-5 h-5 text-amber-700 shrink-0 mt-0.5"><I.warn /></div>
-          <p className="text-xs text-amber-800 leading-relaxed"><b>Dôležité:</b> šírka vlajky je obmedzená šírkou rolky zvoleného materiálu (zvyčajne 150 cm) — vlajka sa <b>nezošíva</b> z viacerých dielov. Ak zákazník potrebuje širšiu vlajku, treba zvoliť materiál so širšou rolkou. Dĺžka obmedzená nie je (bežne do ~500 cm).</p>
+          <p className="text-xs text-amber-800 leading-relaxed"><b>Dôležité:</b> v online konfigurátore je šírka vlajky obmedzená šírkou rolky zvoleného materiálu (zvyčajne 150 cm) — samoobslužne sa panely nezošívajú. Dĺžka obmedzená nie je (bežne do ~500 cm).</p>
+        </div>
+        <div className="flex gap-2.5 bg-sky-50 border border-sky-200 rounded-xl p-3 mt-2">
+          <div className="w-5 h-5 text-sky-700 shrink-0 mt-0.5"><I.info /></div>
+          <p className="text-xs text-sky-800 leading-relaxed"><b>Väčšie ako 150 cm na šírku?</b> Dá sa — zošitím z viacerých pásov na 155 cm šírke látky. Toto ide vždy len ako <b>špeciálna zákazka mimo online konfigurátora</b> (rieši sa ručne, cena na vyžiadanie) — nie je to samoobslužná voľba.</p>
         </div>
       </Step>
 
@@ -99,6 +104,7 @@ function VlajkyPoster() {
           <Opt icon={I.image} t="Vlastné logo/obrázok" d="Nahratie vlastnej grafiky" tone="text-teal-700" />
           <Opt icon={I.sparkle} t="AI generátor" d="Vlastný text alebo AI grafika" tone="text-teal-700" />
         </OptGrid>
+        <p className="text-[11px] text-slate-500 mt-2.5">Vlastný text/nápis (napr. názov klubu, fanúšikovské heslo, meno oslávenca) sa dá pridať k akémukoľvek podkladu — bežné napr. pri fanúšikovských vlajkách.</p>
       </Step>
 
       <Step num="3" title="Ukončenie okrajov" accent="bg-teal-600">
@@ -121,12 +127,22 @@ function VlajkyPoster() {
             <span key={t} className="bg-teal-50 text-teal-700 rounded-lg px-2.5 py-1 text-[11px] font-bold">{t}</span>
           ))}
         </div>
+        <div className="border border-dashed border-slate-300 rounded-xl p-3 mt-3">
+          <p className="text-[11px] font-bold text-slate-600 mb-1.5">Objednávkový lístok — zaznač priamo pri rozhovore so zákazníkom:</p>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-slate-600">
+            <span>☐ Tunel hore &nbsp;☐ dole &nbsp;☐ vľavo &nbsp;☐ vpravo</span>
+            <span>☐ Očká — strana: _______ počet: ____</span>
+            <span>☐ Karabínky — strana: _______ počet: ____</span>
+            <span>☐ Popruh — strana: _______________</span>
+          </div>
+        </div>
       </Step>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 mt-6 pt-4 text-[11px] text-slate-500 font-semibold">
-        <div className="flex items-center gap-2"><span className="w-4 h-4 text-teal-600"><I.bolt /></span>Expresné vyhotovenie (+príplatok) = odoslanie do 24/48 h od schválenia grafiky</div>
+        <div className="flex items-center gap-2"><span className="w-4 h-4 text-teal-600"><I.bolt /></span>Dodanie: 10 pracovných dní štandard / 5 dní expres (+10 %) — od schválenia grafiky</div>
         <div className="flex items-center gap-2"><span className="w-4 h-4 text-teal-600"><I.cart /></span>Cena sa prepočítava naživo podľa počtu kusov</div>
       </div>
+      <p className="text-[11px] text-slate-400 text-center mt-3">Zákazník si vie navrhnúť vlajku aj sám doma cez appku na <b className="text-slate-600">pbtprint.sk</b>.</p>
     </div>
   );
 }
@@ -141,26 +157,27 @@ function BeachvlajkyPoster() {
       </div>
 
       <Step num="1" title="Tvar" accent="bg-orange-600">
-        <OptGrid>
-          <Opt icon={I.feather} t="Pierko (Feather)" tone="text-orange-700" />
-          <Opt icon={I.tear} t="Slza (Tear)" tone="text-orange-700" />
-          <Opt icon={I.blade} t="Čepeľ (Blade)" tone="text-orange-700" />
-          <Opt icon={I.wing} t="Krídlo (Wing)" tone="text-orange-700" />
+        <OptGrid cols="grid-cols-3 sm:grid-cols-5">
+          <Opt icon={I.blade} t="Blade (Čepeľ)" tone="text-orange-700" />
+          <Opt icon={I.basicFlag} t="Basic" tone="text-orange-700" />
+          <Opt icon={I.wing} t="Wing (Krídlo)" d="len M/L/XL" tone="text-orange-700" />
+          <Opt icon={I.tear} t="Wave (Slza)" tone="text-orange-700" />
+          <Opt icon={I.feather} t="Feather (Pierko)" tone="text-orange-700" />
         </OptGrid>
       </Step>
 
       <Step num="2" title="Veľkosť a materiál" accent="bg-orange-600">
         <table className="w-full text-xs mb-2">
-          <thead><tr className="text-[10px] uppercase text-slate-500"><th className="text-left font-bold py-1">Veľ.</th><th className="text-left font-bold py-1">Výška</th><th className="text-left font-bold py-1">Plátno</th><th className="text-left font-bold py-1">Od</th></tr></thead>
+          <thead><tr className="text-[10px] uppercase text-slate-500"><th className="text-left font-bold py-1">Veľ.</th><th className="text-left font-bold py-1">Výška s tyčou</th><th className="text-left font-bold py-1">Plátno</th><th className="text-left font-bold py-1">Od (s DPH)</th></tr></thead>
           <tbody>
-            {[['S', '220 cm', '50×190 cm', '45 €'], ['M', '350 cm', '65×290 cm', '55 €'], ['L', '450 cm', '80×380 cm', '70 €'], ['XL', '550 cm', '90×480 cm', '90 €']].map(row => (
+            {[['S', '220 cm', '55×200 cm', '17,82 €'], ['M', '350 cm', '60×250 cm', '23,22 €'], ['L', '450 cm', '70×340 cm', '31,76 €'], ['XL', '550 cm', '85×450 cm', '43,35 €']].map(row => (
               <tr key={row[0]} className="border-t border-slate-200">
                 <td className="py-1.5 font-bold">{row[0]}</td><td className="py-1.5">{row[1]}</td><td className="py-1.5">{row[2]}</td><td className="py-1.5 font-extrabold text-orange-700">{row[3]}</td>
               </tr>
             ))}
           </tbody>
         </table>
-        <p className="text-[11px] text-slate-500">Plus výber materiálu z knižnice podľa účelu použitia.</p>
+        <p className="text-[11px] text-slate-500">Ceny "od" sú pre tvary Blade/Basic/Feather bez konštrukcie a podstavca — Wing a Wave majú mierne inú spotrebu materiálu, appka dopočíta presne. Plus výber materiálu z knižnice podľa účelu použitia.</p>
       </Step>
 
       <Step num="3" title="Opracovanie okrajov a konštrukcia" accent="bg-orange-600">
@@ -170,8 +187,8 @@ function BeachvlajkyPoster() {
         </OptGrid>
         <OptGrid cols="grid-cols-3">
           <Opt icon={I.poleNone} t="Bez konštrukcie" price="0 €" tone="text-orange-700" />
-          <Opt icon={I.poleBasic} t="Basic laminát prút" price="+14 €" tone="text-orange-700" />
-          <Opt icon={I.polePro} t="PRO hliník + sklo" price="+24 €" tone="text-orange-700" />
+          <Opt icon={I.poleBasic} t="Basic laminát prút" price="15–21 € podľa veľkosti" tone="text-orange-700" />
+          <Opt icon={I.polePro} t="PRO hliník + sklo" price="17–23 € podľa veľkosti" tone="text-orange-700" />
         </OptGrid>
       </Step>
 
@@ -183,35 +200,41 @@ function BeachvlajkyPoster() {
         </OptGrid>
       </Step>
 
-      <Step num="5" title="Podstavec" accent="bg-orange-600">
+      <Step num="5" title="Podstavec (voliteľné)" accent="bg-orange-600">
         <OptGrid>
-          <Opt icon={I.cross} t="Krížový (skladací)" price="+18 € · max 5 ks" tone="text-orange-700" />
-          <Opt icon={I.plate} t="Oceľová platňa 4 kg" price="+28 € · max 5 ks" tone="text-orange-700" />
-          <Opt icon={I.spike} t="Zapichovací tŕň" price="+15 € · max 5 ks" tone="text-orange-700" />
-          <Opt icon={I.waterbag} t="Vodný vak 10 L" price="+8 € · max 5 ks" tone="text-orange-700" />
+          <Opt icon={I.cross} t="Krížový (skladací)" price="16–22 € podľa veľkosti" tone="text-orange-700" />
+          <Opt icon={I.plate} t="Oceľová platňa 4 kg" price="26–32 € podľa veľkosti" tone="text-orange-700" />
+          <Opt icon={I.spike} t="Zapichovací tŕň" price="13–19 € podľa veľkosti" tone="text-orange-700" />
+          <Opt icon={I.waterbag} t="Vodný vak 10 L" price="+8 € (doplnková záťaž)" tone="text-orange-700" />
         </OptGrid>
-        <div className="flex gap-2.5 bg-sky-50 border border-sky-200 rounded-xl p-3 mt-3">
+        <div className="flex gap-2.5 bg-amber-50 border border-amber-300 rounded-xl p-3 mt-3">
+          <div className="w-5 h-5 text-amber-700 shrink-0 mt-0.5"><I.warn /></div>
+          <p className="text-xs text-amber-800 leading-relaxed">Krížový podstavec a zapichovací tŕň sa pri <b>XL</b> veľkosti neodporúčajú vo vonkajšom prostredí (riziko prevrátenia/vytrhnutia) — appka na to sama upozorní. Pre XL von odporúčaj oceľovú platňu. Vodný vak sa vždy pridáva len ako doplnková záťaž k inému podstavcu, sám o sebe vlajku nepostaví.</p>
+        </div>
+        <div className="flex gap-2.5 bg-sky-50 border border-sky-200 rounded-xl p-3 mt-2">
           <div className="w-5 h-5 text-sky-700 shrink-0 mt-0.5"><I.info /></div>
-          <p className="text-xs text-sky-800 leading-relaxed">Cena beachvlajky = základná cena veľkosti + opracovanie okrajov + prút + zvolené podstavce + prípadný expresný príplatok, podľa počtu kusov.</p>
+          <p className="text-xs text-sky-800 leading-relaxed">Cena beachvlajky = základná cena veľkosti/tvaru + opracovanie okrajov + prút + zvolený podstavec + prípadný expresný príplatok, podľa počtu kusov.</p>
         </div>
       </Step>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 mt-6 pt-4 text-[11px] text-slate-500 font-semibold">
-        <div className="flex items-center gap-2"><span className="w-4 h-4 text-orange-600"><I.bolt /></span>Expresné vyhotovenie (+príplatok)</div>
+        <div className="flex items-center gap-2"><span className="w-4 h-4 text-orange-600"><I.bolt /></span>Dodanie: 10 pracovných dní štandard / 5 dní expres (+10 %)</div>
         <div className="flex items-center gap-2"><span className="w-4 h-4 text-orange-600"><I.cart /></span>Cena sa prepočítava naživo podľa počtu kusov</div>
       </div>
+      <p className="text-[11px] text-slate-400 text-center mt-3">Zákazník si vie navrhnúť beachvlajku aj sám doma cez appku na <b className="text-slate-600">pbtprint.sk</b>.</p>
     </div>
   );
 }
 
 const QA = [
-  { q: 'Zákazník chce vlajku 2 metre širokú — dá sa to zošiť z dvoch kusov?', no: true, a: <>Šírka je vždy len taká, akú má rolka materiálu (bežne 150 cm) — panely sa <b>nezošívajú</b>. Over v knižnici, či existuje materiál so širšou rolkou; ak nie, ponúkni max. šírku alebo zmenu orientácie.</> },
+  { q: 'Zákazník chce vlajku 2 metre širokú — dá sa to zošiť z dvoch kusov?', a: <>V online konfigurátore nie — tam je šírka vždy len taká, akú má rolka materiálu (bežne 150 cm). <b>Väčšie sa dá</b>, ale len ako <b>špeciálna zákazka mimo appky</b> — zošitím z panelov na 155 cm šírke látky, rieši sa ručne, cena na vyžiadanie.</> },
   { q: 'Je rozdiel medzi obšitím a orezaním laserom len vizuálny?', a: <>Väčšinou áno, ale <b>obšitie je odolnejšie</b> pri dlhodobom vonkajšom používaní (veterné namáhanie okraja), laser dáva čistejší a o niečo ľahší okraj — pre exteriér/vlajkosláv odporúčaj obšitie, pre interiér/eventy je laser v poriadku.</> },
   { q: 'Zákazník si vybral "Bez konštrukcie" pri beachvlajke — čo presne dostane?', yes: true, a: <>Len samotné potlačené plátno — žiadny prút, žiadny podstavec. Vždy sa opýtaj, či zákazník má vlastnú konštrukciu (napr. z predošlej objednávky), inak príde vlajka, ktorú nemá na čom vystaviť.</> },
-  { q: 'Aký podstavec odporučiť, keď zákazník nevie?', a: <>Tvrdý rovný povrch → <b>krížový skladací</b> alebo <b>oceľová platňa</b> (platňa je stabilnejšia pri vetre, ťažšia na prenášanie). Tráva/piesok → <b>zapichovací tŕň</b>. Vodný vak sa <b>pridáva ako doplnková záťaž</b> k inému podstavcu, sám o sebe vlajku nepostaví.</> },
+  { q: 'Aký podstavec odporučiť, keď zákazník nevie?', a: <>Tvrdý rovný povrch → <b>krížový skladací</b> alebo <b>oceľová platňa</b> (platňa je stabilnejšia pri vetre, ťažšia na prenášanie). Tráva/piesok → <b>zapichovací tŕň</b>. Vodný vak sa <b>pridáva ako doplnková záťaž</b> k inému podstavcu, sám o sebe vlajku nepostaví. Pri <b>XL</b> vonku neodporúčaj krížový ani tŕň — appka na to sama upozorní.</> },
   { q: 'Rýchle šablóny pri vlajkách sú fixné balíčky?', no: true, a: <>Len predvyplnia bežnú kombináciu doplnkov, zákazník ich potom môže ľubovoľne upraviť. Neber ich ako uzavretý produkt s vlastnou cenou.</> },
-  { q: '"Expresné vyhotovenie" garantuje dodanie do 24/48 h od objednávky?', no: true, a: <>Lehota beží <b>od schválenia grafického návrhu/tlačových podkladov</b>, nie od momentu objednávky. Vždy to zákazníkovi vysvetli vopred.</> },
+  { q: '"Expresné vyhotovenie" garantuje dodanie do 24/48 h od objednávky?', no: true, a: <>Nie — štandard je <b>10 pracovných dní</b>, expres <b>5 dní (+10 %)</b>, a lehota beží <b>od schválenia grafického návrhu/tlačových podkladov</b>, nie od momentu objednávky. Vždy to zákazníkovi vysvetli vopred.</> },
   { q: 'Štátna vlajka pri objednávke znamená, že sa nedá pridať vlastné logo?', no: true, a: <>Nesprávne. Štátna vlajka je len podklad (nahrádza jednofarebné pozadie) — logo/text sa dá pridať navyše cez grafický editor rovnako ako pri inom podklade.</> },
+  { q: 'Beachvlajka tvaru Wing v malej (S) veľkosti — dá sa objednať?', no: true, a: <>Zatiaľ nie — Wing (Krídlo) je k dispozícii len v M/L/XL. Pre malú veľkosť ponúkni iný tvar (Blade, Basic, Wave, Feather).</> },
 ];
 
 function ObchodniciManual() {
@@ -224,20 +247,23 @@ function ObchodniciManual() {
         <div className="border border-slate-200 rounded-xl p-4">
           <span className="inline-block bg-teal-50 text-teal-700 text-[10px] font-extrabold uppercase tracking-wide px-2 py-1 rounded mb-2">Vlajky</span>
           <ul className="text-xs space-y-1.5 text-slate-700">
-            <li><b>Limit šírky</b> = šírka rolky materiálu (zvyčajne 150 cm), nezošíva sa</li>
+            <li><b>Limit šírky (online)</b> = šírka rolky materiálu (zvyčajne 150 cm)</li>
+            <li><b>Väčšie</b> — možné zošitím na 155 cm látke, len ako špeciálna zákazka</li>
             <li><b>Limit dĺžky</b> — neobmedzená, bežne do ~500 cm</li>
             <li><b>Okraje</b> — obšité dookola / orezané laserom</li>
             <li><b>Doplnky</b> — tunely, očká, karabínky, popruh</li>
-            <li><b>Grafika</b> — farba/Pantone, štátna vlajka, logo, AI</li>
+            <li><b>Grafika</b> — farba/Pantone, štátna vlajka, logo, AI, vlastný text</li>
+            <li><b>Dodanie</b> — 10 dní štandard / 5 dní expres (+10 %)</li>
           </ul>
         </div>
         <div className="border border-slate-200 rounded-xl p-4">
           <span className="inline-block bg-orange-50 text-orange-700 text-[10px] font-extrabold uppercase tracking-wide px-2 py-1 rounded mb-2">Beachvlajky</span>
           <ul className="text-xs space-y-1.5 text-slate-700">
-            <li><b>Tvary</b> — Pierko, Slza, Čepeľ, Krídlo (len vzhľad)</li>
-            <li><b>Veľkosti</b> — S 45€ / M 55€ / L 70€ / XL 90€ (od)</li>
-            <li><b>Konštrukcia</b> — bez / basic +14€ / PRO +24€</li>
-            <li><b>Podstavce</b> — krížový, platňa, tŕň, vodný vak (max 5ks)</li>
+            <li><b>Tvary</b> — Blade, Basic, Wing (len M/L/XL), Wave, Feather</li>
+            <li><b>Veľkosti</b> — S 17,82€ / M 23,22€ / L 31,76€ / XL 43,35€ (od, s DPH)</li>
+            <li><b>Konštrukcia</b> — bez / basic 15-21€ / PRO 17-23€ (podľa veľkosti)</li>
+            <li><b>Podstavce</b> — krížový, platňa, tŕň, vodný vak (1 na výber, ceny podľa veľkosti)</li>
+            <li><b>Dodanie</b> — 10 dní štandard / 5 dní expres (+10 %)</li>
           </ul>
         </div>
       </div>
