@@ -10,9 +10,10 @@ export default function DoplnkyTab({
     <div className="p-4 sm:p-6 space-y-6">
       <div>
         <div className="flex items-center justify-between mb-3">
-          <label className="text-sm font-bold text-slate-900 flex items-center gap-2"><Boxes className="w-4 h-4 text-indigo-600" /> Podstavce a príslušenstvo</label>
+          <label className="text-sm font-bold text-slate-900 flex items-center gap-2"><Boxes className="w-4 h-4 text-indigo-600" /> Príslušenstvo</label>
           <span className="text-xs text-slate-500">Môžete vybrať aj viaceré kusy</span>
         </div>
+        {katalog.doplnky.length === 0 && <p className="text-xs text-slate-400 italic">Žiadne ďalšie príslušenstvo. Podstavec sa vyberá v kroku Parametre.</p>}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {katalog.doplnky.map(d => {
             const qty = doplnkyMnozstva[d.kod] || 0;
