@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Printer, X, Flag, Waves, HelpCircle } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 
 // Rovnaky vzor ako v PredajnyCennikTab.jsx — docasne premenuje kartu prehliadaca, aby "Ulozit ako
 // PDF" navrhlo rozumny nazov suboru, potom ho vrati spat.
@@ -75,22 +76,17 @@ function VlajkyPoster() {
   return (
     <div>
       <div className="bg-gradient-to-r from-teal-600 to-indigo-700 text-white rounded-t-2xl p-8 -m-8 mb-6">
-        <div className="text-[11px] font-bold tracking-widest uppercase opacity-85 mb-1.5">PrintStudio Pro · Konfigurátor</div>
         <h1 className="text-3xl font-black mb-1.5">Ako objednať vlajku na mieru</h1>
-        <p className="text-sm opacity-90 max-w-md">Krok za krokom presne podľa poradia v online konfigurátore.</p>
       </div>
 
       <Step num="1" title="Rozmer a materiál" accent="bg-teal-600">
         <div className="flex flex-wrap gap-1.5 mb-2.5">
-          {['30 cm', '50 cm', '75 cm', '100 cm'].map(s => <span key={s} className="border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-bold">{s}</span>)}
+          {['30×20 cm', '50×33 cm', '75×50 cm', '100×67 cm'].map(s => <span key={s} className="border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-bold">{s}</span>)}
           <span className="border border-teal-600 text-teal-700 bg-teal-50 rounded-lg px-2.5 py-1 text-xs font-bold">150×100 cm · pomer 3:2</span>
+          {['225×150 cm'].map(s => <span key={s} className="border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-bold">{s}</span>)}
           <span className="border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-bold">vlastný rozmer</span>
         </div>
         <p className="text-[11px] text-slate-500 mb-2.5">Plus výber materiálu podľa účelu použitia (interiér/exteriér, priesvitnosť, hmotnosť).</p>
-        <div className="flex gap-2.5 bg-amber-50 border border-amber-300 rounded-xl p-3">
-          <div className="w-5 h-5 text-amber-700 shrink-0 mt-0.5"><I.warn /></div>
-          <p className="text-xs text-amber-800 leading-relaxed"><b>Dôležité:</b> v online konfigurátore je šírka vlajky obmedzená šírkou rolky zvoleného materiálu (zvyčajne 150 cm) — samoobslužne sa panely nezošívajú. Dĺžka obmedzená nie je (bežne do ~500 cm).</p>
-        </div>
         <div className="flex gap-2.5 bg-sky-50 border border-sky-200 rounded-xl p-3 mt-2">
           <div className="w-5 h-5 text-sky-700 shrink-0 mt-0.5"><I.info /></div>
           <p className="text-xs text-sky-800 leading-relaxed"><b>Väčšie ako 150 cm na šírku?</b> Dá sa — zošitím z viacerých pásov na 155 cm šírke látky. Toto ide vždy len ako <b>špeciálna zákazka mimo online konfigurátora</b> (rieši sa ručne, cena na vyžiadanie) — nie je to samoobslužná voľba.</p>
@@ -121,16 +117,10 @@ function VlajkyPoster() {
           <Opt icon={I.carabiner} t="Kovové karabínky" d="Strana + počet" tone="text-teal-700" />
           <Opt icon={I.strap} t="Spevňujúci popruh" d="Po stranách" tone="text-teal-700" />
         </OptGrid>
-        <p className="text-[11px] text-slate-500 mt-3 mb-1.5">Rýchle hotové kombinácie (predvyplnia doplnky automaticky):</p>
-        <div className="flex flex-wrap gap-1.5">
-          {['Stožiarová vlajka', 'Uličná zástava', 'Plotový banner', 'Karabínky + popruh'].map(t => (
-            <span key={t} className="bg-teal-50 text-teal-700 rounded-lg px-2.5 py-1 text-[11px] font-bold">{t}</span>
-          ))}
-        </div>
         <div className="border border-dashed border-slate-300 rounded-xl p-3 mt-3">
           <p className="text-[11px] font-bold text-slate-600 mb-1.5">Objednávkový lístok — zaznač priamo pri rozhovore so zákazníkom:</p>
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-slate-600">
-            <span>☐ Tunel hore &nbsp;☐ dole &nbsp;☐ vľavo &nbsp;☐ vpravo</span>
+            <span className="col-span-2">☐ Tunel hore &nbsp;☐ dole &nbsp;☐ vľavo &nbsp;☐ vpravo — priemer: ____ cm &nbsp;☐ zatvorený &nbsp;☐ priechodný</span>
             <span>☐ Očká — strana: _______ počet: ____</span>
             <span>☐ Karabínky — strana: _______ počet: ____</span>
             <span>☐ Popruh — strana: _______________</span>
@@ -140,9 +130,11 @@ function VlajkyPoster() {
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 mt-6 pt-4 text-[11px] text-slate-500 font-semibold">
         <div className="flex items-center gap-2"><span className="w-4 h-4 text-teal-600"><I.bolt /></span>Dodanie: 10 pracovných dní štandard / 5 dní expres (+10 %) — od schválenia grafiky</div>
-        <div className="flex items-center gap-2"><span className="w-4 h-4 text-teal-600"><I.cart /></span>Cena sa prepočítava naživo podľa počtu kusov</div>
       </div>
-      <p className="text-[11px] text-slate-400 text-center mt-3">Zákazník si vie navrhnúť vlajku aj sám doma cez appku na <b className="text-slate-600">pbtprint.sk</b>.</p>
+      <div className="flex items-center justify-center gap-3 mt-4 pt-4 border-t border-slate-100">
+        <QRCodeSVG value="https://shop.pbtprint.sk/apps/dtf-metraz?typ=zastava" size={72} level="M" />
+        <p className="text-[11px] text-slate-500 max-w-[200px]">Navrhni si vlajku sám — naskenuj a otvor konfigurátor na <b className="text-slate-700">pbtprint.sk</b>.</p>
+      </div>
     </div>
   );
 }
