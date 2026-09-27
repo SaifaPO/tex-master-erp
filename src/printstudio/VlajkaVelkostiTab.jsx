@@ -8,7 +8,13 @@ export default function VlajkaVelkostiTab({ supabase }) {
   const [materialy, setMaterialy] = useState([]);
   const [pricingConfig, setPricingConfig] = useState(DEFAULT_PRICING_CONFIG);
   const [nastavenia, setNastavenia] = useState({ dph_percent: 23, expresny_priplatok_percent: 10 });
+  const [nakladBmSublimacia, setNakladBmSublimacia] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Rovnaka nominalna sirka, na akej je kalibrovany naklad_bm sublimacie, ako v Edge Functions
+  // (beachflag-price-preview) a v Textilnej metrazi — prevod EUR/bm na EUR/m2.
+  const SUBLIMACIA_ROLL_WIDTH_CM = 160;
+  const nakladM2Sublimacia = nakladBmSublimacia / (SUBLIMACIA_ROLL_WIDTH_CM / 100);
 
   const [testVelkostId, setTestVelkostId] = useState(null);
   const [testMaterialId, setTestMaterialId] = useState(null);
@@ -18,16 +24,18 @@ export default function VlajkaVelkostiTab({ supabase }) {
 
   const nacitaj = async () => {
     setIsLoading(true);
-    const [{ data: v }, { data: m }, { data: n }, { data: cfg }] = await Promise.all([
+    const [{ data: v }, { data: m }, { data: n }, { data: cfg }, { data: tn }] = await Promise.all([
       supabase.from('vlajka_velkosti').select('*').order('poradie').order('id'),
       supabase.from('vlajka_materialy').select('*').order('poradie').order('id'),
       supabase.from('vlajka_nastavenia').select('*').eq('id', 1).maybeSingle(),
       supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
+      supabase.from('textil_naklady_verejny').select('naklad_bm').eq('technologia', 'sublimacia').maybeSingle(),
     ]);
     setVelkosti(v || []);
     setMaterialy(m || []);
     if (n) setNastavenia(n);
     if (cfg) setPricingConfig(mapConfigFromDb(cfg));
+    setNakladBmSublimacia(tn ? Number(tn.naklad_bm) : 0);
     if ((v || []).length > 0) setTestVelkostId(v[0].id);
     if ((m || []).length > 0) setTestMaterialId(m[0].id);
     setIsLoading(false);
@@ -47,7 +55,9 @@ export default function VlajkaVelkostiTab({ supabase }) {
   };
 
   const testMaterial = materialy.find(m => m.id === testMaterialId);
-  const nakladMaterial = (parseFloat(testSpotreba) || 0) * (Number(testMaterial?.naklad_m2) || 0);
+  const testVelkost = velkosti.find(v => v.id === testVelkostId);
+  const nakladSitia = (Number(testVelkost?.minuty_sitia) || 0) * (Number(pricingConfig.cenaMinutySitia) || 0);
+  const nakladMaterial = (parseFloat(testSpotreba) || 0) * ((Number(testMaterial?.naklad_m2) || 0) + nakladM2Sublimacia) + nakladSitia;
   const vysledok = vypocitajCenuVlajky({
     nakladMaterial,
     pricingConfig,
@@ -65,7 +75,7 @@ export default function VlajkaVelkostiTab({ supabase }) {
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-bold text-white flex items-center gap-2"><Ruler className="text-indigo-400 h-5 w-5" /> Veľkosti, DPH a expres</h2>
-        <p className="text-xs text-slate-400 mt-1">Cena veľkosti sa už nezadáva ručne — počíta sa z materiálu (spotreba m² × náklad materiálu, záložka "Materiály" a "Tvary") cez jednotný maržový vzorec. Tu nastavuješ len fyzické rozmery a k tomu sa v konfigurátore pripočíta materiál, opracovanie, prút a doplnky.</p>
+        <p className="text-xs text-slate-400 mt-1">Cena veľkosti sa už nezadáva ručne — počíta sa z nákladu (spotreba m² × (látka + sublimačná potlač) + šitie, záložky "Materiály" a "Tvary") cez jednotný maržový vzorec. Tu nastavuješ fyzické rozmery a minúty šitia — k tomu sa v konfigurátore pripočíta opracovanie, prút a doplnky.</p>
       </div>
 
       <div className="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-x-auto">
@@ -75,6 +85,7 @@ export default function VlajkaVelkostiTab({ supabase }) {
               <th className="text-left px-4 py-2.5">Kód</th>
               <th className="text-left px-4 py-2.5">Výška od zeme (cm)</th>
               <th className="text-left px-4 py-2.5">Rozmer plachty</th>
+              <th className="text-left px-4 py-2.5">Minúty šitia</th>
             </tr>
           </thead>
           <tbody>
@@ -87,10 +98,17 @@ export default function VlajkaVelkostiTab({ supabase }) {
                 <td className="px-4 py-2">
                   <input type="text" value={v.rozmer_popis} onChange={(e) => upravVelkost(v.id, { rozmer_popis: e.target.value })} className="w-36 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" />
                 </td>
+                <td className="px-4 py-2">
+                  <div className="flex items-center gap-1.5">
+                    <input type="number" step="1" value={v.minuty_sitia ?? 0} onChange={(e) => upravVelkost(v.id, { minuty_sitia: parseFloat(e.target.value) || 0 })} className="w-20 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" />
+                    <span className="text-xs text-slate-500">min × {Number(pricingConfig.cenaMinutySitia || 0).toFixed(2)} €/min = {(Number(v.minuty_sitia || 0) * Number(pricingConfig.cenaMinutySitia || 0)).toFixed(2)} €</span>
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
+        <p className="text-[10px] text-slate-500 px-4 pb-3">Sadzba €/min šitia sa nastavuje centrálne v záložke Cenotvorba (Sitie/Krajčírky).</p>
       </div>
 
       <div className="bg-indigo-950/30 border border-indigo-900/40 p-4 rounded-xl grid grid-cols-2 gap-4 max-w-md">
@@ -136,6 +154,7 @@ export default function VlajkaVelkostiTab({ supabase }) {
             </label>
           </div>
         </div>
+        <p className="text-[10px] text-slate-500 mb-2">Náklad: {(parseFloat(testSpotreba) || 0).toFixed(2)} m² × ({(Number(testMaterial?.naklad_m2) || 0).toFixed(2)} € látka + {nakladM2Sublimacia.toFixed(2)} € sublimácia) + {nakladSitia.toFixed(2)} € šitie = {nakladMaterial.toFixed(2)} € spolu</p>
         <div className="flex items-center justify-between pt-3 border-t border-slate-800">
           <div className="text-xs text-slate-400">{vysledok.vzorec}</div>
           <div className="text-2xl font-black text-emerald-400">{vysledok.cenaSpolu.toFixed(2)} €</div>

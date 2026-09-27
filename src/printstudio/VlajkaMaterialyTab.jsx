@@ -60,9 +60,10 @@ export default function VlajkaMaterialyTab({ supabase }) {
       <div>
         <h2 className="text-xl font-bold text-white flex items-center gap-2"><Layers className="text-indigo-400 h-5 w-5" /> Materiály beachvlajky</h2>
         <p className="text-xs text-slate-400 mt-1">
-          "Náklad €/m²" je VÝROBNÁ (nákupná) cena materiálu — zákazník ju nikdy neuvidí. Predajná cena sa
-          dopočítava jednotným maržovým vzorcom (Cenotvorba) z nákladu × spotreby materiálu danej
-          kombinácie tvar+veľkosť (nastavuje sa v záložke "Tvary").
+          "Náklad €/m²" je LEN nákupná cena samotnej látky (bez potlače) — zákazník ju nikdy neuvidí.
+          Sublimačná potlač sa pripočítava automaticky naživo z Kostra cien (rovnaká sadzba ako Textilná
+          metráž/Buffky) a šitie z minút šitia danej veľkosti (záložka "Veľkosti") — súčet všetkých troch
+          × spotreba materiálu (záložka "Tvary") ide do jednotného maržového vzorca (Cenotvorba).
         </p>
         <p className="text-xs text-slate-400 mt-1">
           Materiál sa dá prepojiť na skutočný sklad (Materiály v hlavnom ERP, položky predávané na bežný

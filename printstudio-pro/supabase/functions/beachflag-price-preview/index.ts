@@ -2,6 +2,10 @@
 // nikdy nevidel surove vyrobne naklady (vlajka_materialy.naklad_m2) ani marzove koeficienty
 // (pricing_config) priamo — vidi len hotovu cenu z tejto odpovede.
 //
+// Naklad vlajky = latka + sublimacna potlac + sitie (predtym pocitalo LEN latku, cena bola
+// drasticky podhodnotena). Sublimacia je ziva z textil_naklady_verejny (rovnaky zdroj ako
+// Buffky/Textilna metraz), sitie = vlajka_velkosti.minuty_sitia x pricing_config.cena_minuty_sitia.
+//
 // POZOR: subor je zamerne SAMOSTATNY (ziadne importy z ../_shared/) — Supabase Dashboard
 // (rucne vlepenie kodu bez CLI) nevie zbalit viacsuborove funkcie a hlasi "Module not found".
 // Marzovy vzorec je duplikat z ../_shared/zastavaCena.ts / src/printstudio/pricingEngine.js /
@@ -25,6 +29,14 @@ async function resolveNakladM2(supabase: ReturnType<typeof createClient>, materi
   const { data: sklad } = await supabase.from('materials').select('price_per_m, width').eq('id', material.sklad_material_id).maybeSingle();
   if (!sklad || !sklad.width || Number(sklad.width) <= 0) return Number(material.naklad_m2) || 0;
   return (Number(sklad.price_per_m) || 0) / (Number(sklad.width) / 100);
+}
+
+// Nominalna sirka, na ktorej je kalibrovany textil_naklady_verejny.naklad_bm pre sublimaciu
+// (rovnaka konvencia ako printstudio-pro/src/TextilMetraz.jsx ROLL_WIDTH_CM) — prevod EUR/bm na EUR/m2.
+const SUBLIMACIA_ROLL_WIDTH_CM = 160;
+async function resolveNakladSublimacieM2(supabase: ReturnType<typeof createClient>) {
+  const { data } = await supabase.from('textil_naklady_verejny').select('naklad_bm').eq('technologia', 'sublimacia').maybeSingle();
+  return (Number(data?.naklad_bm) || 0) / (SUBLIMACIA_ROLL_WIDTH_CM / 100);
 }
 
 // Cena stoziara sa lisi podla velkosti vlajky (vacsia vlajka = dlhsi/pevnejsi stoziar) —
@@ -83,7 +95,7 @@ Deno.serve(async (req) => {
     if (!tvarKod || !velkostKod) throw new Error('Chýba tvar alebo veľkosť vlajky.');
     if (!materialKod) throw new Error('Chýba materiál.');
 
-    const [{ data: tvar }, { data: material }, { data: dokoncenie }, cenaStoziara, cenaPodstavca, { data: doplnkyDb }, { data: nastavenia }, { data: cfg }] = await Promise.all([
+    const [{ data: tvar }, { data: material }, { data: dokoncenie }, cenaStoziara, cenaPodstavca, { data: doplnkyDb }, { data: nastavenia }, { data: cfg }, nakladM2Sublimacia, { data: velkostRiadok }] = await Promise.all([
       supabase.from('vlajka_tvary').select('id').eq('kod', tvarKod).maybeSingle(),
       supabase.from('vlajka_materialy').select('naklad_m2, sklad_material_id').eq('kod', materialKod).eq('aktivny', true).maybeSingle(),
       dokoncenieKod ? supabase.from('vlajka_dokoncenie').select('cena').eq('kod', dokoncenieKod).maybeSingle() : Promise.resolve({ data: null }),
@@ -92,6 +104,8 @@ Deno.serve(async (req) => {
       supabase.from('vlajka_doplnky').select('*'),
       supabase.from('vlajka_nastavenia').select('*').eq('id', 1).maybeSingle(),
       supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
+      resolveNakladSublimacieM2(supabase),
+      supabase.from('vlajka_velkosti').select('minuty_sitia').eq('kod', velkostKod).maybeSingle(),
     ]);
 
     if (!tvar) throw new Error(`Tvar "${tvarKod}" sa nenašiel.`);
@@ -109,9 +123,12 @@ Deno.serve(async (req) => {
       return { cena: dbRow ? Number(dbRow.cena) : 0, mnozstvo: Number(d.mnozstvo) || 0 };
     });
 
-    const nakladM2Material = await resolveNakladM2(supabase, material);
+    const nakladM2Latka = await resolveNakladM2(supabase, material);
     const ks = Math.max(1, Math.round(Number(pocetKs)) || 1);
-    const nakladMaterial = Number(rozmer.spotreba_m2) * nakladM2Material;
+    const minutySitia = Number(velkostRiadok?.minuty_sitia) || 0;
+    const cenaMinutySitia = Number(cfg?.cena_minuty_sitia) || 0;
+    const nakladSitia = minutySitia * cenaMinutySitia;
+    const nakladMaterial = Number(rozmer.spotreba_m2) * (nakladM2Latka + nakladM2Sublimacia) + nakladSitia;
     const cenaMaterialKus = priceAt(nakladMaterial, ks, pricingConfig);
     const marzaPercent = Math.round(marginAt(nakladMaterial, ks, pricingConfig));
 

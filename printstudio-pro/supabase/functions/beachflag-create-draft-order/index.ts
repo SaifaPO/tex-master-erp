@@ -6,6 +6,9 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 // Subor je zamerne SAMOSTATNY (ziadne importy z ../_shared/) — Supabase Dashboard (rucne
 // vlepenie kodu bez CLI) nevie zbalit viacsuborove funkcie a hlasi "Module not found".
+//
+// Naklad vlajky = latka + sublimacna potlac + sitie (rovnaky vzorec ako beachflag-price-preview —
+// predtym pocitalo LEN latku, cena bola drasticky podhodnotena, napr. XL vyslo len 17 EUR).
 // Marzovy vzorec + cena z materialu je duplikat beachflag-price-preview/index.ts — pri zmene
 // uprav aj tam (a src/printstudio/pricingEngine.js, printstudio-pro/src/pricingEngine.js).
 const corsHeaders = {
@@ -81,6 +84,14 @@ async function resolveNakladM2(supabase: ReturnType<typeof createClient>, materi
   return (Number(sklad.price_per_m) || 0) / (Number(sklad.width) / 100);
 }
 
+// Nominalna sirka, na ktorej je kalibrovany textil_naklady_verejny.naklad_bm pre sublimaciu
+// (rovnaka konvencia ako printstudio-pro/src/TextilMetraz.jsx ROLL_WIDTH_CM) — prevod EUR/bm na EUR/m2.
+const SUBLIMACIA_ROLL_WIDTH_CM = 160;
+async function resolveNakladSublimacieM2(supabase: ReturnType<typeof createClient>) {
+  const { data } = await supabase.from('textil_naklady_verejny').select('naklad_bm').eq('technologia', 'sublimacia').maybeSingle();
+  return (Number(data?.naklad_bm) || 0) / (SUBLIMACIA_ROLL_WIDTH_CM / 100);
+}
+
 // Cena stoziara sa lisi podla velkosti vlajky (vacsia vlajka = dlhsi/pevnejsi stoziar) —
 // vlajka_stoziare.cena (flat) je uz nepouzivane, nahradza ho vlajka_stoziare_ceny per velkost.
 async function resolveStoziarCena(supabase: ReturnType<typeof createClient>, stoziarKod: string | null, velkostKod: string) {
@@ -119,7 +130,7 @@ Deno.serve(async (req) => {
     if (!tvarKod || !velkostKod) throw new Error('Chýba tvar alebo veľkosť vlajky.');
     if (!materialKod) throw new Error('Chýba materiál.');
 
-    const [{ data: tvar }, { data: velkost }, { data: material }, { data: dokoncenie }, { data: stoziar }, cenaStoziara, { data: podstavec }, cenaPodstavca, { data: doplnkyDb }, { data: nastavenia }, { data: cfg }] = await Promise.all([
+    const [{ data: tvar }, { data: velkost }, { data: material }, { data: dokoncenie }, { data: stoziar }, cenaStoziara, { data: podstavec }, cenaPodstavca, { data: doplnkyDb }, { data: nastavenia }, { data: cfg }, nakladM2Sublimacia] = await Promise.all([
       supabase.from('vlajka_tvary').select('*').eq('kod', tvarKod).maybeSingle(),
       supabase.from('vlajka_velkosti').select('*').eq('kod', velkostKod).maybeSingle(),
       supabase.from('vlajka_materialy').select('*').eq('kod', materialKod).eq('aktivny', true).maybeSingle(),
@@ -131,6 +142,7 @@ Deno.serve(async (req) => {
       supabase.from('vlajka_doplnky').select('*'),
       supabase.from('vlajka_nastavenia').select('*').eq('id', 1).maybeSingle(),
       supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
+      resolveNakladSublimacieM2(supabase),
     ]);
 
     if (!tvar) throw new Error(`Tvar "${tvarKod}" sa v katalógu nenašiel.`);
@@ -149,8 +161,11 @@ Deno.serve(async (req) => {
       return { cena: dbRow ? Number(dbRow.cena) : 0, mnozstvo: Number(d.mnozstvo) || 0, nazov: dbRow?.nazov || d.kod };
     });
 
-    const nakladM2Material = await resolveNakladM2(supabase, material);
-    const nakladMaterial = Number(rozmer.spotreba_m2) * nakladM2Material;
+    const nakladM2Latka = await resolveNakladM2(supabase, material);
+    const minutySitia = Number(velkost.minuty_sitia) || 0;
+    const cenaMinutySitia = Number(cfg?.cena_minuty_sitia) || 0;
+    const nakladSitia = minutySitia * cenaMinutySitia;
+    const nakladMaterial = Number(rozmer.spotreba_m2) * (nakladM2Latka + nakladM2Sublimacia) + nakladSitia;
 
     const cena = vypocitajCenuVlajky({
       nakladMaterial, dokoncenie, cenaStoziara, cenaPodstavca,
