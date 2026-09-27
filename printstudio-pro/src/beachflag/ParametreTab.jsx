@@ -23,12 +23,14 @@ export default function ParametreTab({ katalog, tvarKod, velkostKod, materialKod
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
           {katalog.velkosti.map(v => {
             const active = v.kod === velkostKod;
+            const vybranyTvar = katalog.tvary.find(t => t.kod === tvarKod);
+            const vyskaPreTvar = vybranyTvar?.rozmery?.[v.kod]?.vyska_cm ?? v.vyska_cm;
             return (
               <button key={v.kod} type="button" onClick={() => onVelkost(v.kod)} className={`p-3 rounded-xl border text-left transition-all ${active ? 'border-indigo-600 bg-indigo-50/80 ring-2 ring-indigo-500 text-indigo-900 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'}`}>
                 <div className="mb-1">
                   <span className="font-black text-sm">{v.kod}</span>
                 </div>
-                <div className="text-[11px] font-semibold text-slate-700">{v.vyska_cm} cm od zeme</div>
+                <div className="text-[11px] font-semibold text-slate-700">{vyskaPreTvar} cm od zeme</div>
                 <div className="text-[10px] text-slate-500 mt-0.5">{v.rozmer_popis}</div>
               </button>
             );
