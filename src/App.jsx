@@ -1106,6 +1106,7 @@ export default function App() {
   const [lastAttendanceSync, setLastAttendanceSync] = useState(null);
   const [loginMismatches, setLoginMismatches] = useState([]);
   const [problemReports, setProblemReports] = useState([]);
+  const [laserScanChecks, setLaserScanChecks] = useState([]);
   const [reportingProblemForItem, setReportingProblemForItem] = useState(null); // item object | null
   const [problemCategory, setProblemCategory] = useState(PROBLEM_CATEGORIES[0]);
   const [problemDescription, setProblemDescription] = useState('');
@@ -1606,7 +1607,7 @@ export default function App() {
     }
     async function loadAll() {
       try {
-        const [matRes, prodRes, tierRes, sportRes, empRes, aclRes, orderRes, whRes, rateRes, assignRes, stationDefaultRes, stationExclusionRes, checkinRes, attendanceRes, mismatchRes, problemRes, companyRes, invoiceRes, bankRes, journalRes, deadlineRes, cashDocRes, capacityRes, productTimesRes, assetRes, metricRes, tierRuleRes, travelRes, vehicleRes, vehicleLogRes, customerRes, dotlackovkaPriceRes, addonTypeRes, helpRequestRes, intercompanyRateRes, intercompanyClosedRes, pricingConfigRes, krajcirkyRes, kapacitaRes] = await Promise.all([
+        const [matRes, prodRes, tierRes, sportRes, empRes, aclRes, orderRes, whRes, rateRes, assignRes, stationDefaultRes, stationExclusionRes, checkinRes, attendanceRes, mismatchRes, problemRes, companyRes, invoiceRes, bankRes, journalRes, deadlineRes, cashDocRes, capacityRes, productTimesRes, assetRes, metricRes, tierRuleRes, travelRes, vehicleRes, vehicleLogRes, customerRes, dotlackovkaPriceRes, addonTypeRes, helpRequestRes, intercompanyRateRes, intercompanyClosedRes, pricingConfigRes, krajcirkyRes, kapacitaRes, laserScanChecksRes] = await Promise.all([
           supabase.from('materials').select('*').order('name'),
           supabase.from('products').select('*'),
           supabase.from('quality_tiers').select('*'),
@@ -1645,7 +1646,8 @@ export default function App() {
           supabase.from('intercompany_closed_periods').select('*'),
           supabase.from('pricing_config').select('cena_minuty_sitia, cena_strihania_100cm2, sadzba_rv_min, coef_a, coef_b, margin_floor, coef_p, cielova_hodnota_zakazky').eq('id', 1).maybeSingle(),
           supabase.from('krajcirky').select('*').order('poradie').order('id'),
-          supabase.from('vyrobna_kapacita_nastavenia').select('*').eq('id', 1).maybeSingle()
+          supabase.from('vyrobna_kapacita_nastavenia').select('*').eq('id', 1).maybeSingle(),
+          supabase.from('laser_scan_checks').select('*').order('captured_at', { ascending: false }).limit(200)
         ]);
         const firstErr = [matRes, prodRes, tierRes, sportRes, empRes, orderRes, whRes].find(r => r.error);
         if (firstErr) throw firstErr.error;
@@ -1701,6 +1703,7 @@ export default function App() {
         }
         setKrajcirky(krajcirkyRes.error ? [] : (krajcirkyRes.data || []));
         if (kapacitaRes.data) setVyrobnaKapacitaNastavenia(kapacitaRes.data);
+        setLaserScanChecks(laserScanChecksRes.error ? [] : (laserScanChecksRes.data || []));
         nacitajKostru(supabase).then(setKostra).catch(() => setKostra(null));
 
         if (loadedWarehouses.length > 0) {
@@ -1820,6 +1823,17 @@ export default function App() {
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'acl_settings' }, (payload) => {
         if (payload.new?.rules) setAcl(payload.new.rules);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'laser_scan_checks' }, (payload) => {
+        applyRealtimeChange(setLaserScanChecks, payload, (r) => r);
+        if (payload.eventType === 'INSERT' && payload.new?.status === 'pending') {
+          const found = findItemByItemId(payload.new.item_id);
+          const jeMoja = !found?.item?.assignedDesignerId || found.item.assignedDesignerId === currentUserRef.current?.id;
+          if (jeMoja || currentUserRef.current?.role === 'master') {
+            playAlertBeep(2, 880);
+            showDesktopNotification('📷 Fotka z lasera na schválenie', `${payload.new.item_id} čaká na tvoje schválenie.`);
+          }
+        }
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -5273,6 +5287,11 @@ export default function App() {
       setManualQrInput('');
       return;
     }
+    if ((laserScanChecks || []).some(c => c.item_id === item.itemId && c.status !== 'approved')) {
+      triggerNotification('error', `Položka ${item.itemId} čaká na schválenie fotky z lasera grafikom — nemôže pokračovať ďalej.`);
+      setManualQrInput('');
+      return;
+    }
     if (isMaterialCheckPending(item, selectedTerminalStation)) {
       triggerNotification('error', `Najprv over materiál pri položke ${item.itemId} v Samostatných dielňach (Potvrdiť — spočítané, sedí).`);
       setManualQrInput('');
@@ -5726,6 +5745,22 @@ export default function App() {
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, items: updatedItems } : o));
     if (selectedOrderDetails?.id === orderId) setSelectedOrderDetails({ ...order, items: updatedItems });
     triggerNotification('success', approve ? 'Ultra priorita schválená.' : 'Žiadosť bola zamietnutá.');
+  };
+
+  // Fotka z lasera (automaticky odfotená kamerou pri laseri, pozri laser-qr-watcher/) čaká na
+  // schválenie priradeným grafikom — kým ju neschváli, položka nemôže pokračovať na ďalšiu
+  // stanicu (pozri blokáciu v handleQrScan vyššie).
+  const handleSchvalLaserScanCheck = async (checkId, itemId, schvalene, poznamka) => {
+    const found = findItemByItemId(itemId);
+    if (currentUser.role !== 'master' && currentUser.role !== 'supervisor' && found?.item?.assignedDesignerId && found.item.assignedDesignerId !== currentUser.id) {
+      triggerNotification('error', 'Túto fotku môže schváliť len priradený grafik alebo Master.');
+      return;
+    }
+    const patch = { status: schvalene ? 'approved' : 'problem', reviewed_by: `${currentUser.firstName} ${currentUser.lastName}`, reviewed_at: new Date().toISOString(), notes: poznamka || null };
+    const { error } = await supabase.from('laser_scan_checks').update(patch).eq('id', checkId);
+    if (error) { triggerNotification('error', error.message); return; }
+    setLaserScanChecks(prev => prev.map(c => c.id === checkId ? { ...c, ...patch } : c));
+    triggerNotification('success', schvalene ? 'Fotka schválená, výroba môže pokračovať.' : 'Problém nahlásený — položka ostáva zablokovaná.');
   };
 
   const handleSubmitEmployee = async (e) => {
@@ -9945,10 +9980,48 @@ export default function App() {
               return { id, label: emp ? `${emp.firstName} ${emp.lastName}` : 'Neznámy', avatar: emp?.avatar || '👤' };
             })
           ];
+          const mojeFotoKontroly = (laserScanChecks || []).filter(c => c.status !== 'approved').filter(c => {
+            const found = findItemByItemId(c.item_id);
+            const assignedId = found?.item?.assignedDesignerId;
+            return currentUser.role === 'master' || currentUser.role === 'supervisor' || !assignedId || assignedId === currentUser.id;
+          });
           return (
             <div className="space-y-4 print:hidden animate-in fade-in duration-150">
               <h2 className="text-xl font-bold text-white flex items-center gap-2"><Palette className="text-indigo-400 h-5 w-5" /> Dashboard Grafikov</h2>
               <p className="text-xs text-slate-400 -mt-2">Zákazky aktuálne rozpracované na Grafike, zoradené podľa priradeného grafika. Priradenie sa nastavuje pri vytváraní/úprave položky.</p>
+
+              {mojeFotoKontroly.length > 0 && (
+                <div className="space-y-3">
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">📷 Fotky z lasera na schválenie ({mojeFotoKontroly.length})</h3>
+                  {mojeFotoKontroly.map(check => {
+                    const found = findItemByItemId(check.item_id);
+                    const item = found?.item;
+                    const photos = Array.isArray(check.photos) ? check.photos : [];
+                    return (
+                      <div key={check.id} className={`bg-slate-950 border rounded-xl p-4 ${check.status === 'problem' ? 'border-rose-700/50' : 'border-amber-700/50'}`}>
+                        <div className="flex flex-col sm:flex-row gap-4">
+                          {photos.length > 0 && (
+                            <div className="flex gap-1.5 shrink-0 overflow-x-auto">
+                              {photos.map((url, i) => <img key={i} src={url} alt="Foto z lasera" className="w-32 h-32 object-cover rounded-lg border border-slate-800" />)}
+                            </div>
+                          )}
+                          <div className="flex-1 space-y-1.5">
+                            <span className="font-mono text-[10px] text-slate-500">{check.item_id}{item ? ` • ${item.customer}` : ' • položka nenájdená v aktuálnych zákazkách'}</span>
+                            {item && <p className="text-sm text-white font-bold">{item.productName}</p>}
+                            <p className="text-[10px] text-slate-500">Odfotené: {new Date(check.captured_at).toLocaleString('sk-SK')}</p>
+                            {check.status === 'problem' && <p className="text-[11px] text-rose-400 font-semibold">⚠️ Nahlásený problém{check.notes ? `: ${check.notes}` : ''}</p>}
+                            <div className="flex gap-2 flex-wrap pt-1.5">
+                              {item && <button onClick={() => openOrderDetails(orders.find(o => o.id === item.orderId))} className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold px-3 py-1.5 rounded-lg">Otvoriť zákazku</button>}
+                              <button onClick={() => { const p = window.prompt('Popíš problém (napr. zlá farba, posunutý motív):'); if (p !== null) handleSchvalLaserScanCheck(check.id, check.item_id, false, p); }} className="bg-rose-700 hover:bg-rose-600 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg">Nahlásiť problém</button>
+                              <button onClick={() => handleSchvalLaserScanCheck(check.id, check.item_id, true)} className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg">Schváliť</button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
               {activeGrafikItems.length === 0 ? (
                 <div className="bg-slate-950 border border-slate-800 rounded-2xl p-10 text-center text-slate-500 italic">Momentálne nie je na Grafike žiadna rozpracovaná zákazka.</div>
               ) : (
