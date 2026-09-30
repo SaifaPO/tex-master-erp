@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Layers, Plus, Trash2, RefreshCw, AlertTriangle } from 'lucide-react';
+import NumberInput from '../NumberInput';
 
 // Prepocita cenu €/m2 z realneho skladoveho materialu (cena za bezny meter / sirka rolky v cm).
 // Vracia null, ak sklad. material nema vyplnenu sirku (width) — bez nej sa neda bm -> m2 previest.
@@ -86,13 +87,13 @@ export default function ZastavaMaterialyTab({ supabase }) {
               <div className="flex flex-wrap items-center gap-2">
                 <input type="text" value={m.nazov} onChange={(e) => uprav(m.id, { nazov: e.target.value })} placeholder="Názov" className="flex-1 min-w-[160px] px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" />
                 <div className="flex items-center gap-1 text-xs text-slate-400 shrink-0">
-                  <input type="number" step="0.1" value={m.naklad_m2} disabled={jePrepojeny && !chybaSirka} onChange={(e) => uprav(m.id, { naklad_m2: parseFloat(e.target.value) || 0 })} className="w-24 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white disabled:opacity-60" /> € náklad/m²
+                  <NumberInput step="0.1" value={m.naklad_m2} disabled={jePrepojeny && !chybaSirka} onChange={(v) => uprav(m.id, { naklad_m2: v })} fallback={0} className="w-24 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white disabled:opacity-60" /> € náklad/m²
                   {jePrepojeny && !chybaSirka && (
                     <button type="button" onClick={() => prepocitajZoSkladu(m)} title="Prepočítať zo skladu (ak sa zmenila cena/šírka)" className="text-slate-500 hover:text-indigo-400 p-1"><RefreshCw className="w-3.5 h-3.5" /></button>
                   )}
                 </div>
                 <div className="flex items-center gap-1 text-xs text-slate-400 shrink-0">
-                  <input type="number" step="1" value={m.sirka_rolky_cm ?? 150} onChange={(e) => uprav(m.id, { sirka_rolky_cm: parseFloat(e.target.value) || 150 })} className="w-20 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /> cm šírka rolky
+                  <NumberInput step="1" value={m.sirka_rolky_cm ?? 150} onChange={(v) => uprav(m.id, { sirka_rolky_cm: v })} fallback={150} className="w-20 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /> cm šírka rolky
                 </div>
                 <label className="flex items-center gap-1.5 text-xs text-slate-400 shrink-0">
                   <input type="checkbox" checked={m.aktivny} onChange={(e) => uprav(m.id, { aktivny: e.target.checked })} /> aktívny

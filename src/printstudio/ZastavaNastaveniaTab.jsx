@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Settings, Calculator, Loader2, RefreshCw } from 'lucide-react';
 import { mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 import { vcLaserRezanie } from './vyrobneNaklady';
+import NumberInput from '../NumberInput';
 
 const inputCls = 'w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white';
 const labelCls = 'text-xs text-slate-400 font-medium';
@@ -116,16 +117,16 @@ export default function ZastavaNastaveniaTab({ supabase }) {
         <div>
           <label className={labelCls}>Šitie (€/min práce)</label>
           <div className="flex items-center gap-1">
-            <input type="number" step="0.05" value={nastavenia.naklad_sitia_min} onChange={(e) => uloz({ naklad_sitia_min: parseFloat(e.target.value) || 0 })} className={inputCls} />
+            <NumberInput step="0.05" value={nastavenia.naklad_sitia_min} onChange={(v) => uloz({ naklad_sitia_min: v })} fallback={0} className={inputCls} />
             <button type="button" onClick={prepocitajSitie} title={`Natiahnuť aktuálnu sadzbu z Cenotvorby (${pricingConfig.cenaMinutySitia.toFixed(2)} €/min)`} className="shrink-0 text-slate-500 hover:text-indigo-400 p-1.5"><RefreshCw className="w-3.5 h-3.5" /></button>
           </div>
           <p className="text-[10px] text-slate-500 mt-1">Reálna sadzba šitia sa nastavuje v Cenotvorbe — sem sa len natiahne.</p>
         </div>
-        <div><label className={labelCls}>Minúty šitia na 1 m²</label><input type="number" step="0.5" value={nastavenia.min_sitia_na_m2} onChange={(e) => uloz({ min_sitia_na_m2: parseFloat(e.target.value) || 0 })} className={inputCls} /></div>
+        <div><label className={labelCls}>Minúty šitia na 1 m²</label><NumberInput step="0.5" value={nastavenia.min_sitia_na_m2} onChange={(v) => uloz({ min_sitia_na_m2: v })} fallback={0} className={inputCls} /></div>
         <div>
           <label className={labelCls}>Laser orez (€/m²)</label>
           <div className="flex items-center gap-1">
-            <input type="number" step="0.1" value={nastavenia.naklad_laser_m2} onChange={(e) => uloz({ naklad_laser_m2: parseFloat(e.target.value) || 0 })} className={inputCls} />
+            <NumberInput step="0.1" value={nastavenia.naklad_laser_m2} onChange={(v) => uloz({ naklad_laser_m2: v })} fallback={0} className={inputCls} />
             {nastavenia.laser_hrubka_id && (
               <button type="button" onClick={() => prepocitajLaser(nastavenia.laser_hrubka_id)} title="Prepočítať z Kostry cien → Laserové rezanie" className="shrink-0 text-slate-500 hover:text-indigo-400 p-1.5"><RefreshCw className="w-3.5 h-3.5" /></button>
             )}
@@ -136,7 +137,7 @@ export default function ZastavaNastaveniaTab({ supabase }) {
           </select>
           <p className="text-[10px] text-slate-500 mt-1">Vyber hrúbku vlajkoviny z Kostry cien → Laserové rezanie — dopočíta a natiahne skutočnú cenu.</p>
         </div>
-        <div><label className={labelCls}>Tunel/rukáv (€/bm)</label><input type="number" step="0.1" value={nastavenia.naklad_tunel_bm} onChange={(e) => uloz({ naklad_tunel_bm: parseFloat(e.target.value) || 0 })} className={inputCls} /><p className="text-[10px] text-slate-500 mt-1">Zatiaľ len ručne — nemáme reálny zdroj (čas šitia tunela).</p></div>
+        <div><label className={labelCls}>Tunel/rukáv (€/bm)</label><NumberInput step="0.1" value={nastavenia.naklad_tunel_bm} onChange={(v) => uloz({ naklad_tunel_bm: v })} fallback={0} className={inputCls} /><p className="text-[10px] text-slate-500 mt-1">Zatiaľ len ručne — nemáme reálny zdroj (čas šitia tunela).</p></div>
         <SkladPole label="Kovové očko/priechodka (€/ks)" kluc="ocko" nastavenia={nastavenia} skladPolozky={skladPolozky} SKLAD_POLIA={SKLAD_POLIA} prepojSklad={prepojSklad} prepocitajSklad={prepocitajSklad} uloz={uloz} inputCls={inputCls} labelCls={labelCls} />
         <SkladPole label="Karabínka (€/ks)" kluc="karabinka" nastavenia={nastavenia} skladPolozky={skladPolozky} SKLAD_POLIA={SKLAD_POLIA} prepojSklad={prepojSklad} prepocitajSklad={prepocitajSklad} uloz={uloz} inputCls={inputCls} labelCls={labelCls} />
         <SkladPole label="Spevňujúci popruh (€/bm)" kluc="popruh" nastavenia={nastavenia} skladPolozky={skladPolozky} SKLAD_POLIA={SKLAD_POLIA} prepojSklad={prepojSklad} prepocitajSklad={prepocitajSklad} uloz={uloz} inputCls={inputCls} labelCls={labelCls} />
@@ -145,7 +146,7 @@ export default function ZastavaNastaveniaTab({ supabase }) {
           <input type="number" disabled value={pricingConfig.dphPercent} className={`${inputCls} text-slate-400 opacity-70 cursor-not-allowed`} />
           <p className="text-[10px] text-slate-500 mt-1">Nastavuje sa centrálne v záložke Cenotvorba.</p>
         </div>
-        <div><label className={labelCls}>Expresný príplatok (%)</label><input type="number" step="1" value={nastavenia.expresny_priplatok_percent} onChange={(e) => uloz({ expresny_priplatok_percent: parseFloat(e.target.value) || 0 })} className={inputCls} /></div>
+        <div><label className={labelCls}>Expresný príplatok (%)</label><NumberInput step="1" value={nastavenia.expresny_priplatok_percent} onChange={(v) => uloz({ expresny_priplatok_percent: v })} fallback={0} className={inputCls} /></div>
       </div>
 
       <div className="bg-slate-950 rounded-2xl p-5 border border-indigo-900/40">
@@ -158,8 +159,8 @@ export default function ZastavaNastaveniaTab({ supabase }) {
               {materialy.map(m => <option key={m.kod} value={m.kod}>{m.nazov}</option>)}
             </select>
           </div>
-          <div><label className={labelCls}>Šírka (cm)</label><input type="number" value={testSirka} onChange={(e) => setTestSirka(parseFloat(e.target.value) || 0)} className={inputCls} /></div>
-          <div><label className={labelCls}>Výška (cm)</label><input type="number" value={testVyska} onChange={(e) => setTestVyska(parseFloat(e.target.value) || 0)} className={inputCls} /></div>
+          <div><label className={labelCls}>Šírka (cm)</label><NumberInput value={testSirka} onChange={setTestSirka} fallback={0} className={inputCls} /></div>
+          <div><label className={labelCls}>Výška (cm)</label><NumberInput value={testVyska} onChange={setTestVyska} fallback={0} className={inputCls} /></div>
           <div>
             <label className={labelCls}>Okraje</label>
             <select value={testVyhotovenie} onChange={(e) => setTestVyhotovenie(e.target.value)} className={inputCls}>
@@ -167,7 +168,7 @@ export default function ZastavaNastaveniaTab({ supabase }) {
               <option value="laser">Laser orez</option>
             </select>
           </div>
-          <div><label className={labelCls}>Počet ks</label><input type="number" min="1" value={testKs} onChange={(e) => setTestKs(parseInt(e.target.value) || 1)} className={inputCls} /></div>
+          <div><label className={labelCls}>Počet ks</label><NumberInput min="1" value={testKs} onChange={setTestKs} fallback={1} className={inputCls} /></div>
         </div>
         <button onClick={spustiTest} disabled={testBeziaci || !testMaterial} className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-1.5">
           {testBeziaci && <Loader2 className="w-3.5 h-3.5 animate-spin" />} Prepočítať cenu
@@ -195,7 +196,7 @@ function SkladPole({ label, kluc, nastavenia, skladPolozky, SKLAD_POLIA, prepojS
     <div>
       <label className={labelCls}>{label}</label>
       <div className="flex items-center gap-1">
-        <input type="number" step="0.05" value={nastavenia[nakladPole]} onChange={(e) => uloz({ [nakladPole]: parseFloat(e.target.value) || 0 })} className={inputCls} />
+        <NumberInput step="0.05" value={nastavenia[nakladPole]} onChange={(v) => uloz({ [nakladPole]: v })} fallback={0} className={inputCls} />
         {skladId && (
           <button type="button" onClick={() => prepocitajSklad(kluc)} title="Prepočítať zo skladu" className="shrink-0 text-slate-500 hover:text-indigo-400 p-1.5"><RefreshCw className="w-3.5 h-3.5" /></button>
         )}

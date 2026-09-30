@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Layers3, Plus, Trash2 } from 'lucide-react';
 import { elektrinaZariadeniaEurZaHod, vcSietotlacCelkom, vcLaserRezanie } from './vyrobneNaklady';
+import NumberInput from '../NumberInput';
 
 const inputCls = 'w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white';
 const labelCls = 'text-xs text-slate-400 font-medium';
@@ -9,7 +10,7 @@ function Field({ label, value, step, onChange, hint }) {
   return (
     <div>
       <label className={labelCls}>{label}</label>
-      <input type="number" step={step} value={value ?? ''} onChange={(e) => onChange(parseFloat(e.target.value) || 0)} className={inputCls} />
+      <NumberInput step={step} value={value ?? ''} onChange={onChange} fallback={0} className={inputCls} />
       {hint && <p className="text-[10px] text-slate-500 mt-1">{hint}</p>}
     </div>
   );
@@ -432,7 +433,7 @@ export default function KostraCienTab({ supabase }) {
               <div key={f.id} className="flex flex-wrap items-center gap-2 bg-slate-950/40 rounded-lg p-2">
                 <input type="text" value={f.nazov} onChange={(e) => upravFoliu(f.id, { nazov: e.target.value })} className="flex-1 min-w-[100px] px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" />
                 <div className="flex items-center gap-1 text-xs text-slate-400 shrink-0">
-                  <input type="number" step="0.05" value={f.naklad_bm || 0} onChange={(e) => upravFoliu(f.id, { naklad_bm: parseFloat(e.target.value) || 0 })} className="w-20 px-2 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /> €/bm (bez DPH)
+                  <NumberInput step="0.05" value={f.naklad_bm || 0} onChange={(v) => upravFoliu(f.id, { naklad_bm: v })} fallback={0} className="w-20 px-2 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /> €/bm (bez DPH)
                 </div>
                 <button onClick={() => zmazFoliu(f.id)} className="text-slate-400 hover:text-rose-400 p-1.5 shrink-0 ml-auto"><Trash2 className="w-4 h-4" /></button>
                 <span className="text-[11px] text-slate-500 w-full">= {nakladCm2.toFixed(6)} €/cm² • {(nakladCm2 * 100).toFixed(4)} € pri 10×10cm (bez DPH)</span>
@@ -551,13 +552,13 @@ export default function KostraCienTab({ supabase }) {
           {sietotlacVelkosti.map(v => (
             <div key={v.id} className="flex flex-wrap items-center gap-1.5 text-xs bg-slate-950 border border-slate-800 rounded-lg p-2">
               <input type="text" value={v.label} onChange={(e) => upravVelkost(v.id, { label: e.target.value })} className="flex-1 min-w-[120px] px-2 py-1.5 bg-slate-900 border border-slate-800 rounded text-white" />
-              <input type="number" step="0.1" value={v.sirka_cm} onChange={(e) => upravVelkost(v.id, { sirka_cm: parseFloat(e.target.value) || 0 })} className="w-16 px-2 py-1.5 bg-slate-900 border border-slate-800 rounded text-white" title="šírka cm" />
+              <NumberInput step="0.1" value={v.sirka_cm} onChange={(val) => upravVelkost(v.id, { sirka_cm: val })} fallback={0} className="w-16 px-2 py-1.5 bg-slate-900 border border-slate-800 rounded text-white" title="šírka cm" />
               <span className="text-slate-600">×</span>
-              <input type="number" step="0.1" value={v.vyska_cm} onChange={(e) => upravVelkost(v.id, { vyska_cm: parseFloat(e.target.value) || 0 })} className="w-16 px-2 py-1.5 bg-slate-900 border border-slate-800 rounded text-white" title="výška cm" />
+              <NumberInput step="0.1" value={v.vyska_cm} onChange={(val) => upravVelkost(v.id, { vyska_cm: val })} fallback={0} className="w-16 px-2 py-1.5 bg-slate-900 border border-slate-800 rounded text-white" title="výška cm" />
               <span className="text-slate-500">cm •</span>
-              <input type="number" step="0.5" value={v.spotreba_g_svetly} onChange={(e) => upravVelkost(v.id, { spotreba_g_svetly: parseFloat(e.target.value) || 0 })} className="w-16 px-2 py-1.5 bg-slate-900 border border-slate-800 rounded text-white" title="g svetlý" />
+              <NumberInput step="0.5" value={v.spotreba_g_svetly} onChange={(val) => upravVelkost(v.id, { spotreba_g_svetly: val })} fallback={0} className="w-16 px-2 py-1.5 bg-slate-900 border border-slate-800 rounded text-white" title="g svetlý" />
               <span className="text-slate-500">g svetlý /</span>
-              <input type="number" step="0.5" value={v.spotreba_g_tmavy} onChange={(e) => upravVelkost(v.id, { spotreba_g_tmavy: parseFloat(e.target.value) || 0 })} className="w-16 px-2 py-1.5 bg-slate-900 border border-slate-800 rounded text-white" title="g tmavý" />
+              <NumberInput step="0.5" value={v.spotreba_g_tmavy} onChange={(val) => upravVelkost(v.id, { spotreba_g_tmavy: val })} fallback={0} className="w-16 px-2 py-1.5 bg-slate-900 border border-slate-800 rounded text-white" title="g tmavý" />
               <span className="text-slate-500">g tmavý</span>
               <button onClick={() => zmazVelkost(v.id)} className="text-slate-500 hover:text-rose-400 p-1 shrink-0"><Trash2 className="w-3.5 h-3.5" /></button>
             </div>
@@ -618,7 +619,7 @@ export default function KostraCienTab({ supabase }) {
             <div key={h.id} className="flex flex-wrap items-center gap-2 bg-slate-950/40 rounded-lg p-2">
               <input type="text" value={h.label} onChange={(e) => upravHrubku(h.id, { label: e.target.value })} className="flex-1 min-w-[160px] px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" />
               <div className="flex items-center gap-1 text-xs text-slate-400 shrink-0">
-                <input type="number" step="0.005" value={h.cas_rezania_min_cm2 || 0} onChange={(e) => upravHrubku(h.id, { cas_rezania_min_cm2: parseFloat(e.target.value) || 0 })} className="w-24 px-2 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /> min/cm²
+                <NumberInput step="0.005" value={h.cas_rezania_min_cm2 || 0} onChange={(v) => upravHrubku(h.id, { cas_rezania_min_cm2: v })} fallback={0} className="w-24 px-2 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /> min/cm²
               </div>
               <button onClick={() => zmazHrubku(h.id)} className="text-slate-400 hover:text-rose-400 p-1.5 shrink-0 ml-auto"><Trash2 className="w-4 h-4" /></button>
               <span className="text-[11px] text-slate-500 w-full">{casNaCm2Hint(h.cas_rezania_min_cm2, REF_PLOCHA_CM2)}</span>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import NumberInput from './NumberInput';
 import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
 import { QRCodeSVG } from 'qrcode.react';
@@ -7470,11 +7471,11 @@ export default function App() {
                           <div className="grid grid-cols-2 gap-1.5">
                             <div>
                               <label className="block text-[10px] text-slate-500 mb-0.5">Spotreba 1-4 ks (m)</label>
-                              <input type="number" step="0.01" value={editingProduct ? (editingProduct.layer1?.consumption?.lt5 ?? '') : newModelLayer1Lt5} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, layer1: { ...editingProduct.layer1, consumption: { ...editingProduct.layer1.consumption, lt5: parseFloat(e.target.value) || 0 } } }) : setNewModelLayer1Lt5(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-white" />
+                              <NumberInput step="0.01" value={editingProduct ? (editingProduct.layer1?.consumption?.lt5 ?? '') : newModelLayer1Lt5} onChange={(v) => editingProduct ? setEditingProduct({ ...editingProduct, layer1: { ...editingProduct.layer1, consumption: { ...editingProduct.layer1.consumption, lt5: v } } }) : setNewModelLayer1Lt5(String(v))} fallback={0} className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-white" />
                             </div>
                             <div>
                               <label className="block text-[10px] text-slate-500 mb-0.5">Spotreba 5+ ks (m)</label>
-                              <input type="number" step="0.01" value={editingProduct ? (editingProduct.layer1?.consumption?.ge5 ?? '') : newModelLayer1Ge5} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, layer1: { ...editingProduct.layer1, consumption: { ...editingProduct.layer1.consumption, ge5: parseFloat(e.target.value) || 0 } } }) : setNewModelLayer1Ge5(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-white" />
+                              <NumberInput step="0.01" value={editingProduct ? (editingProduct.layer1?.consumption?.ge5 ?? '') : newModelLayer1Ge5} onChange={(v) => editingProduct ? setEditingProduct({ ...editingProduct, layer1: { ...editingProduct.layer1, consumption: { ...editingProduct.layer1.consumption, ge5: v } } }) : setNewModelLayer1Ge5(String(v))} fallback={0} className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-white" />
                             </div>
                           </div>
                         )}
@@ -7514,11 +7515,11 @@ export default function App() {
                           <div className="grid grid-cols-2 gap-1.5">
                             <div>
                               <label className="block text-[10px] text-slate-500 mb-0.5">Spotreba 1-4 ks (m)</label>
-                              <input type="number" step="0.01" value={editingProduct ? (editingProduct.layer2?.consumption?.lt5 ?? '') : newModelLayer2Lt5} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, layer2: { ...editingProduct.layer2, consumption: { ...editingProduct.layer2.consumption, lt5: parseFloat(e.target.value) || 0 } } }) : setNewModelLayer2Lt5(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-white" />
+                              <NumberInput step="0.01" value={editingProduct ? (editingProduct.layer2?.consumption?.lt5 ?? '') : newModelLayer2Lt5} onChange={(v) => editingProduct ? setEditingProduct({ ...editingProduct, layer2: { ...editingProduct.layer2, consumption: { ...editingProduct.layer2.consumption, lt5: v } } }) : setNewModelLayer2Lt5(String(v))} fallback={0} className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-white" />
                             </div>
                             <div>
                               <label className="block text-[10px] text-slate-500 mb-0.5">Spotreba 5+ ks (m)</label>
-                              <input type="number" step="0.01" value={editingProduct ? (editingProduct.layer2?.consumption?.ge5 ?? '') : newModelLayer2Ge5} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, layer2: { ...editingProduct.layer2, consumption: { ...editingProduct.layer2.consumption, ge5: parseFloat(e.target.value) || 0 } } }) : setNewModelLayer2Ge5(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-white" />
+                              <NumberInput step="0.01" value={editingProduct ? (editingProduct.layer2?.consumption?.ge5 ?? '') : newModelLayer2Ge5} onChange={(v) => editingProduct ? setEditingProduct({ ...editingProduct, layer2: { ...editingProduct.layer2, consumption: { ...editingProduct.layer2.consumption, ge5: v } } }) : setNewModelLayer2Ge5(String(v))} fallback={0} className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-white" />
                             </div>
                           </div>
                         )}
@@ -7558,11 +7559,11 @@ export default function App() {
                           <div className="grid grid-cols-2 gap-1.5">
                             <div>
                               <label className="block text-[10px] text-slate-500 mb-0.5">Spotreba 1-4 ks (m)</label>
-                              <input type="number" step="0.01" value={editingProduct ? (editingProduct.layer3?.consumption?.lt5 ?? '') : newModelLayer3Lt5} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, layer3: { ...editingProduct.layer3, consumption: { ...editingProduct.layer3.consumption, lt5: parseFloat(e.target.value) || 0 } } }) : setNewModelLayer3Lt5(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-white" />
+                              <NumberInput step="0.01" value={editingProduct ? (editingProduct.layer3?.consumption?.lt5 ?? '') : newModelLayer3Lt5} onChange={(v) => editingProduct ? setEditingProduct({ ...editingProduct, layer3: { ...editingProduct.layer3, consumption: { ...editingProduct.layer3.consumption, lt5: v } } }) : setNewModelLayer3Lt5(String(v))} fallback={0} className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-white" />
                             </div>
                             <div>
                               <label className="block text-[10px] text-slate-500 mb-0.5">Spotreba 5+ ks (m)</label>
-                              <input type="number" step="0.01" value={editingProduct ? (editingProduct.layer3?.consumption?.ge5 ?? '') : newModelLayer3Ge5} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, layer3: { ...editingProduct.layer3, consumption: { ...editingProduct.layer3.consumption, ge5: parseFloat(e.target.value) || 0 } } }) : setNewModelLayer3Ge5(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-white" />
+                              <NumberInput step="0.01" value={editingProduct ? (editingProduct.layer3?.consumption?.ge5 ?? '') : newModelLayer3Ge5} onChange={(v) => editingProduct ? setEditingProduct({ ...editingProduct, layer3: { ...editingProduct.layer3, consumption: { ...editingProduct.layer3.consumption, ge5: v } } }) : setNewModelLayer3Ge5(String(v))} fallback={0} className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-white" />
                             </div>
                           </div>
                         )}
@@ -7593,12 +7594,12 @@ export default function App() {
                     <div className="grid grid-cols-2 gap-3 bg-slate-950 p-3 rounded-lg border border-slate-800">
                       <div>
                         <label className="block text-slate-400 font-semibold mb-1">Dámsky strih (% z pánskeho)</label>
-                        <input type="number" step="1" value={editingProduct ? (editingProduct.womenRatioPercent ?? 90) : newModelWomenRatio} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, womenRatioPercent: parseFloat(e.target.value) || 0 }) : setNewModelWomenRatio(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" />
+                        <NumberInput step="1" value={editingProduct ? (editingProduct.womenRatioPercent ?? 90) : newModelWomenRatio} onChange={(v) => editingProduct ? setEditingProduct({ ...editingProduct, womenRatioPercent: v }) : setNewModelWomenRatio(String(v))} fallback={0} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" />
                         <p className="text-[10px] text-slate-500 mt-0.5">napr. 90 = dámsky strih spotrebuje 90% pánskej spotreby</p>
                       </div>
                       <div>
                         <label className="block text-slate-400 font-semibold mb-1">Detský strih (% z pánskeho)</label>
-                        <input type="number" step="1" value={editingProduct ? (editingProduct.childrenRatioPercent ?? 65) : newModelChildrenRatio} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, childrenRatioPercent: parseFloat(e.target.value) || 0 }) : setNewModelChildrenRatio(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" />
+                        <NumberInput step="1" value={editingProduct ? (editingProduct.childrenRatioPercent ?? 65) : newModelChildrenRatio} onChange={(v) => editingProduct ? setEditingProduct({ ...editingProduct, childrenRatioPercent: v }) : setNewModelChildrenRatio(String(v))} fallback={0} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" />
                         <p className="text-[10px] text-slate-500 mt-0.5">napr. 65 = detský strih spotrebuje 65% pánskej spotreby</p>
                       </div>
                     </div>
@@ -7685,7 +7686,7 @@ export default function App() {
                                   <option value="">— formát motívu —</option>
                                   {(kostra?.sietotlacVelkosti || []).map(v => (<option key={v.id} value={v.id}>{v.label}</option>))}
                                 </select>
-                                <input type="number" step="1" min="1" placeholder="počet farieb" value={(editingProduct ? editingProduct.sietotlacPocetFarieb : newModelSietotlacPocetFarieb) ?? 1} onChange={(e) => { const v = Math.max(1, parseInt(e.target.value) || 1); editingProduct ? setEditingProduct({ ...editingProduct, sietotlacPocetFarieb: v }) : setNewModelSietotlacPocetFarieb(v); }} className="w-24 bg-slate-950 border border-slate-800 rounded p-1.5 text-white text-[11px]" />
+                                <NumberInput step="1" min="1" placeholder="počet farieb" value={(editingProduct ? editingProduct.sietotlacPocetFarieb : newModelSietotlacPocetFarieb) ?? 1} onChange={(v) => { const clamped = Math.max(1, v); editingProduct ? setEditingProduct({ ...editingProduct, sietotlacPocetFarieb: clamped }) : setNewModelSietotlacPocetFarieb(clamped); }} fallback={1} className="w-24 bg-slate-950 border border-slate-800 rounded p-1.5 text-white text-[11px]" />
                               </div>
                               <label className="flex items-center gap-1.5 text-[11px] text-slate-300">
                                 <input type="checkbox" checked={editingProduct ? !!editingProduct.sietotlacJeTmavy : newModelSietotlacJeTmavy} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, sietotlacJeTmavy: e.target.checked }) : setNewModelSietotlacJeTmavy(e.target.checked)} className="rounded border-slate-700 bg-slate-950" />
@@ -7949,7 +7950,7 @@ export default function App() {
                   {krajcirky.map(k => (
                     <div key={k.id} className="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs">
                       <input type="text" value={k.meno} onChange={(e) => handleUpravKrajcirku(k.id, { meno: e.target.value })} className="flex-1 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-white" />
-                      <input type="number" step="0.5" value={k.vykon_za_smenu} onChange={(e) => handleUpravKrajcirku(k.id, { vykon_za_smenu: parseFloat(e.target.value) || 0 })} className="w-24 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-white text-right" title="Výkon za smenu (red. jednotky)" />
+                      <NumberInput step="0.5" value={k.vykon_za_smenu} onChange={(v) => handleUpravKrajcirku(k.id, { vykon_za_smenu: v })} fallback={0} className="w-24 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-white text-right" title="Výkon za smenu (red. jednotky)" />
                       <label className="flex items-center gap-1 text-slate-400 shrink-0">
                         <input type="checkbox" checked={k.aktivna} onChange={(e) => handleUpravKrajcirku(k.id, { aktivna: e.target.checked })} /> aktívna
                       </label>
@@ -9000,7 +9001,7 @@ export default function App() {
                         <input type="text" placeholder="Názov" value={it.name} onChange={(e) => handleUpdateParsedItem(it.tempId, 'name', e.target.value)} className="col-span-3 bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" />
                         <input type="text" list="blank-goods-types-list" placeholder="Typ (voliteľné)" value={it.type} onChange={(e) => handleUpdateParsedItem(it.tempId, 'type', e.target.value)} className="col-span-2 bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" />
                         <input type="text" placeholder="Farba" value={it.color} onChange={(e) => handleUpdateParsedItem(it.tempId, 'color', e.target.value)} className="col-span-2 bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" />
-                        <input type="number" step="0.01" value={it.quantity} onChange={(e) => handleUpdateParsedItem(it.tempId, 'quantity', parseFloat(e.target.value) || 0)} className="col-span-2 bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" />
+                        <NumberInput step="0.01" value={it.quantity} onChange={(v) => handleUpdateParsedItem(it.tempId, 'quantity', v)} fallback={0} className="col-span-2 bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" />
                         <select value={it.unit} onChange={(e) => handleUpdateParsedItem(it.tempId, 'unit', e.target.value)} className="col-span-2 bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white">
                           {UNIT_OPTIONS.map(u => <option key={u.value} value={u.value}>{u.value}</option>)}
                         </select>
@@ -11561,7 +11562,7 @@ export default function App() {
                           <option value="">{it.productNameGuess ? `❓ "${it.productNameGuess}" — vyber produkt` : '-- vyber produkt --'}</option>
                           {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                         </select>
-                        <input type="number" min="1" value={it.qty} onChange={(e) => handleUpdateAiResultItem(it.tempId, 'qty', parseInt(e.target.value) || 1)} className="col-span-2 bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" />
+                        <NumberInput min="1" value={it.qty} onChange={(v) => handleUpdateAiResultItem(it.tempId, 'qty', v)} fallback={1} className="col-span-2 bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" />
                         <select value={it.gender} onChange={(e) => handleUpdateAiResultItem(it.tempId, 'gender', e.target.value)} className="col-span-2 bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white">
                           <option value="men">Muži</option>
                           <option value="women">Ženy</option>
@@ -11752,8 +11753,8 @@ export default function App() {
                 {correctionDraft.items.map((it, i) => (
                   <div key={i} className="grid grid-cols-12 gap-1.5 items-center bg-slate-950 border border-slate-800 rounded p-2">
                     <input type="text" value={it.description} onChange={(e) => { const items = [...correctionDraft.items]; items[i] = { ...it, description: e.target.value }; setCorrectionDraft({ ...correctionDraft, items }); }} className="col-span-6 bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" />
-                    <input type="number" value={it.qty} onChange={(e) => { const items = [...correctionDraft.items]; items[i] = { ...it, qty: parseFloat(e.target.value) || 0 }; setCorrectionDraft({ ...correctionDraft, items }); }} className="col-span-2 bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" />
-                    <input type="number" step="0.01" value={it.unitPrice} onChange={(e) => { const items = [...correctionDraft.items]; items[i] = { ...it, unitPrice: parseFloat(e.target.value) || 0 }; setCorrectionDraft({ ...correctionDraft, items }); }} className="col-span-4 bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" />
+                    <NumberInput value={it.qty} onChange={(v) => { const items = [...correctionDraft.items]; items[i] = { ...it, qty: v }; setCorrectionDraft({ ...correctionDraft, items }); }} fallback={0} className="col-span-2 bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" />
+                    <NumberInput step="0.01" value={it.unitPrice} onChange={(v) => { const items = [...correctionDraft.items]; items[i] = { ...it, unitPrice: v }; setCorrectionDraft({ ...correctionDraft, items }); }} fallback={0} className="col-span-4 bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" />
                   </div>
                 ))}
               </div>

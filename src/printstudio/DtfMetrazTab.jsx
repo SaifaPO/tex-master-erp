@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import NumberInput from '../NumberInput';
 import { Scroll, Download, Settings, ExternalLink, Trash2 } from 'lucide-react';
 import { priceAt, marginAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 
@@ -205,7 +206,7 @@ function Field({ label, value, step, onChange }) {
   return (
     <div>
       <label className="block text-slate-400 mb-1">{label}</label>
-      <input type="number" step={step} value={value} onChange={(e) => onChange(parseFloat(e.target.value) || 0)} className="w-full px-2 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono" />
+      <NumberInput step={step} value={value} onChange={onChange} fallback={0} className="w-full px-2 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono" />
     </div>
   );
 }

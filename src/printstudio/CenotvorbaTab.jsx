@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, Fragment } from 'react';
 import { Calculator, ArrowUp, ArrowDown, Download, Loader2, AlertTriangle, Save } from 'lucide-react';
 import { priceAt, marginAt, priceWithCapacity, marginEurPerCapUnit, wholesalePriceOf, QUANTITY_LEVELS, QTY_PRESETS, mapConfigFromDb, mapConfigToDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
+import NumberInput from '../NumberInput';
 
 // Toto je JEDINÉ miesto v appke, kde sa nastavuje 5 koeficientov marže (pricing_config) —
 // pouziva ich aj Cennik potlace (nakladove kalkulacky sublimacia/DTF/sietotlac/rezany transfer).
@@ -196,40 +197,40 @@ export default function CenotvorbaTab({ supabase }) {
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-9 gap-3">
           <div>
             <label className="block text-[11px] text-slate-400 mb-1">Strop marže pri 1 ks (coef_a, %)</label>
-            <input type="number" step="0.1" value={config.coefA} onChange={e => setConfig({ ...config, coefA: parseFloat(e.target.value) || 0 })} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white text-sm" />
+            <NumberInput step="0.1" value={config.coefA} onChange={v => setConfig({ ...config, coefA: v })} fallback={0} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white text-sm" />
           </div>
           <div>
             <label className="block text-[11px] text-slate-400 mb-1">Citlivosť na cenu (coef_b)</label>
-            <input type="number" step="0.1" value={config.coefB} onChange={e => setConfig({ ...config, coefB: parseFloat(e.target.value) || 0 })} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white text-sm" />
+            <NumberInput step="0.1" value={config.coefB} onChange={v => setConfig({ ...config, coefB: v })} fallback={0} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white text-sm" />
           </div>
           <div>
             <label className="block text-[11px] text-slate-400 mb-1">Podlaha marže (%)</label>
-            <input type="number" step="0.1" value={config.marginFloor} onChange={e => setConfig({ ...config, marginFloor: parseFloat(e.target.value) || 0 })} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white text-sm" />
+            <NumberInput step="0.1" value={config.marginFloor} onChange={v => setConfig({ ...config, marginFloor: v })} fallback={0} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white text-sm" />
           </div>
           <div>
             <label className="block text-[11px] text-slate-400 mb-1">Tvar degresie (coef_p)</label>
-            <input type="number" step="0.1" value={config.coefP} onChange={e => setConfig({ ...config, coefP: parseFloat(e.target.value) || 0 })} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white text-sm" />
+            <NumberInput step="0.1" value={config.coefP} onChange={v => setConfig({ ...config, coefP: v })} fallback={0} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white text-sm" />
           </div>
           <div>
             <label className="block text-[11px] text-slate-400 mb-1">Cieľová hodnota veľkej zákazky (€)</label>
-            <input type="number" step="500" value={config.cielovaHodnotaZakazky} onChange={e => setConfig({ ...config, cielovaHodnotaZakazky: parseFloat(e.target.value) || 1 })} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white text-sm" />
+            <NumberInput step="500" value={config.cielovaHodnotaZakazky} onChange={v => setConfig({ ...config, cielovaHodnotaZakazky: v })} fallback={1} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white text-sm" />
             <p className="text-[10px] text-slate-500 mt-1">Počet ks pri podlahovej marži sa dopočíta ako táto hodnota ÷ výrobná cena kusu — drahá položka (napr. dres) dosiahne podlahu už pri pár stovkách ks, lacná (napr. čelenka) až pri tisíckach.</p>
           </div>
           <div>
             <label className="block text-[11px] text-emerald-400 mb-1 font-semibold">DPH (%) — platí pre všetky konfigurátory</label>
-            <input type="number" step="0.5" value={config.dphPercent} onChange={e => setConfig({ ...config, dphPercent: parseFloat(e.target.value) || 0 })} className="w-full bg-slate-950 border border-emerald-900/50 rounded p-2 text-white text-sm" />
+            <NumberInput step="0.5" value={config.dphPercent} onChange={v => setConfig({ ...config, dphPercent: v })} fallback={0} className="w-full bg-slate-950 border border-emerald-900/50 rounded p-2 text-white text-sm" />
           </div>
           <div>
             <label className="block text-[11px] text-emerald-400 mb-1 font-semibold">Cena šitia (€/min)</label>
-            <input type="number" step="0.05" value={config.cenaMinutySitia} onChange={e => setConfig({ ...config, cenaMinutySitia: parseFloat(e.target.value) || 0 })} className="w-full bg-slate-950 border border-emerald-900/50 rounded p-2 text-white text-sm" />
+            <NumberInput step="0.05" value={config.cenaMinutySitia} onChange={v => setConfig({ ...config, cenaMinutySitia: v })} fallback={0} className="w-full bg-slate-950 border border-emerald-900/50 rounded p-2 text-white text-sm" />
           </div>
           <div>
             <label className="block text-[11px] text-emerald-400 mb-1 font-semibold">Strihanie/rezanie/vysek. (€/100cm²)</label>
-            <input type="number" step="0.05" value={config.cenaStrihania100cm2} onChange={e => setConfig({ ...config, cenaStrihania100cm2: parseFloat(e.target.value) || 0 })} className="w-full bg-slate-950 border border-emerald-900/50 rounded p-2 text-white text-sm" />
+            <NumberInput step="0.05" value={config.cenaStrihania100cm2} onChange={v => setConfig({ ...config, cenaStrihania100cm2: v })} fallback={0} className="w-full bg-slate-950 border border-emerald-900/50 rounded p-2 text-white text-sm" />
           </div>
           <div>
             <label className="block text-[11px] text-emerald-400 mb-1 font-semibold">Sadzba RV (€/min)</label>
-            <input type="number" step="0.01" value={config.sadzbaRvMin} onChange={e => setConfig({ ...config, sadzbaRvMin: parseFloat(e.target.value) || 0 })} className="w-full bg-slate-950 border border-emerald-900/50 rounded p-2 text-white text-sm" />
+            <NumberInput step="0.01" value={config.sadzbaRvMin} onChange={v => setConfig({ ...config, sadzbaRvMin: v })} fallback={0} className="w-full bg-slate-950 border border-emerald-900/50 rounded p-2 text-white text-sm" />
           </div>
         </div>
         <p className="text-[11px] text-emerald-500/80 mt-2">DPH sa odteraz nastavuje LEN tu — DTF/Textilná metráž, Zástava, Beachflag, Čelenky aj Buffky ju čítajú odtiaľto, nie zo svojich vlastných nastavení. Cena šitia a cena strihania/rezania/vysekávania sa používajú v Katalógu Produktov na automatický dopočet Výrobnej ceny. Sadzba RV (0,30 €/min podľa historických dát z Výdaja z výroby) sa používa na automatický dopočet Redukovaného výkonu z Minút šitia.</p>
@@ -259,7 +260,7 @@ export default function CenotvorbaTab({ supabase }) {
         <div className="flex items-end gap-3">
           <div>
             <label className="block text-[11px] text-slate-400 mb-1">Cieľ: € marže / jednotku redukovaného výkonu (coef_f)</label>
-            <input type="number" step="0.01" min="0" value={config.capMarginTarget} onChange={e => setConfig({ ...config, capMarginTarget: parseFloat(e.target.value) || 0 })} className="w-64 bg-slate-950 border border-amber-900/40 rounded p-2 text-white text-sm" />
+            <NumberInput step="0.01" min="0" value={config.capMarginTarget} onChange={v => setConfig({ ...config, capMarginTarget: v })} fallback={0} className="w-64 bg-slate-950 border border-amber-900/40 rounded p-2 text-white text-sm" />
           </div>
           <p className="text-[11px] text-slate-500 pb-2">0 = vypnuté (tabuľka nižšie sa správa ako doteraz)</p>
         </div>
@@ -277,7 +278,7 @@ export default function CenotvorbaTab({ supabase }) {
         <div className="flex items-end gap-3">
           <div>
             <label className="block text-[11px] text-slate-400 mb-1">Veľkoobchodná zľava (%)</label>
-            <input type="number" step="0.5" min="0" max="100" value={config.wholesaleDiscountPercent} onChange={e => setConfig({ ...config, wholesaleDiscountPercent: parseFloat(e.target.value) || 0 })} className="w-40 bg-slate-950 border border-cyan-900/40 rounded p-2 text-white text-sm" />
+            <NumberInput step="0.5" min="0" max="100" value={config.wholesaleDiscountPercent} onChange={v => setConfig({ ...config, wholesaleDiscountPercent: v })} fallback={0} className="w-40 bg-slate-950 border border-cyan-900/40 rounded p-2 text-white text-sm" />
           </div>
           <div>
             <label className="block text-[11px] text-slate-400 mb-1">Zobraziť ceny ako</label>

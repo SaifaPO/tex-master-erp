@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Ruler, Calculator } from 'lucide-react';
 import { vypocitajCenuVlajky } from './vlajkaCenotvorba';
 import { mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
+import NumberInput from '../NumberInput';
 
 export default function VlajkaVelkostiTab({ supabase }) {
   const [velkosti, setVelkosti] = useState([]);
@@ -93,14 +94,14 @@ export default function VlajkaVelkostiTab({ supabase }) {
               <tr key={v.id} className="border-t border-slate-800">
                 <td className="px-4 py-2 text-white font-bold">{v.kod}</td>
                 <td className="px-4 py-2">
-                  <input type="number" value={v.vyska_cm} onChange={(e) => upravVelkost(v.id, { vyska_cm: parseFloat(e.target.value) || 0 })} className="w-24 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" />
+                  <NumberInput value={v.vyska_cm} onChange={(val) => upravVelkost(v.id, { vyska_cm: val })} fallback={0} className="w-24 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" />
                 </td>
                 <td className="px-4 py-2">
                   <input type="text" value={v.rozmer_popis} onChange={(e) => upravVelkost(v.id, { rozmer_popis: e.target.value })} className="w-36 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" />
                 </td>
                 <td className="px-4 py-2">
                   <div className="flex items-center gap-1.5">
-                    <input type="number" step="1" value={v.minuty_sitia ?? 0} onChange={(e) => upravVelkost(v.id, { minuty_sitia: parseFloat(e.target.value) || 0 })} className="w-20 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" />
+                    <NumberInput step="1" value={v.minuty_sitia ?? 0} onChange={(val) => upravVelkost(v.id, { minuty_sitia: val })} fallback={0} className="w-20 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" />
                     <span className="text-xs text-slate-500">min × {Number(pricingConfig.cenaMinutySitia || 0).toFixed(2)} €/min = {(Number(v.minuty_sitia || 0) * Number(pricingConfig.cenaMinutySitia || 0)).toFixed(2)} €</span>
                   </div>
                 </td>
@@ -119,7 +120,7 @@ export default function VlajkaVelkostiTab({ supabase }) {
         </div>
         <div>
           <label className="text-xs text-indigo-300 font-medium">Expresný príplatok (%)</label>
-          <input type="number" step="0.5" value={nastavenia.expresny_priplatok_percent} onChange={(e) => ulozNastavenia({ expresny_priplatok_percent: parseFloat(e.target.value) || 0 })} className="w-full mt-1 px-3 py-2 bg-slate-950 border border-indigo-800 rounded-lg text-sm text-white" />
+          <NumberInput step="0.5" value={nastavenia.expresny_priplatok_percent} onChange={(v) => ulozNastavenia({ expresny_priplatok_percent: v })} fallback={0} className="w-full mt-1 px-3 py-2 bg-slate-950 border border-indigo-800 rounded-lg text-sm text-white" />
         </div>
       </div>
 
@@ -146,7 +147,7 @@ export default function VlajkaVelkostiTab({ supabase }) {
           </div>
           <div>
             <label className="text-xs text-slate-400">Počet kusov</label>
-            <input type="number" min="1" value={testKs} onChange={(e) => setTestKs(parseInt(e.target.value) || 1)} className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white" />
+            <NumberInput min="1" value={testKs} onChange={setTestKs} fallback={1} className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white" />
           </div>
           <div className="flex items-end pb-1">
             <label className="text-xs text-slate-400 flex items-center gap-2">

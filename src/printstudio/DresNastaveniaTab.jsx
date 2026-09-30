@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Shirt, Plus, Trash2, ExternalLink, RefreshCw, AlertTriangle } from 'lucide-react';
+import NumberInput from '../NumberInput';
 
 const PRINTSTUDIO_BASE_URL = 'https://printstudio-pro.vercel.app';
 // Orientacna spotreba latky na jeden dospely dres (predok+chrbat spolu), pri bezne pouzivanej
@@ -254,12 +255,12 @@ export default function DresNastaveniaTab({ supabase }) {
                       <input type="text" value={m.kod} onChange={(e) => upravMaterial(m.id, { kod: e.target.value })} placeholder="kód" className="w-28 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white font-mono" />
                       <input type="text" value={m.nazov} onChange={(e) => upravMaterial(m.id, { nazov: e.target.value })} placeholder="Názov" className="flex-1 min-w-[140px] px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" />
                       <div className="flex items-center gap-1 text-xs text-slate-400 shrink-0">
-                        <input type="number" step="0.5" value={m.priplatok_eur} disabled={jePrepojeny && !chybaSirka} onChange={(e) => upravMaterial(m.id, { priplatok_eur: parseFloat(e.target.value) || 0 })} className="w-20 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white disabled:opacity-60" /> € príplatok
+                        <NumberInput step="0.5" value={m.priplatok_eur} disabled={jePrepojeny && !chybaSirka} onChange={(v) => upravMaterial(m.id, { priplatok_eur: v })} fallback={0} className="w-20 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white disabled:opacity-60" /> € príplatok
                         {jePrepojeny && !chybaSirka && (
                           <button type="button" onClick={() => prepocitajZoSkladu(m)} title="Prepočítať zo skladu (ak sa zmenila cena/šírka)" className="text-slate-500 hover:text-indigo-400 p-1"><RefreshCw className="w-3.5 h-3.5" /></button>
                         )}
                       </div>
-                      <input type="number" value={m.poradie} onChange={(e) => upravMaterial(m.id, { poradie: parseInt(e.target.value) || 0 })} title="Poradie" className="w-14 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white shrink-0" />
+                      <NumberInput value={m.poradie} onChange={(v) => upravMaterial(m.id, { poradie: v })} fallback={0} title="Poradie" className="w-14 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white shrink-0" />
                       <button onClick={() => zmazMaterial(m.id)} className="text-slate-400 hover:text-rose-400 p-1 shrink-0"><Trash2 className="w-4 h-4" /></button>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">

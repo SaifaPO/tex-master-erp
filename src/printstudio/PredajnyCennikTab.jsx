@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Printer, Plus, Trash2, X, Tag, Wand2, Hash, Image as ImageIcon, Shirt, Sparkles, Scissors, Palette, Share2 } from 'lucide-react';
+import NumberInput from '../NumberInput';
 import { priceAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 
 // Rovnaky vzor ako printWithFilename v hlavnom ERP (src/App.jsx) — dočasne premenuje kartu
@@ -297,7 +298,7 @@ ${(companySettings?.address || nastavenia.kontakt_riadok) ? `<p>${companySetting
                     <span>cm</span>
                   </div>
                   <div className="flex items-center gap-1 text-xs text-slate-400 shrink-0">
-                    <input type="number" step="0.1" value={p.vyrobna_cena} onChange={(e) => upravPolozku(p.id, { vyrobna_cena: parseFloat(e.target.value) || 0 })} className="w-20 px-2 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-sm text-white" /> € výrobná
+                    <NumberInput step="0.1" value={p.vyrobna_cena} onChange={(v) => upravPolozku(p.id, { vyrobna_cena: v })} fallback={0} className="w-20 px-2 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-sm text-white" /> € výrobná
                   </div>
                   {navrh !== null && (
                     <button onClick={() => upravPolozku(p.id, { vyrobna_cena: Number(navrh.toFixed(2)) })} title="Prepočítať výrobnú cenu z DTF sadzby podľa rozmeru" className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 font-semibold bg-indigo-950/30 border border-indigo-900/40 px-2 py-1.5 rounded-lg whitespace-nowrap">
@@ -423,7 +424,7 @@ function Field({ label, value, step, onChange }) {
   return (
     <div>
       <label className="block text-xs text-slate-400 mb-1">{label}</label>
-      <input type="number" step={step} value={value} onChange={(e) => onChange(parseFloat(e.target.value) || 0)} className="w-full px-2 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm" />
+      <NumberInput step={step} value={value} onChange={onChange} fallback={0} className="w-full px-2 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm" />
     </div>
   );
 }

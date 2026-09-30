@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Layers, Plus, Trash2, RefreshCw, AlertTriangle } from 'lucide-react';
+import NumberInput from '../NumberInput';
 
 // Prepocita cenu €/m2 z realneho skladoveho materialu (cena za bezny meter / sirka rolky v cm).
 // Vracia null, ak sklad. material nema vyplnenu sirku (width) — bez nej sa neda bm -> m2 previest.
@@ -103,13 +104,13 @@ export default function TextilMaterialyTab({ supabase }) {
                   {Object.entries(TECHNOLOGIA_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                 </select>
                 <div className="flex items-center gap-1 text-xs text-slate-400 shrink-0">
-                  <input type="number" step="0.1" value={m.naklad_m2} disabled={jePrepojeny && !chybaSirka} onChange={(e) => uprav(m.id, { naklad_m2: parseFloat(e.target.value) || 0 })} className="w-24 px-2 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-sm text-white disabled:opacity-60" /> € náklad/m²
+                  <NumberInput step="0.1" value={m.naklad_m2} disabled={jePrepojeny && !chybaSirka} onChange={(v) => uprav(m.id, { naklad_m2: v })} fallback={0} className="w-24 px-2 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-sm text-white disabled:opacity-60" /> € náklad/m²
                   {jePrepojeny && !chybaSirka && (
                     <button type="button" onClick={() => prepocitajZoSkladu(m)} title="Prepočítať zo skladu" className="text-slate-500 hover:text-indigo-400 p-1"><RefreshCw className="w-3.5 h-3.5" /></button>
                   )}
                 </div>
                 <div className="flex items-center gap-1 text-xs text-slate-400 shrink-0">
-                  <input type="number" step="1" value={m.sirka_tlace_cm ?? ''} disabled={jePrepojeny && !chybaSirka} onChange={(e) => uprav(m.id, { sirka_tlace_cm: parseFloat(e.target.value) || 0 })} placeholder="šírka" className="w-20 px-2 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-sm text-white disabled:opacity-60" /> cm šírka tlače
+                  <NumberInput step="1" value={m.sirka_tlace_cm ?? ''} disabled={jePrepojeny && !chybaSirka} onChange={(v) => uprav(m.id, { sirka_tlace_cm: v })} fallback={0} placeholder="šírka" className="w-20 px-2 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-sm text-white disabled:opacity-60" /> cm šírka tlače
                 </div>
                 <label className="flex items-center gap-1.5 text-xs text-slate-400 shrink-0">
                   <input type="checkbox" checked={m.aktivny} onChange={(e) => uprav(m.id, { aktivny: e.target.checked })} /> aktívna

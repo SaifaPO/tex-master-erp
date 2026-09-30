@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Plus, Trash2, Package, ChevronDown, ChevronUp, ImagePlus } from 'lucide-react';
 import { nahrajObrazokDoplnku } from './nahrajObrazok';
+import NumberInput from '../NumberInput';
 
 const VELKOSTI = ['S', 'M', 'L', 'XL'];
 
@@ -102,8 +103,8 @@ function JednoduchaSekcia({ supabase, tabulka, nazovSekcie, popisSekcie, maMaxMn
                   <td className="px-4 py-2"><FotoUpload url={r.obrazok_url} onNahraj={async (subor) => uprav(r.id, { obrazok_url: await nahrajObrazokDoplnku(supabase, subor) })} /></td>
                   <td className="px-4 py-2"><input type="text" value={r.kod} onChange={(e) => uprav(r.id, { kod: e.target.value })} className="w-28 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white font-mono" /></td>
                   <td className="px-4 py-2"><input type="text" value={r.nazov} onChange={(e) => uprav(r.id, { nazov: e.target.value })} className="w-48 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /></td>
-                  <td className="px-4 py-2"><input type="number" step="0.5" value={r.cena} onChange={(e) => uprav(r.id, { cena: parseFloat(e.target.value) || 0 })} className="w-20 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /></td>
-                  {maMaxMnozstvo && <td className="px-4 py-2"><input type="number" min="1" value={r.max_mnozstvo} onChange={(e) => uprav(r.id, { max_mnozstvo: parseInt(e.target.value) || 1 })} className="w-16 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /></td>}
+                  <td className="px-4 py-2"><NumberInput step="0.5" value={r.cena} onChange={(v) => uprav(r.id, { cena: v })} fallback={0} className="w-20 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /></td>
+                  {maMaxMnozstvo && <td className="px-4 py-2"><NumberInput min="1" value={r.max_mnozstvo} onChange={(v) => uprav(r.id, { max_mnozstvo: v })} fallback={1} className="w-16 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /></td>}
                   <td className="px-4 py-2"><input type="text" value={r.popis || ''} onChange={(e) => uprav(r.id, { popis: e.target.value })} className="w-64 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white" /></td>
                   <td className="px-4 py-2 text-right"><button onClick={() => zmaz(r.id)} className="text-slate-400 hover:text-rose-400 p-1"><Trash2 className="w-4 h-4" /></button></td>
                 </tr>

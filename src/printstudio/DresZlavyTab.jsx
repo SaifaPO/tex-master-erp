@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, Trash2, Percent } from 'lucide-react';
+import NumberInput from '../NumberInput';
 
 export default function DresZlavyTab({ supabase }) {
   const [riadky, setRiadky] = useState([]);
@@ -56,8 +57,8 @@ export default function DresZlavyTab({ supabase }) {
             <tbody>
               {riadky.map(r => (
                 <tr key={r.id} className="border-t border-slate-800">
-                  <td className="px-4 py-2"><input type="number" min="1" value={r.min_pocet} onChange={(e) => uprav(r.id, { min_pocet: parseInt(e.target.value) || 1 })} className="w-24 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /></td>
-                  <td className="px-4 py-2"><input type="number" step="0.5" min="0" max="100" value={r.zlava_percent} onChange={(e) => uprav(r.id, { zlava_percent: parseFloat(e.target.value) || 0 })} className="w-24 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /></td>
+                  <td className="px-4 py-2"><NumberInput min="1" value={r.min_pocet} onChange={(v) => uprav(r.id, { min_pocet: v })} fallback={1} className="w-24 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /></td>
+                  <td className="px-4 py-2"><NumberInput step="0.5" min="0" max="100" value={r.zlava_percent} onChange={(v) => uprav(r.id, { zlava_percent: v })} fallback={0} className="w-24 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /></td>
                   <td className="px-4 py-2 text-right"><button onClick={() => zmaz(r.id)} className="text-slate-400 hover:text-rose-400 p-1"><Trash2 className="w-4 h-4" /></button></td>
                 </tr>
               ))}
