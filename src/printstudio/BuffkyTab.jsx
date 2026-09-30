@@ -75,7 +75,9 @@ export default function BuffkyTab({ supabase }) {
   };
 
   const zmazObjednavku = async (id) => {
-    if (!window.confirm('Naozaj zmazať túto objednávku? (Zmaže len záznam tu — prípadnú Shopify draft objednávku treba zmazať samostatne v Shopify Admin → Orders → Drafts.)')) return;
+    if (!window.confirm('Naozaj zmazať túto objednávku? Zmaže sa aj priložený súbor v Storage (ak nejaký je). Prípadnú Shopify draft objednávku treba zmazať samostatne v Shopify Admin → Orders → Drafts.')) return;
+    const ord = objednavky.find(x => x.id === id);
+    if (ord?.subor_cesta) await supabase.storage.from(BUCKET).remove([ord.subor_cesta]);
     setObjednavky(o => o.filter(x => x.id !== id));
     await supabase.from('buffky_objednavky').delete().eq('id', id);
   };
@@ -229,6 +231,7 @@ export default function BuffkyTab({ supabase }) {
                     <span className="font-bold text-white font-mono">{o.id.slice(0, 8)}</span>
                     <span className={`px-2 py-0.5 rounded text-[10px] border ${o.typ === 'premium' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' : 'bg-slate-700/40 text-slate-300 border-slate-600/40'}`}>{o.typ === 'premium' ? `Premium${o.material_kod ? ' — ' + o.material_kod : ''}` : 'Tubular Basic'}</span>
                     <span className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded text-[10px]">{o.pocet_ks} ks</span>
+                    {o.osobny_odber && <span className="bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded text-[10px]">Osobný odber</span>}
                     <span className="text-slate-500 text-[10px]">{new Date(o.created_at).toLocaleString('sk-SK')}</span>
                   </div>
                   <div className="text-slate-300">Cena/ks: <strong className="text-indigo-400 font-mono">{o.cena_kus} €</strong> | Suma: <strong className="text-emerald-400 font-mono">{o.cena_spolu} €</strong> | {o.doprava_rychlost === 'express' ? 'Expres' : 'Štandard'}</div>

@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json();
     const {
-      pocetKs, deliverySpeed = 'standard',
+      pocetKs, deliverySpeed = 'standard', osobnyOdber = false,
       suborNazov = null, suborCesta = null, dizajnJson = null,
     } = body;
 
@@ -79,7 +79,7 @@ Deno.serve(async (req) => {
     const cenaKus = priceAt(nakladKs, ks, pricingConfig);
     const subtotal = Math.max(cenaKus * ks, Number(nastavenia.minimalna_cena_objednavky) || 0);
     const expressFee = deliverySpeed === 'express' ? subtotal * ((Number(nastavenia.priplatok_expres_percent) || 0) / 100) : 0;
-    const shippingFee = Number(nastavenia.cena_doprava) || 0;
+    const shippingFee = osobnyOdber ? 0 : (Number(nastavenia.cena_doprava) || 0);
     const grandTotalBezDph = subtotal + expressFee + shippingFee;
     const dphPercent = Number(pricingConfig.dphPercent) || 0;
     const dphSuma = grandTotalBezDph * (dphPercent / 100);
@@ -95,6 +95,7 @@ Deno.serve(async (req) => {
       dizajn_json: dizajnJson ? JSON.parse(dizajnJson) : null,
       subor_nazov: suborNazov,
       subor_cesta: suborCesta,
+      osobny_odber: !!osobnyOdber,
     });
     if (insertErr) throw insertErr;
 
@@ -108,15 +109,16 @@ Deno.serve(async (req) => {
       draft_order: {
         line_items: [
           {
-            title: `Čelenka — vlastný dizajn (${ks} ks)`,
+            title: `Čelenka — vlastný dizajn (${ks} ks)` + (osobnyOdber ? ' (osobný odber)' : ''),
             price: grandTotal.toFixed(2),
             quantity: 1,
             taxable: false, // cena uz zahrna DPH (vypocitana server-side) — Shopify ju druhykrat neprirata
-            requires_shipping: true,
+            requires_shipping: !osobnyOdber,
             properties: [
               { name: '_objednavka_id', value: objednavkaId },
               { name: '_pocet_ks', value: String(ks) },
               { name: '_subor', value: suborNazov || '' },
+              { name: '_osobny_odber', value: osobnyOdber ? 'áno' : 'nie' },
             ],
           },
         ],

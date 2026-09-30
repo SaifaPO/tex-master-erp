@@ -42,7 +42,7 @@ export default function DoplnkyTab({
             <input type="checkbox" checked={expresne} onChange={(e) => onExpresne(e.target.checked)} className="w-5 h-5 text-indigo-600 rounded" />
             <div>
               <span className="font-bold text-xs sm:text-sm text-amber-900 flex items-center gap-1.5"><Zap className="w-4 h-4 text-amber-600" /> Expresné vyhotovenie</span>
-              <p className="text-[11px] text-amber-700">Garantované odoslanie do 24/48 hodín od schválenia tlačových podkladov.</p>
+              <p className="text-[11px] text-amber-700">Garantované dodanie do 5 pracovných dní od schválenia tlačových podkladov.</p>
             </div>
           </div>
           <span className="font-bold text-xs text-amber-800 bg-amber-200/60 px-2 py-1 rounded">+{Number(katalog.nastavenia.expresny_priplatok_percent).toFixed(0)}%</span>
