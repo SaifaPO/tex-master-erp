@@ -43,11 +43,12 @@ interface VlajkaCenaVstup {
   doplnky: { cena: number; mnozstvo: number }[];
   expresne: boolean;
   pocetKs: number;
-  nastavenia: { expresny_priplatok_percent: number };
+  osobnyOdber: boolean;
+  nastavenia: { expresny_priplatok_percent: number; cena_doprava?: number };
   pricingConfig: PricingConfig;
 }
 
-function vypocitajCenuVlajky({ nakladMaterial, dokoncenie, cenaStoziara, cenaPodstavca, doplnky, expresne, pocetKs, nastavenia, pricingConfig }: VlajkaCenaVstup) {
+function vypocitajCenuVlajky({ nakladMaterial, dokoncenie, cenaStoziara, cenaPodstavca, doplnky, expresne, pocetKs, osobnyOdber, nastavenia, pricingConfig }: VlajkaCenaVstup) {
   const ks = Math.max(1, Number(pocetKs) || 1);
   const cenaMaterialKus = priceAt(Number(nakladMaterial) || 0, ks, pricingConfig);
   const cenaDokoncenia = Number(dokoncenie?.cena) || 0;
@@ -60,14 +61,16 @@ function vypocitajCenuVlajky({ nakladMaterial, dokoncenie, cenaStoziara, cenaPod
   const expresnyPercent = Number(nastavenia?.expresny_priplatok_percent) || 0;
   const expresnyPriplatok = expresne ? subtotal * (expresnyPercent / 100) : 0;
 
-  const cenaBezDph = subtotal + expresnyPriplatok;
+  const doprava = osobnyOdber ? 0 : (Number(nastavenia?.cena_doprava) || 0);
+
+  const cenaBezDph = subtotal + expresnyPriplatok + doprava;
 
   const dphPercent = Number(pricingConfig.dphPercent) || 0;
   const dphSuma = cenaBezDph * (dphPercent / 100);
 
   const cenaSpolu = cenaBezDph + dphSuma;
 
-  return { zaklad, doplnkySpolu, subtotal, expresnyPriplatok, cenaBezDph, dphSuma, cenaSpolu };
+  return { zaklad, doplnkySpolu, subtotal, expresnyPriplatok, doprava, cenaBezDph, dphSuma, cenaSpolu };
 }
 
 function odpoved(body: Record<string, unknown>) {
@@ -124,7 +127,7 @@ Deno.serve(async (req) => {
     const {
       designId, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod,
       doplnky = [], farbaHex, farbaPoznamka, textNaVlajke,
-      expresne = false, pocetKs = 1, nahladUrl,
+      expresne = false, pocetKs = 1, osobnyOdber = false, nahladUrl,
     } = body;
 
     if (!tvarKod || !velkostKod) throw new Error('Chýba tvar alebo veľkosť vlajky.');
@@ -173,6 +176,7 @@ Deno.serve(async (req) => {
       pricingConfig,
       expresne: !!expresne,
       pocetKs: Number(pocetKs) || 1,
+      osobnyOdber: !!osobnyOdber,
       nastavenia: nastavenia || { expresny_priplatok_percent: 10 },
     });
 
@@ -195,6 +199,8 @@ Deno.serve(async (req) => {
       _farba_poznamka: farbaPoznamka || '',
       _text_na_vlajke: textNaVlajke || '',
       _expresne: expresne ? 'áno' : 'nie',
+      _doprava: cena.doprava.toFixed(2),
+      _osobny_odber: osobnyOdber ? 'áno' : 'nie',
       _nahlad_url: nahladUrl || '',
     };
 
@@ -202,11 +208,11 @@ Deno.serve(async (req) => {
       draft_order: {
         line_items: [
           {
-            title: nazovPolozky,
+            title: nazovPolozky + (osobnyOdber ? ' (osobný odber)' : ''),
             price: (cena.cenaSpolu / Math.max(1, Number(pocetKs) || 1)).toFixed(2),
             quantity: Number(pocetKs) || 1,
-            taxable: false, // cena už zahŕňa DPH (vypočítaná server-side) — Shopify ju druhýkrát nepripočíta
-            requires_shipping: true,
+            taxable: false, // cena už zahŕňa DPH aj dopravu (vypočítaná server-side) — Shopify ju druhýkrát nepripočíta
+            requires_shipping: !osobnyOdber,
             properties: Object.entries(properties).map(([name, value]) => ({ name, value })),
           },
         ],

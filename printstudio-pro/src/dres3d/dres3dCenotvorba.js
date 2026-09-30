@@ -9,20 +9,22 @@ export function najdiZlavuPreMnozstvo(zlavy, pocet) {
   return vyhovujuce.length ? Number(vyhovujuce[0].zlava_percent) : 0;
 }
 
-export function vypocitajCenuDresu({ zakladnaCena, priplatokMaterial = 0, pocetHracov = 1, zlavy = [] }) {
+export function vypocitajCenuDresu({ zakladnaCena, priplatokMaterial = 0, pocetHracov = 1, zlavy = [], doprava = 0 }) {
   const zakladnaCenaNum = Number(zakladnaCena) || 0;
   const priplatokNum = Number(priplatokMaterial) || 0;
   const jednotkovaCenaPredZlavou = zakladnaCenaNum + priplatokNum;
   const pocet = Math.max(1, Number(pocetHracov) || 1);
   const zlavaPercent = najdiZlavuPreMnozstvo(zlavy, pocet);
   const jednotkovaCena = jednotkovaCenaPredZlavou * (1 - zlavaPercent / 100);
-  const cenaSpolu = jednotkovaCena * pocet;
+  const dopravaNum = Number(doprava) || 0;
+  const cenaSpolu = jednotkovaCena * pocet + dopravaNum;
 
   return {
     jednotkovaCenaPredZlavou,
     zlavaPercent,
     jednotkovaCena,
     pocet,
+    doprava: dopravaNum,
     cenaSpolu,
   };
 }

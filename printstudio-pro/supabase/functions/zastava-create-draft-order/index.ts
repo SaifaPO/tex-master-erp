@@ -77,7 +77,7 @@ Deno.serve(async (req) => {
       designId, materialKod, sirkaCm, vyskaCm, vyhotovenie,
       tunely = [], ocka = [], karabinky = [], popruhy = {},
       statnaVlajka, farbaHex, farbaPoznamka, textNaVlajke,
-      expresne = false, pocetKs = 1, nahladUrl,
+      expresne = false, pocetKs = 1, osobnyOdber = false, nahladUrl,
     } = body;
 
     if (!materialKod || !sirkaCm || !vyskaCm) throw new Error('Chýba materiál alebo rozmery vlajky.');
@@ -116,7 +116,8 @@ Deno.serve(async (req) => {
 
     const subtotal = cenaKus * ks;
     const expresnyPriplatok = expresne ? subtotal * (Number(naklady.expresny_priplatok_percent) / 100) : 0;
-    const cenaBezDph = subtotal + expresnyPriplatok;
+    const doprava = osobnyOdber ? 0 : (Number(naklady.cena_doprava) || 0);
+    const cenaBezDph = subtotal + expresnyPriplatok + doprava;
     const dphSuma = cenaBezDph * (Number(pricingConfig.dphPercent) / 100);
     const cenaSpolu = Math.round((cenaBezDph + dphSuma) * 100) / 100;
 
@@ -140,6 +141,8 @@ Deno.serve(async (req) => {
       _farba_poznamka: farbaPoznamka || '',
       _text_na_vlajke: textNaVlajke || '',
       _expresne: expresne ? 'áno' : 'nie',
+      _doprava: doprava.toFixed(2),
+      _osobny_odber: osobnyOdber ? 'áno' : 'nie',
       _nahlad_url: nahladUrl || '',
     };
 
@@ -147,11 +150,11 @@ Deno.serve(async (req) => {
       draft_order: {
         line_items: [
           {
-            title: nazovPolozky,
-            price: cenaKus.toFixed(2),
+            title: nazovPolozky + (osobnyOdber ? ' (osobný odber)' : ''),
+            price: (cenaSpolu / ks).toFixed(2),
             quantity: ks,
-            taxable: false, // cena uz zahrna DPH (vypocitana server-side)
-            requires_shipping: true,
+            taxable: false, // cena uz zahrna DPH aj dopravu (vypocitana server-side)
+            requires_shipping: !osobnyOdber,
             properties: Object.entries(properties).map(([name, value]) => ({ name, value })),
           },
         ],

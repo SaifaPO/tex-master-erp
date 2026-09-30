@@ -14,7 +14,7 @@ const corsHeaders = {
 };
 
 interface DresZlava { min_pocet: number; zlava_percent: number; }
-interface DresCenaVstup { zakladnaCena: number; priplatokMaterial: number; pocetHracov: number; zlavy: DresZlava[]; }
+interface DresCenaVstup { zakladnaCena: number; priplatokMaterial: number; pocetHracov: number; zlavy: DresZlava[]; doprava: number; }
 
 function najdiZlavuPreMnozstvo(zlavy: DresZlava[], pocet: number): number {
   const vyhovujuce = (zlavy || [])
@@ -23,16 +23,17 @@ function najdiZlavuPreMnozstvo(zlavy: DresZlava[], pocet: number): number {
   return vyhovujuce.length ? Number(vyhovujuce[0].zlava_percent) : 0;
 }
 
-function vypocitajCenuDresu({ zakladnaCena, priplatokMaterial, pocetHracov, zlavy }: DresCenaVstup) {
+function vypocitajCenuDresu({ zakladnaCena, priplatokMaterial, pocetHracov, zlavy, doprava }: DresCenaVstup) {
   const zakladnaCenaNum = Number(zakladnaCena) || 0;
   const priplatokNum = Number(priplatokMaterial) || 0;
   const jednotkovaCenaPredZlavou = zakladnaCenaNum + priplatokNum;
   const pocet = Math.max(1, Number(pocetHracov) || 1);
   const zlavaPercent = najdiZlavuPreMnozstvo(zlavy, pocet);
   const jednotkovaCena = jednotkovaCenaPredZlavou * (1 - zlavaPercent / 100);
-  const cenaSpolu = jednotkovaCena * pocet;
+  const dopravaNum = Number(doprava) || 0;
+  const cenaSpolu = jednotkovaCena * pocet + dopravaNum;
 
-  return { jednotkovaCenaPredZlavou, zlavaPercent, jednotkovaCena, pocet, cenaSpolu };
+  return { jednotkovaCenaPredZlavou, zlavaPercent, jednotkovaCena, pocet, doprava: dopravaNum, cenaSpolu };
 }
 
 function odpoved(body: Record<string, unknown>) {
@@ -51,27 +52,30 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const {
       designId, produktId, vzorKod, farby = {}, golierTyp, materialKod, font, timText,
-      roster = [], nahladUrl,
+      roster = [], osobnyOdber = false, nahladUrl,
     } = body;
 
     if (!produktId) throw new Error('Chýba produktId.');
     if (!Array.isArray(roster) || roster.length === 0) throw new Error('Súpiska hráčov je prázdna.');
 
-    const [{ data: produkt }, { data: material }, { data: zlavy }] = await Promise.all([
+    const [{ data: produkt }, { data: material }, { data: zlavy }, { data: nastavenia }] = await Promise.all([
       supabase.from('produkty').select('*').eq('id', produktId).maybeSingle(),
       materialKod
         ? supabase.from('produkt_dres_materialy').select('*').eq('produkt_id', produktId).eq('kod', materialKod).maybeSingle()
         : Promise.resolve({ data: null }),
       supabase.from('dres_mnozstevne_zlavy').select('*'),
+      supabase.from('dres_nastavenia').select('*').eq('id', 1).maybeSingle(),
     ]);
 
     if (!produkt) throw new Error(`Produkt ${produktId} sa v katalógu nenašiel.`);
 
+    const doprava = osobnyOdber ? 0 : (Number(nastavenia?.cena_doprava) || 0);
     const cena = vypocitajCenuDresu({
       zakladnaCena: produkt.zakladna_cena,
       priplatokMaterial: material?.priplatok_eur || 0,
       pocetHracov: roster.length,
       zlavy: zlavy || [],
+      doprava,
     });
 
     const domain = Deno.env.get('SHOPIFY_STORE_DOMAIN');
@@ -96,6 +100,8 @@ Deno.serve(async (req) => {
       _farba_golier: farby.golier || '',
       _roster: rosterText,
       _roster_json: JSON.stringify(roster),
+      _doprava: doprava.toFixed(2),
+      _osobny_odber: osobnyOdber ? 'áno' : 'nie',
       _nahlad_url: nahladUrl || '',
     };
 
@@ -103,11 +109,14 @@ Deno.serve(async (req) => {
       draft_order: {
         line_items: [
           {
-            title: nazovPolozky,
-            price: cena.jednotkovaCena.toFixed(2),
+            title: nazovPolozky + (osobnyOdber ? ' (osobný odber)' : ''),
+            // Doprava je flat jednorazovy poplatok, nie za kus — rozpocita sa rovnomerne do
+            // jednotkovej ceny (quantity = pocet hracov), aby sucet quantity*price presne
+            // sedel s cena.cenaSpolu (rovnaky vzor ako beachflag/zastava-create-draft-order).
+            price: (cena.cenaSpolu / roster.length).toFixed(2),
             quantity: roster.length,
-            taxable: false, // cena už zahŕňa DPH (produkty.zakladna_cena) — Shopify ju druhýkrát nepripočíta
-            requires_shipping: true,
+            taxable: false, // cena už zahŕňa DPH (produkty.zakladna_cena) aj dopravu — Shopify ju druhýkrát nepripočíta
+            requires_shipping: !osobnyOdber,
             properties: Object.entries(properties).map(([name, value]) => ({ name, value })),
           },
         ],

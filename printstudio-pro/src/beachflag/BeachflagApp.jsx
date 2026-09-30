@@ -35,6 +35,7 @@ export default function BeachflagApp({ supabase }) {
   const [customText, setCustomText] = useState('');
   const [expresne, setExpresne] = useState(false);
   const [pocetKs, setPocetKs] = useState(1);
+  const [osobnyOdber, setOsobnyOdber] = useState(false);
   const [cena, setCena] = useState(null);
   const [cenaNacitava, setCenaNacitava] = useState(false);
   const [cenaChyba, setCenaChyba] = useState('');
@@ -147,7 +148,7 @@ export default function BeachflagApp({ supabase }) {
     setCenaChyba('');
     const t = setTimeout(async () => {
       const { data, error } = await supabase.functions.invoke('beachflag-price-preview', {
-        body: { tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnky, pocetKs, expresne },
+        body: { tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnky, pocetKs, expresne, osobnyOdber },
       });
       setCenaNacitava(false);
       if (error) { setCenaChyba(error.message); return; }
@@ -155,7 +156,7 @@ export default function BeachflagApp({ supabase }) {
       setCena(data.cena);
     }, 400);
     return () => clearTimeout(t);
-  }, [supabase, katalog, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnkyMnozstva, pocetKs, expresne]);
+  }, [supabase, katalog, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnkyMnozstva, pocetKs, expresne, osobnyOdber]);
 
   // snapAngle/snapThreshold = vstavana fabric funkcia, otacanie tahanim za rohovy uchyt "zaskoci"
   // na najblizsi nasobok 45° (v okruhu 5°) — presne ako pytal Martin, bez vlastnej implementacie.
@@ -231,7 +232,7 @@ export default function BeachflagApp({ supabase }) {
         farbaHex: bgColor,
         farbaPoznamka: pantoneNote,
         textNaVlajke: customText,
-        expresne, pocetKs,
+        expresne, pocetKs, osobnyOdber,
         nahladUrl: publicUrlData?.publicUrl || null,
       };
 
@@ -280,6 +281,7 @@ export default function BeachflagApp({ supabase }) {
         {krok === 'doplnky' && (
           <DoplnkyTab katalog={katalog} doplnkyMnozstva={doplnkyMnozstva} onZmenMnozstvo={zmenMnozstvoDoplnku}
             expresne={expresne} onExpresne={setExpresne} pocetKs={pocetKs} onPocetKs={setPocetKs}
+            osobnyOdber={osobnyOdber} onOsobnyOdber={setOsobnyOdber}
             cena={cena} cenaNacitava={cenaNacitava} cenaChyba={cenaChyba} isSubmitting={isSubmitting} submitError={submitError} onObjednat={objednat}
             onSpat={() => setKrok('grafika')} />
         )}

@@ -41,6 +41,7 @@ export default function ZastavaApp({ supabase }) {
   const [popruhy, setPopruhy] = useState({});
   const [expresne, setExpresne] = useState(false);
   const [pocetKs, setPocetKs] = useState(1);
+  const [osobnyOdber, setOsobnyOdber] = useState(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
@@ -295,7 +296,7 @@ export default function ZastavaApp({ supabase }) {
     setCenaChyba('');
     const t = setTimeout(async () => {
       const { data, error } = await supabase.functions.invoke('zastava-price-preview', {
-        body: { materialKod, sirkaCm, vyskaCm, vyhotovenie, tunely, ocka, karabinky, popruhy, pocetKs, expresne },
+        body: { materialKod, sirkaCm, vyskaCm, vyhotovenie, tunely, ocka, karabinky, popruhy, pocetKs, expresne, osobnyOdber },
       });
       setCenaNacitava(false);
       if (error) { setCenaChyba(error.message); return; }
@@ -303,7 +304,7 @@ export default function ZastavaApp({ supabase }) {
       setCena(data.cena);
     }, 400);
     return () => clearTimeout(t);
-  }, [supabase, materialKod, sirkaCm, vyskaCm, vyhotovenie, tunely, ocka, karabinky, popruhy, pocetKs, expresne]);
+  }, [supabase, materialKod, sirkaCm, vyskaCm, vyhotovenie, tunely, ocka, karabinky, popruhy, pocetKs, expresne, osobnyOdber]);
 
   if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500 text-sm">Načítavam…</div>;
   if (loadError) return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-rose-600 text-sm px-4 text-center">{loadError}</div>;
@@ -327,7 +328,7 @@ export default function ZastavaApp({ supabase }) {
         tunely, ocka, karabinky, popruhy,
         statnaVlajka: statnaVlajka?.nazov || null,
         farbaHex: bgColor, farbaPoznamka: pantoneNote, textNaVlajke: customText,
-        expresne, pocetKs,
+        expresne, pocetKs, osobnyOdber,
         nahladUrl: publicUrlData?.publicUrl || null,
       };
 
@@ -388,6 +389,7 @@ export default function ZastavaApp({ supabase }) {
             karabinky={karabinky} onKarabinky={setKarabinky} popruhy={popruhy} onPopruhy={setPopruhy}
             expresne={expresne} onExpresne={setExpresne} expresnyPriplatokPercent={cena?.expresnyPercent}
             pocetKs={pocetKs} onPocetKs={setPocetKs}
+            osobnyOdber={osobnyOdber} onOsobnyOdber={setOsobnyOdber}
             cena={cena} cenaChyba={cenaChyba} cenaNacitava={cenaNacitava}
             isSubmitting={isSubmitting} submitError={submitError} onObjednat={objednat}
             onSpat={() => setKrok('grafika')}

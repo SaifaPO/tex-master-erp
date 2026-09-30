@@ -11,6 +11,7 @@ export default function DoplnkyTab({
   tunely, onTunely, ocka, onOcka, karabinky, onKarabinky, popruhy, onPopruhy,
   expresne, onExpresne, expresnyPriplatokPercent,
   pocetKs, onPocetKs,
+  osobnyOdber, onOsobnyOdber,
   cena, cenaChyba, cenaNacitava,
   isSubmitting, submitError, onObjednat, onSpat,
 }) {
@@ -111,6 +112,11 @@ export default function DoplnkyTab({
           <span className="font-bold text-xs text-amber-800 bg-amber-200/60 px-2 py-1 rounded">+{Number(expresnyPriplatokPercent || 10).toFixed(0)}%</span>
         </label>
 
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" checked={osobnyOdber} onChange={(e) => onOsobnyOdber(e.target.checked)} />
+          <span className="text-xs text-slate-600">Osobný odber (neplatím poštovné)</span>
+        </label>
+
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2">
           <div className="flex items-center gap-2 w-full sm:w-auto">
             <label className="text-xs font-bold text-slate-700">Počet kusov</label>
@@ -139,6 +145,7 @@ export default function DoplnkyTab({
             <div className="flex justify-between"><span>Cena za kus</span><span className="font-semibold">{cena.cenaKus.toFixed(2)} €</span></div>
             <div className="flex justify-between"><span>Medzisúčet ({pocetKs} ks)</span><span className="font-semibold">{cena.subtotal.toFixed(2)} €</span></div>
             {cena.expresnyPriplatok > 0 && <div className="flex justify-between text-amber-700 font-semibold"><span>Expresný príplatok</span><span>{cena.expresnyPriplatok.toFixed(2)} €</span></div>}
+            <div className="flex justify-between"><span>Doprava</span><span className="font-semibold">{!cena.doprava ? 'Zdarma' : `${Number(cena.doprava).toFixed(2)} €`}</span></div>
             <div className="flex justify-between pt-1 border-t border-slate-200"><span>Spolu bez DPH</span><span className="font-semibold">{cena.cenaBezDph.toFixed(2)} €</span></div>
             <div className="flex justify-between"><span>DPH</span><span className="font-semibold">{cena.dphSuma.toFixed(2)} €</span></div>
             <div className="flex justify-between text-sm font-black text-slate-900 pt-1"><span>Celkom s DPH</span><span>{cena.cenaSpolu.toFixed(2)} €</span></div>

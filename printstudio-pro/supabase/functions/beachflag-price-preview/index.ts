@@ -89,7 +89,7 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const {
       tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod,
-      doplnky = [], pocetKs = 1, expresne = false,
+      doplnky = [], pocetKs = 1, expresne = false, osobnyOdber = false,
     } = body;
 
     if (!tvarKod || !velkostKod) throw new Error('Chýba tvar alebo veľkosť vlajky.');
@@ -142,8 +142,9 @@ Deno.serve(async (req) => {
     const naklady = nastavenia || { expresny_priplatok_percent: 10 };
     const expresnyPercent = Number(naklady.expresny_priplatok_percent) || 0;
     const expresnyPriplatok = expresne ? subtotal * (expresnyPercent / 100) : 0;
+    const doprava = osobnyOdber ? 0 : (Number(naklady.cena_doprava) || 0);
 
-    const cenaBezDph = subtotal + expresnyPriplatok;
+    const cenaBezDph = subtotal + expresnyPriplatok + doprava;
     const dphPercent = Number(pricingConfig.dphPercent) || 0;
     const dphSuma = cenaBezDph * (dphPercent / 100);
     const cenaSpolu = cenaBezDph + dphSuma;
@@ -154,6 +155,7 @@ Deno.serve(async (req) => {
         doplnkySpolu: Math.round(doplnkySpolu * 100) / 100,
         subtotal: Math.round(subtotal * 100) / 100,
         expresnyPriplatok: Math.round(expresnyPriplatok * 100) / 100,
+        doprava: Math.round(doprava * 100) / 100,
         cenaBezDph: Math.round(cenaBezDph * 100) / 100,
         dphSuma: Math.round(dphSuma * 100) / 100,
         cenaSpolu: Math.round(cenaSpolu * 100) / 100,

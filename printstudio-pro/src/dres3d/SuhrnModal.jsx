@@ -3,7 +3,7 @@ import { X, Download } from 'lucide-react';
 
 const BUCKET = 'print-designs';
 
-export default function SuhrnModal({ supabase, produkt, configState, roster, materialy, cena, snapshotUrl, onClose, onBackToEdit }) {
+export default function SuhrnModal({ supabase, produkt, configState, roster, materialy, cena, osobnyOdber, onOsobnyOdber, snapshotUrl, onClose, onBackToEdit }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [techPanel, setTechPanel] = useState('');
@@ -53,6 +53,7 @@ export default function SuhrnModal({ supabase, produkt, configState, roster, mat
         font: configState.text.fontRodina,
         timText: configState.text.zobrazitTimText ? configState.text.timText : '',
         roster: roster.map(h => ({ meno: h.meno, cislo: h.cislo, velkost: h.velkost })),
+        osobnyOdber,
         nahladUrl,
       };
 
@@ -107,12 +108,21 @@ export default function SuhrnModal({ supabase, produkt, configState, roster, mat
                 <span className="text-slate-400">Počet kusov:</span>
                 <span className="font-bold text-indigo-400">{cena.pocet} ks</span>
               </div>
+              <div className="flex justify-between py-1 border-b border-slate-800">
+                <span className="text-slate-400">Doprava:</span>
+                <span className="font-bold text-white">{cena.doprava === 0 ? 'Zdarma' : `${cena.doprava.toFixed(2)} €`}</span>
+              </div>
               <div className="flex justify-between py-1 pt-2">
                 <span className="text-slate-300 font-bold">Celková cena:</span>
                 <span className="font-extrabold text-base text-indigo-400">{cena.cenaSpolu.toFixed(2)} €</span>
               </div>
             </div>
           </div>
+
+          <label className="flex items-center gap-2 cursor-pointer px-1">
+            <input type="checkbox" checked={osobnyOdber} onChange={(e) => onOsobnyOdber(e.target.checked)} />
+            <span className="text-xs text-slate-300">Osobný odber (neplatím poštovné)</span>
+          </label>
 
           <div className="bg-slate-900/80 p-3 sm:p-4 rounded-xl border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-2.5">
             <div>

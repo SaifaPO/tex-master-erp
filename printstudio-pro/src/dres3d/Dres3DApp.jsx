@@ -32,6 +32,8 @@ export default function Dres3DApp({ supabase, produktId }) {
   const [zobrazitRoster, setZobrazitRoster] = useState(false);
   const [zobrazitSuhrn, setZobrazitSuhrn] = useState(false);
   const [snapshotUrl, setSnapshotUrl] = useState(null);
+  const [cenaDoprava, setCenaDoprava] = useState(0);
+  const [osobnyOdber, setOsobnyOdber] = useState(false);
 
   const viewportRef = useRef(null);
 
@@ -43,6 +45,15 @@ export default function Dres3DApp({ supabase, produktId }) {
     document.head.appendChild(link);
     return () => { document.head.removeChild(link); };
   }, []);
+
+  // Globalne nastavenie dopravy (spolocne pre vsetky produkty dresov) — samostatny dotaz,
+  // keďze nacitajDresKatalog nacitava len nastavenia SPECIFICKE pre konkretny produkt.
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from('dres_nastavenia').select('cena_doprava').eq('id', 1).maybeSingle();
+      if (data) setCenaDoprava(Number(data.cena_doprava) || 0);
+    })();
+  }, [supabase]);
 
   useEffect(() => {
     let zrusene = false;
@@ -80,7 +91,8 @@ export default function Dres3DApp({ supabase, produktId }) {
     priplatokMaterial: material?.priplatok_eur || 0,
     pocetHracov: roster.length,
     zlavy: katalog?.zlavy || [],
-  }), [katalog, material, roster.length]);
+    doprava: osobnyOdber ? 0 : cenaDoprava,
+  }), [katalog, material, roster.length, cenaDoprava, osobnyOdber]);
 
   const handleZmenText = (patch) => {
     setConfigState(prev => ({ ...prev, text: { ...prev.text, ...patch } }));
@@ -259,6 +271,8 @@ export default function Dres3DApp({ supabase, produktId }) {
           roster={roster}
           materialy={katalog.materialy}
           cena={cena}
+          osobnyOdber={osobnyOdber}
+          onOsobnyOdber={setOsobnyOdber}
           snapshotUrl={snapshotUrl}
           onClose={() => setZobrazitSuhrn(false)}
           onBackToEdit={() => setZobrazitSuhrn(false)}

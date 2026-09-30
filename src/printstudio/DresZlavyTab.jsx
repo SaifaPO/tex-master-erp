@@ -4,16 +4,27 @@ import NumberInput from '../NumberInput';
 
 export default function DresZlavyTab({ supabase }) {
   const [riadky, setRiadky] = useState([]);
+  const [nastavenia, setNastavenia] = useState({ cena_doprava: 4.9 });
   const [isLoading, setIsLoading] = useState(true);
 
   const nacitaj = async () => {
     setIsLoading(true);
-    const { data } = await supabase.from('dres_mnozstevne_zlavy').select('*').order('min_pocet');
+    const [{ data }, { data: n }] = await Promise.all([
+      supabase.from('dres_mnozstevne_zlavy').select('*').order('min_pocet'),
+      supabase.from('dres_nastavenia').select('*').eq('id', 1).maybeSingle(),
+    ]);
     setRiadky(data || []);
+    if (n) setNastavenia(n);
     setIsLoading(false);
   };
 
   useEffect(() => { nacitaj(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const ulozNastavenia = async (patch) => {
+    const next = { ...nastavenia, ...patch };
+    setNastavenia(next);
+    await supabase.from('dres_nastavenia').upsert({ id: 1, ...next });
+  };
 
   const pridaj = async () => {
     const dalsiPocet = (riadky[riadky.length - 1]?.min_pocet || 0) + 5;
@@ -40,6 +51,12 @@ export default function DresZlavyTab({ supabase }) {
           <p className="text-xs text-slate-400 mt-1">Zľava sa počíta z celkového počtu hráčov v tímovej súpiske. Platí najvyššia hladina, na ktorú počet dosiahne.</p>
         </div>
         <button onClick={pridaj} className="text-xs text-indigo-400 font-semibold hover:text-indigo-300 flex items-center gap-1"><Plus className="w-3.5 h-3.5" /> Pridať hladinu</button>
+      </div>
+
+      <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4 max-w-xs">
+        <label className="block text-slate-400 mb-1 text-xs">Doprava (€)</label>
+        <NumberInput step="0.1" value={nastavenia.cena_doprava} onChange={(v) => ulozNastavenia({ cena_doprava: v })} fallback={0} className="w-full px-2 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white font-mono" />
+        <p className="text-[10px] text-slate-500 mt-1">Zákazník ju neplatí pri zaškrtnutí "Osobný odber" pri objednávke.</p>
       </div>
 
       {isLoading ? (

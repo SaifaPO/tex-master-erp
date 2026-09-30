@@ -75,7 +75,7 @@ Deno.serve(async (req) => {
     const {
       materialKod, sirkaCm, vyskaCm, vyhotovenie,
       tunely = [], ocka = [], karabinky = [], popruhy = {},
-      pocetKs = 1, expresne = false,
+      pocetKs = 1, expresne = false, osobnyOdber = false,
     } = body;
 
     if (!materialKod) throw new Error('Chýba materiál.');
@@ -117,7 +117,8 @@ Deno.serve(async (req) => {
 
     const subtotal = cenaKus * ks;
     const expresnyPriplatok = expresne ? subtotal * (Number(naklady.expresny_priplatok_percent) / 100) : 0;
-    const cenaBezDph = subtotal + expresnyPriplatok;
+    const doprava = osobnyOdber ? 0 : (Number(naklady.cena_doprava) || 0);
+    const cenaBezDph = subtotal + expresnyPriplatok + doprava;
     const dphSuma = cenaBezDph * (Number(pricingConfig.dphPercent) / 100);
     const cenaSpolu = cenaBezDph + dphSuma;
 
@@ -129,6 +130,7 @@ Deno.serve(async (req) => {
         subtotal: Math.round(subtotal * 100) / 100,
         expresnyPriplatok: Math.round(expresnyPriplatok * 100) / 100,
         expresnyPercent: Number(naklady.expresny_priplatok_percent),
+        doprava: Math.round(doprava * 100) / 100,
         cenaBezDph: Math.round(cenaBezDph * 100) / 100,
         dphSuma: Math.round(dphSuma * 100) / 100,
         cenaSpolu: Math.round(cenaSpolu * 100) / 100,
