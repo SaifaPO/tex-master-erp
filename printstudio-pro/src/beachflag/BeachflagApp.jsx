@@ -7,6 +7,7 @@ import { nacitajVlajkaKatalog } from './vlajkaData';
 import ParametreTab from './ParametreTab';
 import GrafikaTab from './GrafikaTab';
 import DoplnkyTab from './DoplnkyTab';
+import VelkostnePorovnanie from './VelkostnePorovnanie';
 
 const BUCKET = 'print-designs';
 const DEFAULT_VIEWBOX = { w: 200, h: 420 };
@@ -310,6 +311,8 @@ export default function BeachflagApp({ supabase }) {
             </details>
           )}
         </div>
+
+        <VelkostnePorovnanie tvarKod={tvarKod} velkost={katalog?.velkosti.find(v => v.kod === velkostKod)} velkosti={katalog?.velkosti} bgColor={bgColor} />
       </div>
     </div>
     </>
