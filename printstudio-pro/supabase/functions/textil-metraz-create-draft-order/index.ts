@@ -116,6 +116,7 @@ Deno.serve(async (req) => {
       suborNazov = null, suborCesta = null,
       materialKod = null, manualSirkaCm = null,
       sluzbaRezim = 'na_vas_material',
+      osobnyOdber = false,
     } = body;
 
     if (technologia !== 'sublimacia' && technologia !== 'bavlna') throw new Error('Neplatná technológia.');
@@ -173,8 +174,10 @@ Deno.serve(async (req) => {
     const totalM2 = totalLengthBm * (printWidthCm / 100);
 
     const subtotal = Math.max(totalLengthBm * baseRate + fabricSubtotal, Number(nastavenia.minimalna_cena_objednavky) || 0);
-    const expressFee = deliverySpeed === 'express' ? subtotal * ((Number(nastavenia.priplatok_expres_percent) || 0) / 100) : 0;
-    const shippingFee = Number(nastavenia.cena_doprava) || 0;
+    // Príplatok expres je vzdy aspon minimalna suma — rovnaky vzorec ako v TextilMetraz.jsx.
+    const expressFee = deliverySpeed === 'express' ? Math.max(Number(nastavenia.priplatok_expres_min_eur) || 0, subtotal * ((Number(nastavenia.priplatok_expres_percent) || 0) / 100)) : 0;
+    // Osobny odber = ziadne postovne; inak zdarma od nastaveneho mnozstva (bm).
+    const shippingFee = osobnyOdber || totalLengthBm >= (Number(nastavenia.postovne_zdarma_od_bm) || 0) ? 0 : (Number(nastavenia.cena_doprava) || 0);
     const grandTotalBezDph = subtotal + expressFee + shippingFee;
     const dphPercent = Number(pricingConfig.dphPercent) || 0;
     const dphSuma = grandTotalBezDph * (dphPercent / 100);
@@ -212,6 +215,7 @@ Deno.serve(async (req) => {
       material_kod: vybranyMaterial?.kod || null,
       material_nazov: vybranyMaterial?.nazov || null,
       sluzba_rezim: sluzbaRezim,
+      osobny_odber: !!osobnyOdber,
     });
     if (insertErr) throw insertErr;
 
@@ -222,9 +226,10 @@ Deno.serve(async (req) => {
     const token = await ziskajAdminToken(domain, clientId, clientSecret);
 
     const technikaLabel = technologia === 'sublimacia' ? 'Sublimačná potlač' : 'Digitálna potlač bavlny';
-    const nazovPolozky = sluzbaRezim === 'len_papier'
+    const osobnyOdberSufix = osobnyOdber ? ' (osobný odber)' : '';
+    const nazovPolozky = (sluzbaRezim === 'len_papier'
       ? `Sublimačný papier s vlastnou grafikou — ${totalLengthBm.toFixed(2)}bm`
-      : `Textilná metráž — ${technikaLabel} ${totalLengthBm.toFixed(2)}bm` + (vybranyMaterial ? ` + látka: ${vybranyMaterial.nazov}` : '');
+      : `Textilná metráž — ${technikaLabel} ${totalLengthBm.toFixed(2)}bm` + (vybranyMaterial ? ` + látka: ${vybranyMaterial.nazov}` : '')) + osobnyOdberSufix;
 
     const draftPayload = {
       draft_order: {
@@ -234,7 +239,7 @@ Deno.serve(async (req) => {
             price: grandTotal.toFixed(2),
             quantity: 1,
             taxable: false, // cena uz zahrna DPH (vypocitana server-side) — Shopify ju druhykrat neprirata
-            requires_shipping: true,
+            requires_shipping: !osobnyOdber,
             properties: [
               { name: '_cislo_objednavky', value: cisloObjednavky },
               { name: '_objednavka_id', value: objednavkaId },
@@ -246,6 +251,7 @@ Deno.serve(async (req) => {
               { name: '_subor', value: suborNazov || '' },
               { name: '_subor_link', value: suborUrl || '' },
               { name: '_material', value: vybranyMaterial?.nazov || '' },
+              { name: '_osobny_odber', value: osobnyOdber ? 'áno' : 'nie' },
             ],
           },
         ],

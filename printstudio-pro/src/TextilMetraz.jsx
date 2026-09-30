@@ -20,6 +20,13 @@ const MAX_SIRKA_CM = { sublimacia: 160, bavlna: 180 };
 // funguje pre lubovolnu (aj neceloriselnu) dlzku, toto je len ilustracna tabulka.
 const BM_PREVIEW_LEVELS = [1, 5, 10, 25, 50, 100, 200, 500, 1000];
 
+// Aktualna hodina na Slovensku (nie v casovom pasme zakaznikovho prehliadaca/servera) — pouzite na
+// zistenie, ci este plati denny cutoff pre expresne spracovanie "v den objednavky".
+function aktualnaHodinaSK() {
+  const parts = new Intl.DateTimeFormat('sk-SK', { timeZone: 'Europe/Bratislava', hour: 'numeric', hour12: false }).formatToParts(new Date());
+  return Number(parts.find(p => p.type === 'hour')?.value ?? 0);
+}
+
 const REPEAT_OPTIONS = [
   { id: 'grid', label: 'Rovnobežný (Grid)', icon: Grid3x3 },
   { id: 'half-drop', label: 'Posun 1/2 (Half-Drop)', icon: Rows },
@@ -48,6 +55,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
   const [directLengthBm, setDirectLengthBm] = useState(5.0);
   const [deliverySpeed, setDeliverySpeed] = useState('standard');
   const [scheduleOption, setScheduleOption] = useState(null);
+  const [osobnyOdber, setOsobnyOdber] = useState(false);
 
   const [rawFile, setRawFile] = useState(null);
   const [patternImage, setPatternImage] = useState(null);
@@ -79,6 +87,9 @@ export default function TextilMetraz({ supabase, onSpat }) {
 
   // ---- Výpočet ceny a metráže ----
   let totalLengthBm = 0, totalM2 = 0, baseRate = 0, fabricRate = 0, fabricSubtotal = 0, subtotal = 0, expressFee = 0, shippingFee = 0, grandTotalBezDph = 0, dphSuma = 0, grandTotal = 0, capacityIssue = null;
+  // Expres = "v deň objednávky" — po tomto čase to už tlačiareň fyzicky nestihne, preto sa ponuka vypne.
+  const expresCutoffHodina = nastavenia ? Number(nastavenia.expres_cutoff_hodina ?? 24) : 24;
+  const expresUzNedostupny = aktualnaHodinaSK() >= expresCutoffHodina;
   const nakladBm = nakladBmByTech[technologia] || 0;
   const dostupneMaterialy = materialy.filter(m => m.technologia === 'obe' || m.technologia === technologia);
   const vybranyMaterial = sluzbaRezim === 'na_nas_material' ? (dostupneMaterialy.find(m => m.kod === materialKod) || null) : null;
@@ -127,8 +138,10 @@ export default function TextilMetraz({ supabase, onSpat }) {
       fabricSubtotal = totalLengthBm * fabricRate;
     }
     subtotal = Math.max(totalLengthBm * baseRate + fabricSubtotal, Number(nastavenia.minimalna_cena_objednavky));
-    expressFee = deliverySpeed === 'express' ? subtotal * (Number(nastavenia.priplatok_expres_percent) / 100) : 0;
-    shippingFee = Number(nastavenia.cena_doprava);
+    // Príplatok expres je vždy aspoň minimálna suma — berie sa vyššia z dvoch hodnôt.
+    expressFee = deliverySpeed === 'express' && !expresUzNedostupny ? Math.max(Number(nastavenia.priplatok_expres_min_eur) || 0, subtotal * (Number(nastavenia.priplatok_expres_percent) / 100)) : 0;
+    // Osobný odber = žiadne poštovné; inak zdarma od nastaveného množstva (bm).
+    shippingFee = osobnyOdber || totalLengthBm >= Number(nastavenia.postovne_zdarma_od_bm) ? 0 : Number(nastavenia.cena_doprava);
     grandTotalBezDph = subtotal + expressFee + shippingFee;
     // Slovensky B2C zakaznik vzdy plati s DPH — cena v kosiku aj cele vyuctovanie musi byt s DPH.
     dphSuma = grandTotalBezDph * (Number(pricingConfig.dphPercent || 0) / 100);
@@ -177,6 +190,12 @@ export default function TextilMetraz({ supabase, onSpat }) {
     const max = MAX_SIRKA_CM[technologia] || 160;
     setManualSirkaCm(v => Math.min(v, max));
   }, [technologia]);
+
+  // Ak zakaznik vybral expres a medzitym (kym mal appku otvorenu) uz presiel denny cutoff, prepni ho
+  // spat na standard, nech neplati poplatok za nieco, co uz dnes fyzicky nie je mozne.
+  useEffect(() => {
+    if (deliverySpeed === 'express' && expresUzNedostupny) { setDeliverySpeed('standard'); setScheduleOption(null); }
+  }, [deliverySpeed, expresUzNedostupny]);
 
   const aktualnyHarmonogram = capacityIssue
     ? (scheduleOption ? capacityIssue.options.find(o => o.value === scheduleOption)?.label : capacityIssue.options[0].label)
@@ -275,6 +294,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
           sluzbaRezim,
           materialKod: sluzbaRezim === 'na_nas_material' ? (materialKod || null) : null,
           manualSirkaCm, // pouzije sa len pri "na_vas_material" — inak si sirku server zisti/urci sam
+          osobnyOdber,
         },
       });
       if (error) throw error;
@@ -427,19 +447,34 @@ export default function TextilMetraz({ supabase, onSpat }) {
           </div>
 
           <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-3">
-            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-2"><Truck className="w-4 h-4 text-teal-500" /> Rýchlosť doručenia</h3>
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-2"><Truck className="w-4 h-4 text-teal-500" /> Rýchlosť odoslania</h3>
             <div className="grid grid-cols-2 gap-3">
               <label className={`p-3.5 rounded-xl border cursor-pointer transition ${deliverySpeed === 'standard' ? 'border-teal-500 bg-teal-50/60' : 'border-slate-200'}`}>
                 <input type="radio" name="rychlost" className="hidden" checked={deliverySpeed === 'standard'} onChange={() => { setDeliverySpeed('standard'); setScheduleOption(null); }} />
                 <span className="text-sm font-bold text-slate-900 block">Štandard — do 48 hodín</span>
                 <span className="text-xs text-slate-500">Bez príplatku</span>
               </label>
-              <label className={`p-3.5 rounded-xl border cursor-pointer transition ${deliverySpeed === 'express' ? 'border-amber-500 bg-amber-50/60' : 'border-slate-200'}`}>
-                <input type="radio" name="rychlost" className="hidden" checked={deliverySpeed === 'express'} onChange={() => { setDeliverySpeed('express'); setScheduleOption(null); }} />
+              <label className={`p-3.5 rounded-xl border transition ${expresUzNedostupny ? 'opacity-50 cursor-not-allowed border-slate-200' : 'cursor-pointer'} ${deliverySpeed === 'express' ? 'border-amber-500 bg-amber-50/60' : 'border-slate-200'}`}>
+                <input type="radio" name="rychlost" className="hidden" disabled={expresUzNedostupny} checked={deliverySpeed === 'express'} onChange={() => { setDeliverySpeed('express'); setScheduleOption(null); }} />
                 <span className="text-sm font-bold text-slate-900 block">Expres — v deň objednávky</span>
-                <span className="text-xs text-amber-600 font-medium">+{nastavenia.priplatok_expres_percent}% príplatok</span>
+                {expresUzNedostupny ? (
+                  <span className="text-xs text-slate-500 font-medium">Dnes už nedostupné (len do {expresCutoffHodina}:00)</span>
+                ) : (
+                  <span className="text-xs text-amber-600 font-medium">+{nastavenia.priplatok_expres_percent}% (min. {Number(nastavenia.priplatok_expres_min_eur).toFixed(2)} €)</span>
+                )}
               </label>
             </div>
+
+            <label className="flex items-start gap-3 pt-1 cursor-pointer">
+              <input type="checkbox" checked={osobnyOdber} onChange={(e) => setOsobnyOdber(e.target.checked)} className="mt-0.5" />
+              <div>
+                <span className="text-sm font-bold text-slate-900 block">Osobný odber</span>
+                <p className="text-xs text-slate-500 mt-0.5">Vyzdvihnete si zásielku osobne — neplatíte poštovné.</p>
+              </div>
+            </label>
+            {!osobnyOdber && (
+              <p className="text-[11px] text-slate-400">Poštovné je zdarma automaticky od {nastavenia.postovne_zdarma_od_bm} bm.</p>
+            )}
 
             {capacityIssue && (
               <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-xs space-y-2.5">
@@ -488,7 +523,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
               <Row label="Objednaná dĺžka metráže" value={`${totalLengthBm.toFixed(2)} bm`} highlight />
               <Row label="Tlačová plocha" value={`${totalM2.toFixed(2)} m²`} />
               <Row label="Príplatok za expres" value={`${expressFee.toFixed(2)} €`} />
-              <Row label="Doprava (DPD kuriér)" value={`${shippingFee.toFixed(2)} €`} />
+              <Row label="Doprava (DPD kuriér)" value={shippingFee === 0 ? 'Zdarma' : `${shippingFee.toFixed(2)} €`} />
               <Row label="Harmonogram dodania" value={aktualnyHarmonogram} small />
               <Row label="Cena bez DPH" value={`${grandTotalBezDph.toFixed(2)} €`} />
               <Row label={`DPH ${pricingConfig.dphPercent}%`} value={`${dphSuma.toFixed(2)} €`} />

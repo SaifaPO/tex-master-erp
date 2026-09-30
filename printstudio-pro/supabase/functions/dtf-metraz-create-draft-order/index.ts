@@ -107,6 +107,7 @@ Deno.serve(async (req) => {
       deliverySpeed = 'standard', harmonogram = '',
       suborNazov = null, suborCesta = null,
       grafickaPriprava = false,
+      osobnyOdber = false,
     } = body;
 
     if (mode !== 'auto' && mode !== 'subor' && mode !== 'vzorky' && mode !== 'paleta') throw new Error('Neplatný režim objednávky.');
@@ -147,8 +148,10 @@ Deno.serve(async (req) => {
       const nakladBm = Number(nak.naklad_bm) || 0;
       baseRate = priceAt(nakladBm, totalLengthBm, pricingConfig);
       const subtotal = Math.max(totalLengthBm * baseRate, Number(nastavenia.minimalna_cena_objednavky) || 0);
-      const expressFee = deliverySpeed === 'express' ? subtotal * ((Number(nastavenia.priplatok_expres_percent) || 0) / 100) : 0;
-      const shippingFee = Number(nastavenia.cena_doprava) || 0;
+      // Príplatok expres je vzdy aspon minimalna suma — rovnaky vzorec ako v DtfMetraz.jsx.
+      const expressFee = deliverySpeed === 'express' ? Math.max(Number(nastavenia.priplatok_expres_min_eur) || 0, subtotal * ((Number(nastavenia.priplatok_expres_percent) || 0) / 100)) : 0;
+      // Osobny odber = ziadne postovne; inak zdarma od nastaveneho mnozstva (bm).
+      const shippingFee = osobnyOdber || totalLengthBm >= (Number(nastavenia.postovne_zdarma_od_bm) || 0) ? 0 : (Number(nastavenia.cena_doprava) || 0);
       const grandTotalBezDph = subtotal + expressFee + shippingFee + (grafickaPriprava ? PRIPRAVA_GRAFIKY_EUR : 0);
       const dphPercent = Number(pricingConfig.dphPercent) || 0;
       const dphSuma = grandTotalBezDph * (dphPercent / 100);
@@ -186,6 +189,7 @@ Deno.serve(async (req) => {
       subor_cesta: suborCesta,
       subor_url: suborUrl,
       graficka_priprava: (mode === 'auto' || mode === 'subor') && !!grafickaPriprava,
+      osobny_odber: (mode === 'auto' || mode === 'subor') && !!osobnyOdber,
     });
     if (insertErr) throw insertErr;
 
@@ -195,13 +199,14 @@ Deno.serve(async (req) => {
     if (!domain || !clientId || !clientSecret) throw new Error('SHOPIFY_STORE_DOMAIN, SHOPIFY_CLIENT_ID alebo SHOPIFY_CLIENT_SECRET nie je nastavený v Supabase secrets.');
     const token = await ziskajAdminToken(domain, clientId, clientSecret);
 
+    const osobnyOdberSufix = (mode === 'auto' || mode === 'subor') && osobnyOdber ? ' (osobný odber)' : '';
     const nazovPolozky = mode === 'auto'
-      ? `DTF transfer — metráž ${totalLengthBm.toFixed(2)}bm (${qty}× ${widthCm}×${heightCm}cm)` + (grafickaPriprava ? ' + príprava grafiky' : '')
+      ? `DTF transfer — metráž ${totalLengthBm.toFixed(2)}bm (${qty}× ${widthCm}×${heightCm}cm)` + (grafickaPriprava ? ' + príprava grafiky' : '') + osobnyOdberSufix
       : mode === 'vzorky'
       ? 'DTF transfer — vzorka vlastnej grafiky (A4, 1 ks)'
       : mode === 'paleta'
       ? 'DTF transfer — paleta farieb'
-      : `DTF transfer — hotová rolka ${totalLengthBm.toFixed(2)}bm` + (grafickaPriprava ? ' + príprava grafiky' : '');
+      : `DTF transfer — hotová rolka ${totalLengthBm.toFixed(2)}bm` + (grafickaPriprava ? ' + príprava grafiky' : '') + osobnyOdberSufix;
 
     const draftPayload = {
       draft_order: {
@@ -211,7 +216,7 @@ Deno.serve(async (req) => {
             price: grandTotal.toFixed(2),
             quantity: 1,
             taxable: false, // cena uz zahrna DPH (vypocitana server-side) — Shopify ju druhykrat neprirata
-            requires_shipping: true,
+            requires_shipping: !((mode === 'auto' || mode === 'subor') && osobnyOdber),
             properties: [
               { name: '_cislo_objednavky', value: cisloObjednavky },
               { name: '_objednavka_id', value: objednavkaId },
@@ -220,6 +225,7 @@ Deno.serve(async (req) => {
               { name: '_subor', value: suborNazov || '' },
               { name: '_subor_link', value: suborUrl || '' },
               { name: '_priprava_grafiky', value: grafickaPriprava ? 'áno (+10€)' : 'nie' },
+              { name: '_osobny_odber', value: (mode === 'auto' || mode === 'subor') && osobnyOdber ? 'áno' : 'nie' },
             ],
           },
         ],

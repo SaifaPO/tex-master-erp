@@ -16,6 +16,7 @@ const NAKLADY_DEFAULT = {
 const NASTAVENIA_DEFAULT = {
   shopify_variant_id: '', jednotka_cena_eur: 0.05, cena_doprava: 4.9,
   priplatok_expres_percent: 10, limit_expres_bm: 40, limit_standard_bm: 100, minimalna_cena_objednavky: 3,
+  postovne_zdarma_od_bm: 2, priplatok_expres_min_eur: 5, expres_cutoff_hodina: 12,
   dph_percent: 23,
 };
 
@@ -67,7 +68,9 @@ export default function DtfMetrazTab({ supabase }) {
   };
 
   const zmazObjednavku = async (id) => {
-    if (!window.confirm('Naozaj zmazať túto objednávku? (Zmaže len záznam tu — prípadnú Shopify draft objednávku treba zmazať samostatne v Shopify Admin → Orders → Drafts.)')) return;
+    if (!window.confirm('Naozaj zmazať túto objednávku? Zmaže sa aj priložený súbor v Storage (ak nejaký je). Prípadnú Shopify draft objednávku treba zmazať samostatne v Shopify Admin → Orders → Drafts.')) return;
+    const ord = objednavky.find(x => x.id === id);
+    if (ord?.subor_cesta) await supabase.storage.from(BUCKET).remove([ord.subor_cesta]);
     const { error } = await supabase.from('dtf_objednavky').delete().eq('id', id);
     if (error) { window.alert('Zmazanie zlyhalo: ' + error.message); return; }
     setObjednavky(o => o.filter(x => x.id !== id));
@@ -107,8 +110,11 @@ export default function DtfMetrazTab({ supabase }) {
         <h3 className="font-bold text-sm text-white mb-3">Doprava, expres a kapacitné limity</h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-w-3xl">
           <Field label="Doprava (€)" value={nastavenia.cena_doprava} step="0.1" onChange={(v) => ulozNastavenia({ cena_doprava: v })} />
-          <Field label="Príplatok expres (%)" value={nastavenia.priplatok_expres_percent} step="1" onChange={(v) => ulozNastavenia({ priplatok_expres_percent: v })} />
+          <Field label="Poštovné zdarma od (bm)" value={nastavenia.postovne_zdarma_od_bm} step="0.5" onChange={(v) => ulozNastavenia({ postovne_zdarma_od_bm: v })} />
           <Field label="Minimálna cena objednávky (€)" value={nastavenia.minimalna_cena_objednavky} step="0.5" onChange={(v) => ulozNastavenia({ minimalna_cena_objednavky: v })} />
+          <Field label="Príplatok expres (%)" value={nastavenia.priplatok_expres_percent} step="1" onChange={(v) => ulozNastavenia({ priplatok_expres_percent: v })} />
+          <Field label="Min. príplatok expres (€)" value={nastavenia.priplatok_expres_min_eur} step="0.5" onChange={(v) => ulozNastavenia({ priplatok_expres_min_eur: v })} />
+          <Field label="Expres platí do (hodina 0-23)" value={nastavenia.expres_cutoff_hodina} step="1" onChange={(v) => ulozNastavenia({ expres_cutoff_hodina: v })} />
           <Field label="Limit expres (bm/deň)" value={nastavenia.limit_expres_bm} step="1" onChange={(v) => ulozNastavenia({ limit_expres_bm: v })} />
           <Field label="Limit štandard (bm)" value={nastavenia.limit_standard_bm} step="1" onChange={(v) => ulozNastavenia({ limit_standard_bm: v })} />
           <div>
@@ -117,6 +123,7 @@ export default function DtfMetrazTab({ supabase }) {
             <p className="text-[10px] text-slate-500 mt-1">Nastavuje sa centrálne v záložke Cenotvorba pre celý PrintStudio Pro.</p>
           </div>
         </div>
+        <p className="text-[10px] text-slate-500 mt-3">"Expres platí do" = do koľkej hodiny (slovenský čas) si zákazník ešte môže vybrať expresné spracovanie v deň objednávky — po tomto čase appka expres ponuku automaticky skryje.</p>
       </div>
 
       {/* VÝROBNÉ NÁKLADY + CENOVÉ HLADINY */}
@@ -173,6 +180,9 @@ export default function DtfMetrazTab({ supabase }) {
                     <span className={`px-2 py-0.5 rounded text-[10px] border ${o.rezim === 'vzorky' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30'}`}>{o.rezim === 'auto' ? `${o.pocet_ks}ks ${o.sirka_cm}×${o.vyska_cm}cm` : o.rezim === 'vzorky' ? 'Vzorka A4' : 'Hotová rolka'}</span>
                     {o.rezim === 'auto' && o.otoceny && (
                       <span className="px-2 py-0.5 rounded text-[10px] border bg-amber-500/20 text-amber-300 border-amber-500/30" title="Motív je na vyskladanie otočený o 90° pre lepšie využitie materiálu — rozmery vyššie sú už v tejto (produkčnej) orientácii.">⟳ otočené na výrobu</span>
+                    )}
+                    {o.osobny_odber && (
+                      <span className="px-2 py-0.5 rounded text-[10px] border bg-purple-500/20 text-purple-300 border-purple-500/30">Osobný odber</span>
                     )}
                     {o.subor_url && (
                       <a href={o.subor_url} target="_blank" rel="noopener noreferrer" className="px-2 py-0.5 rounded text-[10px] border bg-teal-500/20 text-teal-300 border-teal-500/30 hover:bg-teal-500/30">⬇ {o.subor_nazov || 'Súbor na tlač'}</a>

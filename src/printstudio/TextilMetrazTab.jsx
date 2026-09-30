@@ -24,6 +24,7 @@ function priceAtBonus(cost, qty, cfg, bonusBodov) {
 
 const NASTAVENIA_DEFAULT = {
   shopify_variant_id: '', jednotka_cena_eur: 0.05, cena_doprava: 4.9, priplatok_expres_percent: 10, minimalna_cena_objednavky: 8,
+  postovne_zdarma_od_bm: 2, priplatok_expres_min_eur: 5, expres_cutoff_hodina: 12,
   limit_expres_bm_sublimacia: 60, limit_standard_bm_sublimacia: 150,
   limit_expres_bm_bavlna: 35, limit_standard_bm_bavlna: 80,
   dph_percent: 23,
@@ -96,7 +97,9 @@ export default function TextilMetrazTab({ supabase }) {
   };
 
   const zmazObjednavku = async (id) => {
-    if (!window.confirm('Naozaj zmazať túto objednávku? (Zmaže len záznam tu — prípadnú Shopify draft objednávku treba zmazať samostatne v Shopify Admin → Orders → Drafts.)')) return;
+    if (!window.confirm('Naozaj zmazať túto objednávku? Zmaže sa aj priložený súbor v Storage (ak nejaký je). Prípadnú Shopify draft objednávku treba zmazať samostatne v Shopify Admin → Orders → Drafts.')) return;
+    const ord = objednavky.find(x => x.id === id);
+    if (ord?.subor_cesta) await supabase.storage.from(BUCKET).remove([ord.subor_cesta]);
     const { error } = await supabase.from('textil_objednavky').delete().eq('id', id);
     if (error) { window.alert('Zmazanie zlyhalo: ' + error.message); return; }
     setObjednavky(o => o.filter(x => x.id !== id));
@@ -132,14 +135,18 @@ export default function TextilMetrazTab({ supabase }) {
         <h3 className="font-bold text-sm text-white mb-3">Doprava, expres a kapacitné limity</h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-w-3xl mb-4">
           <Field label="Doprava (€)" value={nastavenia.cena_doprava} step="0.1" onChange={(v) => ulozNastavenia({ cena_doprava: v })} />
-          <Field label="Príplatok expres (%)" value={nastavenia.priplatok_expres_percent} step="1" onChange={(v) => ulozNastavenia({ priplatok_expres_percent: v })} />
+          <Field label="Poštovné zdarma od (bm)" value={nastavenia.postovne_zdarma_od_bm} step="0.5" onChange={(v) => ulozNastavenia({ postovne_zdarma_od_bm: v })} />
           <Field label="Minimálna cena objednávky (€)" value={nastavenia.minimalna_cena_objednavky} step="0.5" onChange={(v) => ulozNastavenia({ minimalna_cena_objednavky: v })} />
+          <Field label="Príplatok expres (%)" value={nastavenia.priplatok_expres_percent} step="1" onChange={(v) => ulozNastavenia({ priplatok_expres_percent: v })} />
+          <Field label="Min. príplatok expres (€)" value={nastavenia.priplatok_expres_min_eur} step="0.5" onChange={(v) => ulozNastavenia({ priplatok_expres_min_eur: v })} />
+          <Field label="Expres platí do (hodina 0-23)" value={nastavenia.expres_cutoff_hodina} step="1" onChange={(v) => ulozNastavenia({ expres_cutoff_hodina: v })} />
           <div>
             <label className="block text-slate-400 mb-1 text-xs">DPH (%)</label>
             <input type="number" disabled value={pricingConfig.dphPercent} className="w-full px-2 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-400 font-mono opacity-70 cursor-not-allowed" />
             <p className="text-[10px] text-slate-500 mt-1">Nastavuje sa centrálne v záložke Cenotvorba pre celý PrintStudio Pro.</p>
           </div>
         </div>
+        <p className="text-[10px] text-slate-500 mb-4">"Expres platí do" = do koľkej hodiny (slovenský čas) si zákazník ešte môže vybrať expresné spracovanie v deň objednávky — po tomto čase appka expres ponuku automaticky skryje.</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="p-3 bg-slate-950 rounded-xl border border-teal-900/40">
             <span className="text-xs font-bold text-teal-400 block mb-2">Kapacita — Sublimácia</span>
@@ -267,6 +274,7 @@ export default function TextilMetrazTab({ supabase }) {
                     <span className="text-slate-500 text-[10px]">{new Date(o.created_at).toLocaleString('sk-SK')}</span>
                     {o.material_nazov && <span className="bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded text-[10px]">+ {o.material_nazov}</span>}
                     {o.sluzba_rezim === 'len_papier' && <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded text-[10px]">📄 Len papier</span>}
+                    {o.osobny_odber && <span className="bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded text-[10px]">Osobný odber</span>}
                   </div>
                   <div className="text-slate-300">Metráž: <strong className="text-indigo-400 font-mono">{o.dlzka_bm} bm</strong> | Suma: <strong className="text-emerald-400 font-mono">{o.cena_spolu} €</strong> | {o.harmonogram}</div>
                 </div>
