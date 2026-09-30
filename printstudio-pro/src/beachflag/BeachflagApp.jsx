@@ -312,7 +312,7 @@ export default function BeachflagApp({ supabase }) {
           )}
         </div>
 
-        <VelkostnePorovnanie tvarKod={tvarKod} velkost={katalog?.velkosti.find(v => v.kod === velkostKod)} velkosti={katalog?.velkosti} bgColor={bgColor} />
+        <VelkostnePorovnanie rozmer={katalog?.tvary.find(t => t.kod === tvarKod)?.rozmery?.[velkostKod]} velkost={katalog?.velkosti.find(v => v.kod === velkostKod)} velkosti={katalog?.velkosti} bgColor={bgColor} />
       </div>
     </div>
     </>
