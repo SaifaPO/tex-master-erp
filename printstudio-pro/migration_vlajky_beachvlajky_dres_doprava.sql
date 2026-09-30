@@ -18,3 +18,12 @@ create table if not exists dres_nastavenia (
     constraint jediny_riadok_dres_nastavenia check (id = 1)
 );
 insert into dres_nastavenia (id, cena_doprava) values (1, 4.90) on conflict (id) do nothing;
+
+-- Dres3DApp.jsx číta cena_doprava priamo z prehliadača (anon kľúč, rovnaký vzor ako
+-- vlajka_nastavenia) — bez verejnej "select" politiky by appka nevidela poštovné vôbec.
+-- Zápis/úpravu (napr. z admin karty Dres → Zľavy) povoľuje len prihlásený admin.
+alter table dres_nastavenia enable row level security;
+drop policy if exists "verejne citanie dres_nastavenia" on dres_nastavenia;
+create policy "verejne citanie dres_nastavenia" on dres_nastavenia for select using (true);
+drop policy if exists "admin plny pristup dres_nastavenia" on dres_nastavenia;
+create policy "admin plny pristup dres_nastavenia" on dres_nastavenia for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
