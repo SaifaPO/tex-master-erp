@@ -6,13 +6,16 @@ import NumberInput from '../NumberInput';
 // sirkou rolky materialu (vlajka nemoze byt sirsia ako vlajkovina) — vyska/dlzka nie je sirkou
 // rolky obmedzena, len prakticky (bezne robime do cca 500cm).
 const POMER = 150 / 100; // 3:2
+function rozmer(w, h, standard) {
+  return { w, h, label: `${w}×${h}`, standard };
+}
 const STD_ROZMERY = [
-  { w: 30, h: Math.round(30 / POMER), label: '30×proporčné' },
-  { w: 50, h: Math.round(50 / POMER), label: '50×proporčné' },
-  { w: 75, h: Math.round(75 / POMER), label: '75×proporčné' },
-  { w: 100, h: Math.round(100 / POMER), label: '100×proporčné' },
-  { w: 150, h: 100, label: '150×100', standard: true },
-  { w: Math.round(150 * POMER), h: 150, label: 'proporčné×150' },
+  rozmer(30, Math.round(30 / POMER)),
+  rozmer(50, Math.round(50 / POMER)),
+  rozmer(75, Math.round(75 / POMER)),
+  rozmer(100, Math.round(100 / POMER)),
+  rozmer(150, 100, true),
+  rozmer(Math.round(150 * POMER), 150),
 ];
 
 const SABLONY = [
