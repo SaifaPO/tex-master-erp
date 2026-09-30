@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Scroll, UploadCloud, Truck, Eye, ShoppingCart, TriangleAlert, CreditCard, Gift, Palette, Wand2 } from 'lucide-react';
 import { priceAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 import NumberInput from './NumberInput';
+import AskQuestion from './AskQuestion';
 
 const BUCKET = 'print-designs';
 const ROLL_WIDTH_CM = 56;
@@ -266,6 +267,7 @@ export default function DtfMetraz({ supabase, onSpat }) {
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+      <AskQuestion zdroj="DTF metráž" />
       <div className="bg-gradient-to-r from-indigo-50 to-white p-5 sm:p-6 rounded-2xl border border-indigo-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2"><Scroll className="text-indigo-600 w-6 h-6" /> Objednávka DTF transferov v metráži</h1>

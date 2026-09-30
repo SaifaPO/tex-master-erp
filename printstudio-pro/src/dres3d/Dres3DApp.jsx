@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { RotateCcw, Share2, Users, ShoppingCart, Grid3x3, Palette, Type, Image as ImageIcon, Shirt } from 'lucide-react';
+import AskQuestion from '../AskQuestion';
 import { nacitajDresKatalog } from './dresData';
 import { DEFAULT_CONFIG_STATE, GOOGLE_FONTS_HREF } from './dresPresets';
 import { vypocitajCenuDresu } from './dres3dCenotvorba';
@@ -154,6 +155,7 @@ export default function Dres3DApp({ supabase, produktId }) {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative bg-slate-950 h-[calc(100vh-64px)] min-h-0">
+      <AskQuestion zdroj="Dres 3D konfigurátor" />
       <div className="w-full flex items-center justify-between gap-2 p-2.5 bg-slate-900/90 border-b border-slate-800 shrink-0 z-20">
         <span className="text-xs font-bold text-slate-300 truncate">{katalog.produkt.nazov}</span>
         <div className="flex items-center gap-1.5 ml-auto">

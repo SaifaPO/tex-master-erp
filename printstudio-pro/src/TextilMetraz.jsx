@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Shirt, UploadCloud, Truck, Eye, ShoppingCart, TriangleAlert, CreditCard, Grid3x3, Rows, Shapes } from 'lucide-react';
 import { priceAt, marginAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 import NumberInput from './NumberInput';
+import AskQuestion from './AskQuestion';
 
 // Bonusove percentualne body navyse k zakladnej marzi z Cenotvorby — pouzite pre urovne sluzby,
 // kde nepredavame latku ani nazehlenie (tenky obrat musi mat vyssiu maržu, inak sa neoplati).
@@ -318,6 +319,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+      <AskQuestion zdroj="Textilná metráž" />
       <div className="bg-gradient-to-r from-slate-50 to-white p-5 sm:p-6 rounded-2xl border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2"><Shirt className="text-teal-600 w-6 h-6" /> Textilná metráž a sublimačný papier — sublimácia & digitálna bavlna</h1>

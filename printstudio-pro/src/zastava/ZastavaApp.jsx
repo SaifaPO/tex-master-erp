@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { fabric } from 'fabric';
 import { Flag, Eye } from 'lucide-react';
 import PbtHeader from '../PbtHeader';
+import AskQuestion from '../AskQuestion';
 import { nacitajZastavaKatalog } from './zastavaData';
 import RozmeryTab from './RozmeryTab';
 import GrafikaTab from '../beachflag/GrafikaTab';
@@ -346,6 +347,7 @@ export default function ZastavaApp({ supabase }) {
 
   return (
     <>
+    <AskQuestion zdroj="Vlajky (Zástava)" />
     <PbtHeader title="PrintStudio Pro" subtitle="Konfigurátor zástav a koruhiev" />
     <div className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
       <div className="lg:col-span-7 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">

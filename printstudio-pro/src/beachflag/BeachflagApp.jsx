@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { fabric } from 'fabric';
 import { Flag, Eye } from 'lucide-react';
 import PbtHeader from '../PbtHeader';
+import AskQuestion from '../AskQuestion';
 import { nacitajVlajkaKatalog } from './vlajkaData';
 import ParametreTab from './ParametreTab';
 import GrafikaTab from './GrafikaTab';
@@ -251,6 +252,7 @@ export default function BeachflagApp({ supabase }) {
 
   return (
     <>
+    <AskQuestion zdroj="Beachvlajky" />
     <PbtHeader title="PrintStudio Pro" subtitle="Konfigurátor plážovej vlajky" />
     <div className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
       <div className="lg:col-span-7 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
