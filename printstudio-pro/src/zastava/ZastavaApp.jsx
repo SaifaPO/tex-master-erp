@@ -39,6 +39,8 @@ export default function ZastavaApp({ supabase }) {
   const [ocka, setOcka] = useState([]);
   const [karabinky, setKarabinky] = useState([]);
   const [popruhy, setPopruhy] = useState({});
+  const [strapce, setStrapce] = useState([]);
+  const [strapceFarba, setStrapceFarba] = useState('biela');
   const [expresne, setExpresne] = useState(false);
   const [pocetKs, setPocetKs] = useState(1);
   const [osobnyOdber, setOsobnyOdber] = useState(false);
@@ -209,10 +211,31 @@ export default function ZastavaApp({ supabase }) {
       });
     });
 
+    // Strapce — rad malych trojuholnikov ("zubov") pozdlz zvolenej strany/strán, farba podla
+    // strapceFarba (len ilustracne, presny odtien materialu sa potvrdzuje pri objednavke).
+    const strapecFarby = { biela: '#f8fafc', modra: '#2563eb', zlata: '#d4a017' };
+    const strapecFill = strapecFarby[strapceFarba] || strapecFarby.biela;
+    const strapecDlzka = Math.max(10, Math.min(w, h) * 0.03);
+    const strapecKrok = strapecDlzka * 1.4;
+    strapce.forEach((s) => {
+      if (s.side === 'top' || s.side === 'bottom') {
+        const y = s.side === 'top' ? 0 : h;
+        const smer = s.side === 'top' ? -1 : 1;
+        for (let x = strapecKrok / 2; x < w; x += strapecKrok) {
+          pridaj(new fabric.Triangle({ left: x - strapecDlzka / 2, top: smer > 0 ? y : y - strapecDlzka, width: strapecDlzka, height: strapecDlzka, fill: strapecFill, stroke: '#94a3b8', strokeWidth: 1, angle: smer > 0 ? 180 : 0 }));
+        }
+      } else {
+        const x = s.side === 'left' ? 0 : w;
+        for (let y = strapecKrok / 2; y < h; y += strapecKrok) {
+          pridaj(new fabric.Triangle({ left: s.side === 'left' ? x - strapecDlzka : x, top: y - strapecDlzka / 2, width: strapecDlzka, height: strapecDlzka, fill: strapecFill, stroke: '#94a3b8', strokeWidth: 1, angle: s.side === 'left' ? -90 : 90 }));
+        }
+      }
+    });
+
     canvas.getObjects().filter(o => o.isSafeGuide).forEach(o => canvas.bringToFront(o));
     canvas.requestRenderAll();
     setDebugObjCount(canvas.getObjects().length);
-  }, [tunely, ocka, karabinky, popruhy, sirkaCm, vyskaCm, canvasReady]);
+  }, [tunely, ocka, karabinky, popruhy, strapce, strapceFarba, sirkaCm, vyskaCm, canvasReady]);
 
   const pridajText = () => {
     const canvas = fabricRef.current;
@@ -296,7 +319,7 @@ export default function ZastavaApp({ supabase }) {
     setCenaChyba('');
     const t = setTimeout(async () => {
       const { data, error } = await supabase.functions.invoke('zastava-price-preview', {
-        body: { materialKod, sirkaCm, vyskaCm, vyhotovenie, tunely, ocka, karabinky, popruhy, pocetKs, expresne, osobnyOdber },
+        body: { materialKod, sirkaCm, vyskaCm, vyhotovenie, tunely, ocka, karabinky, popruhy, strapce, pocetKs, expresne, osobnyOdber },
       });
       setCenaNacitava(false);
       if (error) { setCenaChyba(error.message); return; }
@@ -304,7 +327,7 @@ export default function ZastavaApp({ supabase }) {
       setCena(data.cena);
     }, 400);
     return () => clearTimeout(t);
-  }, [supabase, materialKod, sirkaCm, vyskaCm, vyhotovenie, tunely, ocka, karabinky, popruhy, pocetKs, expresne, osobnyOdber]);
+  }, [supabase, materialKod, sirkaCm, vyskaCm, vyhotovenie, tunely, ocka, karabinky, popruhy, strapce, pocetKs, expresne, osobnyOdber]);
 
   if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500 text-sm">Načítavam…</div>;
   if (loadError) return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-rose-600 text-sm px-4 text-center">{loadError}</div>;
@@ -325,7 +348,7 @@ export default function ZastavaApp({ supabase }) {
 
       const payload = {
         designId, materialKod, sirkaCm, vyskaCm, vyhotovenie,
-        tunely, ocka, karabinky, popruhy,
+        tunely, ocka, karabinky, popruhy, strapce, strapceFarba: strapce.length > 0 ? strapceFarba : null,
         statnaVlajka: statnaVlajka?.nazov || null,
         farbaHex: bgColor, farbaPoznamka: pantoneNote, textNaVlajke: customText,
         expresne, pocetKs, osobnyOdber,
@@ -387,6 +410,7 @@ export default function ZastavaApp({ supabase }) {
           <DoplnkyTab
             tunely={tunely} onTunely={setTunely} ocka={ocka} onOcka={setOcka}
             karabinky={karabinky} onKarabinky={setKarabinky} popruhy={popruhy} onPopruhy={setPopruhy}
+            strapce={strapce} onStrapce={setStrapce} strapceFarba={strapceFarba} onStrapceFarba={setStrapceFarba}
             expresne={expresne} onExpresne={setExpresne} expresnyPriplatokPercent={cena?.expresnyPercent}
             pocetKs={pocetKs} onPocetKs={setPocetKs}
             osobnyOdber={osobnyOdber} onOsobnyOdber={setOsobnyOdber}

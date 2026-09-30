@@ -50,6 +50,7 @@ function vypocitajHardwareRozmery(
   sirkaCm: number, vyskaCm: number,
   tunely: { side: string }[], ocka: { side: string; count: number }[],
   karabinky: { side: string; count: number }[], popruhy: Record<string, boolean>,
+  strapce: { side: string }[],
 ) {
   const tunelyBm = (tunely || []).reduce((s, t) => s + ((t.side === 'top' || t.side === 'bottom' ? sirkaCm : vyskaCm) / 100), 0);
   const ockaPocet = (ocka || []).reduce((s, g) => s + (g.side === 'all' ? g.count * 4 : g.side === 'corners' ? 4 : g.count), 0);
@@ -59,7 +60,8 @@ function vypocitajHardwareRozmery(
   if (popruhy?.right) popruhBm += vyskaCm / 100;
   if (popruhy?.top) popruhBm += sirkaCm / 100;
   if (popruhy?.bottom) popruhBm += sirkaCm / 100;
-  return { tunelyBm, ockaPocet, karabinkyPocet, popruhBm };
+  const strapceBm = (strapce || []).reduce((s, t) => s + ((t.side === 'top' || t.side === 'bottom' ? sirkaCm : vyskaCm) / 100), 0);
+  return { tunelyBm, ockaPocet, karabinkyPocet, popruhBm, strapceBm };
 }
 
 Deno.serve(async (req) => {
@@ -74,7 +76,7 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const {
       materialKod, sirkaCm, vyskaCm, vyhotovenie,
-      tunely = [], ocka = [], karabinky = [], popruhy = {},
+      tunely = [], ocka = [], karabinky = [], popruhy = {}, strapce = [],
       pocetKs = 1, expresne = false, osobnyOdber = false,
     } = body;
 
@@ -97,7 +99,7 @@ Deno.serve(async (req) => {
 
     const nakladM2Material = await resolveNakladM2(supabase, material);
 
-    const { tunelyBm, ockaPocet, karabinkyPocet, popruhBm } = vypocitajHardwareRozmery(Number(sirkaCm), Number(vyskaCm), tunely, ocka, karabinky, popruhy);
+    const { tunelyBm, ockaPocet, karabinkyPocet, popruhBm, strapceBm } = vypocitajHardwareRozmery(Number(sirkaCm), Number(vyskaCm), tunely, ocka, karabinky, popruhy, strapce);
 
     const m2 = (Number(sirkaCm) * Number(vyskaCm)) / 10000;
     const nakladMaterial = m2 * nakladM2Material;
@@ -108,7 +110,8 @@ Deno.serve(async (req) => {
       tunelyBm * Number(naklady.naklad_tunel_bm) +
       ockaPocet * Number(naklady.naklad_ocko_ks) +
       karabinkyPocet * Number(naklady.naklad_karabinka_ks) +
-      popruhBm * Number(naklady.naklad_popruh_bm);
+      popruhBm * Number(naklady.naklad_popruh_bm) +
+      strapceBm * (Number(naklady.naklad_strapce_bm) || 0);
     const nakladKus = nakladMaterial + nakladVyhotovenie + nakladHardware;
 
     const ks = Math.max(1, Math.round(Number(pocetKs)) || 1);

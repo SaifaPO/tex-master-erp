@@ -1,5 +1,5 @@
 import React from 'react';
-import { Scroll, CircleDot, Link as LinkIcon, Ribbon, Plus, Zap, ShoppingBag, Loader2 } from 'lucide-react';
+import { Scroll, CircleDot, Link as LinkIcon, Ribbon, Sparkle, Plus, Zap, ShoppingBag, Loader2 } from 'lucide-react';
 import NumberInput from '../NumberInput';
 
 const STRANY = [
@@ -7,8 +7,15 @@ const STRANY = [
   { value: 'left', label: 'Vľavo' }, { value: 'right', label: 'Vpravo' },
 ];
 
+const FARBY_STRAPCOV = [
+  { value: 'biela', label: 'Biele' },
+  { value: 'modra', label: 'Modré' },
+  { value: 'zlata', label: 'Zlaté' },
+];
+
 export default function DoplnkyTab({
   tunely, onTunely, ocka, onOcka, karabinky, onKarabinky, popruhy, onPopruhy,
+  strapce, onStrapce, strapceFarba, onStrapceFarba,
   expresne, onExpresne, expresnyPriplatokPercent,
   pocetKs, onPocetKs,
   osobnyOdber, onOsobnyOdber,
@@ -26,6 +33,10 @@ export default function DoplnkyTab({
   const pridajKarabinku = () => onKarabinky([...karabinky, { side: 'left', count: 5 }]);
   const zmazKarabinku = (i) => onKarabinky(karabinky.filter((_, idx) => idx !== i));
   const upravKarabinku = (i, patch) => onKarabinky(karabinky.map((c, idx) => idx === i ? { ...c, ...patch } : c));
+
+  const pridajStrapec = () => onStrapce([...strapce, { side: 'bottom' }]);
+  const zmazStrapec = (i) => onStrapce(strapce.filter((_, idx) => idx !== i));
+  const upravStrapec = (i, patch) => onStrapce(strapce.map((s, idx) => idx === i ? { ...s, ...patch } : s));
 
   return (
     <div className="p-4 sm:p-6 space-y-5">
@@ -98,6 +109,36 @@ export default function DoplnkyTab({
           </div>
         ))}
         {karabinky.length === 0 && <p className="text-[11px] text-slate-400">Zatiaľ žiadne karabínky.</p>}
+      </div>
+
+      <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-3">
+        <div className="flex justify-between items-center">
+          <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5"><Sparkle className="w-4 h-4 text-indigo-600" /> Obšitie strapcami</span>
+          <button onClick={pridajStrapec} className="text-xs bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-medium px-2 py-1 rounded flex items-center gap-1"><Plus className="w-3 h-3" /> Pridať stranu</button>
+        </div>
+        {strapce.map((s, i) => (
+          <div key={i} className="flex items-center gap-2 bg-white p-2 rounded border border-slate-200 text-xs">
+            <select value={s.side} onChange={(e) => upravStrapec(i, { side: e.target.value })} className="border rounded p-1">
+              {STRANY.map(st => <option key={st.value} value={st.value}>{st.label}</option>)}
+            </select>
+            <button onClick={() => zmazStrapec(i)} className="text-red-500 hover:text-red-700 ml-auto font-bold px-1">×</button>
+          </div>
+        ))}
+        {strapce.length === 0 && <p className="text-[11px] text-slate-400">Zatiaľ žiadne strapce. Pridaj jednu alebo viac strán (všetky štyri = dookola).</p>}
+        {strapce.length > 0 && (
+          <div className="pt-1">
+            <span className="block text-[11px] font-medium text-slate-500 mb-1">Farba strapcov</span>
+            <div className="grid grid-cols-3 gap-2">
+              {FARBY_STRAPCOV.map(f => (
+                <label key={f.value} className={`p-1.5 border rounded text-center cursor-pointer text-[11px] ${strapceFarba === f.value ? 'border-indigo-500 bg-indigo-50 font-bold text-indigo-700' : 'border-slate-200 bg-white hover:bg-slate-100'}`}>
+                  <input type="radio" name="strapceFarba" className="hidden" checked={strapceFarba === f.value} onChange={() => onStrapceFarba(f.value)} />
+                  {f.label}
+                </label>
+              ))}
+            </div>
+            {strapceFarba !== 'biela' && <p className="text-[10px] text-amber-600 mt-1">Farebné strapce dodávame podľa aktuálnej dostupnosti — potvrdíme po objednávke.</p>}
+          </div>
+        )}
       </div>
 
       <div className="bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-200 space-y-4">

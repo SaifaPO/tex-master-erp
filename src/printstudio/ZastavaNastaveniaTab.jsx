@@ -10,6 +10,7 @@ const labelCls = 'text-xs text-slate-400 font-medium';
 const DEFAULT_NASTAVENIA = {
   naklad_sitia_min: 0.35, min_sitia_na_m2: 4.0, naklad_laser_m2: 1.8,
   naklad_tunel_bm: 1.5, naklad_ocko_ks: 0.25, naklad_karabinka_ks: 0.55, naklad_popruh_bm: 0.8,
+  naklad_strapce_bm: 2.0,
   expresny_priplatok_percent: 10,
 };
 
@@ -95,7 +96,7 @@ export default function ZastavaNastaveniaTab({ supabase }) {
       body: {
         materialKod: testMaterial, sirkaCm: testSirka, vyskaCm: testVyska,
         vyhotovenie: testVyhotovenie, pocetKs: testKs,
-        tunely: [], ocka: [], karabinky: [], popruhy: {},
+        tunely: [], ocka: [], karabinky: [], popruhy: {}, strapce: [],
       },
     });
     setTestBeziaci(false);
@@ -138,6 +139,7 @@ export default function ZastavaNastaveniaTab({ supabase }) {
           <p className="text-[10px] text-slate-500 mt-1">Vyber hrúbku vlajkoviny z Kostry cien → Laserové rezanie — dopočíta a natiahne skutočnú cenu.</p>
         </div>
         <div><label className={labelCls}>Tunel/rukáv (€/bm)</label><NumberInput step="0.1" value={nastavenia.naklad_tunel_bm} onChange={(v) => uloz({ naklad_tunel_bm: v })} fallback={0} className={inputCls} /><p className="text-[10px] text-slate-500 mt-1">Zatiaľ len ručne — nemáme reálny zdroj (čas šitia tunela).</p></div>
+        <div><label className={labelCls}>Strapce (€/bm)</label><NumberInput step="0.1" value={nastavenia.naklad_strapce_bm} onChange={(v) => uloz({ naklad_strapce_bm: v })} fallback={0} className={inputCls} /><p className="text-[10px] text-slate-500 mt-1">Cena za bm obšitého okraja, bez ohľadu na farbu strapcov.</p></div>
         <SkladPole label="Kovové očko/priechodka (€/ks)" kluc="ocko" nastavenia={nastavenia} skladPolozky={skladPolozky} SKLAD_POLIA={SKLAD_POLIA} prepojSklad={prepojSklad} prepocitajSklad={prepocitajSklad} uloz={uloz} inputCls={inputCls} labelCls={labelCls} />
         <SkladPole label="Karabínka (€/ks)" kluc="karabinka" nastavenia={nastavenia} skladPolozky={skladPolozky} SKLAD_POLIA={SKLAD_POLIA} prepojSklad={prepojSklad} prepocitajSklad={prepocitajSklad} uloz={uloz} inputCls={inputCls} labelCls={labelCls} />
         <SkladPole label="Spevňujúci popruh (€/bm)" kluc="popruh" nastavenia={nastavenia} skladPolozky={skladPolozky} SKLAD_POLIA={SKLAD_POLIA} prepojSklad={prepojSklad} prepocitajSklad={prepocitajSklad} uloz={uloz} inputCls={inputCls} labelCls={labelCls} />
