@@ -1,5 +1,6 @@
 import React from 'react';
 import { Boxes, Zap, ShoppingBag, Loader2, AlertTriangle } from 'lucide-react';
+import NumberInput from '../NumberInput';
 
 export default function DoplnkyTab({
   katalog, doplnkyMnozstva, onZmenMnozstvo,
@@ -52,7 +53,7 @@ export default function DoplnkyTab({
             <label className="text-xs font-bold text-slate-700">Počet kusov</label>
             <div className="flex items-center border border-slate-300 rounded-lg bg-white overflow-hidden">
               <button onClick={() => onPocetKs(Math.max(1, pocetKs - 1))} className="px-3 py-2 text-slate-600 hover:bg-slate-100 font-bold">-</button>
-              <input type="number" min="1" value={pocetKs} onChange={(e) => onPocetKs(Math.max(1, parseInt(e.target.value) || 1))} className="w-12 text-center text-xs font-bold border-x border-slate-200 py-2 focus:outline-none" />
+              <NumberInput min="1" value={pocetKs} onChange={(v) => onPocetKs(Math.max(1, v))} fallback={1} className="w-12 text-center text-xs font-bold border-x border-slate-200 py-2 focus:outline-none" />
               <button onClick={() => onPocetKs(pocetKs + 1)} className="px-3 py-2 text-slate-600 hover:bg-slate-100 font-bold">+</button>
             </div>
           </div>

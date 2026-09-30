@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { Ruler, Layers, Scissors, Sparkles } from 'lucide-react';
+import NumberInput from '../NumberInput';
 
 // Proporcne rozmery podla pomeru bezneho standardu 150x100 (3:2). Sirka je fyzicky obmedzena
 // sirkou rolky materialu (vlajka nemoze byt sirsia ako vlajkovina) — vyska/dlzka nie je sirkou
@@ -60,11 +61,11 @@ export default function RozmeryTab({
         <div className="grid grid-cols-2 gap-3">
           <div>
             <span className="block text-[11px] text-slate-500 mb-1">Šírka (cm) — max {maxSirka} pre vybraný materiál</span>
-            <input type="number" min="20" max={maxSirka} value={sirkaCm} onChange={(e) => nastavRozmery(parseInt(e.target.value) || 20, vyskaCm)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-semibold" />
+            <NumberInput min="20" max={maxSirka} value={sirkaCm} onChange={(v) => nastavRozmery(v, vyskaCm)} fallback={20} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-semibold" />
           </div>
           <div>
             <span className="block text-[11px] text-slate-500 mb-1">Výška/dĺžka (cm)</span>
-            <input type="number" min="20" max="1000" value={vyskaCm} onChange={(e) => onRozmery(sirkaCm, parseInt(e.target.value) || 20)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-semibold" />
+            <NumberInput min="20" max="1000" value={vyskaCm} onChange={(v) => onRozmery(sirkaCm, v)} fallback={20} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-semibold" />
           </div>
         </div>
         <p className="text-[11px] text-slate-500 mt-1">Plocha: {((sirkaCm * vyskaCm) / 10000).toFixed(2)} m² • Šírka je obmedzená šírkou rolky materiálu, dĺžka nie je (bežne do cca 500 cm).</p>

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Trash2, ChevronUp, ChevronDown, Type as TypeIcon, Image as ImageIcon } from 'lucide-react';
+import NumberInput from '../NumberInput';
 
 // Aspon 10 bezpecnych systemovych fontov (Martin 2026-09-27) — ziadne nacitavanie z internetu,
 // aby sa export (toDataURL pri objednavke) nikdy nepokazil kvoli nenacitanemu web fontu.
@@ -85,7 +86,7 @@ export default function LayersPanel({ canvas }) {
               </div>
               <div>
                 <label className="block text-[10px] text-slate-500 mb-1">Veľkosť písma (cm)</label>
-                <input type="number" step="0.5" min="1" value={Math.round((selected.fontSize || 0) * 10) / 10} onChange={(e) => aktualizuj({ fontSize: parseFloat(e.target.value) || 1 })} className="w-full text-xs px-2 py-1.5 border border-slate-300 rounded-lg" />
+                <NumberInput step="0.5" min="1" value={Math.round((selected.fontSize || 0) * 10) / 10} onChange={(v) => aktualizuj({ fontSize: v })} fallback={1} className="w-full text-xs px-2 py-1.5 border border-slate-300 rounded-lg" />
               </div>
             </div>
           )}
@@ -106,14 +107,14 @@ export default function LayersPanel({ canvas }) {
           {jeText && (
             <div>
               <label className="block text-[10px] text-slate-500 mb-1">Hrúbka obrysu (cm) — 0 = bez obrysu</label>
-              <input type="number" step="0.05" min="0" value={selected.strokeWidth || 0} onChange={(e) => aktualizuj({ strokeWidth: parseFloat(e.target.value) || 0 })} className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded-lg" />
+              <NumberInput step="0.05" min="0" value={selected.strokeWidth || 0} onChange={(v) => aktualizuj({ strokeWidth: v })} fallback={0} className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded-lg" />
             </div>
           )}
 
           <div>
             <label className="block text-[10px] text-slate-500 mb-1">Otočenie (°) — ťahaním za úchyt zaskočí po 45°</label>
             <div className="flex items-center gap-2 flex-wrap">
-              <input type="number" step="1" value={uhol} onChange={(e) => aktualizuj({ angle: parseFloat(e.target.value) || 0 })} className="w-16 text-xs px-2.5 py-1.5 border border-slate-300 rounded-lg shrink-0" />
+              <NumberInput step="1" value={uhol} onChange={(v) => aktualizuj({ angle: v })} fallback={0} className="w-16 text-xs px-2.5 py-1.5 border border-slate-300 rounded-lg shrink-0" />
               <div className="flex gap-1 flex-wrap">
                 {UHLY.map(a => (
                   <button key={a} type="button" onClick={() => aktualizuj({ angle: a })} className={`text-[10px] px-1.5 py-1 rounded border ${uhol === a ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-500 hover:bg-slate-100'}`}>{a}°</button>

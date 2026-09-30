@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Shirt, UploadCloud, Truck, Eye, ShoppingCart, TriangleAlert, CreditCard, Grid3x3, Rows, Shapes } from 'lucide-react';
 import { priceAt, marginAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
+import NumberInput from './NumberInput';
 
 // Bonusove percentualne body navyse k zakladnej marzi z Cenotvorby — pouzite pre urovne sluzby,
 // kde nepredavame latku ani nazehlenie (tenky obrat musi mat vyssiu maržu, inak sa neoplati).
@@ -331,15 +332,15 @@ export default function TextilMetraz({ supabase, onSpat }) {
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Šírka motívu (cm)</label>
-                  <input type="number" min="1" max={printWidthCm} step="0.5" value={widthCm} onChange={(e) => setWidthCm(parseFloat(e.target.value) || 1)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+                  <NumberInput min="1" max={printWidthCm} step="0.5" value={widthCm} onChange={setWidthCm} fallback={1} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Výška motívu (cm)</label>
-                  <input type="number" min="1" step="0.5" value={heightCm} onChange={(e) => setHeightCm(parseFloat(e.target.value) || 1)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+                  <NumberInput min="1" step="0.5" value={heightCm} onChange={setHeightCm} fallback={1} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Dĺžka látky (bm)</label>
-                  <input type="number" min="0.5" step="0.5" value={lengthBm} onChange={(e) => setLengthBm(parseFloat(e.target.value) || 0.5)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+                  <NumberInput min="0.5" step="0.5" value={lengthBm} onChange={setLengthBm} fallback={0.5} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
                 </div>
               </div>
 
@@ -375,7 +376,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
               </label>
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">Dĺžka rolky (bm)</label>
-                <input type="number" min="0.5" step="0.5" value={directLengthBm} onChange={(e) => setDirectLengthBm(parseFloat(e.target.value) || 0.5)} className="w-full sm:w-48 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+                <NumberInput min="0.5" step="0.5" value={directLengthBm} onChange={setDirectLengthBm} fallback={0.5} className="w-full sm:w-48 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
               </div>
             </div>
           )}
@@ -418,7 +419,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
             ) : sluzbaRezim === 'na_vas_material' ? (
               <div className="pt-1">
                 <label className="block text-xs font-medium text-slate-500 mb-1">Šírka vašej látky (cm) — max {maxSirka}cm pre túto technológiu</label>
-                <input type="number" min="10" max={maxSirka} step="1" value={manualSirkaCm} onChange={(e) => setManualSirkaCm(Math.min(maxSirka, Math.max(10, parseFloat(e.target.value) || maxSirka)))} className="w-full sm:w-48 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+                <NumberInput min="10" max={maxSirka} step="1" value={manualSirkaCm} onChange={(v) => setManualSirkaCm(Math.min(maxSirka, Math.max(10, v)))} fallback={maxSirka} className="w-full sm:w-48 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
               </div>
             ) : (
               <p className="text-xs text-slate-500 pt-1">Papier má vždy nominálnu šírku {printWidthCm}cm — žiadna látka sa neobjednáva, ani sa na ňu netlačí.</p>

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Scroll, UploadCloud, Truck, Eye, ShoppingCart, TriangleAlert, CreditCard, Gift, Palette, Wand2 } from 'lucide-react';
 import { priceAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
+import NumberInput from './NumberInput';
 
 const BUCKET = 'print-designs';
 const ROLL_WIDTH_CM = 56;
@@ -325,15 +326,15 @@ export default function DtfMetraz({ supabase, onSpat }) {
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Šírka loga (cm)</label>
-                  <input type="number" min="0.5" max={ROLL_WIDTH_CM} step="0.5" value={widthCm} onChange={(e) => setWidthCm(parseFloat(e.target.value) || 0.5)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+                  <NumberInput min="0.5" max={ROLL_WIDTH_CM} step="0.5" value={widthCm} onChange={setWidthCm} fallback={0.5} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Výška loga (cm)</label>
-                  <input type="number" min="0.5" step="0.5" value={heightCm} onChange={(e) => setHeightCm(parseFloat(e.target.value) || 0.5)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+                  <NumberInput min="0.5" step="0.5" value={heightCm} onChange={setHeightCm} fallback={0.5} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Počet kusov</label>
-                  <input type="number" min="1" step="1" value={qty} onChange={(e) => setQty(parseInt(e.target.value) || 1)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+                  <NumberInput min="1" step="1" value={qty} onChange={setQty} fallback={1} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
                 </div>
               </div>
               {rozlozenieAuto?.jeOtoceny && (
@@ -357,7 +358,7 @@ export default function DtfMetraz({ supabase, onSpat }) {
               </label>
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">Dĺžka rolky (bm)</label>
-                <input type="number" min="0.01" step="0.1" value={directLengthBm} onChange={(e) => setDirectLengthBm(parseFloat(e.target.value) || 0.01)} className="w-full sm:w-48 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+                <NumberInput min="0.01" step="0.1" value={directLengthBm} onChange={setDirectLengthBm} fallback={0.01} className="w-full sm:w-48 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
               </div>
             </div>
           )}

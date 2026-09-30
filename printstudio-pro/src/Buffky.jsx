@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ShoppingCart, CreditCard, Gift } from 'lucide-react';
 import PbtHeader from './PbtHeader';
 import { priceAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG, QUANTITY_LEVELS } from './pricingEngine';
+import NumberInput from './NumberInput';
 import { initBuffkyEngine } from './buffky/buffkyEngine';
 
 const BUCKET = 'print-designs';
@@ -357,7 +358,7 @@ export default function Buffky({ supabase, onSpat }) {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-slate-400 mb-1">Počet kusov</label>
-                <input type="number" min="1" step="1" value={pocetKs} onChange={(e) => setPocetKs(Math.max(1, parseInt(e.target.value) || 1))} className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" />
+                <NumberInput min="1" step="1" value={pocetKs} onChange={(v) => setPocetKs(Math.max(1, v))} fallback={1} className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-400 mb-1">Doprava</label>

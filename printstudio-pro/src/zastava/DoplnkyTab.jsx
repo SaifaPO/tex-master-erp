@@ -1,5 +1,6 @@
 import React from 'react';
 import { Scroll, CircleDot, Link as LinkIcon, Ribbon, Plus, Zap, ShoppingBag, Loader2 } from 'lucide-react';
+import NumberInput from '../NumberInput';
 
 const STRANY = [
   { value: 'top', label: 'Hore' }, { value: 'bottom', label: 'Dole' },
@@ -58,7 +59,7 @@ export default function DoplnkyTab({
             {o.side !== 'corners' && (
               <>
                 <span className="text-slate-500">Počet:</span>
-                <input type="number" min="1" value={o.count} onChange={(e) => upravOcko(i, { count: parseInt(e.target.value) || 1 })} className="w-14 border rounded p-1 text-center" />
+                <NumberInput min="1" value={o.count} onChange={(v) => upravOcko(i, { count: v })} fallback={1} className="w-14 border rounded p-1 text-center" />
               </>
             )}
             <button onClick={() => zmazOcko(i)} className="text-red-500 hover:text-red-700 ml-auto font-bold px-1">×</button>
@@ -91,7 +92,7 @@ export default function DoplnkyTab({
               <option value="all">Všetky strany</option>
             </select>
             <span className="text-slate-500">Počet:</span>
-            <input type="number" min="1" value={c.count} onChange={(e) => upravKarabinku(i, { count: parseInt(e.target.value) || 1 })} className="w-14 border rounded p-1 text-center" />
+            <NumberInput min="1" value={c.count} onChange={(v) => upravKarabinku(i, { count: v })} fallback={1} className="w-14 border rounded p-1 text-center" />
             <button onClick={() => zmazKarabinku(i)} className="text-red-500 hover:text-red-700 ml-auto font-bold px-1">×</button>
           </div>
         ))}
@@ -115,7 +116,7 @@ export default function DoplnkyTab({
             <label className="text-xs font-bold text-slate-700">Počet kusov</label>
             <div className="flex items-center border border-slate-300 rounded-lg bg-white overflow-hidden">
               <button onClick={() => onPocetKs(Math.max(1, pocetKs - 1))} className="px-3 py-2 text-slate-600 hover:bg-slate-100 font-bold">-</button>
-              <input type="number" min="1" value={pocetKs} onChange={(e) => onPocetKs(Math.max(1, parseInt(e.target.value) || 1))} className="w-12 text-center text-xs font-bold border-x border-slate-200 py-2 focus:outline-none" />
+              <NumberInput min="1" value={pocetKs} onChange={(v) => onPocetKs(Math.max(1, v))} fallback={1} className="w-12 text-center text-xs font-bold border-x border-slate-200 py-2 focus:outline-none" />
               <button onClick={() => onPocetKs(pocetKs + 1)} className="px-3 py-2 text-slate-600 hover:bg-slate-100 font-bold">+</button>
             </div>
           </div>

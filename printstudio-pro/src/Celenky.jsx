@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Truck, Eye, ShoppingCart, CreditCard, Gift } from 'lucide-react';
 import PbtHeader from './PbtHeader';
 import { priceAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG, QUANTITY_LEVELS } from './pricingEngine';
+import NumberInput from './NumberInput';
 import { initCelenkyEngine } from './celenky/celenkyEngine';
 
 const BUCKET = 'print-designs';
@@ -395,7 +396,7 @@ export default function Celenky({ supabase, onSpat }) {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">Počet kusov</label>
-                <input type="number" min="1" step="1" value={pocetKs} onChange={(e) => setPocetKs(Math.max(1, parseInt(e.target.value) || 1))} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+                <NumberInput min="1" step="1" value={pocetKs} onChange={(v) => setPocetKs(Math.max(1, v))} fallback={1} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">Doprava</label>
