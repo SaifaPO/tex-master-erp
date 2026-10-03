@@ -41,9 +41,23 @@ export default function LayersPanel({ canvas }) {
   const posunDole = (o) => { canvas.sendBackwards(o); canvas.renderAll(); refresh(); };
   const aktualizuj = (patch) => { if (!selected) return; selected.set(patch); canvas.renderAll(); refresh(); };
 
+  // Obrys: "vonku" = paintFirst 'stroke' (obrys pod vyplnou) + zdvojnasobeny strokeWidth, aby bola
+  // viditelna hrubka rovnaka ako zadana a vnutro pisma sa nikdy nezaplnilo. "stred" = povodne
+  // spravanie fabricu (obrys naprieč hranou, pri hrubej linke zozerie vnutro).
+  const obrysHrubka = selected ? (selected.obrysHrubka ?? (selected.strokeWidth || 0)) : 0;
+  const obrysPoloha = selected?.obrysPoloha || 'stred';
+  const nastavObrys = ({ hrubka = obrysHrubka, poloha = obrysPoloha }) => aktualizuj({
+    obrysHrubka: hrubka,
+    obrysPoloha: poloha,
+    strokeWidth: poloha === 'vonku' ? hrubka * 2 : hrubka,
+    paintFirst: poloha === 'vonku' ? 'stroke' : 'fill',
+    strokeLineJoin: 'round',
+  });
+
   const jeText = selected?.type === 'text' || selected?.type === 'i-text';
-  const sirkaCm = selected ? Math.round(selected.getScaledWidth() * 10) / 10 : 0;
-  const vyskaCm = selected ? Math.round(selected.getScaledHeight() * 10) / 10 : 0;
+  const mierka = canvas.mierkaCm || { x: 1, y: 1 };
+  const sirkaCm = selected ? Math.round(selected.getScaledWidth() * mierka.x * 10) / 10 : 0;
+  const vyskaCm = selected ? Math.round(selected.getScaledHeight() * mierka.y * 10) / 10 : 0;
   const uhol = selected ? Math.round((selected.angle || 0) % 360) : 0;
 
   return (
@@ -107,7 +121,18 @@ export default function LayersPanel({ canvas }) {
           {jeText && (
             <div>
               <label className="block text-[10px] text-slate-500 mb-1">Hrúbka obrysu (cm) — 0 = bez obrysu</label>
-              <NumberInput step="0.05" min="0" value={selected.strokeWidth || 0} onChange={(v) => aktualizuj({ strokeWidth: v })} fallback={0} className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded-lg" />
+              <NumberInput step="0.05" min="0" value={obrysHrubka} onChange={(v) => nastavObrys({ hrubka: v })} fallback={0} className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded-lg" />
+            </div>
+          )}
+
+          {jeText && (
+            <div>
+              <label className="block text-[10px] text-slate-500 mb-1">Poloha obrysu</label>
+              <div className="grid grid-cols-2 gap-2">
+                {[['vonku', 'Vonku (za písmom)'], ['stred', 'Na strede (zožerie vnútro)']].map(([k, nazov]) => (
+                  <button key={k} type="button" onClick={() => nastavObrys({ poloha: k })} className={`text-[11px] px-2 py-1.5 rounded-lg border ${obrysPoloha === k ? 'border-indigo-500 bg-indigo-50 text-indigo-700 font-semibold' : 'border-slate-200 text-slate-500 hover:bg-slate-100'}`}>{nazov}</button>
+                ))}
+              </div>
             </div>
           )}
 

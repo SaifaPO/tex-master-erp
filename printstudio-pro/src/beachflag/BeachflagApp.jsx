@@ -53,6 +53,7 @@ export default function BeachflagApp({ supabase }) {
   const previewBoxRef = useRef(null);
   const mierkaCmRef = useRef({ x: 1, y: 1 }); // prepocet "jednotka platna" -> skutocne cm (podla rozmerov vybranej velkosti)
   const [rozmerVlajkyCm, setRozmerVlajkyCm] = useState(null);
+  const [nahladDizajnu, setNahladDizajnu] = useState(null); // dataURL aktualneho dizajnu pre ilustraciu vedla ziveho nahladu
   const [selInfo, setSelInfo] = useState(null); // rozmer (cm) a otocenie prave vybraneho objektu na platne
   const [previewBoxSize, setPreviewBoxSize] = useState({ w: 320, h: 420 });
   const [userZoom, setUserZoom] = useState(1); // dodatocne priblizenie nad ramec auto-fit, ovlada zakaznik (+/-)
@@ -105,9 +106,10 @@ export default function BeachflagApp({ supabase }) {
       const o = canvas.getActiveObject();
       if (!o || o.isMaskOverlay) { setSelInfo(null); return; }
       const m = mierkaCmRef.current;
-      setSelInfo({ sirkaCm: o.getScaledWidth() * m.x, vyskaCm: o.getScaledHeight() * m.y, uhol: ((Math.round(o.angle || 0) % 360) + 360) % 360 });
+      const nova = { sirkaCm: o.getScaledWidth() * m.x, vyskaCm: o.getScaledHeight() * m.y, uhol: ((Math.round(o.angle || 0) % 360) + 360) % 360 };
+      setSelInfo(p => (p && Math.abs(p.sirkaCm - nova.sirkaCm) < 0.05 && Math.abs(p.vyskaCm - nova.vyskaCm) < 0.05 && p.uhol === nova.uhol ? p : nova));
     };
-    ['selection:created', 'selection:updated', 'selection:cleared', 'object:scaling', 'object:rotating', 'object:moving', 'object:modified'].forEach(ev => canvas.on(ev, aktualizujInfo));
+    ['selection:created', 'selection:updated', 'selection:cleared', 'object:scaling', 'object:rotating', 'object:moving', 'object:modified', 'after:render'].forEach(ev => canvas.on(ev, aktualizujInfo));
     setCanvasVersion(v => v + 1); // GrafikaTab (vrstvy/inspektor) caka, kym instancia existuje
     return () => { canvas.dispose(); fabricRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -129,7 +131,7 @@ export default function BeachflagApp({ supabase }) {
     const { w, h } = parseViewbox(rozmer.viewbox);
     logicalSizeRef.current = { w, h };
     const velkostRiadok = k.velkosti.find(v => v.kod === velkostKod);
-    const mRozmer = /([d.,]+)s*xs*([d.,]+)/i.exec(velkostRiadok?.rozmer_popis || '');
+    const mRozmer = /([\d.,]+)\s*x\s*([\d.,]+)/i.exec(velkostRiadok?.rozmer_popis || '');
     if (mRozmer) {
       const sirkaCm = Number(mRozmer[1].replace(',', '.')), vyskaCm = Number(mRozmer[2].replace(',', '.'));
       mierkaCmRef.current = { x: sirkaCm / w, y: vyskaCm / h };
@@ -138,6 +140,7 @@ export default function BeachflagApp({ supabase }) {
       mierkaCmRef.current = { x: 1, y: 1 };
       setRozmerVlajkyCm(null);
     }
+    canvas.mierkaCm = mierkaCmRef.current; // cita LayersPanel na zobrazenie realnych cm
     const autoFit = Math.min(previewBoxSize.w / w, previewBoxSize.h / h);
     const zoom = autoFit * userZoom;
     canvas.setZoom(zoom);
@@ -156,6 +159,35 @@ export default function BeachflagApp({ supabase }) {
     canvas.add(safePath);
     canvas.renderAll();
   }, [tvarKod, velkostKod, katalog, previewBoxSize, userZoom, canvasVersion]);
+
+  // Nahlad aktualneho dizajnu (bez cervenej/zelenej masky) pre ilustraciu vedla ziveho nahladu —
+  // zakaznik tak vidi svoje upravy (texty, loga, obrysy) aj na schematickej vlajke s postavou.
+  // toDataURL vnútorne vyvola 'after:render', preto strazca "generuje" zabrani nekonecnej slucke.
+  useEffect(() => {
+    const canvas = fabricRef.current;
+    if (!canvas) return;
+    let timer = null;
+    let generuje = false;
+    const vytvor = () => {
+      timer = null;
+      const { w } = logicalSizeRef.current;
+      const zoom = canvas.getZoom();
+      if (!w || !zoom) return;
+      const masky = canvas.getObjects().filter(o => o.isMaskOverlay);
+      generuje = true;
+      try {
+        masky.forEach(o => { o.visible = false; });
+        setNahladDizajnu(canvas.toDataURL({ format: 'png', multiplier: 280 / (w * zoom) }));
+      } catch (e) { /* nahlad je len pomocka — pri chybe ostane predchadzajuci */ } finally {
+        masky.forEach(o => { o.visible = true; });
+        generuje = false;
+      }
+    };
+    const naplanuj = () => { if (generuje || timer) return; timer = setTimeout(vytvor, 250); };
+    canvas.on('after:render', naplanuj);
+    naplanuj();
+    return () => { clearTimeout(timer); canvas.off('after:render', naplanuj); };
+  }, [canvasVersion]);
 
   useEffect(() => {
     fabricRef.current?.setBackgroundColor(bgColor, () => fabricRef.current?.renderAll());
@@ -204,6 +236,9 @@ export default function BeachflagApp({ supabase }) {
     const text = new fabric.Text(customText.trim(), {
       left: w * 0.15, top: h * 0.1, fontFamily: 'Arial', fill: '#000000', fontSize,
       stroke: '#ffffff', strokeWidth: 0, // obrys pripraveny, ale neviditelny kym ho zakaznik nezapne v inspektore
+      // Obrys je predvolene VONKU (za pismom): paintFirst 'stroke' vykresli obrys pod vyplnou, takze
+      // hruba linka nikdy nezakryje vnutro textu (LayersPanel pri tom zdvojnasobi strokeWidth).
+      obrysHrubka: 0, obrysPoloha: 'vonku', paintFirst: 'stroke', strokeLineJoin: 'round',
       ...OBJEKT_ZAKLAD,
     });
     canvas.add(text);
@@ -346,7 +381,7 @@ export default function BeachflagApp({ supabase }) {
           <div className="w-36 sm:w-44 shrink-0 bg-slate-50 rounded-xl border border-slate-200 p-1.5 flex flex-col">
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide text-center mb-1">Porovnanie veľkosti</span>
             <div className="flex-1 min-h-0 flex items-center justify-center">
-              <VelkostnePorovnanie kompaktny rozmer={katalog?.tvary.find(t => t.kod === tvarKod)?.rozmery?.[velkostKod]} velkost={katalog?.velkosti.find(v => v.kod === velkostKod)} velkosti={katalog?.velkosti} bgColor={bgColor} />
+              <VelkostnePorovnanie kompaktny rozmer={katalog?.tvary.find(t => t.kod === tvarKod)?.rozmery?.[velkostKod]} velkost={katalog?.velkosti.find(v => v.kod === velkostKod)} velkosti={katalog?.velkosti} bgColor={bgColor} nahladUrl={nahladDizajnu} />
             </div>
           </div>
           </div>

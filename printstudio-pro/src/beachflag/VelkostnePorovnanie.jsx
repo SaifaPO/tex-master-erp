@@ -30,7 +30,7 @@ function parsujRozmerPopis(popis) {
   return { sirkaCm, vyskaCm };
 }
 
-export default function VelkostnePorovnanie({ rozmer, velkost, velkosti, bgColor, kompaktny = false }) {
+export default function VelkostnePorovnanie({ rozmer, velkost, velkosti, bgColor, kompaktny = false, nahladUrl = null }) {
   if (!velkost || !rozmer?.cut_path) return null;
   const fabricRozmer = parsujRozmerPopis(velkost.rozmer_popis);
   const celkovaVyskaCm = Number(velkost.vyska_cm) || 0;
@@ -86,6 +86,13 @@ export default function VelkostnePorovnanie({ rozmer, velkost, velkosti, bgColor
               skalovany (ziadne skreslenie tvaru), farba podla vybraneho podkladu */}
           <g transform={`translate(${xTycka}, ${vlajkaY}) scale(${drawScale})`}>
             <path d={rozmer.cut_path} fill={bgColor || '#4f46e5'} stroke="#1e293b" strokeWidth={0.75 / drawScale} opacity="0.92" />
+            {nahladUrl && (
+              <>
+                <clipPath id="vlajka-strih-clip"><path d={rozmer.cut_path} /></clipPath>
+                <image href={nahladUrl} x="0" y="0" width={vbW} height={vbH} preserveAspectRatio="none" clipPath="url(#vlajka-strih-clip)" />
+                <path d={rozmer.cut_path} fill="none" stroke="#1e293b" strokeWidth={0.75 / drawScale} />
+              </>
+            )}
           </g>
           {/* Kotovanie samotnej vlajky (bocne, pri fabric-portion) */}
           <g stroke="#4f46e5" strokeWidth="1">
