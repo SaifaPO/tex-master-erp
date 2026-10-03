@@ -121,7 +121,7 @@ export default function SuhrnModal({ supabase, produkt, configState, roster, mat
 
           <label className="flex items-center gap-2 cursor-pointer px-1">
             <input type="checkbox" checked={osobnyOdber} onChange={(e) => onOsobnyOdber(e.target.checked)} />
-            <span className="text-xs text-slate-300">Osobný odber (neplatím poštovné)</span>
+            <span className="text-xs text-slate-300">Osobný odber v Prešove alebo Košiciach (neplatím poštovné)</span>
           </label>
 
           <div className="bg-slate-900/80 p-3 sm:p-4 rounded-xl border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-2.5">

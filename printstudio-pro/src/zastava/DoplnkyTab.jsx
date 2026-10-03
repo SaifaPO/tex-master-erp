@@ -155,7 +155,7 @@ export default function DoplnkyTab({
 
         <label className="flex items-center gap-2 cursor-pointer">
           <input type="checkbox" checked={osobnyOdber} onChange={(e) => onOsobnyOdber(e.target.checked)} />
-          <span className="text-xs text-slate-600">Osobný odber (neplatím poštovné)</span>
+          <span className="text-xs text-slate-600">Osobný odber v Prešove alebo Košiciach (neplatím poštovné)</span>
         </label>
 
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2">

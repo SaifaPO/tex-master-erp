@@ -410,7 +410,7 @@ export default function Celenky({ supabase, onSpat }) {
 
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={osobnyOdber} onChange={(e) => setOsobnyOdber(e.target.checked)} />
-              <span className="text-xs text-slate-600">Osobný odber (neplatím poštovné)</span>
+              <span className="text-xs text-slate-600">Osobný odber v Prešove alebo Košiciach (neplatím poštovné)</span>
             </label>
 
             <div className="bg-slate-900 text-white p-4 rounded-xl space-y-2">

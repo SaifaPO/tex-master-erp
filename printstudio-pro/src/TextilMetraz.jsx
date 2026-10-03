@@ -471,7 +471,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
               <input type="checkbox" checked={osobnyOdber} onChange={(e) => setOsobnyOdber(e.target.checked)} className="mt-0.5" />
               <div>
                 <span className="text-sm font-bold text-slate-900 block">Osobný odber</span>
-                <p className="text-xs text-slate-500 mt-0.5">Vyzdvihnete si zásielku osobne — neplatíte poštovné.</p>
+                <p className="text-xs text-slate-500 mt-0.5">Vyzdvihnete si zásielku osobne v Prešove alebo Košiciach — neplatíte poštovné.</p>
               </div>
             </label>
             {!osobnyOdber && (

@@ -372,7 +372,7 @@ export default function Buffky({ supabase, onSpat }) {
 
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={osobnyOdber} onChange={(e) => setOsobnyOdber(e.target.checked)} />
-              <span className="text-xs text-slate-300">Osobný odber (neplatím poštovné)</span>
+              <span className="text-xs text-slate-300">Osobný odber v Prešove alebo Košiciach (neplatím poštovné)</span>
             </label>
 
             <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl space-y-1.5">
