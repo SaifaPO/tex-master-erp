@@ -13,27 +13,49 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface DresZlava { min_pocet: number; zlava_percent: number; }
-interface DresCenaVstup { zakladnaCena: number; priplatokMaterial: number; pocetHracov: number; zlavy: DresZlava[]; doprava: number; }
+interface PricingConfig { coefA: number; coefB: number; marginFloor: number; coefP: number; cielovaHodnotaZakazky: number; dphPercent: number; }
 
+function baseMargin(cost: number, cfg: PricingConfig) {
+  const c = Math.max(cost, 0.05);
+  const m = cfg.coefA - cfg.coefB * Math.log(c);
+  return Math.min(Math.max(m, cfg.marginFloor), 450);
+}
+function marginAt(cost: number, qty: number, cfg: PricingConfig) {
+  const base = baseMargin(cost, cfg);
+  const q = Math.max(qty, 1);
+  const qm = Math.max(cfg.cielovaHodnotaZakazky / Math.max(cost, 0.05), 2);
+  const t = Math.max(0, 1 - Math.log10(q) / Math.log10(qm));
+  const decay = Math.pow(t, cfg.coefP);
+  return cfg.marginFloor + (base - cfg.marginFloor) * decay;
+}
+function priceAt(cost: number, qty: number, cfg: PricingConfig) {
+  return Math.round(cost * (1 + marginAt(cost, qty, cfg) / 100) * 100) / 100;
+}
+
+interface DresZlava { min_pocet: number; zlava_percent: number; }
 function najdiZlavuPreMnozstvo(zlavy: DresZlava[], pocet: number): number {
-  const vyhovujuce = (zlavy || [])
-    .filter((z) => pocet >= Number(z.min_pocet))
-    .sort((a, b) => Number(b.min_pocet) - Number(a.min_pocet));
+  const vyhovujuce = (zlavy || []).filter((z) => pocet >= Number(z.min_pocet)).sort((a, b) => Number(b.min_pocet) - Number(a.min_pocet));
   return vyhovujuce.length ? Number(vyhovujuce[0].zlava_percent) : 0;
 }
 
-function vypocitajCenuDresu({ zakladnaCena, priplatokMaterial, pocetHracov, zlavy, doprava }: DresCenaVstup) {
-  const zakladnaCenaNum = Number(zakladnaCena) || 0;
-  const priplatokNum = Number(priplatokMaterial) || 0;
-  const jednotkovaCenaPredZlavou = zakladnaCenaNum + priplatokNum;
-  const pocet = Math.max(1, Number(pocetHracov) || 1);
-  const zlavaPercent = najdiZlavuPreMnozstvo(zlavy, pocet);
+function vypocitajCenuDresu(p: {
+  zakladnaCena: number; priplatokMaterial: number; pocetHracov: number; zlavy: DresZlava[]; doprava: number;
+  nakladKs: number; nakladMaterial: number; pricingConfig: PricingConfig;
+}) {
+  const pocet = Math.max(1, Number(p.pocetHracov) || 1);
+  const dopravaNum = Number(p.doprava) || 0;
+  if (p.nakladKs > 0) {
+    const cost = p.nakladKs + (p.nakladMaterial || 0);
+    const dphK = 1 + (Number(p.pricingConfig.dphPercent) || 0) / 100;
+    const jednotkovaCenaPredZlavou = Math.round(priceAt(cost, 1, p.pricingConfig) * dphK * 100) / 100;
+    const jednotkovaCena = Math.round(priceAt(cost, pocet, p.pricingConfig) * dphK * 100) / 100;
+    const zlavaPercent = jednotkovaCenaPredZlavou > 0 ? Math.max(0, Math.round((1 - jednotkovaCena / jednotkovaCenaPredZlavou) * 100)) : 0;
+    return { jednotkovaCenaPredZlavou, zlavaPercent, jednotkovaCena, pocet, doprava: dopravaNum, cenaSpolu: jednotkovaCena * pocet + dopravaNum };
+  }
+  const jednotkovaCenaPredZlavou = (Number(p.zakladnaCena) || 0) + (Number(p.priplatokMaterial) || 0);
+  const zlavaPercent = najdiZlavuPreMnozstvo(p.zlavy, pocet);
   const jednotkovaCena = jednotkovaCenaPredZlavou * (1 - zlavaPercent / 100);
-  const dopravaNum = Number(doprava) || 0;
-  const cenaSpolu = jednotkovaCena * pocet + dopravaNum;
-
-  return { jednotkovaCenaPredZlavou, zlavaPercent, jednotkovaCena, pocet, doprava: dopravaNum, cenaSpolu };
+  return { jednotkovaCenaPredZlavou, zlavaPercent, jednotkovaCena, pocet, doprava: dopravaNum, cenaSpolu: jednotkovaCena * pocet + dopravaNum };
 }
 
 function odpoved(body: Record<string, unknown>) {
@@ -58,16 +80,28 @@ Deno.serve(async (req) => {
     if (!produktId) throw new Error('Chýba produktId.');
     if (!Array.isArray(roster) || roster.length === 0) throw new Error('Súpiska hráčov je prázdna.');
 
-    const [{ data: produkt }, { data: material }, { data: zlavy }, { data: nastavenia }] = await Promise.all([
+    const [{ data: produkt }, { data: material }, { data: zlavy }, { data: nastavenia }, { data: naklad }, { data: cfg }] = await Promise.all([
       supabase.from('produkty').select('*').eq('id', produktId).maybeSingle(),
       materialKod
         ? supabase.from('produkt_dres_materialy').select('*').eq('produkt_id', produktId).eq('kod', materialKod).maybeSingle()
         : Promise.resolve({ data: null }),
       supabase.from('dres_mnozstevne_zlavy').select('*'),
       supabase.from('dres_nastavenia').select('*').eq('id', 1).maybeSingle(),
+      supabase.from('produkt_dres_naklady').select('naklad_ks').eq('produkt_id', produktId).maybeSingle(),
+      supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
     ]);
 
+    let nakladMaterial = 0;
+    if (material?.id) {
+      const { data: nm } = await supabase.from('produkt_dres_material_naklady').select('naklad_eur').eq('material_id', material.id).maybeSingle();
+      nakladMaterial = Number(nm?.naklad_eur) || 0;
+    }
+
     if (!produkt) throw new Error(`Produkt ${produktId} sa v katalógu nenašiel.`);
+
+    const pricingConfig: PricingConfig = cfg
+      ? { coefA: Number(cfg.coef_a), coefB: Number(cfg.coef_b), marginFloor: Number(cfg.margin_floor), coefP: Number(cfg.coef_p), cielovaHodnotaZakazky: Number(cfg.cielova_hodnota_zakazky ?? 25000), dphPercent: Number(cfg.dph_percent ?? 23) }
+      : { coefA: 300, coefB: 54, marginFloor: 30, coefP: 1.3, cielovaHodnotaZakazky: 25000, dphPercent: 23 };
 
     const doprava = osobnyOdber ? 0 : (Number(nastavenia?.cena_doprava) || 0);
     const cena = vypocitajCenuDresu({
@@ -76,6 +110,9 @@ Deno.serve(async (req) => {
       pocetHracov: roster.length,
       zlavy: zlavy || [],
       doprava,
+      nakladKs: Number(naklad?.naklad_ks) || 0,
+      nakladMaterial,
+      pricingConfig,
     });
 
     const domain = Deno.env.get('SHOPIFY_STORE_DOMAIN');

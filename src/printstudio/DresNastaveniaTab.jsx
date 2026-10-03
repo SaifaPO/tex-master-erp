@@ -43,6 +43,8 @@ export default function DresNastaveniaTab({ supabase }) {
   const [nastavenia, setNastavenia] = useState(null);
   const [materialy, setMaterialy] = useState([]);
   const [skladMaterialy, setSkladMaterialy] = useState([]);
+  const [naklad, setNaklad] = useState(0); // nakupna cena 1 dresu bez DPH (0 = stary rezim s pevnou cenou)
+  const [materialNaklady, setMaterialNaklady] = useState({}); // { [material_id]: nakupny priplatok }
   const [isLoading, setIsLoading] = useState(true);
 
   const nacitajZoznamProduktov = async () => {
@@ -76,10 +78,15 @@ export default function DresNastaveniaTab({ supabase }) {
   }, [vybranyId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const nacitajProdukt = async (produktId) => {
-    const [{ data: n }, { data: m }] = await Promise.all([
+    const [{ data: n }, { data: m }, { data: nk }] = await Promise.all([
       supabase.from('produkt_dres_nastavenia').select('*').eq('produkt_id', produktId).maybeSingle(),
       supabase.from('produkt_dres_materialy').select('*').eq('produkt_id', produktId).order('poradie'),
+      supabase.from('produkt_dres_naklady').select('naklad_ks').eq('produkt_id', produktId).maybeSingle(),
     ]);
+    setNaklad(Number(nk?.naklad_ks) || 0);
+    const ids = (m || []).map(x => x.id);
+    const { data: mn } = ids.length ? await supabase.from('produkt_dres_material_naklady').select('*').in('material_id', ids) : { data: [] };
+    setMaterialNaklady(Object.fromEntries((mn || []).map(r => [r.material_id, Number(r.naklad_eur) || 0])));
     if (n) {
       setNastavenia(n);
     } else {
@@ -92,6 +99,15 @@ export default function DresNastaveniaTab({ supabase }) {
       setNastavenia(data || novy);
     }
     setMaterialy(m || []);
+  };
+
+  const ulozNaklad = async (v) => {
+    setNaklad(v);
+    await supabase.from('produkt_dres_naklady').upsert({ produkt_id: vybranyId, naklad_ks: v });
+  };
+  const ulozMaterialNaklad = async (materialId, v) => {
+    setMaterialNaklady(n => ({ ...n, [materialId]: v }));
+    await supabase.from('produkt_dres_material_naklady').upsert({ material_id: materialId, naklad_eur: v });
   };
 
   const uprav = async (patch) => {
@@ -189,6 +205,14 @@ export default function DresNastaveniaTab({ supabase }) {
 
       {nastavenia && (
         <>
+          <div className="bg-slate-900/60 rounded-2xl border border-indigo-900/40 p-4">
+            <h3 className="font-bold text-sm text-white mb-1">Nákupná cena dresu</h3>
+            <p className="text-xs text-slate-400 mb-3">Zadaj nákupnú/výrobnú cenu 1 dresu <strong className="text-slate-200">bez DPH</strong> — predajná cena sa dopočíta z marže (Cenotvorba) a počtu hráčov v súpiske, rovnako ako pri ostatných produktoch. Pri 0 platí stará pevná cena produktu + tabuľka množstevných zliav.</p>
+            <div className="flex items-center gap-2">
+              <NumberInput step="0.5" value={naklad} onChange={ulozNaklad} fallback={0} className="w-28 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /> <span className="text-xs text-slate-400">€ / dres (nákup)</span>
+            </div>
+          </div>
+
           <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4">
             <h3 className="font-bold text-sm text-white mb-3">Predvolené farby zón</h3>
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
@@ -262,6 +286,9 @@ export default function DresNastaveniaTab({ supabase }) {
                       </div>
                       <NumberInput value={m.poradie} onChange={(v) => upravMaterial(m.id, { poradie: v })} fallback={0} title="Poradie" className="w-14 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white shrink-0" />
                       <button onClick={() => zmazMaterial(m.id)} className="text-slate-400 hover:text-rose-400 p-1 shrink-0"><Trash2 className="w-4 h-4" /></button>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-slate-400">
+                      <NumberInput step="0.5" value={materialNaklady[m.id] ?? 0} onChange={(v) => ulozMaterialNaklad(m.id, v)} fallback={0} className="w-20 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /> € nákupný príplatok materiálu (bez DPH; použije sa, keď je zadaná nákupná cena dresu)
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <label className="text-[11px] text-slate-500 shrink-0">Materiál zo skladu:</label>

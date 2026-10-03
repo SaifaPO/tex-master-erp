@@ -86,13 +86,27 @@ export default function Dres3DApp({ supabase, produktId }) {
 
   const material = useMemo(() => katalog?.materialy.find(m => m.kod === configState.materialKod), [katalog, configState.materialKod]);
 
-  const cena = useMemo(() => vypocitajCenuDresu({
+  const cenaLokalna = useMemo(() => vypocitajCenuDresu({
     zakladnaCena: katalog?.produkt?.zakladna_cena || 0,
     priplatokMaterial: material?.priplatok_eur || 0,
     pocetHracov: roster.length,
     zlavy: katalog?.zlavy || [],
     doprava: osobnyOdber ? 0 : cenaDoprava,
   }), [katalog, material, roster.length, cenaDoprava, osobnyOdber]);
+
+  // Skutocna cena (marza x pocet hracov z nakupnej ceny) sa pocita na serveri — klient nakupne ceny
+  // nikdy nevidi. Kym odpoved nepride (alebo ak funkcia este nie je nasadena), ukaze sa lokalny odhad.
+  const [cenaServer, setCenaServer] = useState(null);
+  useEffect(() => {
+    if (!katalog?.produkt?.id) return;
+    let zrusene = false;
+    const t = setTimeout(async () => {
+      const { data, error } = await supabase.functions.invoke('dres-price-preview', { body: { produktId: katalog.produkt.id, materialKod: configState.materialKod, pocetHracov: roster.length, osobnyOdber } });
+      if (!zrusene) setCenaServer(!error && !data?.error && data?.cena ? data.cena : null);
+    }, 300);
+    return () => { zrusene = true; clearTimeout(t); };
+  }, [supabase, katalog, configState.materialKod, roster.length, osobnyOdber]);
+  const cena = cenaServer ?? cenaLokalna;
 
   const handleZmenText = (patch) => {
     setConfigState(prev => ({ ...prev, text: { ...prev.text, ...patch } }));
