@@ -3,7 +3,7 @@ import { Boxes, Zap, ShoppingBag, Loader2, AlertTriangle } from 'lucide-react';
 import NumberInput from '../NumberInput';
 
 export default function DoplnkyTab({
-  katalog, doplnkyMnozstva, onZmenMnozstvo,
+  katalog, cenyVolieb, doplnkyMnozstva, onZmenMnozstvo,
   expresne, onExpresne, pocetKs, onPocetKs,
   osobnyOdber, onOsobnyOdber,
   cena, cenaNacitava, cenaChyba, isSubmitting, submitError, onObjednat, onSpat,
@@ -23,7 +23,7 @@ export default function DoplnkyTab({
               <div key={d.kod} className={`p-3 rounded-xl border flex items-center gap-3 ${qty > 0 ? 'border-indigo-600 bg-indigo-50/50 shadow-sm' : 'border-slate-200 bg-white'}`}>
                 <div className="flex-1 min-w-0">
                   <span className="font-bold text-xs text-slate-900 block truncate">{d.nazov}</span>
-                  <span className="text-xs font-semibold text-indigo-600 block">+{Number(d.cena).toFixed(2)} € / ks</span>
+                  <span className="text-xs font-semibold text-indigo-600 block">{cenyVolieb?.doplnky?.[d.kod] == null ? '…' : `+${Number(cenyVolieb.doplnky[d.kod]).toFixed(2)} € / ks`}</span>
                   {d.popis && <p className="text-[10px] text-slate-500 truncate">{d.popis}</p>}
                 </div>
                 <div className="flex items-center border border-slate-300 rounded-lg bg-white overflow-hidden shrink-0">

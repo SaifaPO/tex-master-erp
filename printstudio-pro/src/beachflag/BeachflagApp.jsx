@@ -38,6 +38,7 @@ export default function BeachflagApp({ supabase }) {
   const [pocetKs, setPocetKs] = useState(1);
   const [osobnyOdber, setOsobnyOdber] = useState(false);
   const [cena, setCena] = useState(null);
+  const [cenyVolieb, setCenyVolieb] = useState(null); // predajne ceny opracovania/prutov/podstavcov/doplnkov (zo servera)
   const [cenaNacitava, setCenaNacitava] = useState(false);
   const [cenaChyba, setCenaChyba] = useState('');
 
@@ -159,6 +160,18 @@ export default function BeachflagApp({ supabase }) {
     return () => clearTimeout(t);
   }, [supabase, katalog, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnkyMnozstva, pocetKs, expresne, osobnyOdber]);
 
+  // Predajne ceny jednotlivych volieb — v DB su NAKUPNE ceny (verejnost ich nevidi), predajna cena sa
+  // dopocita na serveri z marze a poctu kusov (rezim 'cenovnik' v beachflag-price-preview).
+  useEffect(() => {
+    if (!katalog || !velkostKod) return;
+    let zrusene = false;
+    const t = setTimeout(async () => {
+      const { data, error } = await supabase.functions.invoke('beachflag-price-preview', { body: { cenovnik: true, velkostKod, pocetKs } });
+      if (!zrusene) setCenyVolieb(!error && !data?.error ? data.cenovnik : null);
+    }, 300);
+    return () => { zrusene = true; clearTimeout(t); };
+  }, [supabase, katalog, velkostKod, pocetKs]);
+
   // snapAngle/snapThreshold = vstavana fabric funkcia, otacanie tahanim za rohovy uchyt "zaskoci"
   // na najblizsi nasobok 45° (v okruhu 5°) — presne ako pytal Martin, bez vlastnej implementacie.
   const OBJEKT_ZAKLAD = { cornerColor: '#4f46e5', cornerSize: 8, transparentCorners: false, snapAngle: 45, snapThreshold: 5 };
@@ -210,7 +223,7 @@ export default function BeachflagApp({ supabase }) {
 
   const doplnkyVybrane = Object.entries(doplnkyMnozstva).map(([kod, mnozstvo]) => {
     const d = katalog.doplnky.find(x => x.kod === kod);
-    return d ? { kod, nazov: d.nazov, cena: d.cena, mnozstvo } : null;
+    return d ? { kod, nazov: d.nazov, mnozstvo } : null;
   }).filter(Boolean);
 
   const objednat = async () => {
@@ -268,7 +281,7 @@ export default function BeachflagApp({ supabase }) {
         </div>
 
         {krok === 'parametre' && (
-          <ParametreTab katalog={katalog} tvarKod={tvarKod} velkostKod={velkostKod} materialKod={materialKod} dokoncenieKod={dokoncenieKod} stoziarKod={stoziarKod} podstavecKod={podstavecKod}
+          <ParametreTab katalog={katalog} cenyVolieb={cenyVolieb} tvarKod={tvarKod} velkostKod={velkostKod} materialKod={materialKod} dokoncenieKod={dokoncenieKod} stoziarKod={stoziarKod} podstavecKod={podstavecKod}
             onTvar={setTvarKod} onVelkost={setVelkostKod} onMaterial={setMaterialKod} onDokoncenie={setDokoncenieKod} onStoziar={setStoziarKod} onPodstavec={setPodstavecKod}
             onDalej={() => setKrok('grafika')} />
         )}
@@ -280,7 +293,7 @@ export default function BeachflagApp({ supabase }) {
             onSpat={() => setKrok('parametre')} onDalej={() => setKrok('doplnky')} />
         )}
         {krok === 'doplnky' && (
-          <DoplnkyTab katalog={katalog} doplnkyMnozstva={doplnkyMnozstva} onZmenMnozstvo={zmenMnozstvoDoplnku}
+          <DoplnkyTab katalog={katalog} cenyVolieb={cenyVolieb} doplnkyMnozstva={doplnkyMnozstva} onZmenMnozstvo={zmenMnozstvoDoplnku}
             expresne={expresne} onExpresne={setExpresne} pocetKs={pocetKs} onPocetKs={setPocetKs}
             osobnyOdber={osobnyOdber} onOsobnyOdber={setOsobnyOdber}
             cena={cena} cenaNacitava={cenaNacitava} cenaChyba={cenaChyba} isSubmitting={isSubmitting} submitError={submitError} onObjednat={objednat}

@@ -1,7 +1,10 @@
 import React from 'react';
 import { Shapes, Ruler, Scissors, GripVertical, Layers, TriangleAlert } from 'lucide-react';
 
-export default function ParametreTab({ katalog, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, onTvar, onVelkost, onMaterial, onDokoncenie, onStoziar, onPodstavec, onDalej }) {
+// undefined = cenovnik sa este nacitava (alebo zlyhal) — radsej nic nez zavadzajuce 'V cene'.
+const cenaText = (c) => (c == null ? '…' : c > 0 ? `+${Number(c).toFixed(2)} €` : 'V cene');
+
+export default function ParametreTab({ katalog, cenyVolieb, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, onTvar, onVelkost, onMaterial, onDokoncenie, onStoziar, onPodstavec, onDalej }) {
   return (
     <div className="p-4 sm:p-6 space-y-6">
       <div>
@@ -69,7 +72,7 @@ export default function ParametreTab({ katalog, tvarKod, velkostKod, materialKod
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-xs truncate">{d.nazov}</span>
-                    <span className="text-xs font-semibold text-slate-500">{d.cena > 0 ? `+${Number(d.cena).toFixed(2)} €` : 'V cene'}</span>
+                    <span className="text-xs font-semibold text-slate-500">{cenaText(cenyVolieb?.dokoncenie?.[d.kod])}</span>
                   </div>
                   {d.popis && <p className="text-[11px] text-slate-500 mt-0.5">{d.popis}</p>}
                 </div>
@@ -84,14 +87,13 @@ export default function ParametreTab({ katalog, tvarKod, velkostKod, materialKod
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {katalog.stoziare.map(s => {
             const active = s.kod === stoziarKod;
-            const cenaPreVelkost = s.ceny?.[velkostKod] ?? 0;
             return (
               <div key={s.kod} onClick={() => onStoziar(s.kod)} className={`p-3 rounded-xl border cursor-pointer transition-all ${active ? 'border-indigo-600 bg-indigo-50/80 ring-2 ring-indigo-500 text-indigo-900 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'}`}>
                 {s.obrazok_url && <img src={s.obrazok_url} alt="" className="w-full h-16 rounded-lg object-cover mb-1.5" />}
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-xs">{s.nazov}</span>
                 </div>
-                <span className="text-xs font-bold text-indigo-600 block">{cenaPreVelkost > 0 ? `+${cenaPreVelkost.toFixed(2)} €` : 'V cene'}</span>
+                <span className="text-xs font-bold text-indigo-600 block">{cenaText(cenyVolieb?.stoziare?.[s.kod])}</span>
                 {s.popis && <p className="text-[10px] text-slate-500 mt-0.5">{s.popis}</p>}
               </div>
             );
@@ -114,7 +116,7 @@ export default function ParametreTab({ katalog, tvarKod, velkostKod, materialKod
               <div key={p.kod} onClick={() => onPodstavec(p.kod)} className={`p-3 rounded-xl border cursor-pointer transition-all ${active ? 'border-indigo-600 bg-indigo-50/80 ring-2 ring-indigo-500 text-indigo-900 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'}`}>
                 {p.obrazok_url && <img src={p.obrazok_url} alt="" className="w-full h-16 rounded-lg object-cover mb-1.5" />}
                 <span className="font-bold text-xs">{p.nazov}</span>
-                <span className="text-xs font-bold text-indigo-600 block">{nastavenie?.cena > 0 ? `+${nastavenie.cena.toFixed(2)} €` : 'V cene'}</span>
+                <span className="text-xs font-bold text-indigo-600 block">{cenaText(cenyVolieb?.podstavce?.[p.kod])}</span>
                 {p.popis && <p className="text-[10px] text-slate-500 mt-0.5">{p.popis}</p>}
                 {!vhodny && (
                   <p className="text-[10px] text-amber-600 font-semibold mt-1 flex items-start gap-1"><TriangleAlert className="w-3 h-3 shrink-0 mt-0.5" /> Neodporúča sa pre túto veľkosť</p>

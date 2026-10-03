@@ -32,7 +32,7 @@ export default function VlajkaDoplnkyTab({ supabase }) {
     <div className="space-y-10">
       <div>
         <h2 className="text-xl font-bold text-white flex items-center gap-2"><Package className="text-indigo-400 h-5 w-5" /> Opracovanie, prúty, podstavce, príslušenstvo, Pantone</h2>
-        <p className="text-xs text-slate-400 mt-1">Voliteľné položky, ktoré si zákazník pridáva ku konfigurácii vlajky.</p>
+        <p className="text-xs text-slate-400 mt-1">Voliteľné položky, ktoré si zákazník pridáva ku konfigurácii vlajky. Zadávaš NÁKUPNÉ ceny — predajná cena sa dopočíta z marže (Cenotvorba) a počtu kusov, rovnako ako pri látke.</p>
       </div>
       <JednoduchaSekcia supabase={supabase} tabulka="vlajka_dokoncenie" nazovSekcie="Opracovanie okrajov" popisSekcie="Napr. obšitie / laserový orez." maMaxMnozstvo={false} />
       <StoziareSekcia supabase={supabase} />
@@ -91,7 +91,7 @@ function JednoduchaSekcia({ supabase, tabulka, nazovSekcie, popisSekcie, maMaxMn
                 <th className="text-left px-4 py-2.5">Foto</th>
                 <th className="text-left px-4 py-2.5">Kód</th>
                 <th className="text-left px-4 py-2.5">Názov</th>
-                <th className="text-left px-4 py-2.5">Cena (€)</th>
+                <th className="text-left px-4 py-2.5">Nákup (€)</th>
                 {maMaxMnozstvo && <th className="text-left px-4 py-2.5">Max. ks</th>}
                 <th className="text-left px-4 py-2.5">Popis</th>
                 <th className="px-4 py-2.5"></th>
@@ -189,7 +189,7 @@ function StoziareSekcia({ supabase }) {
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
                     {VELKOSTI.map(v => (
                       <div key={v}>
-                        <label className="text-[10px] text-slate-500">Veľkosť {v} (€)</label>
+                        <label className="text-[10px] text-slate-500">Nákup, veľkosť {v} (€)</label>
                         <input type="number" step="0.5" value={ceny[v] ?? 0} onChange={(e) => setCeny(c => ({ ...c, [v]: e.target.value }))} className="w-full px-2 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-sm text-white" />
                       </div>
                     ))}
@@ -302,7 +302,7 @@ function PodstavceSekcia({ supabase }) {
                             </label>
                           </div>
                           <div>
-                            <label className="text-[10px] text-slate-500">Cena (€)</label>
+                            <label className="text-[10px] text-slate-500">Nákupná cena (€)</label>
                             <input type="number" step="0.5" value={n.cena} onChange={(e) => zmenNastavenie(v, 'cena', e.target.value)} className="w-full px-2 py-1 bg-slate-950 border border-slate-800 rounded text-sm text-white" />
                           </div>
                           <div>

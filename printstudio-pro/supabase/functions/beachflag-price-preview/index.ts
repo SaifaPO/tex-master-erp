@@ -89,8 +89,37 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const {
       tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod,
-      doplnky = [], pocetKs = 1, expresne = false, osobnyOdber = false,
+      doplnky = [], pocetKs = 1, expresne = false, osobnyOdber = false, cenovnik = false,
     } = body;
+
+    // Rezim "cenovnik": vrati PREDAJNE ceny jednotlivych volieb (opracovanie, prut, podstavec,
+    // doplnky) pre danu velkost a pocet kusov. V DB su ulozene NAKUPNE ceny (anon ich nesmie
+    // citat) — predajna cena = priceAt(nakup, pocetKs), rovnako ako material.
+    if (cenovnik) {
+      if (!velkostKod) throw new Error('Chýba veľkosť vlajky.');
+      const ksC = Math.max(1, Math.round(Number(pocetKs)) || 1);
+      const [{ data: cfgC }, { data: dokC }, { data: stoC }, { data: stoCeny }, { data: podC }, { data: podCeny }, { data: dopC }] = await Promise.all([
+        supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
+        supabase.from('vlajka_dokoncenie').select('kod, cena').eq('aktivny', true),
+        supabase.from('vlajka_stoziare').select('id, kod').eq('aktivny', true),
+        supabase.from('vlajka_stoziare_ceny').select('stoziar_id, cena').eq('velkost', velkostKod),
+        supabase.from('vlajka_podstavce').select('id, kod').eq('aktivny', true),
+        supabase.from('vlajka_podstavce_ceny').select('podstavec_id, cena').eq('velkost', velkostKod),
+        supabase.from('vlajka_doplnky').select('kod, cena').eq('aktivny', true),
+      ]);
+      const cfgCenovnik: PricingConfig = cfgC
+        ? { coefA: Number(cfgC.coef_a), coefB: Number(cfgC.coef_b), marginFloor: Number(cfgC.margin_floor), coefP: Number(cfgC.coef_p), cielovaHodnotaZakazky: Number(cfgC.cielova_hodnota_zakazky ?? 25000), dphPercent: Number(cfgC.dph_percent ?? 23) }
+        : { coefA: 300, coefB: 54, marginFloor: 30, coefP: 1.3, cielovaHodnotaZakazky: 25000, dphPercent: 23 };
+      const predaj = (nakup: unknown) => priceAt(Number(nakup) || 0, ksC, cfgCenovnik);
+      return odpoved({
+        cenovnik: {
+          dokoncenie: Object.fromEntries((dokC || []).map((r: any) => [r.kod, predaj(r.cena)])),
+          stoziare: Object.fromEntries((stoC || []).map((s: any) => [s.kod, predaj((stoCeny || []).find((c: any) => c.stoziar_id === s.id)?.cena)])),
+          podstavce: Object.fromEntries((podC || []).map((p: any) => [p.kod, predaj((podCeny || []).find((c: any) => c.podstavec_id === p.id)?.cena)])),
+          doplnky: Object.fromEntries((dopC || []).map((d: any) => [d.kod, predaj(d.cena)])),
+        },
+      });
+    }
 
     if (!tvarKod || !velkostKod) throw new Error('Chýba tvar alebo veľkosť vlajky.');
     if (!materialKod) throw new Error('Chýba materiál.');
@@ -132,10 +161,13 @@ Deno.serve(async (req) => {
     const cenaMaterialKus = priceAt(nakladMaterial, ks, pricingConfig);
     const marzaPercent = Math.round(marginAt(nakladMaterial, ks, pricingConfig));
 
-    const cenaDokoncenia = Number(dokoncenie?.cena) || 0;
-    const zaklad = cenaMaterialKus + cenaDokoncenia + cenaStoziara + cenaPodstavca;
+    // Opracovanie, prut, podstavec aj doplnky su v DB ulozene ako NAKUPNE ceny — predajna cena sa
+    // dopocita rovnakym maržovym vzorcom ako material (marza klesa s poctom kusov).
+    const predaj = (nakup: number) => priceAt(Number(nakup) || 0, ks, pricingConfig);
+    const cenaDokoncenia = predaj(Number(dokoncenie?.cena) || 0);
+    const zaklad = cenaMaterialKus + cenaDokoncenia + predaj(cenaStoziara) + predaj(cenaPodstavca);
 
-    const doplnkySpolu = doplnkyVypocet.reduce((sum, d) => sum + d.cena * d.mnozstvo, 0);
+    const doplnkySpolu = doplnkyVypocet.reduce((sum, d) => sum + predaj(d.cena) * d.mnozstvo, 0);
 
     const subtotal = (zaklad + doplnkySpolu) * ks;
 

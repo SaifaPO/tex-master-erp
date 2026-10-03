@@ -51,10 +51,13 @@ interface VlajkaCenaVstup {
 function vypocitajCenuVlajky({ nakladMaterial, dokoncenie, cenaStoziara, cenaPodstavca, doplnky, expresne, pocetKs, osobnyOdber, nastavenia, pricingConfig }: VlajkaCenaVstup) {
   const ks = Math.max(1, Number(pocetKs) || 1);
   const cenaMaterialKus = priceAt(Number(nakladMaterial) || 0, ks, pricingConfig);
-  const cenaDokoncenia = Number(dokoncenie?.cena) || 0;
-  const zaklad = cenaMaterialKus + cenaDokoncenia + (Number(cenaStoziara) || 0) + (Number(cenaPodstavca) || 0);
+  // Opracovanie, prut, podstavec aj doplnky su v DB NAKUPNE ceny — predajna sa dopocita rovnakym
+  // marzovym vzorcom ako material (rovnako ako v beachflag-price-preview).
+  const predaj = (nakup: number) => priceAt(Number(nakup) || 0, ks, pricingConfig);
+  const cenaDokoncenia = predaj(Number(dokoncenie?.cena) || 0);
+  const zaklad = cenaMaterialKus + cenaDokoncenia + predaj(Number(cenaStoziara) || 0) + predaj(Number(cenaPodstavca) || 0);
 
-  const doplnkySpolu = (doplnky || []).reduce((sum, d) => sum + (Number(d.cena) || 0) * (Number(d.mnozstvo) || 0), 0);
+  const doplnkySpolu = (doplnky || []).reduce((sum, d) => sum + predaj(Number(d.cena) || 0) * (Number(d.mnozstvo) || 0), 0);
 
   const subtotal = (zaklad + doplnkySpolu) * ks;
 
