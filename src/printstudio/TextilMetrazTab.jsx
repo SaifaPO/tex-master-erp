@@ -17,6 +17,7 @@ const NAKLADY_DEFAULT = {
 // Bonusove percentualne body navyse k zakladnej marzi — MUSIA byt zhodne s TextilMetraz.jsx
 // (zakaznicka appka) a textil-metraz-create-draft-order (Edge Function, autoritativny prepocet).
 const BONUS_LEN_TLAC = 10; // "na vas material" — len tlac + nazehlenie na latku zakaznika, bez latky
+const BONUS_LEN_ZRAZANIE = 0; // "len zrazanie" — ziadna farba ani papier, najlacnejsia sluzba
 const BONUS_LEN_PAPIER = 0; // "len papier" — najlacnejsia z 3 urovni sluzby (ziadne nazehlenie, ziadna latka)
 function priceAtBonus(cost, qty, cfg, bonusBodov) {
   return Math.round(cost * (1 + (marginAt(cost, qty, cfg) + bonusBodov) / 100) * 100) / 100;
@@ -107,6 +108,8 @@ export default function TextilMetrazTab({ supabase }) {
 
   const nakladBmSub = vypocitajNakladBm('sublimacia', naklady.sublimacia);
   const nakladBmCot = vypocitajNakladBm('bavlna', naklady.bavlna);
+  // Zrazanie = len ochranny papier + praca (rovnaka rychlost ako tlac+fixacia), musi zodpovedat SQL pohladu textil_naklady_verejny.naklad_bm_zrazanie
+  const nakladZrazanieBm = (Number(naklady.sublimacia.cena_ochranny_papier_bm) || 0) + naklady.sublimacia.cena_prace_hod / Math.max(0.01, naklady.sublimacia.rychlost_m_hod);
 
   if (isLoading) return <p className="text-sm text-slate-500">Načítavam…</p>;
 
@@ -182,6 +185,7 @@ export default function TextilMetrazTab({ supabase }) {
               <span>Rýchlosť tlače+fixácie (len metráž)</span>
               <span className="text-white font-mono">{Number(naklady.sublimacia.rychlost_m_hod).toFixed(1)} bm/hod</span>
             </div>
+            <div className="flex justify-between p-2 bg-slate-950 rounded-lg border border-slate-800"><span>Náklad samotného zrážania (ochranný papier + práca)</span><span className="text-white font-mono">{nakladZrazanieBm.toFixed(2)} €/bm</span></div>
             <p className="text-[10px] text-slate-500 pt-1">Doprava, príplatok expres a DPH sú spoločné pre celú Textilnú metráž — nastavujú sa v sekcii "Doprava, expres a kapacitné limity" vyššie.</p>
           </div>
           <div className="pt-3 mt-3 border-t border-slate-800">
@@ -191,6 +195,7 @@ export default function TextilMetrazTab({ supabase }) {
                 <thead>
                   <tr className="border-b border-slate-800 text-slate-500 font-semibold">
                     <th className="py-1.5 pr-2">od bm</th>
+                    <th className="py-1.5 pr-2">Len zrážanie</th>
                     <th className="py-1.5 pr-2">📄 Len papier</th>
                     <th className="py-1.5 pr-2">Na váš materiál</th>
                     <th className="py-1.5 pr-2">Na náš materiál (tlač)</th>
@@ -200,6 +205,7 @@ export default function TextilMetrazTab({ supabase }) {
                   {BM_PREVIEW_LEVELS.map(level => (
                     <tr key={level}>
                       <td className="py-1.5 pr-2 text-slate-400">{level}</td>
+                      <td className="py-1.5 pr-2 font-mono font-bold text-white">{priceAtBonus(nakladZrazanieBm, level, pricingConfig, BONUS_LEN_ZRAZANIE).toFixed(2)} €</td>
                       <td className="py-1.5 pr-2 font-mono font-bold text-white">{priceAtBonus(nakladBmSub, level, pricingConfig, BONUS_LEN_PAPIER).toFixed(2)} €</td>
                       <td className="py-1.5 pr-2 font-mono font-bold text-white">{priceAtBonus(nakladBmSub, level, pricingConfig, BONUS_LEN_TLAC).toFixed(2)} €</td>
                       <td className="py-1.5 pr-2 font-mono font-bold text-white">{priceAt(nakladBmSub, level, pricingConfig).toFixed(2)} €<span className="text-slate-500 font-normal"> + látka</span></td>
@@ -273,6 +279,7 @@ export default function TextilMetrazTab({ supabase }) {
                     )}
                     <span className="text-slate-500 text-[10px]">{new Date(o.created_at).toLocaleString('sk-SK')}</span>
                     {o.material_nazov && <span className="bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded text-[10px]">+ {o.material_nazov}</span>}
+                    {o.sluzba_rezim === 'len_zrazanie' && <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded text-[10px]">Len zrážanie</span>}
                     {o.sluzba_rezim === 'len_papier' && <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded text-[10px]">📄 Len papier</span>}
                     {o.osobny_odber && <span className="bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded text-[10px]">Osobný odber</span>}
                   </div>

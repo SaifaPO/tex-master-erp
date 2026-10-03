@@ -8,6 +8,8 @@ import AskQuestion from './AskQuestion';
 // kde nepredavame latku ani nazehlenie (tenky obrat musi mat vyssiu maržu, inak sa neoplati).
 // Rovnake hodnoty MUSIA byt aj v textil-metraz-create-draft-order (autoritativny prepocet ceny).
 const BONUS_LEN_TLAC = 10; // "na vas material" — predavame len tlac + nazehlenie na latku zakaznika, bez latky
+const BONUS_LEN_ZRAZANIE = 0; // "len zrazanie" — ziadna farba ani sublimacny papier, len ochranny papier + praca; naklad je uz sam o sebe najnizsi, bez prirazky
+const MAX_SIRKA_ZRAZANIE_CM = 180; // kalander zrazi material do sirky 180 cm
 const BONUS_LEN_PAPIER = 0; // "len papier" — najmensia sluzba (ziadne nazehlenie, ziadna latka), preto zakladna marza bez prirazky (musi byt NAJLACNEJSIA z troch urovni)
 function priceAtBonus(cost, qty, cfg, bonusBodov) {
   return Math.round(cost * (1 + (marginAt(cost, qty, cfg) + bonusBodov) / 100) * 100) / 100;
@@ -42,6 +44,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [nakladBmByTech, setNakladBmByTech] = useState({ sublimacia: 0, bavlna: 0 });
+  const [nakladZrazanieBm, setNakladZrazanieBm] = useState(0); // €/bm za samotne zrazanie (iba sublimacia), z textil_naklady_verejny
   const [pricingConfig, setPricingConfig] = useState(DEFAULT_PRICING_CONFIG);
   const [nastavenia, setNastavenia] = useState(null);
   const [materialy, setMaterialy] = useState([]);
@@ -77,7 +80,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
     if (!supabase) { setLoadError('Supabase klient nie je nakonfigurovaný.'); setIsLoading(false); return; }
     (async () => {
       const [{ data: nak }, { data: cfg }, { data: n }, { data: mat }] = await Promise.all([
-        supabase.from('textil_naklady_verejny').select('technologia, naklad_bm'),
+        supabase.from('textil_naklady_verejny').select('*'),
         supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
         supabase.from('textil_nastavenia').select('*').eq('id', 1).maybeSingle(),
         supabase.from('textil_materialy_verejny').select('*'),
@@ -85,6 +88,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
       const map = { sublimacia: 0, bavlna: 0 };
       (nak || []).forEach(r => { map[r.technologia] = Number(r.naklad_bm) || 0; });
       setNakladBmByTech(map);
+      setNakladZrazanieBm(Number((nak || []).find(r => r.technologia === 'sublimacia')?.naklad_bm_zrazanie) || 0);
       if (cfg) setPricingConfig(mapConfigFromDb(cfg));
       setNastavenia(n || null);
       setMaterialy(mat || []);
@@ -104,13 +108,17 @@ export default function TextilMetraz({ supabase, onSpat }) {
   // Sirka tlace: pri "len papier" je vzdy nominalna sirka (ziadna latka), pri "nasej latke" sa berie
   // automaticky zo skladu (uz zohladnena rezerva na spadavku), pri "vlastnom materiali" ju zadava
   // zakaznik — vsetky su orezane na max dosiahnutelnu sirku stroja pre danu technologiu.
-  const printWidthCm = sluzbaRezim === 'len_papier'
+  const jeZrazanie = sluzbaRezim === 'len_zrazanie';
+  const printWidthCm = jeZrazanie
+    ? Math.min(manualSirkaCm, MAX_SIRKA_ZRAZANIE_CM)
+    : sluzbaRezim === 'len_papier'
     ? maxSirka
     : Math.min(vybranyMaterial ? (Number(vybranyMaterial.sirka_tlace_cm) || maxSirka) : manualSirkaCm, maxSirka);
   // Zdielane so sekciou "Prehľad množstevných zliav" nižšie, aby aj tá ukazovala SKUTOČNÚ sadzbu
   // pre aktuálne zvolenú úroveň služby (predtým vždy počítala bez bonusu, takže "na váš materiál"
   // a "len papier" v nej vyzerali rovnako drahé ako "na náš materiál" — zavádzajúce).
   const rateForQtyAndRezim = (qty) => {
+    if (sluzbaRezim === 'len_zrazanie') return priceAtBonus(nakladZrazanieBm, qty, pricingConfig, BONUS_LEN_ZRAZANIE);
     if (sluzbaRezim === 'len_papier') return priceAtBonus(nakladBm, qty, pricingConfig, BONUS_LEN_PAPIER);
     if (sluzbaRezim === 'na_vas_material') return priceAtBonus(nakladBm, qty, pricingConfig, BONUS_LEN_TLAC);
     return priceAt(nakladBm, qty, pricingConfig);
@@ -189,14 +197,14 @@ export default function TextilMetraz({ supabase, onSpat }) {
   // "Len papier" existuje len pre sublimaciu (bavlna sa tlaci priamo na latku, ziadny papierovy
   // medzistep) — ak zakaznik prepne na bavlnu s tymto rezimom zvolenym, vrati sa na predvoleny.
   useEffect(() => {
-    if (technologia !== 'sublimacia' && sluzbaRezim === 'len_papier') setSluzbaRezim('na_vas_material');
+    if (technologia !== 'sublimacia' && (sluzbaRezim === 'len_papier' || sluzbaRezim === 'len_zrazanie')) setSluzbaRezim('na_vas_material');
   }, [technologia, sluzbaRezim]);
 
   // Ak zakaznik prepne technologiu a rucne zadana sirka presahuje novy strojovy limit, oreze sa.
   useEffect(() => {
-    const max = MAX_SIRKA_CM[technologia] || 160;
+    const max = sluzbaRezim === 'len_zrazanie' ? MAX_SIRKA_ZRAZANIE_CM : (MAX_SIRKA_CM[technologia] || 160);
     setManualSirkaCm(v => Math.min(v, max));
-  }, [technologia]);
+  }, [technologia, sluzbaRezim]);
 
   // Ak zakaznik vybral expres a medzitym (kym mal appku otvorenu) uz presiel denny cutoff, prepni ho
   // spat na standard, nech neplati poplatok za nieco, co uz dnes fyzicky nie je mozne.
@@ -252,10 +260,10 @@ export default function TextilMetraz({ supabase, onSpat }) {
       ctx.strokeRect(5, 5, canvas.width - 10, canvas.height - 10);
       ctx.fillStyle = '#047857';
       ctx.font = '11px sans-serif';
-      ctx.fillText(`Pripravená rolka ${printWidthCm}cm (150-300 DPI)`, 16, 28);
+      ctx.fillText(sluzbaRezim === 'len_zrazanie' ? `Zrážanie materiálu ${printWidthCm}cm` : `Pripravená rolka ${printWidthCm}cm (150-300 DPI)`, 16, 28);
       ctx.fillText(`Dĺžka: ${directLengthBm.toFixed(2)} bm`, 16, 46);
     }
-  }, [mode, technologia, widthCm, heightCm, lengthBm, directLengthBm, patternRepeat, patternImage, nastavenia, printWidthCm]);
+  }, [mode, technologia, sluzbaRezim, widthCm, heightCm, lengthBm, directLengthBm, patternRepeat, patternImage, nastavenia, printWidthCm]);
 
   const handlePatternUpload = (e) => {
     const file = e.target.files[0];
@@ -401,6 +409,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Ľavý stĺpec */}
         <div className="lg:col-span-7 space-y-6">
+          {!jeZrazanie && (<>
           <div className="bg-white p-1.5 rounded-xl border border-slate-200 grid grid-cols-2 gap-1 shadow-sm">
             <button onClick={() => setMode('auto')} className={`py-2.5 px-3 rounded-lg text-xs sm:text-sm font-semibold transition ${mode === 'auto' ? `bg-${accent}-600 text-white` : 'text-slate-500 hover:bg-slate-50'}`} style={mode === 'auto' ? { backgroundColor: technologia === 'sublimacia' ? '#0d9488' : '#d97706' } : undefined}>1. Vzor s opakovaním</button>
             <button onClick={() => setMode('subor')} className={`py-2.5 px-3 rounded-lg text-xs sm:text-sm font-semibold transition ${mode === 'subor' ? 'text-white' : 'text-slate-500 hover:bg-slate-50'}`} style={mode === 'subor' ? { backgroundColor: technologia === 'sublimacia' ? '#0d9488' : '#d97706' } : undefined}>2. Nahrať hotovú rolku</button>
@@ -460,10 +469,11 @@ export default function TextilMetraz({ supabase, onSpat }) {
               </div>
             </div>
           )}
+          </>)}
 
           <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-3">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-2"><Shirt className="w-4 h-4 text-teal-500" /> Čo presne potrebujete?</h3>
-            <div className={`grid grid-cols-1 ${technologia === 'sublimacia' ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-3`}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label className={`p-3.5 rounded-xl border cursor-pointer transition ${sluzbaRezim === 'na_vas_material' ? 'border-teal-500 bg-teal-50/60' : 'border-slate-200'}`}>
                 <input type="radio" name="sluzba" className="hidden" checked={sluzbaRezim === 'na_vas_material'} onChange={() => setSluzbaRezim('na_vas_material')} />
                 <span className="text-sm font-bold text-slate-900 block">Potlač na váš materiál</span>
@@ -479,6 +489,13 @@ export default function TextilMetraz({ supabase, onSpat }) {
                   <input type="radio" name="sluzba" className="hidden" checked={sluzbaRezim === 'len_papier'} onChange={() => setSluzbaRezim('len_papier')} />
                   <span className="text-sm font-bold text-slate-900 block">Len sublimačný papier</span>
                   <span className="text-xs text-slate-500">Vytlačíme vašu grafiku na transferový papier, nažehlíte si sami</span>
+                </label>
+              )}
+              {technologia === 'sublimacia' && (
+                <label className={`p-3.5 rounded-xl border cursor-pointer transition ${sluzbaRezim === 'len_zrazanie' ? 'border-teal-500 bg-teal-50/60' : 'border-slate-200'}`}>
+                  <input type="radio" name="sluzba" className="hidden" checked={sluzbaRezim === 'len_zrazanie'} onChange={() => { setSluzbaRezim('len_zrazanie'); setMode('subor'); }} />
+                  <span className="text-sm font-bold text-slate-900 block">Len zrážanie materiálu</span>
+                  <span className="text-xs text-slate-500">Zrazíme vám dodaný materiál kalandrovaním, bez tlače (najlacnejšia služba)</span>
                 </label>
               )}
             </div>
@@ -500,6 +517,20 @@ export default function TextilMetraz({ supabase, onSpat }) {
               <div className="pt-1">
                 <label className="block text-xs font-medium text-slate-500 mb-1">Šírka vašej látky (cm) — max {maxSirka}cm pre túto technológiu</label>
                 <NumberInput min="10" max={maxSirka} step="1" value={manualSirkaCm} onChange={(v) => setManualSirkaCm(Math.min(maxSirka, Math.max(10, v)))} fallback={maxSirka} className="w-full sm:w-48 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+              </div>
+            ) : jeZrazanie ? (
+              <div className="pt-1 space-y-3">
+                <p className="text-xs text-slate-500">Zrážanie je len na vami dodaný materiál. Nepoužíva sa žiadna farba ani transferový papier, materiál prejde kalandrom cez ochranný papier, preto je to najlacnejšia služba.</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Dĺžka materiálu na zrážanie (bm)</label>
+                    <NumberInput min="0.5" step="0.5" value={directLengthBm} onChange={setDirectLengthBm} fallback={0.5} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Šírka vášho materiálu (cm), max {MAX_SIRKA_ZRAZANIE_CM}</label>
+                    <NumberInput min="10" max={MAX_SIRKA_ZRAZANIE_CM} step="1" value={manualSirkaCm} onChange={(v) => setManualSirkaCm(Math.min(MAX_SIRKA_ZRAZANIE_CM, Math.max(10, v)))} fallback={MAX_SIRKA_ZRAZANIE_CM} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+                  </div>
+                </div>
               </div>
             ) : (
               <p className="text-xs text-slate-500 pt-1">Papier má vždy nominálnu šírku {printWidthCm}cm — žiadna látka sa neobjednáva, ani sa na ňu netlačí.</p>
@@ -562,7 +593,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
         <div className="lg:col-span-5 space-y-6">
           <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
             <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-              <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5"><Eye className="w-4 h-4 text-teal-500" /> {sluzbaRezim === 'len_papier' ? `Náhľad papiera (${printWidthCm} cm)` : `Náhľad látky (${printWidthCm} cm)`}</span>
+              <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5"><Eye className="w-4 h-4 text-teal-500" /> {jeZrazanie ? `Materiál na zrážanie (${printWidthCm} cm)` : sluzbaRezim === 'len_papier' ? `Náhľad papiera (${printWidthCm} cm)` : `Náhľad látky (${printWidthCm} cm)`}</span>
               <span className="text-[10px] text-slate-400 font-mono">{printWidthCm}cm × {totalLengthBm.toFixed(2)}m</span>
             </div>
             <div className="rounded-xl overflow-hidden border border-slate-100 flex items-center justify-center p-2 bg-slate-50 min-h-[200px]">
@@ -577,11 +608,11 @@ export default function TextilMetraz({ supabase, onSpat }) {
             </h3>
             <div className="space-y-2 text-xs text-slate-300">
               <Row label="Technológia" value={technologia === 'sublimacia' ? 'Sublimácia' : 'Digitálna bavlna'} />
-              <Row label="Úroveň služby" value={sluzbaRezim === 'len_papier' ? 'Len sublimačný papier' : sluzbaRezim === 'na_nas_material' ? 'Potlač aj látka od nás' : 'Potlač na váš materiál'} small />
-              <Row label="Sadzba potlače (bez DPH)" value={`${baseRate.toFixed(2)} €/bm`} />
+              <Row label="Úroveň služby" value={sluzbaRezim === 'len_zrazanie' ? 'Len zrážanie materiálu' : sluzbaRezim === 'len_papier' ? 'Len sublimačný papier' : sluzbaRezim === 'na_nas_material' ? 'Potlač aj látka od nás' : 'Potlač na váš materiál'} small />
+              <Row label={jeZrazanie ? 'Sadzba zrážania (bez DPH)' : 'Sadzba potlače (bez DPH)'} value={`${baseRate.toFixed(2)} €/bm`} />
               {vybranyMaterial && <Row label={`Látka: ${vybranyMaterial.nazov} (bez DPH)`} value={`${fabricRate.toFixed(2)} €/bm`} />}
               <Row label="Objednaná dĺžka metráže" value={`${totalLengthBm.toFixed(2)} bm`} highlight />
-              <Row label="Tlačová plocha" value={`${totalM2.toFixed(2)} m²`} />
+              <Row label={jeZrazanie ? 'Plocha materiálu' : 'Tlačová plocha'} value={`${totalM2.toFixed(2)} m²`} />
               <Row label="Príplatok za expres" value={`${expressFee.toFixed(2)} €`} />
               <Row label="Doprava (DPD kuriér)" value={shippingFee === 0 ? 'Zdarma' : `${shippingFee.toFixed(2)} €`} />
               <Row label="Harmonogram dodania" value={aktualnyHarmonogram} small />

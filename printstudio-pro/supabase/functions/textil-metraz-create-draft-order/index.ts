@@ -36,6 +36,8 @@ function priceAtBonus(cost: number, qty: number, cfg: PricingConfig, bonusBodov:
   return Math.round(cost * (1 + (marginAt(cost, qty, cfg) + bonusBodov) / 100) * 100) / 100;
 }
 const BONUS_LEN_TLAC = 10; // + percentualnych bodov k marzi pri "na vas material" (potlac + nazehlenie na latku zakaznika, bez latky)
+const BONUS_LEN_ZRAZANIE = 0; // "len zrazanie" — ziadna farba ani sublimacny papier, len ochranny papier + praca (rovnaka hodnota ako v TextilMetraz.jsx)
+const MAX_SIRKA_ZRAZANIE_CM = 180;
 const BONUS_LEN_PAPIER = 0; // "len papier" — najmensia sluzba (ziadne nazehlenie, ziadna latka), zakladna marza bez prirazky (musi byt NAJLACNEJSIA z troch urovni)
 
 const REZERVA_SPADAVKA_CM = 8; // rezerva na spadavku/okraje (4cm z kazdej strany), odpocitana zo sirky skladovej rolky
@@ -194,15 +196,17 @@ Deno.serve(async (req) => {
       if (!dataS?.draft_order?.invoice_url) throw new Error('Shopify nevrátil odkaz na platbu draft objednávky.');
       return odpoved({ checkoutUrl: dataS.draft_order.invoice_url, cenaSpolu, objednavkaId: objednavkaIdS, cisloObjednavky: cisloS });
     }
-    if (!['na_vas_material', 'na_nas_material', 'len_papier'].includes(sluzbaRezim)) throw new Error('Neplatný režim služby.');
+    if (!['na_vas_material', 'na_nas_material', 'len_papier', 'len_zrazanie'].includes(sluzbaRezim)) throw new Error('Neplatný režim služby.');
     if (sluzbaRezim === 'len_papier' && technologia !== 'sublimacia') throw new Error('"Len sublimačný papier" je dostupné len pre sublimačnú technológiu.');
+    if (sluzbaRezim === 'len_zrazanie' && technologia !== 'sublimacia') throw new Error('"Len zrážanie materiálu" je dostupné len pre sublimačnú technológiu.');
 
     const [{ data: nakRows }, { data: cfg }, { data: nastavenia }] = await Promise.all([
-      supabase.from('textil_naklady_verejny').select('technologia, naklad_bm'),
+      supabase.from('textil_naklady_verejny').select('*'),
       supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
       supabase.from('textil_nastavenia').select('*').eq('id', 1).maybeSingle(),
     ]);
     const nakladBm = Number((nakRows || []).find((r: any) => r.technologia === technologia)?.naklad_bm) || 0;
+    const nakladZrazanieBm = Number((nakRows || []).find((r: any) => r.technologia === 'sublimacia')?.naklad_bm_zrazanie) || 0;
     if (!nastavenia) throw new Error('Nastavenia Textilnej metráže sa nenašli.');
 
     const pricingConfig: PricingConfig = cfg
@@ -219,7 +223,12 @@ Deno.serve(async (req) => {
     let baseRate = 0, fabricRate = 0, fabricSubtotal = 0, printWidthCm = Math.min(Number(manualSirkaCm) || maxSirka, maxSirka);
     let vybranyMaterial: { kod: string; nazov: string } | null = null;
 
-    if (sluzbaRezim === 'len_papier') {
+    if (sluzbaRezim === 'len_zrazanie') {
+      // Len zrazanie dodaneho materialu kalandrovanim: ziadna farba ani sublimacny papier, len ochranny
+      // papier + praca. Sirka je sirka materialu zakaznika (max 180 cm), na cenu za bm nema vplyv.
+      printWidthCm = Math.min(Number(manualSirkaCm) || MAX_SIRKA_ZRAZANIE_CM, MAX_SIRKA_ZRAZANIE_CM);
+      baseRate = priceAtBonus(nakladZrazanieBm, totalLengthBm, pricingConfig, BONUS_LEN_ZRAZANIE);
+    } else if (sluzbaRezim === 'len_papier') {
       // Ziadna latka, ziadne nazehlenie — vzdy nominalna sirka sublimacneho papiera (rovnaka, na
       // akej je pocitany naklad_bm procesu).
       printWidthCm = maxSirka;
@@ -300,7 +309,9 @@ Deno.serve(async (req) => {
 
     const technikaLabel = technologia === 'sublimacia' ? 'Sublimačná potlač' : 'Digitálna potlač bavlny';
     const osobnyOdberSufix = osobnyOdber ? ' (osobný odber)' : '';
-    const nazovPolozky = (sluzbaRezim === 'len_papier'
+    const nazovPolozky = (sluzbaRezim === 'len_zrazanie'
+      ? `Zrážanie materiálu (kalandrovanie) — ${totalLengthBm.toFixed(2)}bm`
+      : sluzbaRezim === 'len_papier'
       ? `Sublimačný papier s vlastnou grafikou — ${totalLengthBm.toFixed(2)}bm`
       : `Textilná metráž — ${technikaLabel} ${totalLengthBm.toFixed(2)}bm` + (vybranyMaterial ? ` + látka: ${vybranyMaterial.nazov}` : '')) + osobnyOdberSufix;
 
@@ -317,7 +328,7 @@ Deno.serve(async (req) => {
               { name: '_cislo_objednavky', value: cisloObjednavky },
               { name: '_objednavka_id', value: objednavkaId },
               { name: '_technologia', value: technikaLabel },
-              { name: '_uroven_sluzby', value: sluzbaRezim === 'len_papier' ? 'Len papier s grafikou' : sluzbaRezim === 'na_nas_material' ? 'Na náš materiál' : 'Na váš materiál' },
+              { name: '_uroven_sluzby', value: sluzbaRezim === 'len_zrazanie' ? 'Len zrážanie materiálu' : sluzbaRezim === 'len_papier' ? 'Len papier s grafikou' : sluzbaRezim === 'na_nas_material' ? 'Na náš materiál' : 'Na váš materiál' },
               { name: '_dlzka_bm', value: totalLengthBm.toFixed(2) },
               { name: '_sirka_tlace_cm', value: String(Math.round(printWidthCm * 10) / 10) },
               { name: '_harmonogram', value: harmonogram || '' },
