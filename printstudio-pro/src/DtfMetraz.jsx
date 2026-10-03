@@ -47,7 +47,8 @@ export default function DtfMetraz({ supabase, onSpat }) {
   const [pricingConfig, setPricingConfig] = useState(DEFAULT_PRICING_CONFIG);
   const [nastavenia, setNastavenia] = useState(null);
 
-  const [mode, setMode] = useState('auto'); // 'auto' | 'subor' | 'vzorky' | 'paleta'
+  // ?rezim=vzorky|paleta (odkaz z info stranky na webe) otvori rovno objednavku vzorky / palety farieb
+  const [mode, setMode] = useState(() => { const r = new URLSearchParams(window.location.search).get('rezim'); return r === 'vzorky' || r === 'paleta' ? r : 'auto'; }); // 'auto' | 'subor' | 'vzorky' | 'paleta'
   const [widthCm, setWidthCm] = useState(10);
   const [heightCm, setHeightCm] = useState(10);
   const [qty, setQty] = useState(30);
