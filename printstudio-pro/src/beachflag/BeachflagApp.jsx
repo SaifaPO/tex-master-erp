@@ -51,6 +51,9 @@ export default function BeachflagApp({ supabase }) {
   const katalogRef = useRef(null);
   const logicalSizeRef = useRef(DEFAULT_VIEWBOX); // aktualna velkost platna v cm (logicke suradnice, nezavisle od zoomu)
   const previewBoxRef = useRef(null);
+  const mierkaCmRef = useRef({ x: 1, y: 1 }); // prepocet "jednotka platna" -> skutocne cm (podla rozmerov vybranej velkosti)
+  const [rozmerVlajkyCm, setRozmerVlajkyCm] = useState(null);
+  const [selInfo, setSelInfo] = useState(null); // rozmer (cm) a otocenie prave vybraneho objektu na platne
   const [previewBoxSize, setPreviewBoxSize] = useState({ w: 320, h: 420 });
   const [userZoom, setUserZoom] = useState(1); // dodatocne priblizenie nad ramec auto-fit, ovlada zakaznik (+/-)
   const [canvasVersion, setCanvasVersion] = useState(0); // pretiahne novy render do GrafikaTab, ked sa fabric platno prvykrat vytvori
@@ -98,6 +101,13 @@ export default function BeachflagApp({ supabase }) {
     if (isLoading || !canvasElRef.current || fabricRef.current) return;
     const canvas = new fabric.Canvas(canvasElRef.current, { backgroundColor: bgColor });
     fabricRef.current = canvas;
+    const aktualizujInfo = () => {
+      const o = canvas.getActiveObject();
+      if (!o || o.isMaskOverlay) { setSelInfo(null); return; }
+      const m = mierkaCmRef.current;
+      setSelInfo({ sirkaCm: o.getScaledWidth() * m.x, vyskaCm: o.getScaledHeight() * m.y, uhol: ((Math.round(o.angle || 0) % 360) + 360) % 360 });
+    };
+    ['selection:created', 'selection:updated', 'selection:cleared', 'object:scaling', 'object:rotating', 'object:moving', 'object:modified'].forEach(ev => canvas.on(ev, aktualizujInfo));
     setCanvasVersion(v => v + 1); // GrafikaTab (vrstvy/inspektor) caka, kym instancia existuje
     return () => { canvas.dispose(); fabricRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -118,6 +128,16 @@ export default function BeachflagApp({ supabase }) {
     if (!rozmer) return;
     const { w, h } = parseViewbox(rozmer.viewbox);
     logicalSizeRef.current = { w, h };
+    const velkostRiadok = k.velkosti.find(v => v.kod === velkostKod);
+    const mRozmer = /([d.,]+)s*xs*([d.,]+)/i.exec(velkostRiadok?.rozmer_popis || '');
+    if (mRozmer) {
+      const sirkaCm = Number(mRozmer[1].replace(',', '.')), vyskaCm = Number(mRozmer[2].replace(',', '.'));
+      mierkaCmRef.current = { x: sirkaCm / w, y: vyskaCm / h };
+      setRozmerVlajkyCm({ sirkaCm, vyskaCm });
+    } else {
+      mierkaCmRef.current = { x: 1, y: 1 };
+      setRozmerVlajkyCm(null);
+    }
     const autoFit = Math.min(previewBoxSize.w / w, previewBoxSize.h / h);
     const zoom = autoFit * userZoom;
     canvas.setZoom(zoom);
@@ -307,7 +327,12 @@ export default function BeachflagApp({ supabase }) {
             <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2"><Eye className="w-4 h-4 text-indigo-600" /> Živý náhľad vlajky</h3>
             <span className="text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono flex items-center gap-1"><Flag className="w-3 h-3" /> {tvarKod} · {velkostKod}</span>
           </div>
-          <div ref={previewBoxRef} className="relative bg-slate-100 rounded-xl border border-slate-300 p-2 flex items-center justify-center min-h-[380px] sm:min-h-[440px] overflow-auto" onContextMenu={(e) => e.preventDefault()}>
+          <div className="flex gap-2 items-stretch" style={{ height: 'clamp(440px, 72vh, 680px)' }}>
+          <div className="relative flex-1 min-w-0 flex flex-col">
+          <div className="absolute top-2 right-2 z-10 bg-slate-900/85 text-white rounded-lg px-2.5 py-1.5 text-[11px] font-mono leading-tight shadow pointer-events-none text-right">
+            {selInfo ? (<><div>Objekt: <b>{selInfo.sirkaCm.toFixed(1)} × {selInfo.vyskaCm.toFixed(1)} cm</b></div><div>Otočenie: <b>{selInfo.uhol}°</b></div></>) : rozmerVlajkyCm ? (<><div>Vlajka: <b>{rozmerVlajkyCm.sirkaCm} × {rozmerVlajkyCm.vyskaCm} cm</b></div><div className="text-slate-400">vyber objekt = jeho rozmer</div></>) : null}
+          </div>
+          <div ref={previewBoxRef} className="relative flex-1 min-h-0 bg-slate-100 rounded-xl border border-slate-300 p-2 flex items-center justify-center overflow-auto" onContextMenu={(e) => e.preventDefault()}>
             <canvas ref={canvasElRef} className="shadow-md rounded" />
           </div>
           <div className="flex items-center justify-center gap-2 mt-2">
@@ -317,6 +342,14 @@ export default function BeachflagApp({ supabase }) {
             {userZoom !== 1 && <button type="button" onClick={() => setUserZoom(1)} className="text-[11px] text-indigo-600 hover:text-indigo-700 font-semibold ml-1">Resetovať</button>}
           </div>
           <p className="mt-2 text-[11px] text-slate-500">Červená čiara je orez, zelená je bezpečná zóna.</p>
+          </div>
+          <div className="w-36 sm:w-44 shrink-0 bg-slate-50 rounded-xl border border-slate-200 p-1.5 flex flex-col">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide text-center mb-1">Porovnanie veľkosti</span>
+            <div className="flex-1 min-h-0 flex items-center justify-center">
+              <VelkostnePorovnanie kompaktny rozmer={katalog?.tvary.find(t => t.kod === tvarKod)?.rozmery?.[velkostKod]} velkost={katalog?.velkosti.find(v => v.kod === velkostKod)} velkosti={katalog?.velkosti} bgColor={bgColor} />
+            </div>
+          </div>
+          </div>
           {techPanel && (
             <details className="mt-3">
               <summary className="text-[11px] text-slate-400 cursor-pointer">Technický detail</summary>
@@ -325,7 +358,6 @@ export default function BeachflagApp({ supabase }) {
           )}
         </div>
 
-        <VelkostnePorovnanie rozmer={katalog?.tvary.find(t => t.kod === tvarKod)?.rozmery?.[velkostKod]} velkost={katalog?.velkosti.find(v => v.kod === velkostKod)} velkosti={katalog?.velkosti} bgColor={bgColor} />
       </div>
     </div>
     </>

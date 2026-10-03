@@ -30,7 +30,7 @@ function parsujRozmerPopis(popis) {
   return { sirkaCm, vyskaCm };
 }
 
-export default function VelkostnePorovnanie({ rozmer, velkost, velkosti, bgColor }) {
+export default function VelkostnePorovnanie({ rozmer, velkost, velkosti, bgColor, kompaktny = false }) {
   if (!velkost || !rozmer?.cut_path) return null;
   const fabricRozmer = parsujRozmerPopis(velkost.rozmer_popis);
   const celkovaVyskaCm = Number(velkost.vyska_cm) || 0;
@@ -55,18 +55,12 @@ export default function VelkostnePorovnanie({ rozmer, velkost, velkosti, bgColor
 
   // Vodorovne pozicie prvkov (v cm-like jednotkach SVG, nie skutocne cm) — clovek vlavo, tycka s
   // vlajkou vpravo od neho, s dostatocnym odstupom na obe vertikalne kotovacie znacky.
-  const xClovek = 34;
-  const xTycka = 128;
-  const viewW = xTycka + shapeWidthPx + 46;
+  const xClovek = 26;
+  const xTycka = 74;
+  const viewW = xTycka + shapeWidthPx + 24;
 
-  return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-5">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2"><Ruler className="w-4 h-4 text-indigo-600" /> Porovnanie veľkosti</h3>
-        <span className="text-[11px] text-slate-500">{velkost.rozmer_popis} · celkovo {celkovaVyskaCm} cm</span>
-      </div>
-      <div className="bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-center p-3">
-        <svg viewBox={`0 0 ${viewW} ${viewH}`} className="w-full max-w-[260px] h-auto" style={{ maxHeight: 420 }}>
+  const obsah = (
+    <>
           {/* Zem */}
           <line x1="0" y1={groundY} x2={viewW} y2={groundY} stroke="#cbd5e1" strokeWidth="1.5" />
 
@@ -81,7 +75,7 @@ export default function VelkostnePorovnanie({ rozmer, velkost, velkosti, bgColor
             <line x1={xClovek - 26} y1={clovekY} x2={xClovek - 18} y2={clovekY} />
             <line x1={xClovek - 26} y1={groundY} x2={xClovek - 18} y2={groundY} />
           </g>
-          <text x={xClovek - 22} y={(clovekY + groundY) / 2} fontSize="8" fill="#64748b" textAnchor="middle" transform={`rotate(-90 ${xClovek - 22} ${(clovekY + groundY) / 2})`}>180 cm</text>
+          <text x={xClovek - 22} y={(clovekY + groundY) / 2} fontSize="11" fill="#64748b" textAnchor="middle" transform={`rotate(-90 ${xClovek - 22} ${(clovekY + groundY) / 2})`}>180 cm</text>
 
           {/* Podstavec */}
           <path d={`M ${xTycka - 14},${groundY} L ${xTycka + 14},${groundY} L ${xTycka + 8},${groundY - 6} L ${xTycka - 8},${groundY - 6} Z`} fill="#475569" />
@@ -99,10 +93,26 @@ export default function VelkostnePorovnanie({ rozmer, velkost, velkosti, bgColor
             <line x1={xTycka + shapeWidthPx + 6} y1={vlajkaY} x2={xTycka + shapeWidthPx + 14} y2={vlajkaY} />
             <line x1={xTycka + shapeWidthPx + 6} y1={vlajkaY + vlajkaVyskaPx} x2={xTycka + shapeWidthPx + 14} y2={vlajkaY + vlajkaVyskaPx} />
           </g>
-          <text x={xTycka + shapeWidthPx + 10} y={vlajkaY + vlajkaVyskaPx / 2} fontSize="8" fill="#4f46e5" fontWeight="700" textAnchor="middle" transform={`rotate(-90 ${xTycka + shapeWidthPx + 10} ${vlajkaY + vlajkaVyskaPx / 2})`}>{Math.round(fabricRozmer.vyskaCm)} cm</text>
+          <text x={xTycka + shapeWidthPx + 10} y={vlajkaY + vlajkaVyskaPx / 2} fontSize="11" fill="#4f46e5" fontWeight="700" textAnchor="middle" transform={`rotate(-90 ${xTycka + shapeWidthPx + 10} ${vlajkaY + vlajkaVyskaPx / 2})`}>{Math.round(fabricRozmer.vyskaCm)} cm</text>
 
           {/* Popisok celkovej vysky nad tyckou */}
-          <text x={xTycka} y={tyckaY - 6} fontSize="8" fill="#475569" fontWeight="700" textAnchor="middle">{celkovaVyskaCm} cm</text>
+          <text x={xTycka} y={tyckaY - 6} fontSize="11" fill="#475569" fontWeight="700" textAnchor="middle">{celkovaVyskaCm} cm</text>
+    </>
+  );
+
+  if (kompaktny) {
+    return <svg viewBox={`0 0 ${viewW} ${viewH}`} className="w-full h-full">{obsah}</svg>;
+  }
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-5">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2"><Ruler className="w-4 h-4 text-indigo-600" /> Porovnanie veľkosti</h3>
+        <span className="text-[11px] text-slate-500">{velkost.rozmer_popis} · celkovo {celkovaVyskaCm} cm</span>
+      </div>
+      <div className="bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-center p-3">
+        <svg viewBox={`0 0 ${viewW} ${viewH}`} className="w-full max-w-[260px] h-auto" style={{ maxHeight: 420 }}>
+          {obsah}
         </svg>
       </div>
       <p className="mt-2 text-[11px] text-slate-500">Ilustračné porovnanie so vzrastom dospelého človeka (180 cm) — schematické, nie presný náhľad grafiky.</p>
