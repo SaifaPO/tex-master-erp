@@ -64,8 +64,8 @@ ${steps([
   ['Vlož obrázok', 'Nahraj svoje logo alebo grafiku v appke (ideálne PNG alebo TIFF bez pozadia, 300 DPI).'],
   ['Objednaj', 'Zadaj rozmer a počet kusov, cenu uvidíš hneď. Zaplatíš kartou a transfer ti pošleme domov.'],
   ['Umiestni na textil', 'Polož tričko na rovnú pevnú podložku a daj transfer potlačenou stranou na látku, kam ho chceš mať.'],
-  ['Pritlač cez mastný papier', 'Prikry transfer mastným papierom a žehli cca 15 sekúnd, bez pary, s primerane silným prítlakom (pri ručnej žehličke tlač rovnomerne celou váhou ruky; tepelný lis cca 3–4 bar).'],
-  ['Stiahni fóliu a dožehli', 'Stiahni prenosovú fóliu, prikry znova mastným papierom a prežehli ďalších cca 15 sekúnd.'],
+  ['Pritlač cez mastný papier', 'Prikry transfer mastným papierom a žehli cca 15 sekúnd, bez pary, s primerane silným prítlakom (pri ručnej žehličke tlač rovnomerne celou váhou ruky; tepelný lis cca 3–4 bar). Ideálna teplota žehličky je 150 °C. Ak je materiál citlivý, začni na 120 °C.'],
+  ['Stiahni fóliu a dožehli', 'Prenosovú fóliu sa dá stiahnuť aj za tepla, ale bezpečnejšie je robiť to pomaly a za studena, lebo nie každý má doma profesionálnu žehličku na textil. Potom transfer znova prikry mastným papierom a prežehli ďalších cca 15 sekúnd.'],
 ])}
 
 <div class="box">
