@@ -5,16 +5,19 @@ const fs = require('fs');
 const path = require('path');
 
 const EMAIL = 'pbtprint@pbtprint.sk';
+const IMG = 'https://cdn.shopify.com/s/files/1/0777/1016/4311/files/';
 const mail = (subj, body) => `mailto:${EMAIL}?subject=${encodeURIComponent(subj)}${body ? '&amp;body=' + encodeURIComponent(body) : ''}`;
 
 const tlacCss = fs.readFileSync(path.join(__dirname, 'tlac.html'), 'utf8');
 const baseCss = tlacCss.slice(tlacCss.indexOf('<style>') + 7, tlacCss.indexOf('</style>')).replace(/pbt-tlac/g, 'pbt-p');
 const extraCss = `
-.pbt-p .steps{list-style:none;margin:0 0 36px;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;counter-reset:s}
-.pbt-p .steps li{counter-increment:s;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px 16px 14px;position:relative}
-.pbt-p .steps li:before{content:counter(s);display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:#0d9488;color:#fff;font-weight:800;margin-bottom:8px}
-.pbt-p .steps h3{font-size:16px;margin:0 0 6px}
-.pbt-p .steps p{font-size:14px;color:#475569;margin:0}
+.pbt-p .steps{list-style:none;margin:0 0 36px;padding:0;display:grid;grid-template-columns:1fr;gap:14px;counter-reset:s}
+.pbt-p .steps li{counter-increment:s;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;display:grid;grid-template-columns:1fr 190px;column-gap:20px;row-gap:4px;align-items:start;grid-template-rows:auto auto 1fr}
+.pbt-p .steps li:before{content:counter(s);grid-column:1;display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:#0d9488;color:#fff;font-weight:800;margin-bottom:4px}
+.pbt-p .steps h3{grid-column:1;font-size:17px;margin:0 0 2px}
+.pbt-p .steps p{grid-column:1;font-size:14.5px;color:#475569;margin:0}
+
+.pbt-p .steps img{grid-column:2;grid-row:1 / span 3;width:100%;height:auto;display:block;border-radius:10px;margin:0}
 .pbt-p .box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px;padding:20px 24px;margin:0 0 28px}
 .pbt-p .box h3{font-size:18px;margin:0 0 8px}
 .pbt-p .box p,.pbt-p .box li{font-size:14.5px;color:#475569}
@@ -25,7 +28,7 @@ const extraCss = `
 .pbt-p .soc a{display:inline-flex;align-items:center;gap:8px;text-decoration:none;font-weight:700;font-size:14px;padding:8px 14px;border-radius:9px;color:#fff}
 .pbt-p .soc svg{width:20px;height:20px}
 .pbt-p .soc .fb{background:#1877f2}.pbt-p .soc .ig{background:linear-gradient(45deg,#f09433,#dc2743 50%,#bc1888)}
-@media(max-width:600px){.pbt-p .steps{grid-template-columns:1fr}}
+@media(max-width:600px){.pbt-p .steps li{grid-template-columns:1fr}.pbt-p .steps img{grid-column:1;grid-row:auto;max-width:240px;margin-top:10px}}
 `;
 const style = `<style>${baseCss}${extraCss}</style>`;
 
@@ -45,7 +48,7 @@ const mailBox = (subj, co) => `<div class="mail">
 ${social}
 </div>`;
 
-const steps = (items) => `<ol class="steps">\n${items.map(([h, p]) => `<li><h3>${h}</h3><p>${p}</p></li>`).join('\n')}\n</ol>`;
+const steps = (items) => `<ol class="steps">\n${items.map(([h, p, img]) => `<li><h3>${h}</h3><p>${p}</p>${img ? `<img src="${img}" alt="${h}" loading="lazy">` : ''}</li>`).join('\n')}\n</ol>`;
 
 // ---------------- DTF ----------------
 const dtf = `${style}
@@ -61,11 +64,11 @@ const dtf = `${style}
 <h2 class="sec">Ako na to: 5 jednoduchých krokov</h2>
 <p class="sub">Žiadne špeciálne vybavenie. Stačí žehlička, mastný papier (papier na pečenie) a tričko.</p>
 ${steps([
-  ['Vlož obrázok', 'Nahraj svoje logo alebo grafiku v appke (ideálne PNG alebo TIFF bez pozadia, 300 DPI).'],
-  ['Objednaj', 'Zadaj rozmer a počet kusov, cenu uvidíš hneď. Zaplatíš kartou a transfer ti pošleme domov.'],
-  ['Umiestni na textil', 'Polož tričko na rovnú pevnú podložku a daj transfer potlačenou stranou na látku, kam ho chceš mať.'],
-  ['Pritlač cez mastný papier', 'Prikry transfer mastným papierom a žehli cca 15 sekúnd, bez pary, s primerane silným prítlakom (pri ručnej žehličke tlač rovnomerne celou váhou ruky; tepelný lis cca 3–4 bar). Ideálna teplota žehličky je 150 °C. Ak je materiál citlivý, začni na 120 °C.'],
-  ['Stiahni fóliu a dožehli', 'Prenosovú fóliu sa dá stiahnuť aj za tepla, ale bezpečnejšie je robiť to pomaly a za studena, lebo nie každý má doma profesionálnu žehličku na textil. Potom transfer znova prikry mastným papierom a prežehli ďalších cca 15 sekúnd.'],
+  ['Vlož obrázok', 'Nahraj svoje logo alebo grafiku v appke (ideálne PNG alebo TIFF bez pozadia, 300 DPI).', IMG + 'dtf-krok-1.jpg?v=1791022415'],
+  ['Objednaj', 'Zadaj rozmer a počet kusov, cenu uvidíš hneď. Zaplatíš kartou a transfer ti pošleme domov.', IMG + 'dtf-krok-2.jpg?v=1791022415'],
+  ['Umiestni na textil', 'Polož tričko na rovnú pevnú podložku a daj transfer potlačenou stranou na látku, kam ho chceš mať.', IMG + 'dtf-krok-3.jpg?v=1791022415'],
+  ['Pritlač cez mastný papier', 'Prikry transfer mastným papierom a žehli cca 15 sekúnd, bez pary, s primerane silným prítlakom (pri ručnej žehličke tlač rovnomerne celou váhou ruky; tepelný lis cca 3–4 bar). Ideálna teplota žehličky je 150 °C. Ak je materiál citlivý, začni na 120 °C.', IMG + 'dtf-krok-4.jpg?v=1791022415'],
+  ['Stiahni fóliu a dožehli', 'Prenosovú fóliu sa dá stiahnuť aj za tepla, ale bezpečnejšie je robiť to pomaly a za studena, lebo nie každý má doma profesionálnu žehličku na textil. Potom transfer znova prikry mastným papierom a prežehli ďalších cca 15 sekúnd.', IMG + 'dtf-krok-5.jpg?v=1791022415'],
 ])}
 
 <div class="box">
