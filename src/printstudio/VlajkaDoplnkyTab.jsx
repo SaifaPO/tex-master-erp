@@ -1,9 +1,35 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Plus, Trash2, Package, ChevronDown, ChevronUp, ImagePlus } from 'lucide-react';
+import { Plus, Trash2, Package, ChevronDown, ChevronUp, ImagePlus, ArrowUp, ArrowDown } from 'lucide-react';
 import { nahrajObrazokDoplnku } from './nahrajObrazok';
 import NumberInput from '../NumberInput';
 
 const VELKOSTI = ['S', 'M', 'L', 'XL'];
+
+// Zmena poradia (hore/dole) — poradie sa ulozi do stlpca "poradie" a zakaznicka appka radi podla neho.
+// Pri posune sa poradie VSETKYM riadkom znovu ocisluje 0..n-1 (nove polozky maju poradie 0, takze by
+// sa inak neda spolahlivo prehodit).
+async function posunPoradie(supabase, tabulka, riadky, setRiadky, id, smer) {
+  const i = riadky.findIndex(x => x.id === id);
+  const j = i + smer;
+  if (i < 0 || j < 0 || j >= riadky.length) return;
+  const nove = riadky.slice();
+  [nove[i], nove[j]] = [nove[j], nove[i]];
+  const preCislovane = nove.map((x, idx) => ({ ...x, poradie: idx }));
+  const povodne = new Map(riadky.map(x => [x.id, x.poradie]));
+  setRiadky(preCislovane);
+  await Promise.all(preCislovane
+    .filter(x => povodne.get(x.id) !== x.poradie)
+    .map(x => supabase.from(tabulka).update({ poradie: x.poradie }).eq('id', x.id)));
+}
+
+function PosunTlacidla({ index, pocet, onPosun }) {
+  return (
+    <div className="flex flex-col shrink-0">
+      <button type="button" disabled={index === 0} onClick={() => onPosun(-1)} title="Posunúť vyššie" className="text-slate-500 hover:text-white disabled:opacity-25 disabled:hover:text-slate-500 leading-none"><ArrowUp className="w-3.5 h-3.5" /></button>
+      <button type="button" disabled={index === pocet - 1} onClick={() => onPosun(1)} title="Posunúť nižšie" className="text-slate-500 hover:text-white disabled:opacity-25 disabled:hover:text-slate-500 leading-none"><ArrowDown className="w-3.5 h-3.5" /></button>
+    </div>
+  );
+}
 
 // Mala fotka + tlacidlo na nahratie/vymenu — pouzite vo vsetkych sekciach nizsie, aby zakaznik
 // videl realnu fotku podstavca/prutu/doplnku namiesto len textu.
@@ -56,6 +82,8 @@ function JednoduchaSekcia({ supabase, tabulka, nazovSekcie, popisSekcie, maMaxMn
 
   useEffect(() => { nacitaj(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const posun = (id, smer) => posunPoradie(supabase, tabulka, riadky, setRiadky, id, smer);
+
   const pridaj = async () => {
     const patch = { kod: `polozka_${Date.now()}`, nazov: 'Nová položka', cena: 0 };
     if (maMaxMnozstvo) patch.max_mnozstvo = 5;
@@ -88,6 +116,7 @@ function JednoduchaSekcia({ supabase, tabulka, nazovSekcie, popisSekcie, maMaxMn
           <table className="w-full text-sm">
             <thead className="bg-slate-950/60 text-slate-500 text-xs uppercase tracking-wide">
               <tr>
+                <th className="px-2 py-2.5"></th>
                 <th className="text-left px-4 py-2.5">Foto</th>
                 <th className="text-left px-4 py-2.5">Kód</th>
                 <th className="text-left px-4 py-2.5">Názov</th>
@@ -98,8 +127,9 @@ function JednoduchaSekcia({ supabase, tabulka, nazovSekcie, popisSekcie, maMaxMn
               </tr>
             </thead>
             <tbody>
-              {riadky.map(r => (
+              {riadky.map((r, i) => (
                 <tr key={r.id} className="border-t border-slate-800">
+                  <td className="pl-3 pr-1 py-2"><PosunTlacidla index={i} pocet={riadky.length} onPosun={(s) => posun(r.id, s)} /></td>
                   <td className="px-4 py-2"><FotoUpload url={r.obrazok_url} onNahraj={async (subor) => uprav(r.id, { obrazok_url: await nahrajObrazokDoplnku(supabase, subor) })} /></td>
                   <td className="px-4 py-2"><input type="text" value={r.kod} onChange={(e) => uprav(r.id, { kod: e.target.value })} className="w-28 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white font-mono" /></td>
                   <td className="px-4 py-2"><input type="text" value={r.nazov} onChange={(e) => uprav(r.id, { nazov: e.target.value })} className="w-48 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /></td>
@@ -109,7 +139,7 @@ function JednoduchaSekcia({ supabase, tabulka, nazovSekcie, popisSekcie, maMaxMn
                   <td className="px-4 py-2 text-right"><button onClick={() => zmaz(r.id)} className="text-slate-400 hover:text-rose-400 p-1"><Trash2 className="w-4 h-4" /></button></td>
                 </tr>
               ))}
-              {riadky.length === 0 && <tr><td colSpan={7} className="text-center text-slate-500 py-6 text-sm">Zatiaľ žiadne položky.</td></tr>}
+              {riadky.length === 0 && <tr><td colSpan={8} className="text-center text-slate-500 py-6 text-sm">Zatiaľ žiadne položky.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -133,6 +163,8 @@ function StoziareSekcia({ supabase }) {
     setIsLoading(false);
   };
   useEffect(() => { nacitaj(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const posun = (id, smer) => posunPoradie(supabase, 'vlajka_stoziare', riadky, setRiadky, id, smer);
 
   const pridaj = async () => {
     const { data, error } = await supabase.from('vlajka_stoziare').insert({ kod: `stoziar_${Date.now()}`, nazov: 'Nový prút', cena: 0 }).select().single();
@@ -174,9 +206,10 @@ function StoziareSekcia({ supabase }) {
         <p className="text-sm text-slate-500">Načítavam…</p>
       ) : (
         <div className="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-hidden">
-          {riadky.map(r => (
+          {riadky.map((r, i) => (
             <div key={r.id} className="border-b border-slate-800 last:border-b-0">
               <div className="flex items-center gap-2 px-4 py-2.5">
+                <PosunTlacidla index={i} pocet={riadky.length} onPosun={(s) => posun(r.id, s)} />
                 <button onClick={() => rozbal(r.id)} className="text-slate-500 hover:text-white shrink-0">{rozbaleny === r.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
                 <FotoUpload url={r.obrazok_url} onNahraj={async (subor) => uprav(r.id, { obrazok_url: await nahrajObrazokDoplnku(supabase, subor) })} />
                 <input type="text" value={r.kod} onChange={(e) => uprav(r.id, { kod: e.target.value })} className="w-28 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white font-mono" />
@@ -222,6 +255,8 @@ function PodstavceSekcia({ supabase }) {
     setIsLoading(false);
   };
   useEffect(() => { nacitaj(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const posun = (id, smer) => posunPoradie(supabase, 'vlajka_podstavce', riadky, setRiadky, id, smer);
 
   const pridaj = async () => {
     const { data, error } = await supabase.from('vlajka_podstavce').insert({ kod: `podstavec_${Date.now()}`, nazov: 'Nový podstavec' }).select().single();
@@ -277,9 +312,10 @@ function PodstavceSekcia({ supabase }) {
         <p className="text-sm text-slate-500">Načítavam…</p>
       ) : (
         <div className="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-hidden">
-          {riadky.map(r => (
+          {riadky.map((r, i) => (
             <div key={r.id} className="border-b border-slate-800 last:border-b-0">
               <div className="flex items-center gap-2 px-4 py-2.5">
+                <PosunTlacidla index={i} pocet={riadky.length} onPosun={(s) => posun(r.id, s)} />
                 <button onClick={() => rozbal(r.id)} className="text-slate-500 hover:text-white shrink-0">{rozbaleny === r.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
                 <FotoUpload url={r.obrazok_url} onNahraj={async (subor) => uprav(r.id, { obrazok_url: await nahrajObrazokDoplnku(supabase, subor) })} />
                 <input type="text" value={r.kod} onChange={(e) => uprav(r.id, { kod: e.target.value })} className="w-28 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white font-mono" />

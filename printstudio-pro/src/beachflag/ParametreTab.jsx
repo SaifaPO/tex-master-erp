@@ -24,7 +24,7 @@ export default function ParametreTab({ katalog, cenyVolieb, tvarKod, velkostKod,
       <div>
         <label className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-3"><Ruler className="w-4 h-4 text-indigo-600" /> 2. Veľkosť a rozmery</label>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-          {katalog.velkosti.map(v => {
+          {katalog.velkosti.filter(v => { const t = katalog.tvary.find(x => x.kod === tvarKod); return !t?.rozmery || Object.keys(t.rozmery).length === 0 || t.rozmery[v.kod]; }).map(v => {
             const active = v.kod === velkostKod;
             const vybranyTvar = katalog.tvary.find(t => t.kod === tvarKod);
             const vyskaPreTvar = vybranyTvar?.rozmery?.[v.kod]?.vyska_cm ?? v.vyska_cm;
@@ -34,7 +34,7 @@ export default function ParametreTab({ katalog, cenyVolieb, tvarKod, velkostKod,
                   <span className="font-black text-sm">{v.kod}</span>
                 </div>
                 <div className="text-[11px] font-semibold text-slate-700">{vyskaPreTvar} cm od zeme</div>
-                <div className="text-[10px] text-slate-500 mt-0.5">{v.rozmer_popis}</div>
+                <div className="text-[10px] text-slate-500 mt-0.5">{vybranyTvar?.rozmery?.[v.kod]?.rozmer_popis || v.rozmer_popis}</div>
               </button>
             );
           })}

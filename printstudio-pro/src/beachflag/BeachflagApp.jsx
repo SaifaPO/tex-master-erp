@@ -12,6 +12,14 @@ import VelkostnePorovnanie from './VelkostnePorovnanie';
 const BUCKET = 'print-designs';
 const DEFAULT_VIEWBOX = { w: 200, h: 420 };
 
+// Velkost s prepisanym popisom rozmeru a vyskou podla vybraneho tvaru (napr. Square 66 x 220 cm, 270 cm od zeme).
+function velkostPreTvar(katalog, tvarKod, velkostKod) {
+  const v = katalog?.velkosti?.find(x => x.kod === velkostKod);
+  if (!v) return v;
+  const rozmer = katalog.tvary.find(t => t.kod === tvarKod)?.rozmery?.[velkostKod];
+  return { ...v, rozmer_popis: rozmer?.rozmer_popis || v.rozmer_popis, vyska_cm: rozmer?.vyska_cm ?? v.vyska_cm };
+}
+
 function parseViewbox(vb) {
   const parts = (vb || '0 0 200 420').split(/\s+/).map(Number);
   if (parts.length === 4 && parts.every(n => !Number.isNaN(n))) return { w: parts[2], h: parts[3] };
@@ -60,6 +68,15 @@ export default function BeachflagApp({ supabase }) {
   const [canvasVersion, setCanvasVersion] = useState(0); // pretiahne novy render do GrafikaTab, ked sa fabric platno prvykrat vytvori
 
   useEffect(() => { katalogRef.current = katalog; }, [katalog]);
+
+  // Niektore tvary nemaju vsetky velkosti (napr. Square je len S, M, L) — ak zvolena velkost pre tvar neexistuje, prepni na prvu dostupnu.
+  useEffect(() => {
+    if (!katalog || !tvarKod) return;
+    const tvar = katalog.tvary.find(t => t.kod === tvarKod);
+    if (!tvar?.rozmery || tvar.rozmery[velkostKod]) return;
+    const prva = katalog.velkosti.find(v => tvar.rozmery[v.kod]);
+    if (prva) setVelkostKod(prva.kod);
+  }, [katalog, tvarKod, velkostKod]);
 
   // Nahladovy box sa prisposobi realnej sirke/vyske svojho kontajnera (rovnaky vzor ako Zastava/
   // beachflag ma navyse zoom vrstvu - viz efekt nizsie - lebo cut/bleed/safe cesty su ulozene v
@@ -131,15 +148,12 @@ export default function BeachflagApp({ supabase }) {
     const { w, h } = parseViewbox(rozmer.viewbox);
     logicalSizeRef.current = { w, h };
     const velkostRiadok = k.velkosti.find(v => v.kod === velkostKod);
-    const mRozmer = /([\d.,]+)\s*x\s*([\d.,]+)/i.exec(velkostRiadok?.rozmer_popis || '');
-    if (mRozmer) {
-      const sirkaCm = Number(mRozmer[1].replace(',', '.')), vyskaCm = Number(mRozmer[2].replace(',', '.'));
-      mierkaCmRef.current = { x: sirkaCm / w, y: vyskaCm / h };
-      setRozmerVlajkyCm({ sirkaCm, vyskaCm });
-    } else {
-      mierkaCmRef.current = { x: 1, y: 1 };
-      setRozmerVlajkyCm(null);
-    }
+    // Strihy (cut/bleed/safe) su 1:1 v cm, viewbox = vlajka + 5 cm okraj na kazdej strane, takze 1 jednotka
+    // platna = 1 cm. Rozmer z popisu (napr. 66 x 220 cm, moze byt per tvar) sluzi len na zobrazenie.
+    const mRozmer = /([\d.,]+)\s*x\s*([\d.,]+)/i.exec(rozmer.rozmer_popis || velkostRiadok?.rozmer_popis || '');
+    mierkaCmRef.current = { x: 1, y: 1 };
+    if (mRozmer) setRozmerVlajkyCm({ sirkaCm: Number(mRozmer[1].replace(',', '.')), vyskaCm: Number(mRozmer[2].replace(',', '.')) });
+    else setRozmerVlajkyCm(null);
     canvas.mierkaCm = mierkaCmRef.current; // cita LayersPanel na zobrazenie realnych cm
     const autoFit = Math.min(previewBoxSize.w / w, previewBoxSize.h / h);
     const zoom = autoFit * userZoom;
@@ -381,7 +395,7 @@ export default function BeachflagApp({ supabase }) {
           <div className="w-36 sm:w-44 shrink-0 bg-slate-50 rounded-xl border border-slate-200 p-1.5 flex flex-col">
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide text-center mb-1">Porovnanie veľkosti</span>
             <div className="flex-1 min-h-0 flex items-center justify-center">
-              <VelkostnePorovnanie kompaktny rozmer={katalog?.tvary.find(t => t.kod === tvarKod)?.rozmery?.[velkostKod]} velkost={katalog?.velkosti.find(v => v.kod === velkostKod)} velkosti={katalog?.velkosti} bgColor={bgColor} nahladUrl={nahladDizajnu} />
+              <VelkostnePorovnanie kompaktny rozmer={katalog?.tvary.find(t => t.kod === tvarKod)?.rozmery?.[velkostKod]} velkost={velkostPreTvar(katalog, tvarKod, velkostKod)} velkosti={(katalog?.velkosti || []).filter(v => katalog.tvary.find(t => t.kod === tvarKod)?.rozmery?.[v.kod]).map(v => velkostPreTvar(katalog, tvarKod, v.kod))} bgColor={bgColor} nahladUrl={nahladDizajnu} />
             </div>
           </div>
           </div>
