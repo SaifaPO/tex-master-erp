@@ -51,13 +51,13 @@ export default function TextilMetraz({ supabase, onSpat }) {
   const [materialKod, setMaterialKod] = useState(''); // '' = vlastny material zakaznika
   // Uroven sluzby: 'na_vas_material' (len tlac, zakaznik dodava latku) | 'na_nas_material'
   // (predavame aj latku aj tlac) | 'len_papier' (len sublimacny papier s grafikou, bez latky/nazehlenia).
-  const [sluzbaRezim, setSluzbaRezim] = useState('na_vas_material');
+  const [sluzbaRezim, setSluzbaRezim] = useState(URL_PARAMS.get('sluzba') === 'zrazanie' && URL_PARAMS.get('textil') !== 'bavlna' ? 'len_zrazanie' : 'na_vas_material');
 
   // Predvolena technologia a typ objednavky sa daju zvolit odkazom (?textil=sublimacia|bavlna&rezim=farebnica|vzorka) — pouzivaju ho info stranky na webe.
   const [technologia, setTechnologia] = useState(['sublimacia', 'bavlna'].includes(URL_PARAMS.get('textil')) ? URL_PARAMS.get('textil') : 'sublimacia'); // 'sublimacia' | 'bavlna'
   const [typ, setTyp] = useState(['vzorka', 'farebnica'].includes(URL_PARAMS.get('rezim')) ? URL_PARAMS.get('rezim') : 'metraz'); // 'metraz' | 'vzorka' (vzorovy vystrizok vlastnej grafiky) | 'farebnica' (fyzicka farebnica)
   const [manualSirkaCm, setManualSirkaCm] = useState(160); // sirka VLASTNEHO materialu zakaznika (ked nie je vybrata nasa latka)
-  const [mode, setMode] = useState('auto'); // 'auto' (vzor s opakovaním) | 'subor' (hotova rolka)
+  const [mode, setMode] = useState(URL_PARAMS.get('sluzba') === 'zrazanie' && URL_PARAMS.get('textil') !== 'bavlna' ? 'subor' : 'auto'); // 'auto' (vzor s opakovaním) | 'subor' (hotova rolka)
   const [patternRepeat, setPatternRepeat] = useState('grid');
   const [widthCm, setWidthCm] = useState(20);
   const [heightCm, setHeightCm] = useState(20);
