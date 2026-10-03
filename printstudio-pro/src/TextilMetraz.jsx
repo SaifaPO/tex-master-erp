@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Shirt, UploadCloud, Truck, Eye, ShoppingCart, TriangleAlert, CreditCard, Grid3x3, Rows, Shapes } from 'lucide-react';
+import { Shirt, UploadCloud, Truck, Eye, ShoppingCart, TriangleAlert, CreditCard, Grid3x3, Rows, Shapes, Gift, Palette } from 'lucide-react';
 import { priceAt, marginAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 import NumberInput from './NumberInput';
 import AskQuestion from './AskQuestion';
@@ -14,6 +14,10 @@ function priceAtBonus(cost, qty, cfg, bonusBodov) {
 }
 
 const BUCKET = 'print-designs';
+// Pevna cena s DPH (vratane postovneho) — farebnica aj vzorka. MUSI sediet s textil-metraz-create-draft-order.
+const VZORKA_CENA_S_DPH = 5;
+const FAREBNICA_CENA_S_DPH = 5;
+const URL_PARAMS = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
 const ROLL_WIDTH_CM = 160; // nominalna sirka, na ktorej je pocitany naklad_bm procesu (textil_naklady_verejny) — nemeni sa podla objednavky
 // Max dosiahnutelna sirka tlace na stroji podla technologie — bavlna vie tlacit sirsie ako sublimacia.
 const MAX_SIRKA_CM = { sublimacia: 160, bavlna: 180 };
@@ -46,7 +50,9 @@ export default function TextilMetraz({ supabase, onSpat }) {
   // (predavame aj latku aj tlac) | 'len_papier' (len sublimacny papier s grafikou, bez latky/nazehlenia).
   const [sluzbaRezim, setSluzbaRezim] = useState('na_vas_material');
 
-  const [technologia, setTechnologia] = useState('sublimacia'); // 'sublimacia' | 'bavlna'
+  // Predvolena technologia a typ objednavky sa daju zvolit odkazom (?textil=sublimacia|bavlna&rezim=farebnica|vzorka) — pouzivaju ho info stranky na webe.
+  const [technologia, setTechnologia] = useState(['sublimacia', 'bavlna'].includes(URL_PARAMS.get('textil')) ? URL_PARAMS.get('textil') : 'sublimacia'); // 'sublimacia' | 'bavlna'
+  const [typ, setTyp] = useState(['vzorka', 'farebnica'].includes(URL_PARAMS.get('rezim')) ? URL_PARAMS.get('rezim') : 'metraz'); // 'metraz' | 'vzorka' (vzorovy vystrizok vlastnej grafiky) | 'farebnica' (fyzicka farebnica)
   const [manualSirkaCm, setManualSirkaCm] = useState(160); // sirka VLASTNEHO materialu zakaznika (ked nie je vybrata nasa latka)
   const [mode, setMode] = useState('auto'); // 'auto' (vzor s opakovaním) | 'subor' (hotova rolka)
   const [patternRepeat, setPatternRepeat] = useState('grid');
@@ -271,6 +277,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
 
   const odoslatObjednavku = async () => {
     if (!nastavenia) return;
+    if (typ === 'vzorka' && !rawFile) { setSubmitError('Nahrajte súbor s grafikou pre vzorku.'); return; }
     setIsSubmitting(true);
     setSubmitError('');
     setConfirmation('');
@@ -289,7 +296,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
       // poctom kusov cez /cart/add.js), zakaznika presmerujeme rovno na platbu tejto objednavky.
       const { data, error } = await supabase.functions.invoke('textil-metraz-create-draft-order', {
         body: {
-          technologia, mode, lengthBm, directLengthBm, widthCm, heightCm, patternRepeat,
+          technologia, mode: typ === 'metraz' ? mode : typ, lengthBm, directLengthBm, widthCm, heightCm, patternRepeat,
           deliverySpeed, harmonogram: aktualnyHarmonogram,
           suborNazov: rawFile?.name || null, suborCesta,
           sluzbaRezim,
@@ -302,7 +309,9 @@ export default function TextilMetraz({ supabase, onSpat }) {
       if (data?.error) throw new Error(data.error);
       if (!data?.checkoutUrl) throw new Error('Server nevrátil odkaz na platbu.');
 
-      setConfirmation(`Objednávka bola vytvorená — ${totalLengthBm.toFixed(2)} bm, ${Number(data.cenaSpolu).toFixed(2)} €. Presmerúvam na platbu…`);
+      setConfirmation(typ === 'metraz'
+        ? `Objednávka bola vytvorená — ${totalLengthBm.toFixed(2)} bm, ${Number(data.cenaSpolu).toFixed(2)} €. Presmerúvam na platbu…`
+        : `Objednávka bola vytvorená — ${Number(data.cenaSpolu).toFixed(2)} €. Presmerúvam na platbu…`);
       window.location.href = data.checkoutUrl;
     } catch (e) {
       setSubmitError('Objednávku sa nepodarilo odoslať: ' + e.message);
@@ -340,6 +349,55 @@ export default function TextilMetraz({ supabase, onSpat }) {
         </button>
       </div>
 
+      <div className="bg-white p-1.5 rounded-xl border border-slate-200 grid grid-cols-3 gap-1 shadow-sm max-w-3xl">
+        <button type="button" onClick={() => setTyp('metraz')} className={`py-2.5 px-2 rounded-lg text-[11px] sm:text-sm font-semibold transition ${typ === 'metraz' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>Objednať metráž</button>
+        <button type="button" onClick={() => setTyp('vzorka')} className={`py-2.5 px-2 rounded-lg text-[11px] sm:text-sm font-semibold transition flex items-center justify-center gap-1 ${typ === 'vzorka' ? 'bg-emerald-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}><Gift className="w-3.5 h-3.5" /> Objednať vzorku</button>
+        <button type="button" onClick={() => setTyp('farebnica')} className={`py-2.5 px-2 rounded-lg text-[11px] sm:text-sm font-semibold transition flex items-center justify-center gap-1 ${typ === 'farebnica' ? 'bg-emerald-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}><Palette className="w-3.5 h-3.5" /> Objednať farebnicu</button>
+      </div>
+
+      {typ === 'farebnica' ? (
+        <div className="max-w-xl bg-white p-5 sm:p-6 rounded-2xl border border-emerald-200 shadow-sm space-y-4">
+          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Palette className="w-4 h-4 text-emerald-600" /> Farebnica — {technologia === 'sublimacia' ? 'sublimácia' : 'digitálna potlač bavlny'}</h3>
+          <p className="text-sm text-slate-600">Nie ste si istí, aké farby a odtiene vieme reálne vytlačiť? Pošleme vám fyzickú farebnicu vytlačenú na našej tlačiarni touto technológiou, aby ste si vybrali presne podľa skutočnej tlače.</p>
+          <ul className="text-xs text-slate-500 list-disc pl-4 space-y-1">
+            <li>Cena zahŕňa aj poštovné</li>
+            <li>Cena je s DPH {pricingConfig.dphPercent}%</li>
+          </ul>
+          <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+            <span className="text-xs text-slate-500">Cena farebnice s DPH</span>
+            <span className="text-2xl font-extrabold font-mono text-slate-900">{FAREBNICA_CENA_S_DPH.toFixed(2).replace('.', ',')} €</span>
+          </div>
+          <button onClick={odoslatObjednavku} disabled={isSubmitting} className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white font-bold text-sm flex items-center justify-center gap-2 transition">
+            <ShoppingCart className="w-4 h-4" /> {isSubmitting ? 'Vytváram objednávku…' : 'Objednať farebnicu a zaplatiť'}
+          </button>
+          {confirmation && <p className="text-xs text-emerald-600">{confirmation}</p>}
+          {submitError && <p className="text-xs text-rose-600">{submitError}</p>}
+        </div>
+      ) : typ === 'vzorka' ? (
+        <div className="max-w-xl bg-white p-5 sm:p-6 rounded-2xl border border-emerald-200 shadow-sm space-y-4">
+          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Gift className="w-4 h-4 text-emerald-600" /> Vzorka vlastnej grafiky — {technologia === 'sublimacia' ? 'sublimácia' : 'digitálna potlač bavlny'}</h3>
+          <p className="text-sm text-slate-600">Nie ste si istí kvalitou? Nahrajte svoju grafiku, vytlačíme ju touto technológiou na malý vzorový výstrižok a pošleme vám ho ešte pred väčšou objednávkou.</p>
+          <label className="border-2 border-dashed border-slate-200 hover:border-emerald-400 rounded-xl p-6 flex flex-col items-center gap-2 cursor-pointer transition bg-slate-50/50">
+            <UploadCloud className="w-7 h-7 text-emerald-500" />
+            <span className="text-xs text-slate-600 font-medium">{rawFile ? `Nahraté: ${rawFile.name}` : 'Kliknite pre výber (PNG / TIFF / PDF, 150-300 DPI)'}</span>
+            <input type="file" accept="image/png,image/tiff,image/jpeg,application/pdf" onChange={handleRollUpload} className="hidden" />
+          </label>
+          <ul className="text-xs text-slate-500 list-disc pl-4 space-y-1">
+            <li>Cena zahŕňa aj poštovné</li>
+            <li>Cena je s DPH {pricingConfig.dphPercent}%</li>
+          </ul>
+          <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+            <span className="text-xs text-slate-500">Cena vzorky s DPH</span>
+            <span className="text-2xl font-extrabold font-mono text-slate-900">{VZORKA_CENA_S_DPH.toFixed(2).replace('.', ',')} €</span>
+          </div>
+          <button onClick={odoslatObjednavku} disabled={isSubmitting} className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white font-bold text-sm flex items-center justify-center gap-2 transition">
+            <ShoppingCart className="w-4 h-4" /> {isSubmitting ? 'Vytváram objednávku…' : 'Objednať vzorku a zaplatiť'}
+          </button>
+          {confirmation && <p className="text-xs text-emerald-600">{confirmation}</p>}
+          {submitError && <p className="text-xs text-rose-600">{submitError}</p>}
+        </div>
+      ) : (
+      <>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Ľavý stĺpec */}
         <div className="lg:col-span-7 space-y-6">
@@ -575,6 +633,8 @@ export default function TextilMetraz({ supabase, onSpat }) {
           </table>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }

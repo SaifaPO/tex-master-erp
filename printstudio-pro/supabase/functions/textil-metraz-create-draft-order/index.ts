@@ -120,7 +120,80 @@ Deno.serve(async (req) => {
     } = body;
 
     if (technologia !== 'sublimacia' && technologia !== 'bavlna') throw new Error('Neplatná technológia.');
-    if (mode !== 'auto' && mode !== 'subor') throw new Error('Neplatný režim objednávky.');
+    if (mode !== 'auto' && mode !== 'subor' && mode !== 'vzorka' && mode !== 'farebnica') throw new Error('Neplatný režim objednávky.');
+
+    // Vzorka (vzorovy vystrizok vlastnej grafiky) a farebnica (fyzicka farebnica) maju pevnu cenu 5 EUR
+    // s DPH vratane postovneho — nepocitaju sa podla bm ako zvysok appky. Rovnaka cena ako v
+    // TextilMetraz.jsx (VZORKA_CENA_S_DPH / FAREBNICA_CENA_S_DPH) a v dtf-metraz-create-draft-order.
+    if (mode === 'vzorka' || mode === 'farebnica') {
+      if (mode === 'vzorka' && !suborCesta) throw new Error('Pre vzorku je potrebné nahrať súbor s grafikou.');
+      const cenaSpolu = 5;
+      const technikaLabelS = technologia === 'sublimacia' ? 'Sublimačná potlač' : 'Digitálna potlač bavlny';
+      const objednavkaIdS = crypto.randomUUID();
+      const cisloS = await ziskajCisloObjednavky(supabase, 'TXT');
+
+      let suborUrlS: string | null = null;
+      if (suborCesta) {
+        const { data: signed } = await supabase.storage.from('print-designs').createSignedUrl(suborCesta, 60 * 60 * 24 * 365);
+        suborUrlS = signed?.signedUrl || null;
+      }
+
+      const { error: insertErrS } = await supabase.from('textil_objednavky').insert({
+        id: objednavkaIdS,
+        cislo_objednavky: cisloS,
+        technologia,
+        rezim: mode,
+        dlzka_bm: 0,
+        cena_hladina: mode === 'vzorka' ? 'Vzorka — pevná cena' : 'Farebnica — pevná cena',
+        cena_spolu: cenaSpolu,
+        doprava_rychlost: 'standard',
+        harmonogram: mode === 'vzorka' ? 'Vzorka' : 'Farebnica',
+        subor_nazov: suborNazov,
+        subor_cesta: suborCesta,
+        subor_url: suborUrlS,
+        osobny_odber: false,
+      });
+      if (insertErrS) throw insertErrS;
+
+      const domainS = Deno.env.get('SHOPIFY_STORE_DOMAIN');
+      const clientIdS = Deno.env.get('SHOPIFY_CLIENT_ID');
+      const clientSecretS = Deno.env.get('SHOPIFY_CLIENT_SECRET');
+      if (!domainS || !clientIdS || !clientSecretS) throw new Error('SHOPIFY_STORE_DOMAIN, SHOPIFY_CLIENT_ID alebo SHOPIFY_CLIENT_SECRET nie je nastavený v Supabase secrets.');
+      const tokenS = await ziskajAdminToken(domainS, clientIdS, clientSecretS);
+
+      const resS = await fetch(`https://${domainS}/admin/api/2025-01/draft_orders.json`, {
+        method: 'POST',
+        headers: { 'X-Shopify-Access-Token': tokenS, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          draft_order: {
+            line_items: [
+              {
+                title: mode === 'vzorka' ? `${technikaLabelS} — vzorka vlastnej grafiky` : `${technikaLabelS} — farebnica`,
+                price: cenaSpolu.toFixed(2),
+                quantity: 1,
+                taxable: false, // cena uz zahrna DPH aj postovne
+                requires_shipping: true,
+                properties: [
+                  { name: '_cislo_objednavky', value: cisloS },
+                  { name: '_objednavka_id', value: objednavkaIdS },
+                  { name: '_technologia', value: technikaLabelS },
+                  { name: '_typ', value: mode === 'vzorka' ? 'Vzorka vlastnej grafiky' : 'Farebnica' },
+                  { name: '_subor', value: suborNazov || '' },
+                  { name: '_subor_link', value: suborUrlS || '' },
+                ],
+              },
+            ],
+            note: `${cisloS} (Textilná metráž — ${mode === 'vzorka' ? 'vzorka' : 'farebnica'})` + (suborUrlS ? `\nSúbor na tlač: ${suborUrlS}` : ''),
+            tags: 'textil-metraz',
+            use_customer_default_address: true,
+          },
+        }),
+      });
+      if (!resS.ok) throw new Error(`Shopify Admin API chyba ${resS.status}: ${await resS.text()}`);
+      const dataS = await resS.json();
+      if (!dataS?.draft_order?.invoice_url) throw new Error('Shopify nevrátil odkaz na platbu draft objednávky.');
+      return odpoved({ checkoutUrl: dataS.draft_order.invoice_url, cenaSpolu, objednavkaId: objednavkaIdS, cisloObjednavky: cisloS });
+    }
     if (!['na_vas_material', 'na_nas_material', 'len_papier'].includes(sluzbaRezim)) throw new Error('Neplatný režim služby.');
     if (sluzbaRezim === 'len_papier' && technologia !== 'sublimacia') throw new Error('"Len sublimačný papier" je dostupné len pre sublimačnú technológiu.');
 

@@ -267,7 +267,7 @@ export default function TextilMetrazTab({ supabase }) {
                     <span className={`px-2 py-0.5 rounded text-[10px] border ${o.technologia === 'sublimacia' ? 'bg-teal-500/20 text-teal-300 border-teal-500/30' : 'bg-amber-500/20 text-amber-300 border-amber-500/30'}`}>
                       {o.technologia === 'sublimacia' ? 'Sublimácia' : 'Digitálna bavlna'}
                     </span>
-                    <span className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded text-[10px]">{o.rezim === 'auto' ? `${o.sirka_cm}×${o.vyska_cm}cm` : 'Hotová rolka'}</span>
+                    <span className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded text-[10px]">{o.rezim === 'auto' ? `${o.sirka_cm}×${o.vyska_cm}cm` : o.rezim === 'vzorka' ? 'Vzorka' : o.rezim === 'farebnica' ? 'Farebnica' : 'Hotová rolka'}</span>
                     {o.subor_url && (
                       <a href={o.subor_url} target="_blank" rel="noopener noreferrer" className="px-2 py-0.5 rounded text-[10px] border bg-teal-500/20 text-teal-300 border-teal-500/30 hover:bg-teal-500/30">⬇ {o.subor_nazov || 'Súbor na tlač'}</a>
                     )}
