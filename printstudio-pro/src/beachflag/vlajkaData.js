@@ -10,6 +10,7 @@ export async function nacitajVlajkaKatalog(supabase) {
     { data: podstavce },
     { data: pantone },
     { data: nastaveniaRow },
+    { data: stoziareTvary },
   ] = await Promise.all([
     supabase.from('vlajka_tvary').select('*, vlajka_tvar_rozmery(*)').eq('aktivny', true).order('poradie').order('id'),
     // Verejný pohľad (bez naklad_m2) — surová cena materiálu ide len cez beachflag-price-preview.
@@ -21,6 +22,8 @@ export async function nacitajVlajkaKatalog(supabase) {
     supabase.from('vlajka_podstavce').select('id, kod, nazov, popis, obrazok_url, poradie, aktivny, vlajka_podstavce_ceny(velkost, vhodny, poznamka)').eq('aktivny', true).order('poradie').order('id'),
     supabase.from('vlajka_pantone').select('*').order('poradie').order('id'),
     supabase.from('vlajka_nastavenia').select('*').eq('id', 1).maybeSingle(),
+    // Ktore tvary pouzivaju dany prut (ak prut nema ziadny riadok = je dostupny pre vsetky tvary). Chyba/ chybajuca tabulka = bez obmedzenia.
+    supabase.from('vlajka_stoziare_tvary').select('stoziar_id, tvar_id'),
   ]);
 
   return {
@@ -31,7 +34,10 @@ export async function nacitajVlajkaKatalog(supabase) {
     materialy: materialy || [],
     velkosti: velkosti || [],
     dokoncenie: dokoncenie || [],
-    stoziare: stoziare || [],
+    stoziare: (stoziare || []).map(st => ({
+      ...st,
+      tvarIds: (stoziareTvary || []).filter(x => x.stoziar_id === st.id).map(x => x.tvar_id),
+    })),
     doplnky: doplnky || [],
     podstavce: (podstavce || []).map(p => ({
       ...p,

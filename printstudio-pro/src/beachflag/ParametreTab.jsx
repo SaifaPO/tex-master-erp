@@ -85,7 +85,7 @@ export default function ParametreTab({ katalog, cenyVolieb, tvarKod, velkostKod,
       <div>
         <label className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-3"><GripVertical className="w-4 h-4 text-indigo-600" /> 5. Konštrukcia / prút</label>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {katalog.stoziare.map(s => {
+          {katalog.stoziare.filter(s => !s.tvarIds?.length || s.tvarIds.includes(katalog.tvary.find(t => t.kod === tvarKod)?.id)).map(s => {
             const active = s.kod === stoziarKod;
             return (
               <div key={s.kod} onClick={() => onStoziar(s.kod)} className={`p-3 rounded-xl border cursor-pointer transition-all ${active ? 'border-indigo-600 bg-indigo-50/80 ring-2 ring-indigo-500 text-indigo-900 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'}`}>

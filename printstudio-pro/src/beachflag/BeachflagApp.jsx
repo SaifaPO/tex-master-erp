@@ -69,6 +69,14 @@ export default function BeachflagApp({ supabase }) {
 
   useEffect(() => { katalogRef.current = katalog; }, [katalog]);
 
+  // Niektore prúty su len pre urcite tvary (napr. Square) — ak zvoleny prut pre tvar nie je dostupny, prepni na prvy dostupny.
+  useEffect(() => {
+    if (!katalog || !tvarKod || !stoziarKod) return;
+    const tvar = katalog.tvary.find(t => t.kod === tvarKod);
+    const dostupne = katalog.stoziare.filter(st => !st.tvarIds?.length || st.tvarIds.includes(tvar?.id));
+    if (dostupne.length > 0 && !dostupne.some(st => st.kod === stoziarKod)) setStoziarKod(dostupne[0].kod);
+  }, [katalog, tvarKod, stoziarKod]);
+
   // Niektore tvary nemaju vsetky velkosti (napr. Square je len S, M, L) — ak zvolena velkost pre tvar neexistuje, prepni na prvu dostupnu.
   useEffect(() => {
     if (!katalog || !tvarKod) return;

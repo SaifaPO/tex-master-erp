@@ -155,12 +155,32 @@ function StoziareSekcia({ supabase }) {
   const [rozbaleny, setRozbaleny] = useState(null);
   const [ceny, setCeny] = useState({}); // { [velkost]: cena }
   const [ukladam, setUkladam] = useState(false);
+  const [tvary, setTvary] = useState([]);
+  const [povoleneTvary, setPovoleneTvary] = useState({}); // { [stoziarId]: [tvarId] } — prazdne = dostupne pre vsetky tvary
 
   const nacitaj = async () => {
     setIsLoading(true);
-    const { data } = await supabase.from('vlajka_stoziare').select('*').order('poradie').order('id');
+    const [{ data }, { data: t }, { data: pt }] = await Promise.all([
+      supabase.from('vlajka_stoziare').select('*').order('poradie').order('id'),
+      supabase.from('vlajka_tvary').select('id, nazov').order('poradie').order('id'),
+      supabase.from('vlajka_stoziare_tvary').select('stoziar_id, tvar_id'),
+    ]);
     setRiadky(data || []);
+    setTvary(t || []);
+    const map = {};
+    (pt || []).forEach(x => { (map[x.stoziar_id] = map[x.stoziar_id] || []).push(x.tvar_id); });
+    setPovoleneTvary(map);
     setIsLoading(false);
+  };
+  // Zaskrtnute tvary = kde sa prut ponuka. Vsetky zaskrtnute (alebo ziadny riadok) = ponuka sa pri vsetkych tvaroch.
+  const prepniTvar = async (stoziarId, tvarId) => {
+    const aktualne = povoleneTvary[stoziarId]?.length ? povoleneTvary[stoziarId] : tvary.map(t => t.id);
+    let nove = aktualne.includes(tvarId) ? aktualne.filter(x => x !== tvarId) : [...aktualne, tvarId];
+    if (nove.length === 0) return; // aspon jeden tvar musi ostat zaskrtnuty
+    const vsetky = nove.length === tvary.length;
+    setPovoleneTvary(m => ({ ...m, [stoziarId]: vsetky ? [] : nove }));
+    await supabase.from('vlajka_stoziare_tvary').delete().eq('stoziar_id', stoziarId);
+    if (!vsetky) await supabase.from('vlajka_stoziare_tvary').insert(nove.map(tid => ({ stoziar_id: stoziarId, tvar_id: tid })));
   };
   useEffect(() => { nacitaj(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -219,6 +239,19 @@ function StoziareSekcia({ supabase }) {
               </div>
               {rozbaleny === r.id && (
                 <div className="px-4 pb-3 bg-slate-950/60">
+                  <div className="mb-3">
+                    <span className="text-[10px] text-slate-500 block mb-1">Ponúka sa pri tvaroch (všetky zaškrtnuté = pri všetkých)</span>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1">
+                      {tvary.map(t => {
+                        const povolene = povoleneTvary[r.id]?.length ? povoleneTvary[r.id] : tvary.map(x => x.id);
+                        return (
+                          <label key={t.id} className="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer">
+                            <input type="checkbox" checked={povolene.includes(t.id)} onChange={() => prepniTvar(r.id, t.id)} className="rounded bg-slate-950 border-slate-700" /> {t.nazov}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
                     {VELKOSTI.map(v => (
                       <div key={v}>
