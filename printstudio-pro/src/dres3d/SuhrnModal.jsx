@@ -3,7 +3,7 @@ import { X, Download } from 'lucide-react';
 
 const BUCKET = 'print-designs';
 
-export default function SuhrnModal({ supabase, produkt, configState, roster, materialy, cena, osobnyOdber, onOsobnyOdber, snapshotUrl, onClose, onBackToEdit }) {
+export default function SuhrnModal({ supabase, produkt, configState, roster, materialy, cena, b2bKod, osobnyOdber, onOsobnyOdber, snapshotUrl, onClose, onBackToEdit }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [techPanel, setTechPanel] = useState('');
@@ -55,6 +55,7 @@ export default function SuhrnModal({ supabase, produkt, configState, roster, mat
         roster: roster.map(h => ({ meno: h.meno, cislo: h.cislo, velkost: h.velkost })),
         osobnyOdber,
         nahladUrl,
+        b2bKod,
       };
 
       const { data, error } = await supabase.functions.invoke('dres-create-draft-order', { body: payload });
@@ -108,6 +109,12 @@ export default function SuhrnModal({ supabase, produkt, configState, roster, mat
                 <span className="text-slate-400">Počet kusov:</span>
                 <span className="font-bold text-indigo-400">{cena.pocet} ks</span>
               </div>
+              {cena.b2bZlavaPercent > 0 && (
+                <div className="flex justify-between py-1 border-b border-slate-800">
+                  <span className="text-slate-400">B2B zľava:</span>
+                  <span className="font-bold text-emerald-400">{cena.b2bZlavaPercent} % (už v cene)</span>
+                </div>
+              )}
               <div className="flex justify-between py-1 border-b border-slate-800">
                 <span className="text-slate-400">Doprava:</span>
                 <span className="font-bold text-white">{cena.doprava === 0 ? 'Zdarma' : `${cena.doprava.toFixed(2)} €`}</span>

@@ -34,6 +34,7 @@ export default function RozpisCeny({ cena, pocetKs, osobnyOdber, kompaktny = fal
       ) : (
         <div className="flex justify-between"><span>Vlajky ({pocetKs}× materiál + opracovanie)</span><span className="font-semibold">{Number(cena.vlajkySpolu ?? cena.zaklad * pocetKs).toFixed(2)} €</span></div>
       )}
+      {cena.b2bZlavaEur > 0 && <div className="flex justify-between text-emerald-700 font-semibold"><span>B2B zľava {Number(cena.b2bZlavaPercent)} %</span><span>−{Number(cena.b2bZlavaEur).toFixed(2)} €</span></div>}
       {cena.expresnyPriplatok > 0 && <div className="flex justify-between text-amber-700 font-semibold"><span>Expresný príplatok</span><span>{cena.expresnyPriplatok.toFixed(2)} €</span></div>}
       <div className="flex justify-between"><span>Doprava</span><span className="font-semibold">{!cena.doprava ? 'Zdarma' : `${Number(cena.doprava).toFixed(2)} €`}</span></div>
       {cena.postovneZdarmaOd > 0 && !osobnyOdber && (cena.doDopravyZdarma > 0

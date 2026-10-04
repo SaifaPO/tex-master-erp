@@ -3,6 +3,8 @@ import { Shirt, UploadCloud, Truck, Eye, ShoppingCart, TriangleAlert, CreditCard
 import { priceAt, marginAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 import NumberInput from './NumberInput';
 import AskQuestion from './AskQuestion';
+import { useB2bKod } from './b2b';
+import B2bKod from './B2bKod';
 
 // Bonusove percentualne body navyse k zakladnej marzi z Cenotvorby — pouzite pre urovne sluzby,
 // kde nepredavame latku ani nazehlenie (tenky obrat musi mat vyssiu maržu, inak sa neoplati).
@@ -66,6 +68,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
   const [deliverySpeed, setDeliverySpeed] = useState('standard');
   const [scheduleOption, setScheduleOption] = useState(null);
   const [osobnyOdber, setOsobnyOdber] = useState(false);
+  const b2b = useB2bKod(supabase);
 
   const [rawFile, setRawFile] = useState(null);
   const [patternImage, setPatternImage] = useState(null);
@@ -97,6 +100,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
   }, [supabase]);
 
   // ---- Výpočet ceny a metráže ----
+  let b2bZlavaEur = 0;
   let totalLengthBm = 0, totalM2 = 0, baseRate = 0, fabricRate = 0, fabricSubtotal = 0, subtotal = 0, expressFee = 0, shippingFee = 0, grandTotalBezDph = 0, dphSuma = 0, grandTotal = 0, capacityIssue = null;
   // Expres = "v deň objednávky" — po tomto čase to už tlačiareň fyzicky nestihne, preto sa ponuka vypne.
   const expresCutoffHodina = nastavenia ? Number(nastavenia.expres_cutoff_hodina ?? 24) : 24;
@@ -153,6 +157,9 @@ export default function TextilMetraz({ supabase, onSpat }) {
       fabricSubtotal = totalLengthBm * fabricRate;
     }
     subtotal = Math.max(totalLengthBm * baseRate + fabricSubtotal, Number(nastavenia.minimalna_cena_objednavky));
+    // B2B zľava (kód agentúry) sa odpočíta z ceny metráže — rovnako ako na serveri.
+    b2bZlavaEur = Math.round(subtotal * (Number(b2b.zlavaPercent) || 0)) / 100;
+    subtotal -= b2bZlavaEur;
     // Príplatok expres je vždy aspoň minimálna suma — berie sa vyššia z dvoch hodnôt.
     expressFee = deliverySpeed === 'express' && !expresUzNedostupny ? Math.max(Number(nastavenia.priplatok_expres_min_eur) || 0, subtotal * (Number(nastavenia.priplatok_expres_percent) / 100)) : 0;
     // Osobný odber = žiadne poštovné; inak zdarma od nastaveného množstva (bm).
@@ -324,6 +331,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
           materialKod: sluzbaRezim === 'na_nas_material' ? (materialKod || null) : null,
           manualSirkaCm, // pouzije sa len pri "na_vas_material" — inak si sirku server zisti/urci sam
           osobnyOdber,
+          b2bKod: b2b.kod,
         },
       });
       if (error) throw error;
@@ -350,6 +358,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
       <AskQuestion zdroj="Textilná metráž" />
+      <B2bKod b2b={b2b} />
       <div className="bg-gradient-to-r from-slate-50 to-white p-5 sm:p-6 rounded-2xl border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2"><Shirt className="text-teal-600 w-6 h-6" /> Textilná metráž a sublimačný papier — sublimácia & digitálna bavlna</h1>
@@ -626,6 +635,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
               {vybranyMaterial && <Row label={`Látka: ${vybranyMaterial.nazov} (bez DPH)`} value={`${fabricRate.toFixed(2)} €/bm`} />}
               <Row label="Objednaná dĺžka metráže" value={`${totalLengthBm.toFixed(2)} bm`} highlight />
               <Row label={jeZrazanie ? 'Plocha materiálu' : 'Tlačová plocha'} value={`${totalM2.toFixed(2)} m²`} />
+              {b2bZlavaEur > 0 && <Row label={`B2B zľava ${Number(b2b.zlavaPercent)} %`} value={`−${b2bZlavaEur.toFixed(2)} €`} />}
               <Row label="Príplatok za expres" value={`${expressFee.toFixed(2)} €`} />
               <Row label="Doprava (DPD kuriér)" value={shippingFee === 0 ? 'Zdarma' : `${shippingFee.toFixed(2)} €`} />
               <Row label="Harmonogram dodania" value={aktualnyHarmonogram} small />

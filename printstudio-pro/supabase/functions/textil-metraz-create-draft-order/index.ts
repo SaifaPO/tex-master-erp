@@ -102,6 +102,14 @@ async function ziskajAdminToken(domain: string, clientId: string, clientSecret: 
   return data.access_token as string;
 }
 
+// B2B zlava (reklamne agentury): kod sa overuje na serveri v tabulke b2b_kody (servisny kluc). Neplatny / vypnuty kod = 0 %.
+async function b2bZlava(supabase: ReturnType<typeof createClient>, kod: unknown) {
+  const k = String(kod || '').trim().toUpperCase();
+  if (!k) return 0;
+  const { data } = await supabase.from('b2b_kody').select('zlava_percent').eq('kod', k).eq('aktivny', true).maybeSingle();
+  return Math.min(Math.max(Number(data?.zlava_percent) || 0, 0), 90);
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -118,7 +126,7 @@ Deno.serve(async (req) => {
       suborNazov = null, suborCesta = null,
       materialKod = null, manualSirkaCm = null,
       sluzbaRezim = 'na_vas_material',
-      osobnyOdber = false,
+      osobnyOdber = false, b2bKod = null,
     } = body;
 
     if (technologia !== 'sublimacia' && technologia !== 'bavlna') throw new Error('Neplatná technológia.');
@@ -255,7 +263,10 @@ Deno.serve(async (req) => {
     }
     const totalM2 = totalLengthBm * (printWidthCm / 100);
 
-    const subtotal = Math.max(totalLengthBm * baseRate + fabricSubtotal, Number(nastavenia.minimalna_cena_objednavky) || 0);
+    const subtotalPredZlavou = Math.max(totalLengthBm * baseRate + fabricSubtotal, Number(nastavenia.minimalna_cena_objednavky) || 0);
+    // B2B zlava sa odpocita z ceny metraze (pred expresom, dopravou a DPH)
+    const b2bZlavaPercent = await b2bZlava(supabase, b2bKod);
+    const subtotal = subtotalPredZlavou - Math.round(subtotalPredZlavou * b2bZlavaPercent) / 100;
     // Príplatok expres je vzdy aspon minimalna suma — rovnaky vzorec ako v TextilMetraz.jsx.
     const expressFee = deliverySpeed === 'express' ? Math.max(Number(nastavenia.priplatok_expres_min_eur) || 0, subtotal * ((Number(nastavenia.priplatok_expres_percent) || 0) / 100)) : 0;
     // Osobny odber = ziadne postovne; inak zdarma od nastaveneho mnozstva (bm).
@@ -336,6 +347,8 @@ Deno.serve(async (req) => {
               { name: '_subor_link', value: suborUrl || '' },
               { name: '_material', value: vybranyMaterial?.nazov || '' },
               { name: '_osobny_odber', value: osobnyOdber ? 'áno' : 'nie' },
+              { name: '_b2b_kod', value: b2bZlavaPercent > 0 ? String(b2bKod).trim().toUpperCase() : '' },
+              { name: '_b2b_zlava_percent', value: b2bZlavaPercent > 0 ? String(b2bZlavaPercent) : '' },
             ],
           },
         ],

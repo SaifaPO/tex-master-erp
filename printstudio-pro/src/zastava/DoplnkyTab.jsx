@@ -185,6 +185,7 @@ export default function DoplnkyTab({
           <>
             <div className="flex justify-between"><span>Cena za kus</span><span className="font-semibold">{cena.cenaKus.toFixed(2)} €</span></div>
             <div className="flex justify-between"><span>Medzisúčet ({pocetKs} ks)</span><span className="font-semibold">{cena.subtotal.toFixed(2)} €</span></div>
+            {cena.b2bZlavaEur > 0 && <div className="flex justify-between text-emerald-700 font-semibold"><span>B2B zľava {Number(cena.b2bZlavaPercent)} %</span><span>−{Number(cena.b2bZlavaEur).toFixed(2)} €</span></div>}
             {cena.expresnyPriplatok > 0 && <div className="flex justify-between text-amber-700 font-semibold"><span>Expresný príplatok</span><span>{cena.expresnyPriplatok.toFixed(2)} €</span></div>}
             <div className="flex justify-between"><span>Doprava</span><span className="font-semibold">{!cena.doprava ? 'Zdarma' : `${Number(cena.doprava).toFixed(2)} €`}</span></div>
             <div className="flex justify-between pt-1 border-t border-slate-200"><span>Spolu bez DPH</span><span className="font-semibold">{cena.cenaBezDph.toFixed(2)} €</span></div>

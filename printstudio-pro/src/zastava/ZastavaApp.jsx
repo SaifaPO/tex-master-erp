@@ -8,6 +8,8 @@ import RozmeryTab from './RozmeryTab';
 import GrafikaTab from '../beachflag/GrafikaTab';
 import StatnaVlajkaPicker from './StatnaVlajkaPicker';
 import DoplnkyTab from './DoplnkyTab';
+import { useB2bKod } from '../b2b';
+import B2bKod from '../B2bKod';
 
 const BUCKET = 'print-designs';
 const PREVIEW_MAX_PX_DEFAULT = 480;
@@ -43,6 +45,7 @@ export default function ZastavaApp({ supabase }) {
   const [strapceFarba, setStrapceFarba] = useState('biela');
   const [expresne, setExpresne] = useState(false);
   const [pocetKs, setPocetKs] = useState(1);
+  const b2b = useB2bKod(supabase);
   const [osobnyOdber, setOsobnyOdber] = useState(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -319,7 +322,7 @@ export default function ZastavaApp({ supabase }) {
     setCenaChyba('');
     const t = setTimeout(async () => {
       const { data, error } = await supabase.functions.invoke('zastava-price-preview', {
-        body: { materialKod, sirkaCm, vyskaCm, vyhotovenie, tunely, ocka, karabinky, popruhy, strapce, pocetKs, expresne, osobnyOdber },
+        body: { materialKod, sirkaCm, vyskaCm, vyhotovenie, tunely, ocka, karabinky, popruhy, strapce, pocetKs, expresne, osobnyOdber, b2bKod: b2b.kod },
       });
       setCenaNacitava(false);
       if (error) { setCenaChyba(error.message); return; }
@@ -327,7 +330,7 @@ export default function ZastavaApp({ supabase }) {
       setCena(data.cena);
     }, 400);
     return () => clearTimeout(t);
-  }, [supabase, materialKod, sirkaCm, vyskaCm, vyhotovenie, tunely, ocka, karabinky, popruhy, strapce, pocetKs, expresne, osobnyOdber]);
+  }, [supabase, materialKod, sirkaCm, vyskaCm, vyhotovenie, tunely, ocka, karabinky, popruhy, strapce, pocetKs, expresne, osobnyOdber, b2b.kod]);
 
   if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500 text-sm">Načítavam…</div>;
   if (loadError) return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-rose-600 text-sm px-4 text-center">{loadError}</div>;
@@ -351,7 +354,7 @@ export default function ZastavaApp({ supabase }) {
         tunely, ocka, karabinky, popruhy, strapce, strapceFarba: strapce.length > 0 ? strapceFarba : null,
         statnaVlajka: statnaVlajka?.nazov || null,
         farbaHex: bgColor, farbaPoznamka: pantoneNote, textNaVlajke: customText,
-        expresne, pocetKs, osobnyOdber,
+        expresne, pocetKs, osobnyOdber, b2bKod: b2b.kod,
         nahladUrl: publicUrlData?.publicUrl || null,
       };
 
@@ -383,6 +386,7 @@ export default function ZastavaApp({ supabase }) {
             </button>
           ))}
         </div>
+        <div className="px-4 pt-3"><B2bKod b2b={b2b} /></div>
 
         {krok === 'rozmery' && (
           <RozmeryTab

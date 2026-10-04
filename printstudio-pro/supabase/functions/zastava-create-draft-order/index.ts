@@ -47,6 +47,14 @@ function priceAt(cost: number, qty: number, cfg: PricingConfig) {
   return Math.round(cost * (1 + marginAt(cost, qty, cfg) / 100) * 100) / 100;
 }
 
+// B2B zlava (reklamne agentury): kod sa overuje na serveri v tabulke b2b_kody (servisny kluc). Neplatny / vypnuty kod = 0 %.
+async function b2bZlava(supabase: ReturnType<typeof createClient>, kod: unknown) {
+  const k = String(kod || '').trim().toUpperCase();
+  if (!k) return 0;
+  const { data } = await supabase.from('b2b_kody').select('zlava_percent').eq('kod', k).eq('aktivny', true).maybeSingle();
+  return Math.min(Math.max(Number(data?.zlava_percent) || 0, 0), 90);
+}
+
 function vypocitajHardwareRozmery(
   sirkaCm: number, vyskaCm: number,
   tunely: { side: string }[], ocka: { side: string; count: number }[],
@@ -79,7 +87,7 @@ Deno.serve(async (req) => {
       designId, materialKod, sirkaCm, vyskaCm, vyhotovenie,
       tunely = [], ocka = [], karabinky = [], popruhy = {}, strapce = [], strapceFarba = null,
       statnaVlajka, farbaHex, farbaPoznamka, textNaVlajke,
-      expresne = false, pocetKs = 1, osobnyOdber = false, nahladUrl,
+      expresne = false, pocetKs = 1, osobnyOdber = false, nahladUrl, b2bKod = null,
     } = body;
 
     if (!materialKod || !sirkaCm || !vyskaCm) throw new Error('Chýba materiál alebo rozmery vlajky.');
@@ -117,7 +125,9 @@ Deno.serve(async (req) => {
     const ks = Math.max(1, Math.round(Number(pocetKs)) || 1);
     const cenaKus = priceAt(nakladKus, ks, pricingConfig);
 
-    const subtotal = cenaKus * ks;
+    const subtotalPredZlavou = cenaKus * ks;
+    const b2bZlavaPercent = await b2bZlava(supabase, b2bKod);
+    const subtotal = subtotalPredZlavou - Math.round(subtotalPredZlavou * b2bZlavaPercent) / 100;
     const expresnyPriplatok = expresne ? subtotal * (Number(naklady.expresny_priplatok_percent) / 100) : 0;
     const doprava = osobnyOdber ? 0 : (Number(naklady.cena_doprava) || 0);
     const cenaBezDph = subtotal + expresnyPriplatok + doprava;
@@ -149,6 +159,8 @@ Deno.serve(async (req) => {
       _doprava: doprava.toFixed(2),
       _osobny_odber: osobnyOdber ? 'áno' : 'nie',
       _nahlad_url: nahladUrl || '',
+      _b2b_kod: b2bZlavaPercent > 0 ? String(b2bKod).trim().toUpperCase() : '',
+      _b2b_zlava_percent: b2bZlavaPercent > 0 ? String(b2bZlavaPercent) : '',
     };
 
     const draftPayload = {

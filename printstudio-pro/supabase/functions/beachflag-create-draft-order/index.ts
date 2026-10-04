@@ -16,6 +16,14 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// B2B zlava (reklamne agentury): kod sa overuje na serveri v tabulke b2b_kody (servisny kluc). Neplatny / vypnuty kod = 0 %.
+async function b2bZlava(supabase: ReturnType<typeof createClient>, kod: unknown) {
+  const k = String(kod || '').trim().toUpperCase();
+  if (!k) return 0;
+  const { data } = await supabase.from('b2b_kody').select('zlava_percent').eq('kod', k).eq('aktivny', true).maybeSingle();
+  return Math.min(Math.max(Number(data?.zlava_percent) || 0, 0), 90);
+}
+
 interface PricingConfig { coefA: number; coefB: number; marginFloor: number; coefP: number; cielovaHodnotaZakazky: number; dphPercent: number; }
 
 function baseMargin(cost: number, cfg: PricingConfig) {
@@ -46,9 +54,10 @@ interface VlajkaCenaVstup {
   osobnyOdber: boolean;
   nastavenia: { expresny_priplatok_percent: number; cena_doprava?: number; postovne_zdarma_od_eur?: number };
   pricingConfig: PricingConfig;
+  zlavaPercent?: number; // B2B zlava v % z ceny tovaru
 }
 
-function vypocitajCenuVlajky({ nakladMaterial, dokoncenie, stoziare, podstavce, doplnky, expresne, pocetKs, osobnyOdber, nastavenia, pricingConfig }: VlajkaCenaVstup) {
+function vypocitajCenuVlajky({ nakladMaterial, dokoncenie, stoziare, podstavce, doplnky, expresne, pocetKs, osobnyOdber, nastavenia, pricingConfig, zlavaPercent = 0 }: VlajkaCenaVstup) {
   const ks = Math.max(1, Number(pocetKs) || 1);
   const cenaMaterialKus = priceAt(Number(nakladMaterial) || 0, ks, pricingConfig);
   // Opracovanie, prut, podstavec aj doplnky su v DB NAKUPNE ceny — predajna sa dopocita rovnakym
@@ -63,7 +72,9 @@ function vypocitajCenuVlajky({ nakladMaterial, dokoncenie, stoziare, podstavce, 
   }, 0);
   const doplnkySpolu = sumaPolozky(doplnky);
 
-  const subtotal = zaklad * ks + sumaPolozky(stoziare) + sumaPolozky(podstavce) + doplnkySpolu;
+  const subtotalPredZlavou = zaklad * ks + sumaPolozky(stoziare) + sumaPolozky(podstavce) + doplnkySpolu;
+  const b2bZlavaEur = Math.round(subtotalPredZlavou * (Number(zlavaPercent) || 0)) / 100;
+  const subtotal = subtotalPredZlavou - b2bZlavaEur;
 
   const expresnyPercent = Number(nastavenia?.expresny_priplatok_percent) || 0;
   const expresnyPriplatok = expresne ? subtotal * (expresnyPercent / 100) : 0;
@@ -137,7 +148,7 @@ Deno.serve(async (req) => {
       designId, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod,
       doplnky = [], farbaHex, farbaPoznamka, textNaVlajke,
       expresne = false, pocetKs = 1, osobnyOdber = false, nahladUrl,
-      stoziare = null, podstavce = null, // volitelne: [{ kod, mnozstvo }] — pocet kusov kazdeho pruta/podstavca zvlast
+      stoziare = null, podstavce = null, b2bKod = null, // volitelne: [{ kod, mnozstvo }] — pocet kusov kazdeho pruta/podstavca zvlast
     } = body;
 
     if (!tvarKod || !velkostKod) throw new Error('Chýba tvar alebo veľkosť vlajky.');
@@ -195,7 +206,9 @@ Deno.serve(async (req) => {
     const nakladSitia = minutySitia * cenaMinutySitia;
     const nakladMaterial = Number(rozmer.spotreba_m2) * (nakladM2Latka + nakladM2Sublimacia) + nakladSitia;
 
+    const b2bZlavaPercent = await b2bZlava(supabase, b2bKod);
     const cena = vypocitajCenuVlajky({
+      zlavaPercent: b2bZlavaPercent,
       nakladMaterial, dokoncenie,
       stoziare: stoziarePolozky,
       podstavce: podstavcePolozky,
@@ -220,6 +233,8 @@ Deno.serve(async (req) => {
       _material: material.nazov,
       _opracovanie: dokoncenie?.nazov || '',
       _pocet_vlajok: String(ksVlajok),
+      _b2b_kod: b2bZlavaPercent > 0 ? String(b2bKod).trim().toUpperCase() : '',
+      _b2b_zlava_percent: b2bZlavaPercent > 0 ? String(b2bZlavaPercent) : '',
       _stoziar: stoziarePolozky.map((p) => `${p.mnozstvo}× ${p.nazov}`).join(', ') || (stoziar?.nazov || ''),
       _podstavec: podstavcePolozky.map((p) => `${p.mnozstvo}× ${p.nazov}`).join(', ') || (podstavec?.nazov || ''),
       _doplnky: doplnkyVypocet.map((d) => `${d.mnozstvo}× ${d.nazov}`).join(', '),

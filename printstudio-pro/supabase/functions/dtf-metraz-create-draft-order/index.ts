@@ -92,6 +92,14 @@ async function ziskajAdminToken(domain: string, clientId: string, clientSecret: 
   return data.access_token as string;
 }
 
+// B2B zlava (reklamne agentury): kod sa overuje na serveri v tabulke b2b_kody (servisny kluc). Neplatny / vypnuty kod = 0 %.
+async function b2bZlava(supabase: ReturnType<typeof createClient>, kod: unknown) {
+  const k = String(kod || '').trim().toUpperCase();
+  if (!k) return 0;
+  const { data } = await supabase.from('b2b_kody').select('zlava_percent').eq('kod', k).eq('aktivny', true).maybeSingle();
+  return Math.min(Math.max(Number(data?.zlava_percent) || 0, 0), 90);
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -107,7 +115,7 @@ Deno.serve(async (req) => {
       deliverySpeed = 'standard', harmonogram = '',
       suborNazov = null, suborCesta = null,
       grafickaPriprava = false,
-      osobnyOdber = false,
+      osobnyOdber = false, b2bKod = null,
     } = body;
 
     if (mode !== 'auto' && mode !== 'subor' && mode !== 'vzorky' && mode !== 'paleta') throw new Error('Neplatný režim objednávky.');
@@ -132,6 +140,7 @@ Deno.serve(async (req) => {
     const PALETA_CENA_S_DPH = 5;
     const PRIPRAVA_GRAFIKY_EUR = 10;
 
+    let b2bZlavaPercent = 0;
     let totalLengthBm = 0, totalM2 = 0, baseRate = 0, grandTotal = mode === 'paleta' ? PALETA_CENA_S_DPH : VZORKA_CENA_S_DPH;
     let rozlozenie: { dlzkaBm: number; jeOtoceny: boolean; efektivnaSirkaCm: number; efektivnaVyskaCm: number } | null = null;
     if (mode === 'auto' || mode === 'subor') {
@@ -147,7 +156,10 @@ Deno.serve(async (req) => {
 
       const nakladBm = Number(nak.naklad_bm) || 0;
       baseRate = priceAt(nakladBm, totalLengthBm, pricingConfig);
-      const subtotal = Math.max(totalLengthBm * baseRate, Number(nastavenia.minimalna_cena_objednavky) || 0);
+      const subtotalPredZlavou = Math.max(totalLengthBm * baseRate, Number(nastavenia.minimalna_cena_objednavky) || 0);
+      // B2B zlava sa odpocita z ceny metraze (pred expresom, dopravou a DPH)
+      b2bZlavaPercent = await b2bZlava(supabase, b2bKod);
+      const subtotal = subtotalPredZlavou - Math.round(subtotalPredZlavou * b2bZlavaPercent) / 100;
       // Príplatok expres je vzdy aspon minimalna suma — rovnaky vzorec ako v DtfMetraz.jsx.
       const expressFee = deliverySpeed === 'express' ? Math.max(Number(nastavenia.priplatok_expres_min_eur) || 0, subtotal * ((Number(nastavenia.priplatok_expres_percent) || 0) / 100)) : 0;
       // Osobny odber = ziadne postovne; inak zdarma od nastaveneho mnozstva (bm).
@@ -226,6 +238,8 @@ Deno.serve(async (req) => {
               { name: '_subor_link', value: suborUrl || '' },
               { name: '_priprava_grafiky', value: grafickaPriprava ? 'áno (+10€)' : 'nie' },
               { name: '_osobny_odber', value: (mode === 'auto' || mode === 'subor') && osobnyOdber ? 'áno' : 'nie' },
+              { name: '_b2b_kod', value: b2bZlavaPercent > 0 ? String(b2bKod).trim().toUpperCase() : '' },
+              { name: '_b2b_zlava_percent', value: b2bZlavaPercent > 0 ? String(b2bZlavaPercent) : '' },
             ],
           },
         ],

@@ -46,6 +46,14 @@ function priceAt(cost: number, qty: number, cfg: PricingConfig) {
   return Math.round(cost * (1 + marginAt(cost, qty, cfg) / 100) * 100) / 100;
 }
 
+// B2B zlava (reklamne agentury): kod sa overuje na serveri v tabulke b2b_kody (servisny kluc). Neplatny / vypnuty kod = 0 %.
+async function b2bZlava(supabase: ReturnType<typeof createClient>, kod: unknown) {
+  const k = String(kod || '').trim().toUpperCase();
+  if (!k) return 0;
+  const { data } = await supabase.from('b2b_kody').select('zlava_percent').eq('kod', k).eq('aktivny', true).maybeSingle();
+  return Math.min(Math.max(Number(data?.zlava_percent) || 0, 0), 90);
+}
+
 function vypocitajHardwareRozmery(
   sirkaCm: number, vyskaCm: number,
   tunely: { side: string }[], ocka: { side: string; count: number }[],
@@ -77,7 +85,7 @@ Deno.serve(async (req) => {
     const {
       materialKod, sirkaCm, vyskaCm, vyhotovenie,
       tunely = [], ocka = [], karabinky = [], popruhy = {}, strapce = [],
-      pocetKs = 1, expresne = false, osobnyOdber = false,
+      pocetKs = 1, expresne = false, osobnyOdber = false, b2bKod = null,
     } = body;
 
     if (!materialKod) throw new Error('Chýba materiál.');
@@ -119,9 +127,13 @@ Deno.serve(async (req) => {
     const marzaPercent = Math.round(marginAt(nakladKus, ks, pricingConfig));
 
     const subtotal = cenaKus * ks;
-    const expresnyPriplatok = expresne ? subtotal * (Number(naklady.expresny_priplatok_percent) / 100) : 0;
+    // B2B zlava sa odpocita z ceny tovaru (pred expresom, dopravou a DPH)
+    const b2bZlavaPercent = await b2bZlava(supabase, b2bKod);
+    const b2bZlavaEur = Math.round(subtotal * b2bZlavaPercent) / 100;
+    const subtotalPoZlave = subtotal - b2bZlavaEur;
+    const expresnyPriplatok = expresne ? subtotalPoZlave * (Number(naklady.expresny_priplatok_percent) / 100) : 0;
     const doprava = osobnyOdber ? 0 : (Number(naklady.cena_doprava) || 0);
-    const cenaBezDph = subtotal + expresnyPriplatok + doprava;
+    const cenaBezDph = subtotalPoZlave + expresnyPriplatok + doprava;
     const dphSuma = cenaBezDph * (Number(pricingConfig.dphPercent) / 100);
     const cenaSpolu = cenaBezDph + dphSuma;
 
@@ -131,6 +143,8 @@ Deno.serve(async (req) => {
         cenaKus,
         marzaPercent,
         subtotal: Math.round(subtotal * 100) / 100,
+        b2bZlavaPercent,
+        b2bZlavaEur: Math.round(b2bZlavaEur * 100) / 100,
         expresnyPriplatok: Math.round(expresnyPriplatok * 100) / 100,
         expresnyPercent: Number(naklady.expresny_priplatok_percent),
         doprava: Math.round(doprava * 100) / 100,

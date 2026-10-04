@@ -9,6 +9,12 @@ const eur = (c) => (c == null ? null : Number(c).toFixed(2) + ' €');
 const cenaText = (c) => (c == null ? '…' : c > 0 ? `+${Number(c).toFixed(2)} €` : 'V cene');
 
 export default function ParametreTab({ katalog, cenyVolieb, cenyMatica, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, onTvar, onVelkost, onMaterial, onDokoncenie, onStoziar, onPodstavec, onDalej }) {
+  // Pri materiáloch sa ukazuje len rozdiel oproti práve zvolenému materiálu (cena vlajky bez DPH).
+  const rozdielMaterialu = (kod) => {
+    const m = cenyMatica?.materialy;
+    if (m?.[kod] == null || m?.[materialKod] == null) return null;
+    return Math.round((m[kod] - m[materialKod]) * 100) / 100;
+  };
   return (
     <div className="p-4 sm:p-6 space-y-6">
       <div>
@@ -39,7 +45,7 @@ export default function ParametreTab({ katalog, cenyVolieb, cenyMatica, tvarKod,
                 </div>
                 <div className="text-[11px] font-semibold text-slate-700">{vyskaPreTvar} cm od zeme</div>
                 <div className="text-[10px] text-slate-500 mt-0.5">{vybranyTvar?.rozmery?.[v.kod]?.rozmer_popis || v.rozmer_popis}</div>
-                {eur(cenyMatica?.velkosti?.[v.kod]) && <div className="text-xs font-black text-indigo-600 mt-1">spolu {eur(cenyMatica.velkosti[v.kod])}</div>}
+                {eur(cenyMatica?.velkosti?.[v.kod]) && <div className="text-xs font-black text-indigo-600 mt-1">{eur(cenyMatica.velkosti[v.kod])} <span className="font-semibold text-slate-400">bez DPH</span></div>}
               </button>
             );
           })}
@@ -75,7 +81,7 @@ export default function ParametreTab({ katalog, cenyVolieb, cenyMatica, tvarKod,
                 {m.obrazok_url && <img src={m.obrazok_url} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />}
                 <div className="min-w-0">
                   <span className="font-bold text-xs block">{m.nazov}</span>
-                  {eur(cenyMatica?.materialy?.[m.kod]) && <span className="text-xs font-black text-indigo-600 block">spolu {eur(cenyMatica.materialy[m.kod])}</span>}
+                  {rozdielMaterialu(m.kod) != null && <span className={`text-xs font-black block ${rozdielMaterialu(m.kod) === 0 ? 'text-slate-400' : rozdielMaterialu(m.kod) > 0 ? 'text-indigo-600' : 'text-emerald-600'}`}>{rozdielMaterialu(m.kod) === 0 ? 'V cene' : `${rozdielMaterialu(m.kod) > 0 ? '+' : '−'}${Math.abs(rozdielMaterialu(m.kod)).toFixed(2)} € bez DPH`}</span>}
                   {m.popis && <p className="text-[11px] text-slate-500 mt-0.5">{m.popis}</p>}
                   {m.pouzitie && <p className="text-[10px] text-slate-400 mt-0.5">{m.pouzitie}</p>}
                 </div>
@@ -97,7 +103,7 @@ export default function ParametreTab({ katalog, cenyVolieb, cenyMatica, tvarKod,
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-xs truncate">{d.nazov}</span>
-                    <span className="text-xs font-semibold text-slate-500">{cenaText(cenyVolieb?.dokoncenie?.[d.kod])}</span>
+                    <span className="text-xs font-bold text-indigo-600">{cenaText(cenyVolieb?.dokoncenie?.[d.kod])}</span>
                   </div>
                   {d.popis && <p className="text-[11px] text-slate-500 mt-0.5">{d.popis}</p>}
                 </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Tag, Box, Palette, Type, Image as ImageIcon, Banknote, Camera, ShoppingBag, Flag, Shirt, Calculator, Waves, ShoppingCart, ExternalLink, Layers3, Ruler, Printer, Circle, Wind, Grid3x3, HardDrive } from 'lucide-react';
+import { Tag, Box, Palette, Type, Image as ImageIcon, Banknote, Camera, ShoppingBag, Flag, Shirt, Calculator, Waves, ShoppingCart, ExternalLink, Layers3, Ruler, Printer, Circle, Wind, Grid3x3, HardDrive, BadgePercent } from 'lucide-react';
 import KategorieTab from './KategorieTab';
 import ProduktyTab from './ProduktyTab';
 import FarbyTab from './FarbyTab';
@@ -20,6 +20,7 @@ import ManualyTab from './ManualyTab';
 import CelenkyTab from './CelenkyTab';
 import BuffkyTab from './BuffkyTab';
 import DtfSeparatorTab from './DtfSeparatorTab';
+import B2bKodyTab from './B2bKodyTab';
 import UloziskoTab from '../UloziskoTab';
 
 // Vsetky Shopify konfiguratory (dotlac na tricka, DTF metraz, vlajky/beachvlajky, vyroba dresov)
@@ -49,6 +50,7 @@ const SUBTABS = [
   { id: 'dresy', label: 'Výroba dresov', icon: Shirt, appUrl: PRINTSTUDIO_BASE_URL },
   { id: 'celenky', label: 'Čelenky', icon: Circle, appUrl: `${PRINTSTUDIO_BASE_URL}/?typ=celenka` },
   { id: 'buffky', label: 'Buffky', icon: Wind, appUrl: `${PRINTSTUDIO_BASE_URL}/?typ=buffka` },
+  { id: 'b2b-kody', label: 'B2B kódy (agentúry)', icon: BadgePercent },
   { id: 'dtf-separator', label: 'DTF/DTG Separátor', icon: Grid3x3 },
   { id: 'ulozisko', label: 'Úložisko', icon: HardDrive },
 ];
@@ -117,6 +119,7 @@ export default function PrintStudioAdmin({ supabase, initialSubtab }) {
         {subtab === 'dresy' && <DresAdmin supabase={supabase} />}
         {subtab === 'celenky' && <CelenkyTab supabase={supabase} />}
         {subtab === 'buffky' && <BuffkyTab supabase={supabase} />}
+        {subtab === 'b2b-kody' && <B2bKodyTab supabase={supabase} />}
         {subtab === 'dtf-separator' && <DtfSeparatorTab supabase={supabase} />}
         {subtab === 'ulozisko' && <UloziskoTab supabase={supabase} />}
       </div>

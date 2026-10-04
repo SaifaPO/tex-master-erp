@@ -3,6 +3,8 @@ import { ShoppingCart, CreditCard, Gift } from 'lucide-react';
 import PbtHeader from './PbtHeader';
 import { priceAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG, QUANTITY_LEVELS } from './pricingEngine';
 import NumberInput from './NumberInput';
+import { useB2bKod } from './b2b';
+import B2bKod from './B2bKod';
 import { initBuffkyEngine } from './buffky/buffkyEngine';
 
 const BUCKET = 'print-designs';
@@ -20,6 +22,7 @@ export default function Buffky({ supabase, onSpat }) {
   const [pocetKs, setPocetKs] = useState(1);
   const [deliverySpeed, setDeliverySpeed] = useState('standard');
   const [osobnyOdber, setOsobnyOdber] = useState(false);
+  const b2b = useB2bKod(supabase);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmation, setConfirmation] = useState('');
   const [submitError, setSubmitError] = useState('');
@@ -58,7 +61,10 @@ export default function Buffky({ supabase, onSpat }) {
     : Number(naklady.naklad_ks || 0));
 
   const cenaKus = priceAt(nakladKs, pocetKs, pricingConfig);
-  const subtotal = Math.max(cenaKus * pocetKs, Number(nastavenia?.minimalna_cena_objednavky) || 0);
+  const subtotalPredZlavou = Math.max(cenaKus * pocetKs, Number(nastavenia?.minimalna_cena_objednavky) || 0);
+  // B2B zľava (kód agentúry) sa odpočíta z ceny tovaru — rovnako ako na serveri.
+  const b2bZlavaEur = Math.round(subtotalPredZlavou * (Number(b2b.zlavaPercent) || 0)) / 100;
+  const subtotal = subtotalPredZlavou - b2bZlavaEur;
   const expressFee = deliverySpeed === 'express' ? subtotal * ((Number(nastavenia?.priplatok_expres_percent) || 0) / 100) : 0;
   const shippingFee = osobnyOdber ? 0 : Number(nastavenia?.cena_doprava) || 0;
   const grandTotalBezDph = subtotal + expressFee + shippingFee;
@@ -81,7 +87,7 @@ export default function Buffky({ supabase, onSpat }) {
       const dizajnJson = engineRef.current.getDesignJson();
 
       const { data, error } = await supabase.functions.invoke('buffky-create-draft-order', {
-        body: { typ, materialKod: typ === 'premium' ? materialKod : null, pocetKs, deliverySpeed, osobnyOdber, suborNazov: 'buffka.png', suborCesta: cesta, dizajnJson },
+        body: { typ, materialKod: typ === 'premium' ? materialKod : null, pocetKs, deliverySpeed, osobnyOdber, b2bKod: b2b.kod, suborNazov: 'buffka.png', suborCesta: cesta, dizajnJson },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -107,6 +113,7 @@ export default function Buffky({ supabase, onSpat }) {
         subtitle="Konfigurátor multifunkčných šatiek (Buffiek)"
         right={onSpat && <button onClick={onSpat} className="text-slate-300 hover:text-cyan-400 hover:bg-slate-800 px-3 py-2 rounded-lg text-sm font-medium transition self-start">← Katalóg</button>}
       />
+      <div className="px-4 py-2 bg-white border-b border-slate-200"><B2bKod b2b={b2b} /></div>
 
       <div className="px-4 py-3 border-b border-slate-800 bg-slate-900/80 flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-1.5 p-1 bg-slate-800/90 rounded-xl border border-slate-700/60">
@@ -382,6 +389,7 @@ export default function Buffky({ supabase, onSpat }) {
               </div>
               <RowSum label="Cena za kus (bez DPH)" value={`${cenaKus.toFixed(2)} €`} />
               <RowSum label="Doprava" value={shippingFee === 0 ? 'Zdarma' : `${shippingFee.toFixed(2)} €`} />
+              {b2bZlavaEur > 0 && <RowSum label={`B2B zľava ${Number(b2b.zlavaPercent)} %`} value={`−${b2bZlavaEur.toFixed(2)} €`} />}
               {expressFee > 0 && <RowSum label="Príplatok expres" value={`${expressFee.toFixed(2)} €`} />}
               <RowSum label="Cena bez DPH" value={`${grandTotalBezDph.toFixed(2)} €`} />
               <RowSum label={`DPH ${dphPercent}%`} value={`${dphSuma.toFixed(2)} €`} />

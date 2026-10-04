@@ -3,6 +3,8 @@ import { Truck, Eye, ShoppingCart, CreditCard, Gift } from 'lucide-react';
 import PbtHeader from './PbtHeader';
 import { priceAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG, QUANTITY_LEVELS } from './pricingEngine';
 import NumberInput from './NumberInput';
+import { useB2bKod } from './b2b';
+import B2bKod from './B2bKod';
 import { initCelenkyEngine } from './celenky/celenkyEngine';
 
 const BUCKET = 'print-designs';
@@ -17,6 +19,7 @@ export default function Celenky({ supabase, onSpat }) {
   const [pocetKs, setPocetKs] = useState(1);
   const [deliverySpeed, setDeliverySpeed] = useState('standard');
   const [osobnyOdber, setOsobnyOdber] = useState(false);
+  const b2b = useB2bKod(supabase);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmation, setConfirmation] = useState('');
   const [submitError, setSubmitError] = useState('');
@@ -47,7 +50,10 @@ export default function Celenky({ supabase, onSpat }) {
 
   // ---- Cena ----
   const cenaKus = priceAt(nakladKs, pocetKs, pricingConfig);
-  const subtotal = Math.max(cenaKus * pocetKs, Number(nastavenia?.minimalna_cena_objednavky) || 0);
+  const subtotalPredZlavou = Math.max(cenaKus * pocetKs, Number(nastavenia?.minimalna_cena_objednavky) || 0);
+  // B2B zľava (kód agentúry) sa odpočíta z ceny tovaru — rovnako ako na serveri.
+  const b2bZlavaEur = Math.round(subtotalPredZlavou * (Number(b2b.zlavaPercent) || 0)) / 100;
+  const subtotal = subtotalPredZlavou - b2bZlavaEur;
   const expressFee = deliverySpeed === 'express' ? subtotal * ((Number(nastavenia?.priplatok_expres_percent) || 0) / 100) : 0;
   const shippingFee = osobnyOdber ? 0 : Number(nastavenia?.cena_doprava) || 0;
   const grandTotalBezDph = subtotal + expressFee + shippingFee;
@@ -69,7 +75,7 @@ export default function Celenky({ supabase, onSpat }) {
       const dizajnJson = engineRef.current.getDesignJson();
 
       const { data, error } = await supabase.functions.invoke('celenky-create-draft-order', {
-        body: { pocetKs, deliverySpeed, osobnyOdber, suborNazov: 'celenka.png', suborCesta: cesta, dizajnJson },
+        body: { pocetKs, deliverySpeed, osobnyOdber, b2bKod: b2b.kod, suborNazov: 'celenka.png', suborCesta: cesta, dizajnJson },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -95,6 +101,7 @@ export default function Celenky({ supabase, onSpat }) {
         subtitle="Konfigurátor športových čeleniek"
         right={onSpat && <button onClick={onSpat} className="text-slate-600 hover:text-indigo-600 hover:bg-slate-100 px-3 py-2 rounded-lg text-sm font-medium transition self-start">← Katalóg</button>}
       />
+      <div className="px-4 py-2 bg-white border-b border-slate-200"><B2bKod b2b={b2b} /></div>
 
       <main ref={rootRef} className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-4 grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
         {/* ĽAVÝ PANEL: nástroje, farby, text, grafiky, vrstvy */}
@@ -420,6 +427,7 @@ export default function Celenky({ supabase, onSpat }) {
               </div>
               <RowSum label="Cena za kus (bez DPH)" value={`${cenaKus.toFixed(2)} €`} />
               <RowSum label="Doprava" value={shippingFee === 0 ? 'Zdarma' : `${shippingFee.toFixed(2)} €`} />
+              {b2bZlavaEur > 0 && <RowSum label={`B2B zľava ${Number(b2b.zlavaPercent)} %`} value={`−${b2bZlavaEur.toFixed(2)} €`} />}
               {expressFee > 0 && <RowSum label="Príplatok expres" value={`${expressFee.toFixed(2)} €`} />}
               <RowSum label="Cena bez DPH" value={`${grandTotalBezDph.toFixed(2)} €`} />
               <RowSum label={`DPH ${dphPercent}%`} value={`${dphSuma.toFixed(2)} €`} />

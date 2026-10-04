@@ -58,6 +58,14 @@ async function resolvePodstavecCena(supabase: ReturnType<typeof createClient>, p
   return Number(cenaRow?.cena) || 0;
 }
 
+// B2B zlava (reklamne agentury): kod sa overuje na serveri v tabulke b2b_kody (servisny kluc). Neplatny / vypnuty kod = 0 %.
+async function b2bZlava(supabase: ReturnType<typeof createClient>, kod: unknown) {
+  const k = String(kod || '').trim().toUpperCase();
+  if (!k) return 0;
+  const { data } = await supabase.from('b2b_kody').select('zlava_percent').eq('kod', k).eq('aktivny', true).maybeSingle();
+  return Math.min(Math.max(Number(data?.zlava_percent) || 0, 0), 90);
+}
+
 interface PricingConfig { coefA: number; coefB: number; marginFloor: number; coefP: number; cielovaHodnotaZakazky: number; dphPercent: number; }
 
 function baseMargin(cost: number, cfg: PricingConfig) {
@@ -79,7 +87,7 @@ function priceAt(cost: number, qty: number, cfg: PricingConfig) {
 
 // Cely vypocet ceny jednej konfiguracie. Pouziva ho aj rezim "matica" (cena pri kazdej velkosti a kazdom materiali).
 async function spocitaj(supabase: ReturnType<typeof createClient>, v: Record<string, any>) {
-  const { tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnky = [], pocetKs = 1, expresne = false, osobnyOdber = false, stoziare = null, podstavce = null } = v;
+  const { tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnky = [], pocetKs = 1, expresne = false, osobnyOdber = false, stoziare = null, podstavce = null, b2bKod = null } = v;
   if (!tvarKod || !velkostKod) throw new Error('Chýba tvar alebo veľkosť vlajky.');
   if (!materialKod) throw new Error('Chýba materiál.');
 
@@ -160,17 +168,21 @@ async function spocitaj(supabase: ReturnType<typeof createClient>, v: Record<str
   const doplnkySpolu = doplnkyRiadky.reduce((a, x) => a + x.spolu, 0);
 
   const subtotal = vlajkySpolu + stoziareSpolu + podstavceSpolu + doplnkySpolu;
+  // B2B zlava sa odpocita z ceny tovaru (pred expresom, postovnym a DPH)
+  const b2bZlavaPercent = await b2bZlava(supabase, b2bKod);
+  const b2bZlavaEur = r2(subtotal * b2bZlavaPercent / 100);
+  const subtotalPoZlave = subtotal - b2bZlavaEur;
 
   const naklady = nastavenia || { expresny_priplatok_percent: 10 };
   const expresnyPercent = Number(naklady.expresny_priplatok_percent) || 0;
-  const expresnyPriplatok = expresne ? subtotal * (expresnyPercent / 100) : 0;
+  const expresnyPriplatok = expresne ? subtotalPoZlave * (expresnyPercent / 100) : 0;
   const dphPercent = Number(pricingConfig.dphPercent) || 0;
   // Postovne zdarma od urcitej sumy objednavky (s DPH, bez dopravy) — predvolene 150 EUR, nastavitelne v ERP.
   const postovneZdarmaOd = Number(naklady.postovne_zdarma_od_eur ?? 150) || 0;
-  const tovarSDph = (subtotal + expresnyPriplatok) * (1 + dphPercent / 100);
+  const tovarSDph = (subtotalPoZlave + expresnyPriplatok) * (1 + dphPercent / 100);
   const doprava = osobnyOdber || (postovneZdarmaOd > 0 && tovarSDph >= postovneZdarmaOd) ? 0 : (Number(naklady.cena_doprava) || 0);
 
-  const cenaBezDph = subtotal + expresnyPriplatok + doprava;
+  const cenaBezDph = subtotalPoZlave + expresnyPriplatok + doprava;
   const dphSuma = cenaBezDph * (dphPercent / 100);
   const cenaSpolu = cenaBezDph + dphSuma;
 
@@ -183,6 +195,8 @@ async function spocitaj(supabase: ReturnType<typeof createClient>, v: Record<str
         podstavce: podstavceRiadky,
         doplnky: doplnkyRiadky,
       },
+      b2bZlavaPercent,
+      b2bZlavaEur,
       postovneZdarmaOd,
       doDopravyZdarma: osobnyOdber || postovneZdarmaOd <= 0 ? 0 : Math.max(0, r2(postovneZdarmaOd - tovarSDph)),
       stoziareSpolu: Math.round(stoziareSpolu * 100) / 100,
@@ -212,7 +226,7 @@ Deno.serve(async (req) => {
     const {
       tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod,
       doplnky = [], pocetKs = 1, expresne = false, osobnyOdber = false, cenovnik = false,
-      stoziare = null, podstavce = null, // volitelne: [{ kod, mnozstvo }] — zakaznik si zvoli pocet kusov kazdeho pruta/podstavca zvlast
+      stoziare = null, podstavce = null, b2bKod = null, // volitelne: [{ kod, mnozstvo }] — zakaznik si zvoli pocet kusov kazdeho pruta/podstavca zvlast
     } = body;
 
     // Rezim "cenovnik": vrati PREDAJNE ceny jednotlivych volieb (opracovanie, prut, podstavec,
@@ -233,7 +247,8 @@ Deno.serve(async (req) => {
       const cfgCenovnik: PricingConfig = cfgC
         ? { coefA: Number(cfgC.coef_a), coefB: Number(cfgC.coef_b), marginFloor: Number(cfgC.margin_floor), coefP: Number(cfgC.coef_p), cielovaHodnotaZakazky: Number(cfgC.cielova_hodnota_zakazky ?? 25000), dphPercent: Number(cfgC.dph_percent ?? 23) }
         : { coefA: 300, coefB: 54, marginFloor: 30, coefP: 1.3, cielovaHodnotaZakazky: 25000, dphPercent: 23 };
-      const predaj = (nakup: unknown) => priceAt(Number(nakup) || 0, ksC, cfgCenovnik);
+      const zlavaC = await b2bZlava(supabase, b2bKod);
+      const predaj = (nakup: unknown) => Math.round(priceAt(Number(nakup) || 0, ksC, cfgCenovnik) * (1 - zlavaC / 100) * 100) / 100;
       return odpoved({
         cenovnik: {
           dokoncenie: Object.fromEntries((dokC || []).map((r: any) => [r.kod, predaj(r.cena)])),
@@ -244,9 +259,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    const vstup = { tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnky, pocetKs, expresne, osobnyOdber, stoziare, podstavce };
+    const vstup = { tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnky, pocetKs, expresne, osobnyOdber, stoziare, podstavce, b2bKod };
 
-    // Rezim "matica": celkova cena objednavky pri KAZDEJ velkosti a KAZDOM materiali (so zvyskom konfiguracie nezmeneným) —
+    // Rezim "matica": cena samotnej vlajky (material + opracovanie, bez DPH, 1 ks) pri KAZDEJ velkosti a KAZDOM materiali (so zvyskom konfiguracie nezmeneným) —
     // zakaznik vidi cenu priamo pri vybere velkosti a materialu.
     if (body.matica) {
       if (!tvarKod || !velkostKod || !materialKod) throw new Error('Chýba tvar, veľkosť alebo materiál.');
@@ -254,7 +269,7 @@ Deno.serve(async (req) => {
         supabase.from('vlajka_velkosti').select('kod').eq('aktivny', true),
         supabase.from('vlajka_materialy').select('kod').eq('aktivny', true),
       ]);
-      const spolu = async (zmena: Record<string, string>) => { try { return (await spocitaj(supabase, { ...vstup, ...zmena })).cenaSpolu; } catch { return null; } };
+      const spolu = async (zmena: Record<string, string>) => { try { const c = await spocitaj(supabase, { ...vstup, ...zmena }); return Math.round(c.zaklad * (1 - (Number(c.b2bZlavaPercent) || 0) / 100) * 100) / 100; } catch { return null; } };
       const [velkosti, materialy] = await Promise.all([
         Promise.all((velk || []).map(async (x: any) => [x.kod, await spolu({ velkostKod: x.kod })])),
         Promise.all((mats || []).map(async (x: any) => [x.kod, await spolu({ materialKod: x.kod })])),

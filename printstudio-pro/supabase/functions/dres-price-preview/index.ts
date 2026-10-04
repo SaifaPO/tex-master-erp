@@ -42,24 +42,36 @@ function najdiZlavuPreMnozstvo(zlavy: DresZlava[], pocet: number): number {
   return vyhovujuce.length ? Number(vyhovujuce[0].zlava_percent) : 0;
 }
 
+// B2B zlava (reklamne agentury): kod sa overuje na serveri v tabulke b2b_kody (servisny kluc). Neplatny / vypnuty kod = 0 %.
+async function b2bZlava(supabase: ReturnType<typeof createClient>, kod: unknown) {
+  const k = String(kod || '').trim().toUpperCase();
+  if (!k) return 0;
+  const { data } = await supabase.from('b2b_kody').select('zlava_percent').eq('kod', k).eq('aktivny', true).maybeSingle();
+  return Math.min(Math.max(Number(data?.zlava_percent) || 0, 0), 90);
+}
+
 function vypocitajCenuDresu(p: {
   zakladnaCena: number; priplatokMaterial: number; pocetHracov: number; zlavy: DresZlava[]; doprava: number;
-  nakladKs: number; nakladMaterial: number; pricingConfig: PricingConfig;
+  nakladKs: number; nakladMaterial: number; pricingConfig: PricingConfig; b2bZlavaPercent?: number;
 }) {
   const pocet = Math.max(1, Number(p.pocetHracov) || 1);
   const dopravaNum = Number(p.doprava) || 0;
+  const b2bP = Math.min(Math.max(Number(p.b2bZlavaPercent) || 0, 0), 90);
+  // B2B zlava sa odpocita z jednotkovej ceny (s DPH), doprava ostava
+  const sB2b = (jc: number) => Math.round(jc * (1 - b2bP / 100) * 100) / 100;
   if (p.nakladKs > 0) {
     const cost = p.nakladKs + (p.nakladMaterial || 0);
     const dphK = 1 + (Number(p.pricingConfig.dphPercent) || 0) / 100;
     const jednotkovaCenaPredZlavou = Math.round(priceAt(cost, 1, p.pricingConfig) * dphK * 100) / 100;
     const jednotkovaCena = Math.round(priceAt(cost, pocet, p.pricingConfig) * dphK * 100) / 100;
     const zlavaPercent = jednotkovaCenaPredZlavou > 0 ? Math.max(0, Math.round((1 - jednotkovaCena / jednotkovaCenaPredZlavou) * 100)) : 0;
-    return { jednotkovaCenaPredZlavou, zlavaPercent, jednotkovaCena, pocet, doprava: dopravaNum, cenaSpolu: jednotkovaCena * pocet + dopravaNum };
+    const jc = sB2b(jednotkovaCena);
+    return { jednotkovaCenaPredZlavou, zlavaPercent, jednotkovaCena: jc, b2bZlavaPercent: b2bP, pocet, doprava: dopravaNum, cenaSpolu: jc * pocet + dopravaNum };
   }
   const jednotkovaCenaPredZlavou = (Number(p.zakladnaCena) || 0) + (Number(p.priplatokMaterial) || 0);
   const zlavaPercent = najdiZlavuPreMnozstvo(p.zlavy, pocet);
-  const jednotkovaCena = jednotkovaCenaPredZlavou * (1 - zlavaPercent / 100);
-  return { jednotkovaCenaPredZlavou, zlavaPercent, jednotkovaCena, pocet, doprava: dopravaNum, cenaSpolu: jednotkovaCena * pocet + dopravaNum };
+  const jc = sB2b(jednotkovaCenaPredZlavou * (1 - zlavaPercent / 100));
+  return { jednotkovaCenaPredZlavou, zlavaPercent, jednotkovaCena: jc, b2bZlavaPercent: b2bP, pocet, doprava: dopravaNum, cenaSpolu: jc * pocet + dopravaNum };
 }
 
 Deno.serve(async (req) => {
@@ -68,7 +80,7 @@ Deno.serve(async (req) => {
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
   try {
-    const { produktId, materialKod = null, pocetHracov = 1, osobnyOdber = false } = await req.json();
+    const { produktId, materialKod = null, pocetHracov = 1, osobnyOdber = false, b2bKod = null } = await req.json();
     if (!produktId) throw new Error('Chýba produktId.');
 
     const [{ data: produkt }, { data: material }, { data: zlavy }, { data: nastavenia }, { data: naklad }, { data: cfg }] = await Promise.all([
@@ -102,6 +114,7 @@ Deno.serve(async (req) => {
       nakladKs: Number(naklad?.naklad_ks) || 0,
       nakladMaterial,
       pricingConfig,
+      b2bZlavaPercent: await b2bZlava(supabase, b2bKod),
     });
     return odpoved({ cena });
   } catch (e) {

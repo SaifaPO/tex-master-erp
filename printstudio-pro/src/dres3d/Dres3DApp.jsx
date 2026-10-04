@@ -12,6 +12,8 @@ import LogaTab from './LogaTab';
 import GolierMaterialTab from './GolierMaterialTab';
 import RosterModal from './RosterModal';
 import SuhrnModal from './SuhrnModal';
+import { useB2bKod } from '../b2b';
+import B2bKod from '../B2bKod';
 
 const TABY = [
   { id: 'vzory', label: 'Vzory', icon: Grid3x3 },
@@ -34,6 +36,7 @@ export default function Dres3DApp({ supabase, produktId }) {
   const [snapshotUrl, setSnapshotUrl] = useState(null);
   const [cenaDoprava, setCenaDoprava] = useState(0);
   const [osobnyOdber, setOsobnyOdber] = useState(false);
+  const b2b = useB2bKod(supabase);
 
   const viewportRef = useRef(null);
 
@@ -101,11 +104,11 @@ export default function Dres3DApp({ supabase, produktId }) {
     if (!katalog?.produkt?.id) return;
     let zrusene = false;
     const t = setTimeout(async () => {
-      const { data, error } = await supabase.functions.invoke('dres-price-preview', { body: { produktId: katalog.produkt.id, materialKod: configState.materialKod, pocetHracov: roster.length, osobnyOdber } });
+      const { data, error } = await supabase.functions.invoke('dres-price-preview', { body: { produktId: katalog.produkt.id, materialKod: configState.materialKod, pocetHracov: roster.length, osobnyOdber, b2bKod: b2b.kod } });
       if (!zrusene) setCenaServer(!error && !data?.error && data?.cena ? data.cena : null);
     }, 300);
     return () => { zrusene = true; clearTimeout(t); };
-  }, [supabase, katalog, configState.materialKod, roster.length, osobnyOdber]);
+  }, [supabase, katalog, configState.materialKod, roster.length, osobnyOdber, b2b.kod]);
   const cena = cenaServer ?? cenaLokalna;
 
   const handleZmenText = (patch) => {
@@ -256,6 +259,7 @@ export default function Dres3DApp({ supabase, produktId }) {
             )}
           </div>
 
+          <div className="px-3.5 sm:px-4 py-2 border-t border-slate-800 bg-slate-950 shrink-0"><B2bKod b2b={b2b} className="[&_button]:!text-indigo-400" /></div>
           <div className="p-3.5 sm:p-4 border-t border-slate-800 bg-slate-950 shrink-0 flex items-center justify-between">
             <div>
               <span className="text-[10px] sm:text-[11px] text-slate-400 uppercase tracking-wider block">Kalkulácia</span>
@@ -264,7 +268,7 @@ export default function Dres3DApp({ supabase, produktId }) {
                 <span className="text-[11px] text-slate-400">/ ks s DPH</span>
               </div>
               <span className="text-[10px] text-indigo-400 font-semibold block">
-                {cena.zlavaPercent > 0 ? `Aplikovaná tímová zľava ${cena.zlavaPercent}%` : 'Objednajte 5+ ks a získajte zľavu'}
+                {cena.b2bZlavaPercent > 0 ? `B2B zľava ${cena.b2bZlavaPercent} % uplatnená` : cena.zlavaPercent > 0 ? `Aplikovaná tímová zľava ${cena.zlavaPercent}%` : 'Objednajte 5+ ks a získajte zľavu'}
               </span>
             </div>
             <button onClick={otvorSuhrn} className="px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-slate-950 font-extrabold text-xs sm:text-sm transition">
@@ -285,6 +289,7 @@ export default function Dres3DApp({ supabase, produktId }) {
           roster={roster}
           materialy={katalog.materialy}
           cena={cena}
+          b2bKod={b2b.kod}
           osobnyOdber={osobnyOdber}
           onOsobnyOdber={setOsobnyOdber}
           snapshotUrl={snapshotUrl}

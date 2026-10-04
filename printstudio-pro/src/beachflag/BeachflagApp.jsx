@@ -7,6 +7,8 @@ import { nacitajVlajkaKatalog } from './vlajkaData';
 import ParametreTab from './ParametreTab';
 import GrafikaTab from './GrafikaTab';
 import SpodnaListaCeny from './SpodnaListaCeny';
+import { useB2bKod } from '../b2b';
+import B2bKod from '../B2bKod';
 import DoplnkyTab from './DoplnkyTab';
 import VelkostnePorovnanie from './VelkostnePorovnanie';
 
@@ -51,6 +53,7 @@ export default function BeachflagApp({ supabase }) {
   const [podstavceMn, setPodstavceMn] = useState({});
   const [mnozstvaRucne, setMnozstvaRucne] = useState(false);
   const [osobnyOdber, setOsobnyOdber] = useState(false);
+  const b2b = useB2bKod(supabase);
   const [cena, setCena] = useState(null);
   const [cenyMatica, setCenyMatica] = useState(null); // { velkosti: {S: 123}, materialy: {kod: 123} } — celkova cena pri kazdej velkosti / materiali
   const [listaOtvorena, setListaOtvorena] = useState(false);
@@ -248,7 +251,7 @@ export default function BeachflagApp({ supabase }) {
     setCenaChyba('');
     const t = setTimeout(async () => {
       const { data, error } = await supabase.functions.invoke('beachflag-price-preview', {
-        body: { tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnky, pocetKs, expresne, osobnyOdber, stoziare: zoznamMnozstiev(stoziareMn), podstavce: zoznamMnozstiev(podstavceMn) },
+        body: { tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnky, pocetKs, expresne, osobnyOdber, stoziare: zoznamMnozstiev(stoziareMn), podstavce: zoznamMnozstiev(podstavceMn), b2bKod: b2b.kod },
       });
       setCenaNacitava(false);
       if (error) { setCenaChyba(error.message); return; }
@@ -256,7 +259,7 @@ export default function BeachflagApp({ supabase }) {
       setCena(data.cena);
     }, 400);
     return () => clearTimeout(t);
-  }, [supabase, katalog, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnkyMnozstva, pocetKs, expresne, osobnyOdber, stoziareMn, podstavceMn]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [supabase, katalog, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnkyMnozstva, pocetKs, expresne, osobnyOdber, stoziareMn, podstavceMn, b2b.kod]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Celkova cena objednavky pri KAZDEJ velkosti a KAZDOM materiali (so zvyskom konfiguracie nezmeneným) — zakaznik ju vidi priamo
   // pri vybere velkosti a materialu; pri zmene niecoho ineho (pocet kusov, prut, ...) sa to prepocita v realnom case.
@@ -266,12 +269,12 @@ export default function BeachflagApp({ supabase }) {
     const doplnky = Object.entries(doplnkyMnozstva).map(([kod, mnozstvo]) => ({ kod, mnozstvo }));
     const t = setTimeout(async () => {
       const { data, error } = await supabase.functions.invoke('beachflag-price-preview', {
-        body: { matica: true, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnky, pocetKs, expresne, osobnyOdber, stoziare: zoznamMnozstiev(stoziareMn), podstavce: zoznamMnozstiev(podstavceMn) },
+        body: { matica: true, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnky, pocetKs, expresne, osobnyOdber, stoziare: zoznamMnozstiev(stoziareMn), podstavce: zoznamMnozstiev(podstavceMn), b2bKod: b2b.kod },
       });
       if (!zrusene) setCenyMatica(!error && !data?.error ? data.matica : null);
     }, 600);
     return () => { zrusene = true; clearTimeout(t); };
-  }, [supabase, katalog, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnkyMnozstva, pocetKs, expresne, osobnyOdber, stoziareMn, podstavceMn]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [supabase, katalog, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnkyMnozstva, pocetKs, expresne, osobnyOdber, stoziareMn, podstavceMn, b2b.kod]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Predajne ceny jednotlivych volieb — v DB su NAKUPNE ceny (verejnost ich nevidi), predajna cena sa
   // dopocita na serveri z marze a poctu kusov (rezim 'cenovnik' v beachflag-price-preview).
@@ -279,11 +282,11 @@ export default function BeachflagApp({ supabase }) {
     if (!katalog || !velkostKod) return;
     let zrusene = false;
     const t = setTimeout(async () => {
-      const { data, error } = await supabase.functions.invoke('beachflag-price-preview', { body: { cenovnik: true, velkostKod, pocetKs } });
+      const { data, error } = await supabase.functions.invoke('beachflag-price-preview', { body: { cenovnik: true, velkostKod, pocetKs, b2bKod: b2b.kod } });
       if (!zrusene) setCenyVolieb(!error && !data?.error ? data.cenovnik : null);
     }, 300);
     return () => { zrusene = true; clearTimeout(t); };
-  }, [supabase, katalog, velkostKod, pocetKs]);
+  }, [supabase, katalog, velkostKod, pocetKs, b2b.kod]);
 
   // snapAngle/snapThreshold = vstavana fabric funkcia, otacanie tahanim za rohovy uchyt "zaskoci"
   // na najblizsi nasobok 45° (v okruhu 5°) — presne ako pytal Martin, bez vlastnej implementacie.
@@ -363,7 +366,7 @@ export default function BeachflagApp({ supabase }) {
         farbaPoznamka: pantoneNote,
         textNaVlajke: customText,
         expresne, pocetKs, osobnyOdber,
-        stoziare: zoznamMnozstiev(stoziareMn), podstavce: zoznamMnozstiev(podstavceMn),
+        stoziare: zoznamMnozstiev(stoziareMn), podstavce: zoznamMnozstiev(podstavceMn), b2bKod: b2b.kod,
         nahladUrl: publicUrlData?.publicUrl || null,
       };
 
@@ -396,6 +399,7 @@ export default function BeachflagApp({ supabase }) {
             </button>
           ))}
         </div>
+        <div className="px-4 pt-3"><B2bKod b2b={b2b} /></div>
 
         {krok === 'parametre' && (
           <ParametreTab katalog={katalog} cenyVolieb={cenyVolieb} cenyMatica={cenyMatica} tvarKod={tvarKod} velkostKod={velkostKod} materialKod={materialKod} dokoncenieKod={dokoncenieKod} stoziarKod={stoziarKod} podstavecKod={podstavecKod}

@@ -3,6 +3,8 @@ import { Scroll, UploadCloud, Truck, Eye, ShoppingCart, TriangleAlert, CreditCar
 import { priceAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 import NumberInput from './NumberInput';
 import AskQuestion from './AskQuestion';
+import { useB2bKod } from './b2b';
+import B2bKod from './B2bKod';
 
 const BUCKET = 'print-designs';
 const ROLL_WIDTH_CM = 56;
@@ -57,6 +59,7 @@ export default function DtfMetraz({ supabase, onSpat }) {
   const [scheduleOption, setScheduleOption] = useState(null);
   const [grafickaPriprava, setGrafickaPriprava] = useState(false);
   const [osobnyOdber, setOsobnyOdber] = useState(false);
+  const b2b = useB2bKod(supabase);
 
   const [rawFile, setRawFile] = useState(null);
   const [logoImage, setLogoImage] = useState(null);
@@ -83,6 +86,7 @@ export default function DtfMetraz({ supabase, onSpat }) {
   }, [supabase]);
 
   // ---- Výpočet ceny a metráže ----
+  let b2bZlavaEur = 0;
   let totalLengthBm = 0, totalM2 = 0, totalCm2 = 0, baseRate = 0, subtotal = 0, expressFee = 0, shippingFee = 0, grandTotalBezDph = 0, dphSuma = 0, grandTotal = 0, capacityIssue = null;
   const rozlozenieAuto = mode === 'auto' ? vypocitajRozlozenie(widthCm, heightCm, qty) : null;
   // Expres = "v deň objednávky" — po tomto čase to už tlačiareň fyzicky nestihne, preto sa ponuka vypne.
@@ -104,6 +108,9 @@ export default function DtfMetraz({ supabase, onSpat }) {
     // (rovnaky ako v celom PrintStudio Pro) — vacsi odber = nizsia marza = nizsia sadzba.
     baseRate = priceAt(nakladBm, totalLengthBm, pricingConfig);
     subtotal = Math.max(totalLengthBm * baseRate, Number(nastavenia.minimalna_cena_objednavky));
+    // B2B zľava (kód agentúry) sa odpočíta z ceny metráže — rovnako ako na serveri.
+    b2bZlavaEur = Math.round(subtotal * (Number(b2b.zlavaPercent) || 0)) / 100;
+    subtotal -= b2bZlavaEur;
     // Príplatok expres je vždy aspoň minimálna suma (nie len % z malej objednávky, ktoré by vyšlo
     // smiešne nízko) — berie sa vyššia z dvoch hodnôt.
     expressFee = deliverySpeed === 'express' && !expresUzNedostupny ? Math.max(Number(nastavenia.priplatok_expres_min_eur) || 0, subtotal * (Number(nastavenia.priplatok_expres_percent) / 100)) : 0;
@@ -247,6 +254,7 @@ export default function DtfMetraz({ supabase, onSpat }) {
           suborNazov: rawFile?.name || null, suborCesta,
           grafickaPriprava: mode === 'auto' || mode === 'subor' ? grafickaPriprava : false,
           osobnyOdber: mode === 'auto' || mode === 'subor' ? osobnyOdber : false,
+          b2bKod: b2b.kod,
         },
       });
       if (error) throw error;
@@ -269,6 +277,7 @@ export default function DtfMetraz({ supabase, onSpat }) {
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
       <AskQuestion zdroj="DTF metráž" />
+      <B2bKod b2b={b2b} />
       <div className="bg-gradient-to-r from-indigo-50 to-white p-5 sm:p-6 rounded-2xl border border-indigo-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2"><Scroll className="text-indigo-600 w-6 h-6" /> Objednávka DTF transferov v metráži</h1>
@@ -468,6 +477,7 @@ export default function DtfMetraz({ supabase, onSpat }) {
               <Row label="Sadzba pri tomto odbere (bez DPH)" value={`${baseRate.toFixed(2)} €/bm`} />
               <Row label="Potrebná dĺžka rolky" value={`${totalLengthBm.toFixed(2)} bm`} highlight />
               <Row label="Tlačová plocha" value={`${totalM2.toFixed(2)} m²`} />
+              {b2bZlavaEur > 0 && <Row label={`B2B zľava ${Number(b2b.zlavaPercent)} %`} value={`−${b2bZlavaEur.toFixed(2)} €`} />}
               <Row label="Príplatok za expres" value={`${expressFee.toFixed(2)} €`} />
               {grafickaPriprava && <Row label="Príprava grafiky na tlač" value="10.00 €" />}
               <Row label="Doprava" value={shippingFee === 0 ? 'Zdarma' : `${shippingFee.toFixed(2)} €`} />

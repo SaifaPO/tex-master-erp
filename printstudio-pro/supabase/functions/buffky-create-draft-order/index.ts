@@ -45,6 +45,14 @@ async function ziskajAdminToken(domain: string, clientId: string, clientSecret: 
   return data.access_token as string;
 }
 
+// B2B zlava (reklamne agentury): kod sa overuje na serveri v tabulke b2b_kody (servisny kluc). Neplatny / vypnuty kod = 0 %.
+async function b2bZlava(supabase: ReturnType<typeof createClient>, kod: unknown) {
+  const k = String(kod || '').trim().toUpperCase();
+  if (!k) return 0;
+  const { data } = await supabase.from('b2b_kody').select('zlava_percent').eq('kod', k).eq('aktivny', true).maybeSingle();
+  return Math.min(Math.max(Number(data?.zlava_percent) || 0, 0), 90);
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -57,7 +65,7 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const {
       typ = 'tubular_basic', materialKod = null,
-      pocetKs, deliverySpeed = 'standard', osobnyOdber = false,
+      pocetKs, deliverySpeed = 'standard', osobnyOdber = false, b2bKod = null,
       suborNazov = null, suborCesta = null, dizajnJson = null,
     } = body;
 
@@ -89,7 +97,10 @@ Deno.serve(async (req) => {
       vybranyMaterialNazov = material.nazov;
     }
     const cenaKus = priceAt(nakladKs, ks, pricingConfig);
-    const subtotal = Math.max(cenaKus * ks, Number(nastavenia.minimalna_cena_objednavky) || 0);
+    const subtotalPredZlavou = Math.max(cenaKus * ks, Number(nastavenia.minimalna_cena_objednavky) || 0);
+    // B2B zlava sa odpocita z ceny tovaru (pred expresom, dopravou a DPH)
+    const b2bZlavaPercent = await b2bZlava(supabase, b2bKod);
+    const subtotal = subtotalPredZlavou - Math.round(subtotalPredZlavou * b2bZlavaPercent) / 100;
     const expressFee = deliverySpeed === 'express' ? subtotal * ((Number(nastavenia.priplatok_expres_percent) || 0) / 100) : 0;
     const shippingFee = osobnyOdber ? 0 : (Number(nastavenia.cena_doprava) || 0);
     const grandTotalBezDph = subtotal + expressFee + shippingFee;
@@ -135,6 +146,8 @@ Deno.serve(async (req) => {
               { name: '_pocet_ks', value: String(ks) },
               { name: '_subor', value: suborNazov || '' },
               { name: '_osobny_odber', value: osobnyOdber ? 'áno' : 'nie' },
+              { name: '_b2b_kod', value: b2bZlavaPercent > 0 ? String(b2bKod).trim().toUpperCase() : '' },
+              { name: '_b2b_zlava_percent', value: b2bZlavaPercent > 0 ? String(b2bZlavaPercent) : '' },
             ],
           },
         ],
