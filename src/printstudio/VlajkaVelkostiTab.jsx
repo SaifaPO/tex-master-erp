@@ -6,6 +6,7 @@ import NumberInput from '../NumberInput';
 
 export default function VlajkaVelkostiTab({ supabase }) {
   const [velkosti, setVelkosti] = useState([]);
+  const [tvary, setTvary] = useState([]); // kazdy tvar so svojimi rozmermi (rozmer plachty + vyska od zeme PER TVAR a velkost)
   const [materialy, setMaterialy] = useState([]);
   const [pricingConfig, setPricingConfig] = useState(DEFAULT_PRICING_CONFIG);
   const [nastavenia, setNastavenia] = useState({ dph_percent: 23, expresny_priplatok_percent: 10 });
@@ -25,13 +26,15 @@ export default function VlajkaVelkostiTab({ supabase }) {
 
   const nacitaj = async () => {
     setIsLoading(true);
-    const [{ data: v }, { data: m }, { data: n }, { data: cfg }, { data: tn }] = await Promise.all([
+    const [{ data: v }, { data: m }, { data: n }, { data: cfg }, { data: tn }, { data: t }] = await Promise.all([
       supabase.from('vlajka_velkosti').select('*').order('poradie').order('id'),
       supabase.from('vlajka_materialy').select('*').order('poradie').order('id'),
       supabase.from('vlajka_nastavenia').select('*').eq('id', 1).maybeSingle(),
       supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
       supabase.from('textil_naklady_verejny').select('naklad_bm').eq('technologia', 'sublimacia').maybeSingle(),
+      supabase.from('vlajka_tvary').select('id, kod, nazov, poradie, vlajka_tvar_rozmery(id, velkost, rozmer_popis, vyska_cm, spotreba_m2)').order('poradie').order('id'),
     ]);
+    setTvary(t || []);
     setVelkosti(v || []);
     setMaterialy(m || []);
     if (n) setNastavenia(n);
@@ -47,6 +50,12 @@ export default function VlajkaVelkostiTab({ supabase }) {
   const upravVelkost = async (id, patch) => {
     setVelkosti(v => v.map(x => x.id === id ? { ...x, ...patch } : x));
     await supabase.from('vlajka_velkosti').update(patch).eq('id', id);
+  };
+
+  // Rozmer plachty a vyska od zeme sa zadavaju PER TVAR a velkost (Basic/Blade/Feather maju ine rozmery nez Wave, Wing, Square).
+  const upravRozmerTvaru = async (tvarId, rozmerId, patch) => {
+    setTvary(ts => ts.map(t => t.id !== tvarId ? t : { ...t, vlajka_tvar_rozmery: t.vlajka_tvar_rozmery.map(x => x.id === rozmerId ? { ...x, ...patch } : x) }));
+    await supabase.from('vlajka_tvar_rozmery').update(patch).eq('id', rozmerId);
   };
 
   const ulozNastavenia = async (patch) => {
@@ -76,29 +85,59 @@ export default function VlajkaVelkostiTab({ supabase }) {
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-bold text-white flex items-center gap-2"><Ruler className="text-indigo-400 h-5 w-5" /> Veľkosti, DPH a expres</h2>
-        <p className="text-xs text-slate-400 mt-1">Cena veľkosti sa už nezadáva ručne — počíta sa z nákladu (spotreba m² × (látka + sublimačná potlač) + šitie, záložky "Materiály" a "Tvary") cez jednotný maržový vzorec. Tu nastavuješ fyzické rozmery a minúty šitia — k tomu sa v konfigurátore pripočíta opracovanie, prút a doplnky.</p>
+        <p className="text-xs text-slate-400 mt-1">Cena veľkosti sa už nezadáva ručne — počíta sa z nákladu (spotreba m² × (látka + sublimačná potlač) + šitie, záložky "Materiály" a "Tvary") cez jednotný maržový vzorec. Tu nastavuješ rozmery plachty a výšku od zeme (po tvaroch) a minúty šitia — k tomu sa v konfigurátore pripočíta opracovanie, prút a doplnky.</p>
       </div>
 
+      {/* ROZMERY PODLA TVARU: rozmer plachty + vyska od zeme (kazdy tvar ma ine) */}
+      <div className="space-y-4">
+        <p className="text-xs text-slate-400">Rozmery plachty a výška od zeme sa zadávajú <strong className="text-slate-200">pre každý tvar zvlášť</strong> (Basic, Blade a Feather majú rovnaké, Wave, Wing a Square iné). Zákazník ich vidí pri výbere veľkosti a v náhľade s postavou.</p>
+        {tvary.map(t => {
+          const rozmery = (t.vlajka_tvar_rozmery || []).slice().sort((a, b) => ['S', 'M', 'L', 'XL'].indexOf(a.velkost) - ['S', 'M', 'L', 'XL'].indexOf(b.velkost));
+          return (
+            <div key={t.id} className="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-x-auto">
+              <div className="px-4 pt-3 pb-1 flex items-center gap-2">
+                <h3 className="font-bold text-sm text-white">{t.nazov}</h3>
+                <span className="text-[10px] text-slate-500 font-mono">{t.kod}</span>
+              </div>
+              <table className="w-full text-sm">
+                <thead className="text-slate-500 text-xs uppercase tracking-wide">
+                  <tr>
+                    <th className="text-left px-4 py-2">Veľkosť</th>
+                    <th className="text-left px-4 py-2">Rozmer plachty (šírka x výška)</th>
+                    <th className="text-left px-4 py-2">Výška od zeme (cm)</th>
+                    <th className="text-left px-4 py-2">Spotreba (m²)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rozmery.map(rz => (
+                    <tr key={rz.id} className="border-t border-slate-800">
+                      <td className="px-4 py-2 text-white font-bold">{rz.velkost}</td>
+                      <td className="px-4 py-2"><input type="text" value={rz.rozmer_popis || ''} placeholder="napr. 55 x 200 cm" onChange={(e) => upravRozmerTvaru(t.id, rz.id, { rozmer_popis: e.target.value })} className="w-40 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /></td>
+                      <td className="px-4 py-2"><NumberInput value={rz.vyska_cm ?? 0} onChange={(val) => upravRozmerTvaru(t.id, rz.id, { vyska_cm: val })} fallback={0} className="w-24 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /></td>
+                      <td className="px-4 py-2 text-slate-400 font-mono text-xs">{rz.spotreba_m2 != null ? Number(rz.spotreba_m2).toFixed(3) : '—'}</td>
+                    </tr>
+                  ))}
+                  {rozmery.length === 0 && <tr><td colSpan={4} className="px-4 py-3 text-xs text-slate-500">Tvar zatiaľ nemá žiadne veľkosti (pridaj ich v záložke Tvary).</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* MINUTY SITIA: spolocne pre velkost (S, M, L, XL) */}
       <div className="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-slate-950/60 text-slate-500 text-xs uppercase tracking-wide">
             <tr>
-              <th className="text-left px-4 py-2.5">Kód</th>
-              <th className="text-left px-4 py-2.5">Výška od zeme (cm)</th>
-              <th className="text-left px-4 py-2.5">Rozmer plachty</th>
-              <th className="text-left px-4 py-2.5">Minúty šitia</th>
+              <th className="text-left px-4 py-2.5">Veľkosť</th>
+              <th className="text-left px-4 py-2.5">Minúty šitia (rovnaké pre všetky tvary)</th>
             </tr>
           </thead>
           <tbody>
             {velkosti.map(v => (
               <tr key={v.id} className="border-t border-slate-800">
                 <td className="px-4 py-2 text-white font-bold">{v.kod}</td>
-                <td className="px-4 py-2">
-                  <NumberInput value={v.vyska_cm} onChange={(val) => upravVelkost(v.id, { vyska_cm: val })} fallback={0} className="w-24 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" />
-                </td>
-                <td className="px-4 py-2">
-                  <input type="text" value={v.rozmer_popis} onChange={(e) => upravVelkost(v.id, { rozmer_popis: e.target.value })} className="w-36 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" />
-                </td>
                 <td className="px-4 py-2">
                   <div className="flex items-center gap-1.5">
                     <NumberInput step="1" value={v.minuty_sitia ?? 0} onChange={(val) => upravVelkost(v.id, { minuty_sitia: val })} fallback={0} className="w-20 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" />
