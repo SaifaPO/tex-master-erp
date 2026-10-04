@@ -77,6 +77,128 @@ function priceAt(cost: number, qty: number, cfg: PricingConfig) {
   return Math.round(cost * (1 + marginAt(cost, qty, cfg) / 100) * 100) / 100;
 }
 
+// Cely vypocet ceny jednej konfiguracie. Pouziva ho aj rezim "matica" (cena pri kazdej velkosti a kazdom materiali).
+async function spocitaj(supabase: ReturnType<typeof createClient>, v: Record<string, any>) {
+  const { tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnky = [], pocetKs = 1, expresne = false, osobnyOdber = false, stoziare = null, podstavce = null } = v;
+  if (!tvarKod || !velkostKod) throw new Error('Chýba tvar alebo veľkosť vlajky.');
+  if (!materialKod) throw new Error('Chýba materiál.');
+
+  const [{ data: tvar }, { data: material }, { data: dokoncenie }, cenaStoziara, cenaPodstavca, { data: doplnkyDb }, { data: nastavenia }, { data: cfg }, nakladM2Sublimacia, { data: velkostRiadok }] = await Promise.all([
+    supabase.from('vlajka_tvary').select('id').eq('kod', tvarKod).maybeSingle(),
+    supabase.from('vlajka_materialy').select('naklad_m2, sklad_material_id').eq('kod', materialKod).eq('aktivny', true).maybeSingle(),
+    dokoncenieKod ? supabase.from('vlajka_dokoncenie').select('cena').eq('kod', dokoncenieKod).maybeSingle() : Promise.resolve({ data: null }),
+    resolveStoziarCena(supabase, stoziarKod, velkostKod),
+    resolvePodstavecCena(supabase, podstavecKod, velkostKod),
+    supabase.from('vlajka_doplnky').select('*'),
+    supabase.from('vlajka_nastavenia').select('*').eq('id', 1).maybeSingle(),
+    supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
+    resolveNakladSublimacieM2(supabase),
+    supabase.from('vlajka_velkosti').select('minuty_sitia').eq('kod', velkostKod).maybeSingle(),
+  ]);
+
+  if (!tvar) throw new Error(`Tvar "${tvarKod}" sa nenašiel.`);
+  if (!material) throw new Error(`Materiál "${materialKod}" sa nenašiel.`);
+
+  const { data: rozmer } = await supabase.from('vlajka_tvar_rozmery').select('spotreba_m2').eq('tvar_id', tvar.id).eq('velkost', velkostKod).maybeSingle();
+  if (!rozmer || rozmer.spotreba_m2 == null) throw new Error(`Spotreba materiálu pre tvar "${tvarKod}" a veľkosť "${velkostKod}" nie je nastavená (admin: Vlajky → Tvary).`);
+
+  const pricingConfig: PricingConfig = cfg
+    ? { coefA: Number(cfg.coef_a), coefB: Number(cfg.coef_b), marginFloor: Number(cfg.margin_floor), coefP: Number(cfg.coef_p), cielovaHodnotaZakazky: Number(cfg.cielova_hodnota_zakazky ?? 25000), dphPercent: Number(cfg.dph_percent ?? 23) }
+    : { coefA: 300, coefB: 54, marginFloor: 30, coefP: 1.3, cielovaHodnotaZakazky: 25000, dphPercent: 23 };
+
+  const doplnkyVypocet = (doplnky as { kod: string; mnozstvo: number }[]).map((d) => {
+    const dbRow = (doplnkyDb || []).find((x: any) => x.kod === d.kod);
+    return { cena: dbRow ? Number(dbRow.cena) : 0, mnozstvo: Number(d.mnozstvo) || 0 };
+  });
+
+  const nakladM2Latka = await resolveNakladM2(supabase, material);
+  const ks = Math.max(1, Math.round(Number(pocetKs)) || 1);
+  const minutySitia = Number(velkostRiadok?.minuty_sitia) || 0;
+  const cenaMinutySitia = Number(cfg?.cena_minuty_sitia) || 0;
+  const nakladSitia = minutySitia * cenaMinutySitia;
+  const nakladMaterial = Number(rozmer.spotreba_m2) * (nakladM2Latka + nakladM2Sublimacia) + nakladSitia;
+  const cenaMaterialKus = priceAt(nakladMaterial, ks, pricingConfig);
+  const marzaPercent = Math.round(marginAt(nakladMaterial, ks, pricingConfig));
+
+  // Opracovanie, prut, podstavec aj doplnky su v DB ulozene ako NAKUPNE ceny — predajna cena sa
+  // dopocita rovnakym maržovym vzorcom ako material (marza klesa s poctom kusov).
+  // Vlajky: ks x (material + opracovanie), marza podla poctu vlajok. Prúty, podstavce a prislusenstvo
+  // maju kazdy VLASTNY pocet kusov (marza sa pocita z poctu kusov danej polozky). Ak klient neposle
+  // polia stoziare/podstavce, plati stary sposob: vybrany prut/podstavec x pocet vlajok.
+  const predajVlajka = (nakup: number) => priceAt(Number(nakup) || 0, ks, pricingConfig);
+  const cenaDokoncenia = predajVlajka(Number(dokoncenie?.cena) || 0);
+  const zaklad = cenaMaterialKus + cenaDokoncenia; // na 1 vlajku
+  const vlajkySpolu = zaklad * ks;
+  const polozky = (pole: unknown, kodFallback: string | null) => (Array.isArray(pole)
+    ? (pole as { kod: string; mnozstvo: number }[]).filter((x) => x?.kod && Number(x.mnozstvo) > 0).map((x) => ({ kod: String(x.kod), mnozstvo: Math.round(Number(x.mnozstvo)) }))
+    : (kodFallback ? [{ kod: kodFallback, mnozstvo: ks }] : []));
+  // Detailny rozpis po polozkach (nazov, kusy, cena za kus, spolu) pre zobrazenie zakaznikovi.
+  const r2 = (x: number) => Math.round(x * 100) / 100;
+  type Riadok = { nazov: string; mnozstvo: number; cenaZaKus: number; spolu: number };
+  const stoziareRiadky: Riadok[] = [];
+  for (const p of polozky(stoziare, stoziarKod)) {
+    const cena = p.kod === stoziarKod ? cenaStoziara : await resolveStoziarCena(supabase, p.kod, velkostKod);
+    const { data: st } = await supabase.from('vlajka_stoziare').select('nazov').eq('kod', p.kod).maybeSingle();
+    const jedn = priceAt(Number(cena) || 0, p.mnozstvo, pricingConfig);
+    stoziareRiadky.push({ nazov: st?.nazov || p.kod, mnozstvo: p.mnozstvo, cenaZaKus: r2(jedn), spolu: r2(jedn * p.mnozstvo) });
+  }
+  const podstavceRiadky: Riadok[] = [];
+  for (const p of polozky(podstavce, podstavecKod)) {
+    const cena = p.kod === podstavecKod ? cenaPodstavca : await resolvePodstavecCena(supabase, p.kod, velkostKod);
+    const { data: pd } = await supabase.from('vlajka_podstavce').select('nazov').eq('kod', p.kod).maybeSingle();
+    const jedn = priceAt(Number(cena) || 0, p.mnozstvo, pricingConfig);
+    podstavceRiadky.push({ nazov: pd?.nazov || p.kod, mnozstvo: p.mnozstvo, cenaZaKus: r2(jedn), spolu: r2(jedn * p.mnozstvo) });
+  }
+  const doplnkyRiadky: Riadok[] = (doplnky as { kod: string; mnozstvo: number }[]).filter((d) => Number(d.mnozstvo) > 0).map((d) => {
+    const dbRow = (doplnkyDb || []).find((x: any) => x.kod === d.kod);
+    const m = Math.round(Number(d.mnozstvo));
+    const jedn = priceAt(Number(dbRow?.cena) || 0, Math.max(1, m), pricingConfig);
+    return { nazov: dbRow?.nazov || d.kod, mnozstvo: m, cenaZaKus: r2(jedn), spolu: r2(jedn * m) };
+  });
+  const stoziareSpolu = stoziareRiadky.reduce((a, x) => a + x.spolu, 0);
+  const podstavceSpolu = podstavceRiadky.reduce((a, x) => a + x.spolu, 0);
+  const doplnkySpolu = doplnkyRiadky.reduce((a, x) => a + x.spolu, 0);
+
+  const subtotal = vlajkySpolu + stoziareSpolu + podstavceSpolu + doplnkySpolu;
+
+  const naklady = nastavenia || { expresny_priplatok_percent: 10 };
+  const expresnyPercent = Number(naklady.expresny_priplatok_percent) || 0;
+  const expresnyPriplatok = expresne ? subtotal * (expresnyPercent / 100) : 0;
+  const dphPercent = Number(pricingConfig.dphPercent) || 0;
+  // Postovne zdarma od urcitej sumy objednavky (s DPH, bez dopravy) — predvolene 150 EUR, nastavitelne v ERP.
+  const postovneZdarmaOd = Number(naklady.postovne_zdarma_od_eur ?? 150) || 0;
+  const tovarSDph = (subtotal + expresnyPriplatok) * (1 + dphPercent / 100);
+  const doprava = osobnyOdber || (postovneZdarmaOd > 0 && tovarSDph >= postovneZdarmaOd) ? 0 : (Number(naklady.cena_doprava) || 0);
+
+  const cenaBezDph = subtotal + expresnyPriplatok + doprava;
+  const dphSuma = cenaBezDph * (dphPercent / 100);
+  const cenaSpolu = cenaBezDph + dphSuma;
+
+  return {
+      zaklad: Math.round(zaklad * 100) / 100,
+      vlajkySpolu: Math.round(vlajkySpolu * 100) / 100,
+      rozpis: {
+        vlajka: { mnozstvo: ks, cenaZaKus: r2(zaklad), spolu: r2(vlajkySpolu) },
+        stoziare: stoziareRiadky,
+        podstavce: podstavceRiadky,
+        doplnky: doplnkyRiadky,
+      },
+      postovneZdarmaOd,
+      doDopravyZdarma: osobnyOdber || postovneZdarmaOd <= 0 ? 0 : Math.max(0, r2(postovneZdarmaOd - tovarSDph)),
+      stoziareSpolu: Math.round(stoziareSpolu * 100) / 100,
+      podstavceSpolu: Math.round(podstavceSpolu * 100) / 100,
+      doplnkySpolu: Math.round(doplnkySpolu * 100) / 100,
+      subtotal: Math.round(subtotal * 100) / 100,
+      expresnyPriplatok: Math.round(expresnyPriplatok * 100) / 100,
+      doprava: Math.round(doprava * 100) / 100,
+      cenaBezDph: Math.round(cenaBezDph * 100) / 100,
+      dphSuma: Math.round(dphSuma * 100) / 100,
+      cenaSpolu: Math.round(cenaSpolu * 100) / 100,
+      cenaMaterialKus,
+      marzaPercent,
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -122,125 +244,25 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (!tvarKod || !velkostKod) throw new Error('Chýba tvar alebo veľkosť vlajky.');
-    if (!materialKod) throw new Error('Chýba materiál.');
+    const vstup = { tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnky, pocetKs, expresne, osobnyOdber, stoziare, podstavce };
 
-    const [{ data: tvar }, { data: material }, { data: dokoncenie }, cenaStoziara, cenaPodstavca, { data: doplnkyDb }, { data: nastavenia }, { data: cfg }, nakladM2Sublimacia, { data: velkostRiadok }] = await Promise.all([
-      supabase.from('vlajka_tvary').select('id').eq('kod', tvarKod).maybeSingle(),
-      supabase.from('vlajka_materialy').select('naklad_m2, sklad_material_id').eq('kod', materialKod).eq('aktivny', true).maybeSingle(),
-      dokoncenieKod ? supabase.from('vlajka_dokoncenie').select('cena').eq('kod', dokoncenieKod).maybeSingle() : Promise.resolve({ data: null }),
-      resolveStoziarCena(supabase, stoziarKod, velkostKod),
-      resolvePodstavecCena(supabase, podstavecKod, velkostKod),
-      supabase.from('vlajka_doplnky').select('*'),
-      supabase.from('vlajka_nastavenia').select('*').eq('id', 1).maybeSingle(),
-      supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
-      resolveNakladSublimacieM2(supabase),
-      supabase.from('vlajka_velkosti').select('minuty_sitia').eq('kod', velkostKod).maybeSingle(),
-    ]);
-
-    if (!tvar) throw new Error(`Tvar "${tvarKod}" sa nenašiel.`);
-    if (!material) throw new Error(`Materiál "${materialKod}" sa nenašiel.`);
-
-    const { data: rozmer } = await supabase.from('vlajka_tvar_rozmery').select('spotreba_m2').eq('tvar_id', tvar.id).eq('velkost', velkostKod).maybeSingle();
-    if (!rozmer || rozmer.spotreba_m2 == null) throw new Error(`Spotreba materiálu pre tvar "${tvarKod}" a veľkosť "${velkostKod}" nie je nastavená (admin: Vlajky → Tvary).`);
-
-    const pricingConfig: PricingConfig = cfg
-      ? { coefA: Number(cfg.coef_a), coefB: Number(cfg.coef_b), marginFloor: Number(cfg.margin_floor), coefP: Number(cfg.coef_p), cielovaHodnotaZakazky: Number(cfg.cielova_hodnota_zakazky ?? 25000), dphPercent: Number(cfg.dph_percent ?? 23) }
-      : { coefA: 300, coefB: 54, marginFloor: 30, coefP: 1.3, cielovaHodnotaZakazky: 25000, dphPercent: 23 };
-
-    const doplnkyVypocet = (doplnky as { kod: string; mnozstvo: number }[]).map((d) => {
-      const dbRow = (doplnkyDb || []).find((x: any) => x.kod === d.kod);
-      return { cena: dbRow ? Number(dbRow.cena) : 0, mnozstvo: Number(d.mnozstvo) || 0 };
-    });
-
-    const nakladM2Latka = await resolveNakladM2(supabase, material);
-    const ks = Math.max(1, Math.round(Number(pocetKs)) || 1);
-    const minutySitia = Number(velkostRiadok?.minuty_sitia) || 0;
-    const cenaMinutySitia = Number(cfg?.cena_minuty_sitia) || 0;
-    const nakladSitia = minutySitia * cenaMinutySitia;
-    const nakladMaterial = Number(rozmer.spotreba_m2) * (nakladM2Latka + nakladM2Sublimacia) + nakladSitia;
-    const cenaMaterialKus = priceAt(nakladMaterial, ks, pricingConfig);
-    const marzaPercent = Math.round(marginAt(nakladMaterial, ks, pricingConfig));
-
-    // Opracovanie, prut, podstavec aj doplnky su v DB ulozene ako NAKUPNE ceny — predajna cena sa
-    // dopocita rovnakym maržovym vzorcom ako material (marza klesa s poctom kusov).
-    // Vlajky: ks x (material + opracovanie), marza podla poctu vlajok. Prúty, podstavce a prislusenstvo
-    // maju kazdy VLASTNY pocet kusov (marza sa pocita z poctu kusov danej polozky). Ak klient neposle
-    // polia stoziare/podstavce, plati stary sposob: vybrany prut/podstavec x pocet vlajok.
-    const predajVlajka = (nakup: number) => priceAt(Number(nakup) || 0, ks, pricingConfig);
-    const cenaDokoncenia = predajVlajka(Number(dokoncenie?.cena) || 0);
-    const zaklad = cenaMaterialKus + cenaDokoncenia; // na 1 vlajku
-    const vlajkySpolu = zaklad * ks;
-    const polozky = (pole: unknown, kodFallback: string | null) => (Array.isArray(pole)
-      ? (pole as { kod: string; mnozstvo: number }[]).filter((x) => x?.kod && Number(x.mnozstvo) > 0).map((x) => ({ kod: String(x.kod), mnozstvo: Math.round(Number(x.mnozstvo)) }))
-      : (kodFallback ? [{ kod: kodFallback, mnozstvo: ks }] : []));
-    // Detailny rozpis po polozkach (nazov, kusy, cena za kus, spolu) pre zobrazenie zakaznikovi.
-    const r2 = (x: number) => Math.round(x * 100) / 100;
-    type Riadok = { nazov: string; mnozstvo: number; cenaZaKus: number; spolu: number };
-    const stoziareRiadky: Riadok[] = [];
-    for (const p of polozky(stoziare, stoziarKod)) {
-      const cena = p.kod === stoziarKod ? cenaStoziara : await resolveStoziarCena(supabase, p.kod, velkostKod);
-      const { data: st } = await supabase.from('vlajka_stoziare').select('nazov').eq('kod', p.kod).maybeSingle();
-      const jedn = priceAt(Number(cena) || 0, p.mnozstvo, pricingConfig);
-      stoziareRiadky.push({ nazov: st?.nazov || p.kod, mnozstvo: p.mnozstvo, cenaZaKus: r2(jedn), spolu: r2(jedn * p.mnozstvo) });
+    // Rezim "matica": celkova cena objednavky pri KAZDEJ velkosti a KAZDOM materiali (so zvyskom konfiguracie nezmeneným) —
+    // zakaznik vidi cenu priamo pri vybere velkosti a materialu.
+    if (body.matica) {
+      if (!tvarKod || !velkostKod || !materialKod) throw new Error('Chýba tvar, veľkosť alebo materiál.');
+      const [{ data: velk }, { data: mats }] = await Promise.all([
+        supabase.from('vlajka_velkosti').select('kod').eq('aktivny', true),
+        supabase.from('vlajka_materialy').select('kod').eq('aktivny', true),
+      ]);
+      const spolu = async (zmena: Record<string, string>) => { try { return (await spocitaj(supabase, { ...vstup, ...zmena })).cenaSpolu; } catch { return null; } };
+      const [velkosti, materialy] = await Promise.all([
+        Promise.all((velk || []).map(async (x: any) => [x.kod, await spolu({ velkostKod: x.kod })])),
+        Promise.all((mats || []).map(async (x: any) => [x.kod, await spolu({ materialKod: x.kod })])),
+      ]);
+      return odpoved({ matica: { velkosti: Object.fromEntries(velkosti), materialy: Object.fromEntries(materialy) } });
     }
-    const podstavceRiadky: Riadok[] = [];
-    for (const p of polozky(podstavce, podstavecKod)) {
-      const cena = p.kod === podstavecKod ? cenaPodstavca : await resolvePodstavecCena(supabase, p.kod, velkostKod);
-      const { data: pd } = await supabase.from('vlajka_podstavce').select('nazov').eq('kod', p.kod).maybeSingle();
-      const jedn = priceAt(Number(cena) || 0, p.mnozstvo, pricingConfig);
-      podstavceRiadky.push({ nazov: pd?.nazov || p.kod, mnozstvo: p.mnozstvo, cenaZaKus: r2(jedn), spolu: r2(jedn * p.mnozstvo) });
-    }
-    const doplnkyRiadky: Riadok[] = (doplnky as { kod: string; mnozstvo: number }[]).filter((d) => Number(d.mnozstvo) > 0).map((d) => {
-      const dbRow = (doplnkyDb || []).find((x: any) => x.kod === d.kod);
-      const m = Math.round(Number(d.mnozstvo));
-      const jedn = priceAt(Number(dbRow?.cena) || 0, Math.max(1, m), pricingConfig);
-      return { nazov: dbRow?.nazov || d.kod, mnozstvo: m, cenaZaKus: r2(jedn), spolu: r2(jedn * m) };
-    });
-    const stoziareSpolu = stoziareRiadky.reduce((a, x) => a + x.spolu, 0);
-    const podstavceSpolu = podstavceRiadky.reduce((a, x) => a + x.spolu, 0);
-    const doplnkySpolu = doplnkyRiadky.reduce((a, x) => a + x.spolu, 0);
 
-    const subtotal = vlajkySpolu + stoziareSpolu + podstavceSpolu + doplnkySpolu;
-
-    const naklady = nastavenia || { expresny_priplatok_percent: 10 };
-    const expresnyPercent = Number(naklady.expresny_priplatok_percent) || 0;
-    const expresnyPriplatok = expresne ? subtotal * (expresnyPercent / 100) : 0;
-    const dphPercent = Number(pricingConfig.dphPercent) || 0;
-    // Postovne zdarma od urcitej sumy objednavky (s DPH, bez dopravy) — predvolene 150 EUR, nastavitelne v ERP.
-    const postovneZdarmaOd = Number(naklady.postovne_zdarma_od_eur ?? 150) || 0;
-    const tovarSDph = (subtotal + expresnyPriplatok) * (1 + dphPercent / 100);
-    const doprava = osobnyOdber || (postovneZdarmaOd > 0 && tovarSDph >= postovneZdarmaOd) ? 0 : (Number(naklady.cena_doprava) || 0);
-
-    const cenaBezDph = subtotal + expresnyPriplatok + doprava;
-    const dphSuma = cenaBezDph * (dphPercent / 100);
-    const cenaSpolu = cenaBezDph + dphSuma;
-
-    return odpoved({
-      cena: {
-        zaklad: Math.round(zaklad * 100) / 100,
-        vlajkySpolu: Math.round(vlajkySpolu * 100) / 100,
-        rozpis: {
-          vlajka: { mnozstvo: ks, cenaZaKus: r2(zaklad), spolu: r2(vlajkySpolu) },
-          stoziare: stoziareRiadky,
-          podstavce: podstavceRiadky,
-          doplnky: doplnkyRiadky,
-        },
-        postovneZdarmaOd,
-        doDopravyZdarma: osobnyOdber || postovneZdarmaOd <= 0 ? 0 : Math.max(0, r2(postovneZdarmaOd - tovarSDph)),
-        stoziareSpolu: Math.round(stoziareSpolu * 100) / 100,
-        podstavceSpolu: Math.round(podstavceSpolu * 100) / 100,
-        doplnkySpolu: Math.round(doplnkySpolu * 100) / 100,
-        subtotal: Math.round(subtotal * 100) / 100,
-        expresnyPriplatok: Math.round(expresnyPriplatok * 100) / 100,
-        doprava: Math.round(doprava * 100) / 100,
-        cenaBezDph: Math.round(cenaBezDph * 100) / 100,
-        dphSuma: Math.round(dphSuma * 100) / 100,
-        cenaSpolu: Math.round(cenaSpolu * 100) / 100,
-        cenaMaterialKus,
-        marzaPercent,
-      },
-    });
+    return odpoved({ cena: await spocitaj(supabase, vstup) });
   } catch (e) {
     return odpoved({ error: e instanceof Error ? e.message : String(e) });
   }

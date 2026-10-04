@@ -1,10 +1,14 @@
 import React from 'react';
+import { Download } from 'lucide-react';
+import { stiahniStrihPdf } from './stiahniStrih';
 import { Shapes, Ruler, Scissors, GripVertical, Layers, TriangleAlert } from 'lucide-react';
+
+const eur = (c) => (c == null ? null : Number(c).toFixed(2) + ' €');
 
 // undefined = cenovnik sa este nacitava (alebo zlyhal) — radsej nic nez zavadzajuce 'V cene'.
 const cenaText = (c) => (c == null ? '…' : c > 0 ? `+${Number(c).toFixed(2)} €` : 'V cene');
 
-export default function ParametreTab({ katalog, cenyVolieb, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, onTvar, onVelkost, onMaterial, onDokoncenie, onStoziar, onPodstavec, onDalej }) {
+export default function ParametreTab({ katalog, cenyVolieb, cenyMatica, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, onTvar, onVelkost, onMaterial, onDokoncenie, onStoziar, onPodstavec, onDalej }) {
   return (
     <div className="p-4 sm:p-6 space-y-6">
       <div>
@@ -35,11 +39,31 @@ export default function ParametreTab({ katalog, cenyVolieb, tvarKod, velkostKod,
                 </div>
                 <div className="text-[11px] font-semibold text-slate-700">{vyskaPreTvar} cm od zeme</div>
                 <div className="text-[10px] text-slate-500 mt-0.5">{vybranyTvar?.rozmery?.[v.kod]?.rozmer_popis || v.rozmer_popis}</div>
+                {eur(cenyMatica?.velkosti?.[v.kod]) && <div className="text-xs font-black text-indigo-600 mt-1">spolu {eur(cenyMatica.velkosti[v.kod])}</div>}
               </button>
             );
           })}
         </div>
       </div>
+
+      {(() => {
+        const t = katalog.tvary.find(x => x.kod === tvarKod);
+        const velkostiSStrihom = katalog.velkosti.filter(v => t?.rozmery?.[v.kod]?.cut_path);
+        if (!t || velkostiSStrihom.length === 0) return null;
+        return (
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+            <div className="text-xs font-bold text-slate-800 mb-0.5 flex items-center gap-1.5"><Download className="w-3.5 h-3.5 text-indigo-600" /> Strih na stiahnutie (PDF, mierka 1:1)</div>
+            <p className="text-[11px] text-slate-500 mb-2">Pre grafikov, ktorí si grafiku nakreslia sami. Obsahuje 3 čiary: <span className="text-red-500 font-semibold">orez</span>, <span className="text-emerald-600 font-semibold">bezpečná zóna</span> a <span className="text-amber-500 font-semibold">spadávka</span>.</p>
+            <div className="flex flex-wrap gap-2">
+              {velkostiSStrihom.map(v => (
+                <button key={v.kod} type="button" onClick={() => stiahniStrihPdf({ tvarKod: t.kod, tvarNazov: t.nazov, velkostKod: v.kod, rozmer: t.rozmery[v.kod] })} className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:border-indigo-400 hover:text-indigo-700 flex items-center gap-1.5">
+                  <Download className="w-3 h-3" /> {t.nazov} {v.kod}
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       <div>
         <label className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-3"><Layers className="w-4 h-4 text-indigo-600" /> 3. Materiál</label>
@@ -51,6 +75,7 @@ export default function ParametreTab({ katalog, cenyVolieb, tvarKod, velkostKod,
                 {m.obrazok_url && <img src={m.obrazok_url} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />}
                 <div className="min-w-0">
                   <span className="font-bold text-xs block">{m.nazov}</span>
+                  {eur(cenyMatica?.materialy?.[m.kod]) && <span className="text-xs font-black text-indigo-600 block">spolu {eur(cenyMatica.materialy[m.kod])}</span>}
                   {m.popis && <p className="text-[11px] text-slate-500 mt-0.5">{m.popis}</p>}
                   {m.pouzitie && <p className="text-[10px] text-slate-400 mt-0.5">{m.pouzitie}</p>}
                 </div>

@@ -6,6 +6,7 @@ import AskQuestion from '../AskQuestion';
 import { nacitajVlajkaKatalog } from './vlajkaData';
 import ParametreTab from './ParametreTab';
 import GrafikaTab from './GrafikaTab';
+import SpodnaListaCeny from './SpodnaListaCeny';
 import DoplnkyTab from './DoplnkyTab';
 import VelkostnePorovnanie from './VelkostnePorovnanie';
 
@@ -51,6 +52,8 @@ export default function BeachflagApp({ supabase }) {
   const [mnozstvaRucne, setMnozstvaRucne] = useState(false);
   const [osobnyOdber, setOsobnyOdber] = useState(false);
   const [cena, setCena] = useState(null);
+  const [cenyMatica, setCenyMatica] = useState(null); // { velkosti: {S: 123}, materialy: {kod: 123} } — celkova cena pri kazdej velkosti / materiali
+  const [listaOtvorena, setListaOtvorena] = useState(false);
   const [cenyVolieb, setCenyVolieb] = useState(null); // predajne ceny opracovania/prutov/podstavcov/doplnkov (zo servera)
   const [cenaNacitava, setCenaNacitava] = useState(false);
   const [cenaChyba, setCenaChyba] = useState('');
@@ -255,6 +258,21 @@ export default function BeachflagApp({ supabase }) {
     return () => clearTimeout(t);
   }, [supabase, katalog, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnkyMnozstva, pocetKs, expresne, osobnyOdber, stoziareMn, podstavceMn]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Celkova cena objednavky pri KAZDEJ velkosti a KAZDOM materiali (so zvyskom konfiguracie nezmeneným) — zakaznik ju vidi priamo
+  // pri vybere velkosti a materialu; pri zmene niecoho ineho (pocet kusov, prut, ...) sa to prepocita v realnom case.
+  useEffect(() => {
+    if (!katalog || !tvarKod || !velkostKod || !materialKod) return;
+    let zrusene = false;
+    const doplnky = Object.entries(doplnkyMnozstva).map(([kod, mnozstvo]) => ({ kod, mnozstvo }));
+    const t = setTimeout(async () => {
+      const { data, error } = await supabase.functions.invoke('beachflag-price-preview', {
+        body: { matica: true, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnky, pocetKs, expresne, osobnyOdber, stoziare: zoznamMnozstiev(stoziareMn), podstavce: zoznamMnozstiev(podstavceMn) },
+      });
+      if (!zrusene) setCenyMatica(!error && !data?.error ? data.matica : null);
+    }, 600);
+    return () => { zrusene = true; clearTimeout(t); };
+  }, [supabase, katalog, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnkyMnozstva, pocetKs, expresne, osobnyOdber, stoziareMn, podstavceMn]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Predajne ceny jednotlivych volieb — v DB su NAKUPNE ceny (verejnost ich nevidi), predajna cena sa
   // dopocita na serveri z marze a poctu kusov (rezim 'cenovnik' v beachflag-price-preview).
   useEffect(() => {
@@ -380,7 +398,7 @@ export default function BeachflagApp({ supabase }) {
         </div>
 
         {krok === 'parametre' && (
-          <ParametreTab katalog={katalog} cenyVolieb={cenyVolieb} tvarKod={tvarKod} velkostKod={velkostKod} materialKod={materialKod} dokoncenieKod={dokoncenieKod} stoziarKod={stoziarKod} podstavecKod={podstavecKod}
+          <ParametreTab katalog={katalog} cenyVolieb={cenyVolieb} cenyMatica={cenyMatica} tvarKod={tvarKod} velkostKod={velkostKod} materialKod={materialKod} dokoncenieKod={dokoncenieKod} stoziarKod={stoziarKod} podstavecKod={podstavecKod}
             onTvar={vyberTvar} onVelkost={vyberVelkost} onMaterial={setMaterialKod} onDokoncenie={setDokoncenieKod} onStoziar={vyberStoziar} onPodstavec={vyberPodstavec}
             onDalej={() => setKrok('grafika')} />
         )}
@@ -441,6 +459,7 @@ export default function BeachflagApp({ supabase }) {
 
       </div>
     </div>
+    <SpodnaListaCeny cena={cena} cenaNacitava={cenaNacitava} pocetKs={pocetKs} osobnyOdber={osobnyOdber} />
     </>
   );
 }

@@ -123,6 +123,7 @@ function JednoduchaSekcia({ supabase, tabulka, nazovSekcie, popisSekcie, maMaxMn
                 <th className="text-left px-4 py-2.5">Nákup (€)</th>
                 {maMaxMnozstvo && <th className="text-left px-4 py-2.5">Max. ks</th>}
                 <th className="text-left px-4 py-2.5">Popis</th>
+                <th className="text-left px-4 py-2.5">Zobrazuje sa</th>
                 <th className="px-4 py-2.5"></th>
               </tr>
             </thead>
@@ -136,10 +137,11 @@ function JednoduchaSekcia({ supabase, tabulka, nazovSekcie, popisSekcie, maMaxMn
                   <td className="px-4 py-2"><NumberInput step="0.5" value={r.cena} onChange={(v) => uprav(r.id, { cena: v })} fallback={0} className="w-20 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /></td>
                   {maMaxMnozstvo && <td className="px-4 py-2"><NumberInput min="1" value={r.max_mnozstvo} onChange={(v) => uprav(r.id, { max_mnozstvo: v })} fallback={1} className="w-16 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /></td>}
                   <td className="px-4 py-2"><input type="text" value={r.popis || ''} onChange={(e) => uprav(r.id, { popis: e.target.value })} className="w-64 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white" /></td>
+                  <td className="px-4 py-2"><button onClick={() => uprav(r.id, { aktivny: !r.aktivny })} className={`text-[10px] font-semibold px-2 py-1 rounded-lg ${r.aktivny ? 'bg-emerald-950/60 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>{r.aktivny ? 'Aktívny' : 'Skrytý'}</button></td>
                   <td className="px-4 py-2 text-right"><button onClick={() => zmaz(r.id)} className="text-slate-400 hover:text-rose-400 p-1"><Trash2 className="w-4 h-4" /></button></td>
                 </tr>
               ))}
-              {riadky.length === 0 && <tr><td colSpan={8} className="text-center text-slate-500 py-6 text-sm">Zatiaľ žiadne položky.</td></tr>}
+              {riadky.length === 0 && <tr><td colSpan={9} className="text-center text-slate-500 py-6 text-sm">Zatiaľ žiadne položky.</td></tr>}
             </tbody>
           </table>
         </div>
