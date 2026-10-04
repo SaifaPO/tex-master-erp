@@ -259,6 +259,53 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Rezim "b2bCennik" (ERP -> B2B kody): bezne PREDAJNE ceny za 1 ks bez DPH pri roznych poctoch kusov —
+    // vlajka (material + opracovanie), kazdy prut, kazdy podstavec, kazdy doplnok. Zlavu (%) si pripocita
+    // az ERP podla zadaneho percenta, server vracia len ceny bez zlavy.
+    if (body.b2bCennik) {
+      if (!tvarKod || !materialKod) throw new Error('Chýba tvar alebo materiál.');
+      const hladiny = [1, 5, 10, 25, 50, 100];
+      const [{ data: velk }, { data: stoAll }, { data: stoTvary }, { data: tvarRow }, { data: podAll }, { data: dopAll }, { data: dokAll }, { data: cfgB }] = await Promise.all([
+        supabase.from('vlajka_velkosti').select('kod, nazov').eq('aktivny', true).order('poradie').order('id'),
+        supabase.from('vlajka_stoziare').select('id, kod, nazov').eq('aktivny', true).order('poradie').order('id'),
+        supabase.from('vlajka_stoziare_tvary').select('stoziar_id, tvar_id'),
+        supabase.from('vlajka_tvary').select('id').eq('kod', tvarKod).maybeSingle(),
+        supabase.from('vlajka_podstavce').select('id, kod, nazov').eq('aktivny', true).order('poradie').order('id'),
+        supabase.from('vlajka_doplnky').select('kod, nazov').eq('aktivny', true).order('poradie').order('id'),
+        supabase.from('vlajka_dokoncenie').select('kod').eq('aktivny', true).order('poradie').order('id'),
+        supabase.from('pricing_config').select('dph_percent').eq('id', 1).maybeSingle(),
+      ]);
+      const stoziare = (stoAll || []).filter((s: any) => {
+        const riadky = (stoTvary || []).filter((x: any) => x.stoziar_id === s.id);
+        return riadky.length === 0 || riadky.some((x: any) => x.tvar_id === tvarRow?.id);
+      });
+      const dokKod = dokoncenieKod || dokAll?.[0]?.kod || null;
+      const velkosti = await Promise.all((velk || []).map(async (v: any) => {
+        const ceny = await Promise.all(hladiny.map(async (h) => {
+          try {
+            const c = await spocitaj(supabase, {
+              tvarKod, velkostKod: v.kod, materialKod, dokoncenieKod: dokKod, pocetKs: h,
+              stoziarKod: null, podstavecKod: null,
+              stoziare: stoziare.map((s: any) => ({ kod: s.kod, mnozstvo: h })),
+              podstavce: (podAll || []).map((p: any) => ({ kod: p.kod, mnozstvo: h })),
+              doplnky: (dopAll || []).map((d: any) => ({ kod: d.kod, mnozstvo: h })),
+            });
+            return c.rozpis;
+          } catch { return null; }
+        }));
+        const cenyRiadka = (pole: 'stoziare' | 'podstavce' | 'doplnky', nazov: string) => ceny.map((rz: any) => rz?.[pole]?.find((x: any) => x.nazov === nazov)?.cenaZaKus ?? null);
+        return {
+          kod: v.kod,
+          nazov: v.nazov || v.kod,
+          vlajka: ceny.map((rz: any) => rz?.vlajka?.cenaZaKus ?? null),
+          stoziare: stoziare.map((s: any) => ({ nazov: s.nazov, ceny: cenyRiadka('stoziare', s.nazov) })),
+          podstavce: (podAll || []).map((p: any) => ({ nazov: p.nazov, ceny: cenyRiadka('podstavce', p.nazov) })),
+          doplnky: (dopAll || []).map((d: any) => ({ nazov: d.nazov, ceny: cenyRiadka('doplnky', d.nazov) })),
+        };
+      }));
+      return odpoved({ b2bCennik: { hladiny, dphPercent: Number(cfgB?.dph_percent ?? 23), velkosti } });
+    }
+
     const vstup = { tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnky, pocetKs, expresne, osobnyOdber, stoziare, podstavce, b2bKod };
 
     // Rezim "matica": cena samotnej vlajky (material + opracovanie, bez DPH, 1 ks) pri KAZDEJ velkosti a KAZDOM materiali (so zvyskom konfiguracie nezmeneným) —

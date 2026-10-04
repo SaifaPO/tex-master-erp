@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, Trash2, BadgePercent, Copy, Check } from 'lucide-react';
 import NumberInput from '../NumberInput';
+import B2bPrehladCien from './B2bPrehladCien';
 
 const ODKAZ_ZAKLAD = 'https://shop.pbtprint.sk/apps/dtf-metraz';
 // Znaky bez zameniteľných (0/O, 1/I) — kód sa často diktuje alebo prepisuje.
@@ -90,6 +91,7 @@ export default function B2bKodyTab({ supabase }) {
           </table>
         </div>
       )}
+      <B2bPrehladCien supabase={supabase} kody={kody} />
       <p className="text-[11px] text-slate-500">Odkaz s kódom funguje pre ktorúkoľvek appku, stačí zmeniť časť <code className="bg-slate-950 px-1 rounded">typ=beachflag</code> (zastava, buffka, celenka) alebo pripojiť <code className="bg-slate-950 px-1 rounded">&amp;b2b=KÓD</code> k odkazu na DTF či textilnú metráž (<code className="bg-slate-950 px-1 rounded">?dtf=1</code>, <code className="bg-slate-950 px-1 rounded">?textil=1</code>).</p>
     </div>
   );
