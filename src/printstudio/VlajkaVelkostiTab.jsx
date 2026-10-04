@@ -67,7 +67,8 @@ export default function VlajkaVelkostiTab({ supabase }) {
   const testMaterial = materialy.find(m => m.id === testMaterialId);
   const testVelkost = velkosti.find(v => v.id === testVelkostId);
   const nakladSitia = (Number(testVelkost?.minuty_sitia) || 0) * (Number(pricingConfig.cenaMinutySitia) || 0);
-  const nakladMaterial = (parseFloat(testSpotreba) || 0) * ((Number(testMaterial?.naklad_m2) || 0) + nakladM2Sublimacia) + nakladSitia;
+  const rezervaKoef = 1 + (Number(nastavenia.rezerva_odpad_percent ?? 3) || 0) / 100;
+  const nakladMaterial = (parseFloat(testSpotreba) || 0) * rezervaKoef * ((Number(testMaterial?.naklad_m2) || 0) + nakladM2Sublimacia) + nakladSitia;
   const vysledok = vypocitajCenuVlajky({
     nakladMaterial,
     pricingConfig,
@@ -163,6 +164,11 @@ export default function VlajkaVelkostiTab({ supabase }) {
           <p className="text-[10px] text-slate-500 mt-1">0 = poštovné zdarma sa nepoužíva. Platí pre Beachvlajky.</p>
         </div>
         <div>
+          <label className="text-xs text-indigo-300 font-medium">Rezerva na odpad a kazy (%)</label>
+          <NumberInput step="0.5" value={nastavenia.rezerva_odpad_percent ?? 3} onChange={(v) => ulozNastavenia({ rezerva_odpad_percent: v })} fallback={0} className="w-full mt-1 px-3 py-2 bg-slate-950 border border-indigo-800 rounded-lg text-sm text-white" />
+          <p className="text-[10px] text-slate-500 mt-1">Pripočíta sa k spotrebe látky a sublimácie (nie k šitiu). Spotreby v záložke Tvary ostávajú čisté.</p>
+        </div>
+        <div>
           <label className="text-xs text-indigo-300 font-medium">Expresný príplatok (%)</label>
           <NumberInput step="0.5" value={nastavenia.expresny_priplatok_percent} onChange={(v) => ulozNastavenia({ expresny_priplatok_percent: v })} fallback={0} className="w-full mt-1 px-3 py-2 bg-slate-950 border border-indigo-800 rounded-lg text-sm text-white" />
         </div>
@@ -199,7 +205,7 @@ export default function VlajkaVelkostiTab({ supabase }) {
             </label>
           </div>
         </div>
-        <p className="text-[10px] text-slate-500 mb-2">Náklad: {(parseFloat(testSpotreba) || 0).toFixed(2)} m² × ({(Number(testMaterial?.naklad_m2) || 0).toFixed(2)} € látka + {nakladM2Sublimacia.toFixed(2)} € sublimácia) + {nakladSitia.toFixed(2)} € šitie = {nakladMaterial.toFixed(2)} € spolu</p>
+        <p className="text-[10px] text-slate-500 mb-2">Náklad: {(parseFloat(testSpotreba) || 0).toFixed(2)} m² × {rezervaKoef.toFixed(2)} (rezerva) × ({(Number(testMaterial?.naklad_m2) || 0).toFixed(2)} € látka + {nakladM2Sublimacia.toFixed(2)} € sublimácia) + {nakladSitia.toFixed(2)} € šitie = {nakladMaterial.toFixed(2)} € spolu</p>
         <div className="flex items-center justify-between pt-3 border-t border-slate-800">
           <div className="text-xs text-slate-400">{vysledok.vzorec}</div>
           <div className="text-2xl font-black text-emerald-400">{vysledok.cenaSpolu.toFixed(2)} €</div>

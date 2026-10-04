@@ -206,7 +206,9 @@ Deno.serve(async (req) => {
     const minutySitia = Number(velkost.minuty_sitia) || 0;
     const cenaMinutySitia = Number(cfg?.cena_minuty_sitia) || 0;
     const nakladSitia = minutySitia * cenaMinutySitia;
-    const nakladMaterial = Number(rozmer.spotreba_m2) * (nakladM2Latka + nakladM2Sublimacia) + nakladSitia;
+    // Rezerva na odpad a kazy (ERP: Beachvlajky -> Veľkosti -> Rezerva) sa pripocita k spotrebe latky aj sublimacie, nie k sitiu.
+    const rezervaKoef = 1 + (Number(nastavenia?.rezerva_odpad_percent ?? 3) || 0) / 100;
+    const nakladMaterial = Number(rozmer.spotreba_m2) * rezervaKoef * (nakladM2Latka + nakladM2Sublimacia) + nakladSitia;
 
     const b2bZlavaPercent = await b2bZlava(supabase, b2bKod);
     const cena = vypocitajCenuVlajky({
