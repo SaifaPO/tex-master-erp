@@ -112,6 +112,22 @@ export default function VlajkaMaterialyTab({ supabase }) {
                     <button type="button" onClick={() => prepocitajZoSkladu(m)} title="Prepočítať zo skladu (ak sa zmenila cena/šírka)" className="text-slate-500 hover:text-indigo-400 p-1"><RefreshCw className="w-3.5 h-3.5" /></button>
                   )}
                 </div>
+                {jePrepojeny && (
+                  <div className="shrink-0 text-xs text-slate-400" title="Prepíše cenu zo skladu. Nechaj prázdne = použije sa reálna cena zo skladu.">
+                    <div className="flex items-center gap-1">
+                      <input type="number" step="0.01" min="0"
+                        key={m.id + '-' + (m.naklad_m2_rucne ?? 'x')}
+                        defaultValue={m.naklad_m2_rucne ?? ''}
+                        placeholder={vypocitajNakladZoSkladu(sklad)?.toFixed(2) ?? ''}
+                        onBlur={(e) => { const v = e.target.value === '' ? null : Math.max(0, Number(e.target.value)); if (v !== (m.naklad_m2_rucne ?? null)) uprav(m.id, { naklad_m2_rucne: v }); }}
+                        className={`w-24 px-2 py-1.5 bg-slate-950 border rounded-lg text-sm text-white ${m.naklad_m2_rucne > 0 ? 'border-amber-500/70' : 'border-slate-800'}`} /> € ručne/m²
+                    </div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">
+                      {vypocitajNakladZoSkladu(sklad) != null ? `sklad (reálna cena): ${vypocitajNakladZoSkladu(sklad).toFixed(2)} €/m²` : 'sklad: cena sa nedá prepočítať'}
+                      {m.naklad_m2_rucne > 0 ? ' · používa sa ručná cena' : ''}
+                    </div>
+                  </div>
+                )}
                 <label className="flex items-center gap-1.5 text-xs text-slate-400 shrink-0">
                   <input type="checkbox" checked={m.aktivny} onChange={(e) => uprav(m.id, { aktivny: e.target.checked })} /> aktívny
                 </label>

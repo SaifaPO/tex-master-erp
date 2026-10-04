@@ -20,7 +20,9 @@ function odpoved(body: Record<string, unknown>) {
 // Ak je material prepojeny na skutocny sklad (materials.id), naklad/m2 sa VZDY pocita naживo
 // z aktualnej ceny za bezny meter + sirky rolky v Sklade — nie zo starej ulozenej snimky.
 // Bez prepojenia (alebo ak sklad. polozka nema vyplnenu sirku) sa pouzije rucne zadany naklad_m2.
-async function resolveNakladM2(supabase: ReturnType<typeof createClient>, material: { naklad_m2: number; sklad_material_id: string | null }) {
+async function resolveNakladM2(supabase: ReturnType<typeof createClient>, material: { naklad_m2: number; sklad_material_id: string | null; naklad_m2_rucne?: number | null }) {
+  // Rucne zadana cena €/m2 (ERP: Materialy -> "rucne") ma prednost pred cenou zo skladu.
+  if (Number(material.naklad_m2_rucne) > 0) return Number(material.naklad_m2_rucne);
   if (!material.sklad_material_id) return Number(material.naklad_m2) || 0;
   const { data: sklad } = await supabase.from('materials').select('price_per_m, width').eq('id', material.sklad_material_id).maybeSingle();
   if (!sklad || !sklad.width || Number(sklad.width) <= 0) return Number(material.naklad_m2) || 0;
@@ -93,7 +95,7 @@ Deno.serve(async (req) => {
     if (vyhotovenie !== 'obsite' && vyhotovenie !== 'laser') throw new Error('Neplatné vyhotovenie okrajov.');
 
     const [{ data: material }, { data: naklady }, { data: cfg }] = await Promise.all([
-      supabase.from('zastava_materialy').select('naklad_m2, sklad_material_id').eq('kod', materialKod).eq('aktivny', true).maybeSingle(),
+      supabase.from('zastava_materialy').select('naklad_m2, sklad_material_id, naklad_m2_rucne').eq('kod', materialKod).eq('aktivny', true).maybeSingle(),
       supabase.from('zastava_nastavenia').select('*').eq('id', 1).maybeSingle(),
       supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
     ]);
