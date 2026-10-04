@@ -387,7 +387,7 @@ export default function BeachflagApp({ supabase }) {
 
   return (
     <>
-    <AskQuestion zdroj="Beachvlajky" />
+    <AskQuestion zdroj="Beachvlajky" nadListou />
     <PbtHeader title="PrintStudio Pro" subtitle="Konfigurátor plážovej vlajky" />
     <div className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
       <div className="lg:col-span-7 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">

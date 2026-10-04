@@ -9,7 +9,7 @@ import { MessageCircleQuestion, X, Send } from 'lucide-react';
 // treba naozaj skontrolovat dorucenie mailu, appka sama uspech potvrdit nevie.
 const SHOP_KONTAKT_URL = 'https://pbtprint.sk/contact';
 
-export default function AskQuestion({ zdroj }) {
+export default function AskQuestion({ zdroj, nadListou = false }) {
   const [otvorene, setOtvorene] = useState(false);
   const [meno, setMeno] = useState('');
   const [email, setEmail] = useState('');
@@ -58,7 +58,7 @@ export default function AskQuestion({ zdroj }) {
     <>
       <button
         onClick={() => setOtvorene(true)}
-        className="fixed bottom-5 right-5 z-[9999] flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm px-4 py-3 rounded-full shadow-xl transition"
+        className={`fixed ${nadListou ? 'bottom-24' : 'bottom-5'} right-5 z-[9999] flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm px-4 py-3 rounded-full shadow-xl transition`}
       >
         <MessageCircleQuestion className="w-5 h-5" /> <span className="hidden sm:inline">Opýtať sa</span>
       </button>
