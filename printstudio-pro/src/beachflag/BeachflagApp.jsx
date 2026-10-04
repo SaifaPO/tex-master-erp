@@ -44,6 +44,11 @@ export default function BeachflagApp({ supabase }) {
   const [customText, setCustomText] = useState('');
   const [expresne, setExpresne] = useState(false);
   const [pocetKs, setPocetKs] = useState(1);
+  // Pocet kusov prutov a podstavcov — zakaznik si v poslednom kroku zvoli kolko z kazdeho chce (aj viac druhov podstavcov naraz).
+  // Pokial ich nezmenil rucne, kopiruju vyber z kroku Parametre x pocet vlajok.
+  const [stoziareMn, setStoziareMn] = useState({});
+  const [podstavceMn, setPodstavceMn] = useState({});
+  const [mnozstvaRucne, setMnozstvaRucne] = useState(false);
   const [osobnyOdber, setOsobnyOdber] = useState(false);
   const [cena, setCena] = useState(null);
   const [cenyVolieb, setCenyVolieb] = useState(null); // predajne ceny opracovania/prutov/podstavcov/doplnkov (zo servera)
@@ -68,6 +73,22 @@ export default function BeachflagApp({ supabase }) {
   const [canvasVersion, setCanvasVersion] = useState(0); // pretiahne novy render do GrafikaTab, ked sa fabric platno prvykrat vytvori
 
   useEffect(() => { katalogRef.current = katalog; }, [katalog]);
+
+  // Pokial zakaznik pocty prutov/podstavcov nemenil rucne, kopiruju vyber z kroku Parametre x pocet vlajok.
+  useEffect(() => {
+    if (mnozstvaRucne) return;
+    setStoziareMn(stoziarKod ? { [stoziarKod]: pocetKs } : {});
+    setPodstavceMn(podstavecKod ? { [podstavecKod]: pocetKs } : {});
+  }, [mnozstvaRucne, stoziarKod, podstavecKod, pocetKs]);
+
+  const zoznamMnozstiev = (mapa) => Object.entries(mapa).filter(([, m]) => m > 0).map(([kod, mnozstvo]) => ({ kod, mnozstvo }));
+  const nastavStoziarMn = (kod, hodnota) => { setMnozstvaRucne(true); setStoziareMn(m => ({ ...m, [kod]: Math.max(0, Math.round(hodnota) || 0) })); };
+  const nastavPodstavecMn = (kod, hodnota) => { setMnozstvaRucne(true); setPodstavceMn(m => ({ ...m, [kod]: Math.max(0, Math.round(hodnota) || 0) })); };
+  // Zmena vyberu v kroku Parametre znovu naplni mnozstva z vyberu (nech zakaznikovi neostane stary rucny stav).
+  const vyberTvar = (k) => { setTvarKod(k); setMnozstvaRucne(false); };
+  const vyberVelkost = (k) => { setVelkostKod(k); setMnozstvaRucne(false); };
+  const vyberStoziar = (k) => { setStoziarKod(k); setMnozstvaRucne(false); };
+  const vyberPodstavec = (k) => { setPodstavecKod(k); setMnozstvaRucne(false); };
 
   // Niektore prúty su len pre urcite tvary (napr. Square) — ak zvoleny prut pre tvar nie je dostupny, prepni na prvy dostupny.
   useEffect(() => {
@@ -224,7 +245,7 @@ export default function BeachflagApp({ supabase }) {
     setCenaChyba('');
     const t = setTimeout(async () => {
       const { data, error } = await supabase.functions.invoke('beachflag-price-preview', {
-        body: { tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnky, pocetKs, expresne, osobnyOdber },
+        body: { tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnky, pocetKs, expresne, osobnyOdber, stoziare: zoznamMnozstiev(stoziareMn), podstavce: zoznamMnozstiev(podstavceMn) },
       });
       setCenaNacitava(false);
       if (error) { setCenaChyba(error.message); return; }
@@ -232,7 +253,7 @@ export default function BeachflagApp({ supabase }) {
       setCena(data.cena);
     }, 400);
     return () => clearTimeout(t);
-  }, [supabase, katalog, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnkyMnozstva, pocetKs, expresne, osobnyOdber]);
+  }, [supabase, katalog, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnkyMnozstva, pocetKs, expresne, osobnyOdber, stoziareMn, podstavceMn]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Predajne ceny jednotlivych volieb — v DB su NAKUPNE ceny (verejnost ich nevidi), predajna cena sa
   // dopocita na serveri z marze a poctu kusov (rezim 'cenovnik' v beachflag-price-preview).
@@ -324,6 +345,7 @@ export default function BeachflagApp({ supabase }) {
         farbaPoznamka: pantoneNote,
         textNaVlajke: customText,
         expresne, pocetKs, osobnyOdber,
+        stoziare: zoznamMnozstiev(stoziareMn), podstavce: zoznamMnozstiev(podstavceMn),
         nahladUrl: publicUrlData?.publicUrl || null,
       };
 
@@ -359,7 +381,7 @@ export default function BeachflagApp({ supabase }) {
 
         {krok === 'parametre' && (
           <ParametreTab katalog={katalog} cenyVolieb={cenyVolieb} tvarKod={tvarKod} velkostKod={velkostKod} materialKod={materialKod} dokoncenieKod={dokoncenieKod} stoziarKod={stoziarKod} podstavecKod={podstavecKod}
-            onTvar={setTvarKod} onVelkost={setVelkostKod} onMaterial={setMaterialKod} onDokoncenie={setDokoncenieKod} onStoziar={setStoziarKod} onPodstavec={setPodstavecKod}
+            onTvar={vyberTvar} onVelkost={vyberVelkost} onMaterial={setMaterialKod} onDokoncenie={setDokoncenieKod} onStoziar={vyberStoziar} onPodstavec={vyberPodstavec}
             onDalej={() => setKrok('grafika')} />
         )}
         {krok === 'grafika' && (
@@ -371,6 +393,8 @@ export default function BeachflagApp({ supabase }) {
         )}
         {krok === 'doplnky' && (
           <DoplnkyTab katalog={katalog} cenyVolieb={cenyVolieb} doplnkyMnozstva={doplnkyMnozstva} onZmenMnozstvo={zmenMnozstvoDoplnku}
+            tvarKod={tvarKod} velkostKod={velkostKod}
+            stoziareMn={stoziareMn} onStoziarMn={nastavStoziarMn} podstavceMn={podstavceMn} onPodstavecMn={nastavPodstavecMn}
             expresne={expresne} onExpresne={setExpresne} pocetKs={pocetKs} onPocetKs={setPocetKs}
             osobnyOdber={osobnyOdber} onOsobnyOdber={setOsobnyOdber}
             cena={cena} cenaNacitava={cenaNacitava} cenaChyba={cenaChyba} isSubmitting={isSubmitting} submitError={submitError} onObjednat={objednat}

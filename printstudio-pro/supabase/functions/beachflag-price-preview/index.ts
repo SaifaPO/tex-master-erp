@@ -90,6 +90,7 @@ Deno.serve(async (req) => {
     const {
       tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod,
       doplnky = [], pocetKs = 1, expresne = false, osobnyOdber = false, cenovnik = false,
+      stoziare = null, podstavce = null, // volitelne: [{ kod, mnozstvo }] — zakaznik si zvoli pocet kusov kazdeho pruta/podstavca zvlast
     } = body;
 
     // Rezim "cenovnik": vrati PREDAJNE ceny jednotlivych volieb (opracovanie, prut, podstavec,
@@ -163,27 +164,72 @@ Deno.serve(async (req) => {
 
     // Opracovanie, prut, podstavec aj doplnky su v DB ulozene ako NAKUPNE ceny — predajna cena sa
     // dopocita rovnakym maržovym vzorcom ako material (marza klesa s poctom kusov).
-    const predaj = (nakup: number) => priceAt(Number(nakup) || 0, ks, pricingConfig);
-    const cenaDokoncenia = predaj(Number(dokoncenie?.cena) || 0);
-    const zaklad = cenaMaterialKus + cenaDokoncenia + predaj(cenaStoziara) + predaj(cenaPodstavca);
+    // Vlajky: ks x (material + opracovanie), marza podla poctu vlajok. Prúty, podstavce a prislusenstvo
+    // maju kazdy VLASTNY pocet kusov (marza sa pocita z poctu kusov danej polozky). Ak klient neposle
+    // polia stoziare/podstavce, plati stary sposob: vybrany prut/podstavec x pocet vlajok.
+    const predajVlajka = (nakup: number) => priceAt(Number(nakup) || 0, ks, pricingConfig);
+    const cenaDokoncenia = predajVlajka(Number(dokoncenie?.cena) || 0);
+    const zaklad = cenaMaterialKus + cenaDokoncenia; // na 1 vlajku
+    const vlajkySpolu = zaklad * ks;
+    const polozky = (pole: unknown, kodFallback: string | null) => (Array.isArray(pole)
+      ? (pole as { kod: string; mnozstvo: number }[]).filter((x) => x?.kod && Number(x.mnozstvo) > 0).map((x) => ({ kod: String(x.kod), mnozstvo: Math.round(Number(x.mnozstvo)) }))
+      : (kodFallback ? [{ kod: kodFallback, mnozstvo: ks }] : []));
+    // Detailny rozpis po polozkach (nazov, kusy, cena za kus, spolu) pre zobrazenie zakaznikovi.
+    const r2 = (x: number) => Math.round(x * 100) / 100;
+    type Riadok = { nazov: string; mnozstvo: number; cenaZaKus: number; spolu: number };
+    const stoziareRiadky: Riadok[] = [];
+    for (const p of polozky(stoziare, stoziarKod)) {
+      const cena = p.kod === stoziarKod ? cenaStoziara : await resolveStoziarCena(supabase, p.kod, velkostKod);
+      const { data: st } = await supabase.from('vlajka_stoziare').select('nazov').eq('kod', p.kod).maybeSingle();
+      const jedn = priceAt(Number(cena) || 0, p.mnozstvo, pricingConfig);
+      stoziareRiadky.push({ nazov: st?.nazov || p.kod, mnozstvo: p.mnozstvo, cenaZaKus: r2(jedn), spolu: r2(jedn * p.mnozstvo) });
+    }
+    const podstavceRiadky: Riadok[] = [];
+    for (const p of polozky(podstavce, podstavecKod)) {
+      const cena = p.kod === podstavecKod ? cenaPodstavca : await resolvePodstavecCena(supabase, p.kod, velkostKod);
+      const { data: pd } = await supabase.from('vlajka_podstavce').select('nazov').eq('kod', p.kod).maybeSingle();
+      const jedn = priceAt(Number(cena) || 0, p.mnozstvo, pricingConfig);
+      podstavceRiadky.push({ nazov: pd?.nazov || p.kod, mnozstvo: p.mnozstvo, cenaZaKus: r2(jedn), spolu: r2(jedn * p.mnozstvo) });
+    }
+    const doplnkyRiadky: Riadok[] = (doplnky as { kod: string; mnozstvo: number }[]).filter((d) => Number(d.mnozstvo) > 0).map((d) => {
+      const dbRow = (doplnkyDb || []).find((x: any) => x.kod === d.kod);
+      const m = Math.round(Number(d.mnozstvo));
+      const jedn = priceAt(Number(dbRow?.cena) || 0, Math.max(1, m), pricingConfig);
+      return { nazov: dbRow?.nazov || d.kod, mnozstvo: m, cenaZaKus: r2(jedn), spolu: r2(jedn * m) };
+    });
+    const stoziareSpolu = stoziareRiadky.reduce((a, x) => a + x.spolu, 0);
+    const podstavceSpolu = podstavceRiadky.reduce((a, x) => a + x.spolu, 0);
+    const doplnkySpolu = doplnkyRiadky.reduce((a, x) => a + x.spolu, 0);
 
-    const doplnkySpolu = doplnkyVypocet.reduce((sum, d) => sum + predaj(d.cena) * d.mnozstvo, 0);
-
-    const subtotal = (zaklad + doplnkySpolu) * ks;
+    const subtotal = vlajkySpolu + stoziareSpolu + podstavceSpolu + doplnkySpolu;
 
     const naklady = nastavenia || { expresny_priplatok_percent: 10 };
     const expresnyPercent = Number(naklady.expresny_priplatok_percent) || 0;
     const expresnyPriplatok = expresne ? subtotal * (expresnyPercent / 100) : 0;
-    const doprava = osobnyOdber ? 0 : (Number(naklady.cena_doprava) || 0);
+    const dphPercent = Number(pricingConfig.dphPercent) || 0;
+    // Postovne zdarma od urcitej sumy objednavky (s DPH, bez dopravy) — predvolene 150 EUR, nastavitelne v ERP.
+    const postovneZdarmaOd = Number(naklady.postovne_zdarma_od_eur ?? 150) || 0;
+    const tovarSDph = (subtotal + expresnyPriplatok) * (1 + dphPercent / 100);
+    const doprava = osobnyOdber || (postovneZdarmaOd > 0 && tovarSDph >= postovneZdarmaOd) ? 0 : (Number(naklady.cena_doprava) || 0);
 
     const cenaBezDph = subtotal + expresnyPriplatok + doprava;
-    const dphPercent = Number(pricingConfig.dphPercent) || 0;
     const dphSuma = cenaBezDph * (dphPercent / 100);
     const cenaSpolu = cenaBezDph + dphSuma;
 
     return odpoved({
       cena: {
         zaklad: Math.round(zaklad * 100) / 100,
+        vlajkySpolu: Math.round(vlajkySpolu * 100) / 100,
+        rozpis: {
+          vlajka: { mnozstvo: ks, cenaZaKus: r2(zaklad), spolu: r2(vlajkySpolu) },
+          stoziare: stoziareRiadky,
+          podstavce: podstavceRiadky,
+          doplnky: doplnkyRiadky,
+        },
+        postovneZdarmaOd,
+        doDopravyZdarma: osobnyOdber || postovneZdarmaOd <= 0 ? 0 : Math.max(0, r2(postovneZdarmaOd - tovarSDph)),
+        stoziareSpolu: Math.round(stoziareSpolu * 100) / 100,
+        podstavceSpolu: Math.round(podstavceSpolu * 100) / 100,
         doplnkySpolu: Math.round(doplnkySpolu * 100) / 100,
         subtotal: Math.round(subtotal * 100) / 100,
         expresnyPriplatok: Math.round(expresnyPriplatok * 100) / 100,

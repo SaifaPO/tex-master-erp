@@ -158,6 +158,11 @@ export default function VlajkaVelkostiTab({ supabase }) {
           <p className="text-[10px] text-slate-500 mt-1">Nastavuje sa centrálne v záložke Cenotvorba.</p>
         </div>
         <div>
+          <label className="text-xs text-indigo-300 font-medium">Poštovné zdarma od (€ s DPH)</label>
+          <NumberInput step="10" value={nastavenia.postovne_zdarma_od_eur ?? 150} onChange={(v) => ulozNastavenia({ postovne_zdarma_od_eur: v })} fallback={0} className="w-full mt-1 px-3 py-2 bg-slate-950 border border-indigo-800 rounded-lg text-sm text-white" />
+          <p className="text-[10px] text-slate-500 mt-1">0 = poštovné zdarma sa nepoužíva. Platí pre Beachvlajky.</p>
+        </div>
+        <div>
           <label className="text-xs text-indigo-300 font-medium">Expresný príplatok (%)</label>
           <NumberInput step="0.5" value={nastavenia.expresny_priplatok_percent} onChange={(v) => ulozNastavenia({ expresny_priplatok_percent: v })} fallback={0} className="w-full mt-1 px-3 py-2 bg-slate-950 border border-indigo-800 rounded-lg text-sm text-white" />
         </div>

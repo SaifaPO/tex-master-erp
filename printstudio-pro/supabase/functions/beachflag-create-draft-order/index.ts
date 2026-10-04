@@ -38,37 +38,43 @@ function priceAt(cost: number, qty: number, cfg: PricingConfig) {
 interface VlajkaCenaVstup {
   nakladMaterial: number;
   dokoncenie: { cena: number } | null;
-  cenaStoziara: number;
-  cenaPodstavca: number;
+  stoziare: { cena: number; mnozstvo: number }[]; // kazdy prut ma vlastny pocet kusov
+  podstavce: { cena: number; mnozstvo: number }[]; // kazdy podstavec ma vlastny pocet kusov
   doplnky: { cena: number; mnozstvo: number }[];
   expresne: boolean;
   pocetKs: number;
   osobnyOdber: boolean;
-  nastavenia: { expresny_priplatok_percent: number; cena_doprava?: number };
+  nastavenia: { expresny_priplatok_percent: number; cena_doprava?: number; postovne_zdarma_od_eur?: number };
   pricingConfig: PricingConfig;
 }
 
-function vypocitajCenuVlajky({ nakladMaterial, dokoncenie, cenaStoziara, cenaPodstavca, doplnky, expresne, pocetKs, osobnyOdber, nastavenia, pricingConfig }: VlajkaCenaVstup) {
+function vypocitajCenuVlajky({ nakladMaterial, dokoncenie, stoziare, podstavce, doplnky, expresne, pocetKs, osobnyOdber, nastavenia, pricingConfig }: VlajkaCenaVstup) {
   const ks = Math.max(1, Number(pocetKs) || 1);
   const cenaMaterialKus = priceAt(Number(nakladMaterial) || 0, ks, pricingConfig);
   // Opracovanie, prut, podstavec aj doplnky su v DB NAKUPNE ceny — predajna sa dopocita rovnakym
   // marzovym vzorcom ako material (rovnako ako v beachflag-price-preview).
-  const predaj = (nakup: number) => priceAt(Number(nakup) || 0, ks, pricingConfig);
-  const cenaDokoncenia = predaj(Number(dokoncenie?.cena) || 0);
-  const zaklad = cenaMaterialKus + cenaDokoncenia + predaj(Number(cenaStoziara) || 0) + predaj(Number(cenaPodstavca) || 0);
+  // Vlajky: ks x (material + opracovanie). Prúty, podstavce a prislusenstvo maju kazdy VLASTNY pocet kusov
+  // (marza sa pocita z poctu kusov danej polozky) — rovnaky vypocet ako v beachflag-price-preview.
+  const cenaDokoncenia = priceAt(Number(dokoncenie?.cena) || 0, ks, pricingConfig);
+  const zaklad = cenaMaterialKus + cenaDokoncenia;
+  const sumaPolozky = (pole: { cena: number; mnozstvo: number }[]) => (pole || []).reduce((sum, d) => {
+    const m = Math.round(Number(d.mnozstvo) || 0);
+    return m > 0 ? sum + priceAt(Number(d.cena) || 0, m, pricingConfig) * m : sum;
+  }, 0);
+  const doplnkySpolu = sumaPolozky(doplnky);
 
-  const doplnkySpolu = (doplnky || []).reduce((sum, d) => sum + predaj(Number(d.cena) || 0) * (Number(d.mnozstvo) || 0), 0);
-
-  const subtotal = (zaklad + doplnkySpolu) * ks;
+  const subtotal = zaklad * ks + sumaPolozky(stoziare) + sumaPolozky(podstavce) + doplnkySpolu;
 
   const expresnyPercent = Number(nastavenia?.expresny_priplatok_percent) || 0;
   const expresnyPriplatok = expresne ? subtotal * (expresnyPercent / 100) : 0;
 
-  const doprava = osobnyOdber ? 0 : (Number(nastavenia?.cena_doprava) || 0);
+  const dphPercent = Number(pricingConfig.dphPercent) || 0;
+  // Postovne zdarma od urcitej sumy objednavky (s DPH, bez dopravy) — predvolene 150 EUR (rovnako ako v beachflag-price-preview).
+  const postovneZdarmaOd = Number(nastavenia?.postovne_zdarma_od_eur ?? 150) || 0;
+  const tovarSDph = (subtotal + expresnyPriplatok) * (1 + dphPercent / 100);
+  const doprava = osobnyOdber || (postovneZdarmaOd > 0 && tovarSDph >= postovneZdarmaOd) ? 0 : (Number(nastavenia?.cena_doprava) || 0);
 
   const cenaBezDph = subtotal + expresnyPriplatok + doprava;
-
-  const dphPercent = Number(pricingConfig.dphPercent) || 0;
   const dphSuma = cenaBezDph * (dphPercent / 100);
 
   const cenaSpolu = cenaBezDph + dphSuma;
@@ -131,6 +137,7 @@ Deno.serve(async (req) => {
       designId, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod,
       doplnky = [], farbaHex, farbaPoznamka, textNaVlajke,
       expresne = false, pocetKs = 1, osobnyOdber = false, nahladUrl,
+      stoziare = null, podstavce = null, // volitelne: [{ kod, mnozstvo }] — pocet kusov kazdeho pruta/podstavca zvlast
     } = body;
 
     if (!tvarKod || !velkostKod) throw new Error('Chýba tvar alebo veľkosť vlajky.');
@@ -167,6 +174,21 @@ Deno.serve(async (req) => {
       return { cena: dbRow ? Number(dbRow.cena) : 0, mnozstvo: Number(d.mnozstvo) || 0, nazov: dbRow?.nazov || d.kod };
     });
 
+    const ksVlajok = Math.max(1, Math.round(Number(pocetKs)) || 1);
+    const zoznamPolozok = (pole: unknown, kodFallback: string | null) => (Array.isArray(pole)
+      ? (pole as { kod: string; mnozstvo: number }[]).filter((x) => x?.kod && Number(x.mnozstvo) > 0).map((x) => ({ kod: String(x.kod), mnozstvo: Math.round(Number(x.mnozstvo)) }))
+      : (kodFallback ? [{ kod: kodFallback, mnozstvo: ksVlajok }] : []));
+    const stoziarePolozky: { cena: number; mnozstvo: number; nazov: string }[] = [];
+    for (const p of zoznamPolozok(stoziare, stoziarKod)) {
+      const { data: st } = await supabase.from('vlajka_stoziare').select('nazov').eq('kod', p.kod).maybeSingle();
+      stoziarePolozky.push({ cena: p.kod === stoziarKod ? cenaStoziara : await resolveStoziarCena(supabase, p.kod, velkostKod), mnozstvo: p.mnozstvo, nazov: st?.nazov || p.kod });
+    }
+    const podstavcePolozky: { cena: number; mnozstvo: number; nazov: string }[] = [];
+    for (const p of zoznamPolozok(podstavce, podstavecKod)) {
+      const { data: pd } = await supabase.from('vlajka_podstavce').select('nazov').eq('kod', p.kod).maybeSingle();
+      podstavcePolozky.push({ cena: p.kod === podstavecKod ? cenaPodstavca : await resolvePodstavecCena(supabase, p.kod, velkostKod), mnozstvo: p.mnozstvo, nazov: pd?.nazov || p.kod });
+    }
+
     const nakladM2Latka = await resolveNakladM2(supabase, material);
     const minutySitia = Number(velkost.minuty_sitia) || 0;
     const cenaMinutySitia = Number(cfg?.cena_minuty_sitia) || 0;
@@ -174,7 +196,9 @@ Deno.serve(async (req) => {
     const nakladMaterial = Number(rozmer.spotreba_m2) * (nakladM2Latka + nakladM2Sublimacia) + nakladSitia;
 
     const cena = vypocitajCenuVlajky({
-      nakladMaterial, dokoncenie, cenaStoziara, cenaPodstavca,
+      nakladMaterial, dokoncenie,
+      stoziare: stoziarePolozky,
+      podstavce: podstavcePolozky,
       doplnky: doplnkyVypocet,
       pricingConfig,
       expresne: !!expresne,
@@ -195,8 +219,9 @@ Deno.serve(async (req) => {
       _velkost: velkost.kod,
       _material: material.nazov,
       _opracovanie: dokoncenie?.nazov || '',
-      _stoziar: stoziar?.nazov || '',
-      _podstavec: podstavec?.nazov || '',
+      _pocet_vlajok: String(ksVlajok),
+      _stoziar: stoziarePolozky.map((p) => `${p.mnozstvo}× ${p.nazov}`).join(', ') || (stoziar?.nazov || ''),
+      _podstavec: podstavcePolozky.map((p) => `${p.mnozstvo}× ${p.nazov}`).join(', ') || (podstavec?.nazov || ''),
       _doplnky: doplnkyVypocet.map((d) => `${d.mnozstvo}× ${d.nazov}`).join(', '),
       _farba_hex: farbaHex || '',
       _farba_poznamka: farbaPoznamka || '',

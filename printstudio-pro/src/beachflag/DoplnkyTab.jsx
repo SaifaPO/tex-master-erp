@@ -1,19 +1,78 @@
 import React from 'react';
-import { Boxes, Zap, ShoppingBag, Loader2, AlertTriangle } from 'lucide-react';
+import { Boxes, Zap, ShoppingBag, Loader2, AlertTriangle, Flag, GripVertical, Layers } from 'lucide-react';
 import NumberInput from '../NumberInput';
+
+// Jednoduchy stepper s priamym zadanim kusov.
+function Stepper({ hodnota, onZmen, min = 0 }) {
+  return (
+    <div className="flex items-center border border-slate-300 rounded-lg bg-white overflow-hidden shrink-0">
+      <button type="button" onClick={() => onZmen(Math.max(min, hodnota - 1))} className="px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 font-bold text-xs">-</button>
+      <NumberInput min={min} value={hodnota} onChange={(v) => onZmen(Math.max(min, v))} fallback={min} className="w-12 text-center text-xs font-bold border-x border-slate-200 py-1.5 focus:outline-none" />
+      <button type="button" onClick={() => onZmen(hodnota + 1)} className="px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 font-bold text-xs">+</button>
+    </div>
+  );
+}
 
 export default function DoplnkyTab({
   katalog, cenyVolieb, doplnkyMnozstva, onZmenMnozstvo,
+  tvarKod, velkostKod, stoziareMn, onStoziarMn, podstavceMn, onPodstavecMn,
   expresne, onExpresne, pocetKs, onPocetKs,
   osobnyOdber, onOsobnyOdber,
   cena, cenaNacitava, cenaChyba, isSubmitting, submitError, onObjednat, onSpat,
 }) {
+  const tvar = katalog.tvary.find(t => t.kod === tvarKod);
+  const dostupnePruty = katalog.stoziare.filter(st => !st.tvarIds?.length || st.tvarIds.includes(tvar?.id));
+  const podstavce = katalog.podstavce;
+  const riadokMnozstva = (kod, nazov, cenaTxt, hodnota, onZmen, extra) => (
+    <div key={kod} className={`p-3 rounded-xl border flex items-center gap-3 ${hodnota > 0 ? 'border-indigo-600 bg-indigo-50/50 shadow-sm' : 'border-slate-200 bg-white'}`}>
+      <div className="flex-1 min-w-0">
+        <span className="font-bold text-xs text-slate-900 block truncate">{nazov}</span>
+        <span className="text-xs font-semibold text-indigo-600 block">{cenaTxt}</span>
+        {extra}
+      </div>
+      <Stepper hodnota={hodnota} onZmen={onZmen} />
+    </div>
+  );
+  const cenaKs = (c) => (c == null ? '…' : c > 0 ? `+${Number(c).toFixed(2)} € / ks` : 'V cene');
+
   return (
     <div className="p-4 sm:p-6 space-y-6">
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-4">
+        <div>
+          <label className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-1"><Flag className="w-4 h-4 text-indigo-600" /> Množstvo</label>
+          <p className="text-xs text-slate-500">Zvoľ, koľko kusov z čoho chceš. Napríklad 10 vlajok, 10 prútov a rôzne podstavce (plátno aj bodce naraz).</p>
+        </div>
+
+        <div className="flex items-center justify-between gap-3 p-3 rounded-xl border border-indigo-600 bg-indigo-50/50">
+          <span className="font-bold text-xs text-slate-900">Vlajky</span>
+          <Stepper hodnota={pocetKs} onZmen={(v) => onPocetKs(Math.max(1, v))} min={1} />
+        </div>
+
+        <div>
+          <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5 mb-2"><GripVertical className="w-3.5 h-3.5 text-indigo-600" /> Prúty / konštrukcie</span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {dostupnePruty.map(st => riadokMnozstva(st.kod, st.nazov, cenaKs(cenyVolieb?.stoziare?.[st.kod]), stoziareMn?.[st.kod] || 0, (v) => onStoziarMn(st.kod, v)))}
+          </div>
+        </div>
+
+        <div>
+          <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5 mb-2"><Layers className="w-3.5 h-3.5 text-indigo-600" /> Podstavce</span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {podstavce.map(p => {
+              const nastavenie = p.ceny?.[velkostKod];
+              return riadokMnozstva(p.kod, p.nazov, cenaKs(cenyVolieb?.podstavce?.[p.kod]), podstavceMn?.[p.kod] || 0, (v) => onPodstavecMn(p.kod, v),
+                nastavenie?.vhodny === false ? <span className="text-[10px] text-amber-600 font-semibold block">Neodporúča sa pre túto veľkosť</span> : null);
+            })}
+            {podstavce.length === 0 && <p className="text-xs text-slate-400 italic">Žiadne podstavce.</p>}
+          </div>
+        </div>
+        <p className="text-[11px] text-slate-400">Cena za kus sa mierne znižuje s počtom kusov danej položky. Presná cena je v rozpise nižšie.</p>
+      </div>
+
       <div>
         <div className="flex items-center justify-between mb-3">
           <label className="text-sm font-bold text-slate-900 flex items-center gap-2"><Boxes className="w-4 h-4 text-indigo-600" /> Príslušenstvo</label>
-          <span className="text-xs text-slate-500">Môžete vybrať aj viaceré kusy</span>
+          <span className="text-xs text-slate-500">Počet kusov celkom</span>
         </div>
         {katalog.doplnky.length === 0 && <p className="text-xs text-slate-400 italic">Žiadne ďalšie príslušenstvo. Podstavec sa vyberá v kroku Parametre.</p>}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -55,15 +114,6 @@ export default function DoplnkyTab({
         </label>
 
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2">
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <label className="text-xs font-bold text-slate-700">Počet kusov</label>
-            <div className="flex items-center border border-slate-300 rounded-lg bg-white overflow-hidden">
-              <button onClick={() => onPocetKs(Math.max(1, pocetKs - 1))} className="px-3 py-2 text-slate-600 hover:bg-slate-100 font-bold">-</button>
-              <NumberInput min="1" value={pocetKs} onChange={(v) => onPocetKs(Math.max(1, v))} fallback={1} className="w-12 text-center text-xs font-bold border-x border-slate-200 py-2 focus:outline-none" />
-              <button onClick={() => onPocetKs(pocetKs + 1)} className="px-3 py-2 text-slate-600 hover:bg-slate-100 font-bold">+</button>
-            </div>
-          </div>
-
           <button onClick={onObjednat} disabled={isSubmitting || cenaNacitava || !cena} className="w-full sm:w-auto flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-extrabold text-sm py-3.5 px-6 rounded-xl shadow-lg flex items-center justify-center gap-2">
             {isSubmitting || cenaNacitava ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShoppingBag className="w-4 h-4" />} Objednať {cena ? `(${cena.cenaSpolu.toFixed(2)} €)` : '…'}
           </button>
@@ -76,10 +126,39 @@ export default function DoplnkyTab({
       {cena && (
         <div className="pt-2 border-t border-slate-100 space-y-1 text-xs text-slate-600">
           <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-1">Rozpis ceny</h4>
-          <div className="flex justify-between"><span>Základ (materiál + opracovanie + prút)</span><span className="font-semibold">{cena.zaklad.toFixed(2)} €</span></div>
-          <div className="flex justify-between"><span>Doplnky</span><span className="font-semibold">{cena.doplnkySpolu.toFixed(2)} €</span></div>
+          {cena.rozpis ? (
+            <div className="space-y-2">
+              <div>
+                <div className="font-semibold text-slate-800">Vlajka</div>
+                <div className="flex justify-between pl-3"><span>{cena.rozpis.vlajka.mnozstvo} ks × {cena.rozpis.vlajka.cenaZaKus.toFixed(2)} € (materiál + opracovanie)</span><span className="font-semibold">{cena.rozpis.vlajka.spolu.toFixed(2)} €</span></div>
+              </div>
+              {cena.rozpis.stoziare.length > 0 && (
+                <div>
+                  <div className="font-semibold text-slate-800">Konštrukcia / prút</div>
+                  {cena.rozpis.stoziare.map((x, i) => <div key={i} className="flex justify-between pl-3"><span>{x.nazov} · {x.mnozstvo} ks × {x.cenaZaKus.toFixed(2)} €</span><span className="font-semibold">{x.spolu.toFixed(2)} €</span></div>)}
+                </div>
+              )}
+              {cena.rozpis.podstavce.length > 0 && (
+                <div>
+                  <div className="font-semibold text-slate-800">Podstavec</div>
+                  {cena.rozpis.podstavce.map((x, i) => <div key={i} className="flex justify-between pl-3"><span>{x.nazov} · {x.mnozstvo} ks × {x.cenaZaKus.toFixed(2)} €</span><span className="font-semibold">{x.spolu.toFixed(2)} €</span></div>)}
+                </div>
+              )}
+              {cena.rozpis.doplnky.length > 0 && (
+                <div>
+                  <div className="font-semibold text-slate-800">Príslušenstvo / doplnky</div>
+                  {cena.rozpis.doplnky.map((x, i) => <div key={i} className="flex justify-between pl-3"><span>{x.nazov} · {x.mnozstvo} ks × {x.cenaZaKus.toFixed(2)} €</span><span className="font-semibold">{x.spolu.toFixed(2)} €</span></div>)}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex justify-between"><span>Vlajky ({pocetKs}× materiál + opracovanie)</span><span className="font-semibold">{Number(cena.vlajkySpolu ?? cena.zaklad * pocetKs).toFixed(2)} €</span></div>
+          )}
           {cena.expresnyPriplatok > 0 && <div className="flex justify-between text-amber-700 font-semibold"><span>Expresný príplatok</span><span>{cena.expresnyPriplatok.toFixed(2)} €</span></div>}
           <div className="flex justify-between"><span>Doprava</span><span className="font-semibold">{!cena.doprava ? 'Zdarma' : `${Number(cena.doprava).toFixed(2)} €`}</span></div>
+          {cena.postovneZdarmaOd > 0 && !osobnyOdber && (cena.doDopravyZdarma > 0
+            ? <p className="text-[11px] text-emerald-700">Poštovné zdarma pri objednávke od {Number(cena.postovneZdarmaOd).toFixed(0)} € (ešte {Number(cena.doDopravyZdarma).toFixed(2)} € s DPH).</p>
+            : (cena.doprava === 0 && <p className="text-[11px] text-emerald-700">Poštovné zdarma, objednávka je nad {Number(cena.postovneZdarmaOd).toFixed(0)} €.</p>))}
           <div className="flex justify-between pt-1 border-t border-slate-200"><span>Spolu bez DPH</span><span className="font-semibold">{cena.cenaBezDph.toFixed(2)} €</span></div>
           <div className="flex justify-between"><span>DPH</span><span className="font-semibold">{cena.dphSuma.toFixed(2)} €</span></div>
           <div className="flex justify-between text-sm font-black text-slate-900 pt-1"><span>Celkom s DPH</span><span>{cena.cenaSpolu.toFixed(2)} €</span></div>
