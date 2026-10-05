@@ -5246,10 +5246,17 @@ export default function App() {
       stationStatuses: { ...it.stationStatuses, [stationId]: newStationStatus },
       stationMeta: { ...it.stationMeta, [stationId]: newMeta }
     });
-    const { error } = await supabase.from('orders').update({ items: updatedItems }).eq('id', order.id);
+    // Ak týmto skenom skončila posledná stanica celej zákazky (a platí sa faktúrou), zákazka ide do Fronty pre účtovníka
+    // — rovnako ako pri ručnej zmene stavu stanice v updateStationStatus.
+    const updatePayload = { items: updatedItems };
+    if (order.paymentType === 'faktura' && !order.accountingStatus && isOrderFullyComplete({ ...order, items: updatedItems })) {
+      updatePayload.accounting_status = 'pending_review';
+    }
+    const { error } = await supabase.from('orders').update(updatePayload).eq('id', order.id);
     if (error) { triggerNotification('error', error.message); return; }
-    setOrders(prev => prev.map(o => o.id === order.id ? { ...o, items: updatedItems } : o));
-    if (selectedOrderDetails?.id === order.id) setSelectedOrderDetails({ ...order, items: updatedItems });
+    const accountingPatch = updatePayload.accounting_status ? { accountingStatus: updatePayload.accounting_status } : {};
+    setOrders(prev => prev.map(o => o.id === order.id ? { ...o, items: updatedItems, ...accountingPatch } : o));
+    if (selectedOrderDetails?.id === order.id) setSelectedOrderDetails({ ...order, items: updatedItems, ...accountingPatch });
     if (allDone) {
       triggerNotification('success', `Materiál "${matName}" hotový — VŠETKY materiály hotové, položka ${item.itemId} je HOTOVÁ na stanici ${STATION_CONFIGS[stationId].name}! 🎉`);
     } else {
