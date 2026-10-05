@@ -1033,6 +1033,19 @@ function isOrderFullyComplete(order) {
   });
 }
 
+// Postup výroby zákazky: koľko staníc (cez všetky položky) je hotových z celkového počtu aktívnych staníc.
+function orderProductionProgress(order) {
+  let done = 0, total = 0;
+  (order.items || []).forEach(item => {
+    Object.values(item.stationStatuses || {}).forEach(v => {
+      if (!v || v === 'neaktivne') return;
+      total += 1;
+      if (v === 'hotove') done += 1;
+    });
+  });
+  return { done, total };
+}
+
 // Zisti, či navrhovaná spotreba materiálu (needList) prekračuje dostupnú zásobu na sklade,
 // alebo by po odpočítaní zostalo menej než minimálne množstvo (na tesno — treba doobjednať).
 // reservedMap = koľko z daného materiálu už "rezervujú" ostatné rozpracované položky v tej istej zákazke.
@@ -4561,7 +4574,7 @@ export default function App() {
       const created = {
         id: orderId, customer: expressCustomerName.trim(), createdAt: now, deliveryDate: expressNeededDate, driveLink: '', notes: '',
         paymentType: expressPaymentType, items, orderLog: [{ date: now, author: createdBy, text: `Dotlačová zákazka zaevidovaná cez expresný formulár (${items.length} produkt${items.length > 1 ? 'y/ov' : ''}).` }],
-        legacyOrderNumber: '', companyBrand: expressCompany, orderNumber, accountingStatus: null,
+        legacyOrderNumber: '', companyBrand: expressCompany, orderNumber, accountingStatus: expressPaymentType === 'faktura' ? 'pending_review' : null,
         variableSymbol: generateVariableSymbol(orderId), expectedAmount: totalPrice || null
       };
 
@@ -4783,7 +4796,7 @@ export default function App() {
     const nextNum = counterData?.next_number || 1;
     const orderNumber = `${newOrderCompany}-${shortYear}-${String(nextNum).padStart(4, '0')}`;
 
-    const created = { id: orderId, customer: newOrderCustomer, createdAt: now, deliveryDate: newOrderDeliveryDate, driveLink: orderDriveLink, notes: orderNotes, paymentType: newOrderPaymentType, items: itemsWithMeta, orderLog: [], legacyOrderNumber: newOrderLegacyNumber.trim(), companyBrand: newOrderCompany, orderNumber, variableSymbol: generateVariableSymbol(orderId) };
+    const created = { id: orderId, customer: newOrderCustomer, createdAt: now, deliveryDate: newOrderDeliveryDate, driveLink: orderDriveLink, notes: orderNotes, paymentType: newOrderPaymentType, items: itemsWithMeta, orderLog: [], legacyOrderNumber: newOrderLegacyNumber.trim(), companyBrand: newOrderCompany, orderNumber, variableSymbol: generateVariableSymbol(orderId), accountingStatus: newOrderPaymentType === 'faktura' ? 'pending_review' : null };
     const { error } = await supabase.from('orders').insert(mapOrderToDb(created));
     if (error) { triggerNotification('error', `Chyba: ${error.message}`); return; }
     await supabase.from('order_number_counters').upsert({ company: newOrderCompany, year: fullYear, next_number: nextNum + 1 }, { onConflict: 'company,year' });
@@ -5183,7 +5196,11 @@ export default function App() {
     });
 
     const changeDescription = describeOrderChanges(selectedOrderDetails, { ...orderEditDraft, items: cleanedItems });
-    const finalDraft = { ...orderEditDraft, items: cleanedItems, lastModifiedAt: now, lastModifiedNote: `${changeDescription} (${currentUser.firstName} ${currentUser.lastName})` };
+    // Zmena spôsobu platby synchronizuje Frontu pre účtovníka: hotovosť zákazku z fronty vyradí, faktúra ju do fronty vráti.
+    let accountingStatusNovy = orderEditDraft.accountingStatus || null;
+    if (orderEditDraft.paymentType === 'hotovost' && accountingStatusNovy === 'pending_review') accountingStatusNovy = 'resolved_cash';
+    if (orderEditDraft.paymentType === 'faktura' && (!accountingStatusNovy || accountingStatusNovy === 'resolved_cash')) accountingStatusNovy = 'pending_review';
+    const finalDraft = { ...orderEditDraft, accountingStatus: accountingStatusNovy, items: cleanedItems, lastModifiedAt: now, lastModifiedNote: `${changeDescription} (${currentUser.firstName} ${currentUser.lastName})` };
     const { error } = await supabase.from('orders').update(mapOrderToDb(finalDraft)).eq('id', finalDraft.id);
     if (error) { triggerNotification('error', `Chyba: ${error.message}`); return; }
 
@@ -10635,20 +10652,27 @@ export default function App() {
                       })}
                     </div>
                   )}
-                  <p className="text-xs text-slate-400">Zákazky, ktoré sú kompletne hotové na všetkých staniciach a majú byť fakturované. Skontroluj a buď vystav faktúru, alebo prehoď na hotovosť, ak si to zákazník rozmyslel.</p>
+                  <p className="text-xs text-slate-400">Zákazky na fakturáciu — objavia sa tu hneď po zadaní zákazky do systému (faktúra sa môže vystaviť aj pred výrobou alebo počas nej). Pri každej vidíš, ako ďaleko je výroba. Vystav faktúru, alebo prehoď zákazku na hotovosť, ak si to zákazník rozmyslel.</p>
                   {pendingReviewOrders.length === 0 ? (
                     <div className="bg-slate-950 border border-slate-800 rounded-2xl p-10 text-center text-slate-500 italic">Fronta je prázdna — nič nečaká na spracovanie. 🎉</div>
                   ) : (
                     <div className="space-y-2">
-                      {pendingReviewOrders.map(o => (
-                        <div key={o.id} className="bg-slate-950 border border-amber-800/30 rounded-xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                      {[...pendingReviewOrders].sort((a, b) => (isOrderFullyComplete(b) ? 1 : 0) - (isOrderFullyComplete(a) ? 1 : 0) || String(a.deliveryDate || '').localeCompare(String(b.deliveryDate || ''))).map(o => {
+                        const postup = orderProductionProgress(o);
+                        const hotova = isOrderFullyComplete(o);
+                        return (
+                        <div key={o.id} className={`bg-slate-950 border rounded-xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 ${hotova ? 'border-emerald-700/50' : 'border-amber-800/30'}`}>
                           <div>
                             <div className="flex items-center gap-2">
                               <span className="font-mono font-bold text-indigo-400">{o.orderNumber || o.id}</span>
                               <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded ${companyBrandBadgeClass(o.companyBrand)}`}>{o.companyBrand}</span>
+                              {hotova
+                                ? <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-950/60 text-emerald-300">✓ Výroba hotová</span>
+                                : <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-amber-950/50 text-amber-300">Vo výrobe {postup.done}/{postup.total}</span>}
                             </div>
                             <p className="font-bold text-white text-sm">{o.customer}</p>
                             <p className="text-[11px] text-slate-500">{(o.items || []).map(it => it.productName).join(', ')}</p>
+                            <p className="text-[11px] text-slate-500">{o.deliveryDate ? `Dodanie ${o.deliveryDate}` : ''}{o.expectedAmount != null ? ` • očakávaná suma ${Number(o.expectedAmount).toFixed(2)} €` : ''}{o.variableSymbol ? ` • VS ${o.variableSymbol}` : ''}</p>
                           </div>
                           <div className="flex flex-wrap gap-2 w-full sm:w-auto sm:shrink-0">
                             <button onClick={() => openOrderDetails(o)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-[11px] px-3 py-2 rounded-lg">Otvoriť zákazku</button>
@@ -10656,7 +10680,8 @@ export default function App() {
                             <button onClick={() => handleStartNewInvoice(o)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] px-3 py-2 rounded-lg flex items-center gap-1"><FileEdit className="h-3.5 w-3.5" /> Vystaviť faktúru</button>
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
