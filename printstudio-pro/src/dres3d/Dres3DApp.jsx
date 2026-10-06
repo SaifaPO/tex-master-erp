@@ -228,7 +228,7 @@ export default function Dres3DApp({ supabase, produktId }) {
           <ThreeViewport ref={viewportRef} configState={configState} onDragLogo={handleDragLogo} zostava={zostavaEf} />
         </div>
 
-        <div className="w-full lg:w-[480px] xl:w-[520px] bg-slate-900 border-t lg:border-t-0 lg:border-l border-slate-800 flex flex-col h-[58vh] sm:h-[50vh] lg:h-auto min-h-0">
+        <div className="w-full lg:w-[480px] xl:w-[520px] bg-slate-900 border-t lg:border-t-0 lg:border-l border-slate-800 flex flex-col h-[48vh] sm:h-[44vh] lg:h-auto min-h-0 shrink-0 lg:shrink">
           <div className="flex border-b border-slate-800 bg-slate-950/70 p-1.5 sm:p-2 gap-1 overflow-x-auto">
             {TABY.map(t => {
               const Icon = t.icon;

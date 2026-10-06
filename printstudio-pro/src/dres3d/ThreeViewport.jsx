@@ -8,7 +8,7 @@ import { vykresliTrenirky, postavCestyZon, zonaKusu } from './trenirkyRenderer';
 
 // Trenírky sa v komplete posunú o toľko cm nižšie, aby pás nohavíc sedel pod spodným lemom dresu (v pôvodnom
 // súradnicovom systéme avatara sa oba kusy čiastočne prekrývajú — dres je prehodený cez pás).
-const TRENIRKY_POSUN_Y_CM = -25;
+const TRENIRKY_POSUN_Y_CM = -22;
 
 // 3D náhľad dresu — vlastní celú Three.js scénu (kamera/svetlá/geometria/OrbitControls)
 // a offscreen 2D canvas s textúrou. Portované z init3D/setupLighting/createJerseyModel/
@@ -171,6 +171,9 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState, onDragLog
       renderer.setSize(container.clientWidth, container.clientHeight);
     };
     window.addEventListener('resize', onResize);
+    // Okno náhľadu sa mení aj bez zmeny okna prehliadača (napr. vyššia horná lišta na mobile) — sleduje sa priamo kontajner.
+    const resizeObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(onResize) : null;
+    resizeObserver?.observe(container);
 
     // Ťahanie loga/erbu priamo na 3D modeli — raycast z pozície myši na dres, prevod bodu
     // dopadu na UV → px na 2048×2048 textúrovom plátne (rovnaká konvencia ako PANELY v
@@ -249,6 +252,7 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState, onDragLog
     return () => {
       cancelAnimationFrame(animId);
       window.removeEventListener('resize', onResize);
+      resizeObserver?.disconnect();
       renderer.domElement.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
@@ -349,7 +353,7 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState, onDragLog
   ];
 
   return (
-    <div className="relative flex-1 h-[42vh] sm:h-[50vh] lg:h-auto bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 overflow-hidden flex items-center justify-center rounded-2xl">
+    <div className="relative flex-1 min-h-[200px] lg:min-h-0 bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 overflow-hidden flex items-center justify-center rounded-2xl">
       <canvas ref={textureCanvasRef} width={2048} height={2048} className="hidden" />
       <div ref={containerRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
 
