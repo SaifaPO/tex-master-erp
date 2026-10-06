@@ -225,7 +225,7 @@ export default function CenotvorbaTab({ supabase }) {
             <NumberInput step="0.05" value={config.cenaMinutySitia} onChange={v => setConfig({ ...config, cenaMinutySitia: v })} fallback={0} className="w-full bg-slate-950 border border-emerald-900/50 rounded p-2 text-white text-sm" />
           </div>
           <div>
-            <label className="block text-[11px] text-emerald-400 mb-1 font-semibold">Strihanie/rezanie/vysek. (€/100cm²)</label>
+            <label className="block text-[11px] text-emerald-400 mb-1 font-semibold">Strihanie/rezanie/vysek. (€/m² látky)</label>
             <NumberInput step="0.05" value={config.cenaStrihania100cm2} onChange={v => setConfig({ ...config, cenaStrihania100cm2: v })} fallback={0} className="w-full bg-slate-950 border border-emerald-900/50 rounded p-2 text-white text-sm" />
           </div>
           <div>

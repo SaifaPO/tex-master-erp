@@ -688,8 +688,8 @@ const mapTierRuleFromDb = (r) => ({ tier: r.tier, sortOrder: r.sort_order, minOr
 const TIER_LABELS = { standard: 'Standard', bronze: 'Bronze', silver: 'Silver', gold: 'Gold' };
 const TIER_COLORS = { standard: 'bg-slate-700 text-slate-200', bronze: 'bg-amber-800 text-amber-100', silver: 'bg-slate-400 text-slate-900', gold: 'bg-yellow-500 text-yellow-950' };
 
-const mapCostMetricFromDb = (r) => ({ id: r.id, name: r.name, value: r.value || 0, unit: r.unit || '', description: r.description || '', category: r.category || 'vseobecne', powerKw: r.power_kw, hoursPerMonth: r.hours_per_month, costType: r.cost_type || 'fixny', company: r.company || '', vykonZaHodinu: r.vykon_za_hodinu, vykonJednotka: r.vykon_jednotka || '' });
-const mapCostMetricToDb = (m) => ({ id: m.id, name: m.name, value: m.value, unit: m.unit || null, description: m.description || null, category: m.category || 'vseobecne', power_kw: m.powerKw ?? null, hours_per_month: m.hoursPerMonth ?? null, cost_type: m.costType || 'fixny', company: m.company || null, vykon_za_hodinu: m.vykonZaHodinu ?? null, vykon_jednotka: m.vykonJednotka || null });
+const mapCostMetricFromDb = (r) => ({ id: r.id, name: r.name, value: r.value || 0, unit: r.unit || '', description: r.description || '', category: r.category || 'vseobecne', powerKw: r.power_kw, hoursPerMonth: r.hours_per_month, costType: r.cost_type || 'fixny', company: r.company || '', vykonZaHodinu: r.vykon_za_hodinu, vykonJednotka: r.vykon_jednotka || '', amortizaciaHod: r.amortizacia_hod ?? null, pracaHod: r.praca_hod ?? null });
+const mapCostMetricToDb = (m) => ({ id: m.id, name: m.name, value: m.value, unit: m.unit || null, description: m.description || null, category: m.category || 'vseobecne', power_kw: m.powerKw ?? null, hours_per_month: m.hoursPerMonth ?? null, cost_type: m.costType || 'fixny', company: m.company || null, vykon_za_hodinu: m.vykonZaHodinu ?? null, vykon_jednotka: m.vykonJednotka || null, ...(m.amortizaciaHod != null ? { amortizacia_hod: m.amortizaciaHod } : {}), ...(m.pracaHod != null ? { praca_hod: m.pracaHod } : {}) });
 
 // Mesačný náklad zariadenia = výkon (kW) × hodiny prevádzky za mesiac × cena elektriny/plynu (podľa kategórie).
 function calculateDeviceMonthlyCost(metric, allMetrics) {
@@ -703,12 +703,19 @@ function calculateDeviceMonthlyCost(metric, allMetrics) {
 // (kW x cena elektriny/plynu) delene vykonom za hodinu (kolko jednotiek stroj spravi za hodinu).
 // Pouziva sa v Katalogu Produktov (napr. Laser) namiesto samostatnej "Kostry cien" pre kazdy stroj —
 // vsetky stroje (tlaciarne, lasery a pod.) su spolu v jednom registri, rovnako ako mzdy/elektrina/kurenie.
-function calculateDeviceRatePerUnit(metric, allMetrics) {
-  if (metric.powerKw == null || metric.vykonZaHodinu == null || metric.vykonZaHodinu <= 0) return null;
+// Naklad na hodinu prevadzky rozdeleny na 3 zlozky: elektrina (kW x cena), amortizacia stroja (€/hod) a praca
+// obsluhy (€/hod). Amortizacia a praca sa zadavaju rucne v tabulke (Prehlady -> Vseobecna tabulka nakladov).
+function calculateDeviceHourlyParts(metric, allMetrics) {
+  if (metric.powerKw == null) return null;
   const rateMetric = allMetrics.find(m => m.name === (metric.category === 'kurenie' ? 'Cena plynu' : 'Cena elektriny'));
   if (!rateMetric) return null;
-  const nakladHod = metric.powerKw * rateMetric.value;
-  return nakladHod / metric.vykonZaHodinu;
+  return { elektrina: metric.powerKw * rateMetric.value, amortizacia: Number(metric.amortizaciaHod) || 0, praca: Number(metric.pracaHod) || 0 };
+}
+function calculateDeviceRatePerUnit(metric, allMetrics) {
+  if (metric.vykonZaHodinu == null || metric.vykonZaHodinu <= 0) return null;
+  const casti = calculateDeviceHourlyParts(metric, allMetrics);
+  if (!casti) return null;
+  return (casti.elektrina + casti.amortizacia + casti.praca) / metric.vykonZaHodinu;
 }
 
 const mapAssetFromDb = (r) => ({ id: r.id, name: r.name, acquisitionDate: r.acquisition_date, acquisitionPrice: r.acquisition_price || 0, depreciationGroup: r.depreciation_group, depreciationMethod: r.depreciation_method || 'rovnomerne', status: r.status || 'aktivny', disposalDate: r.disposal_date, notes: r.notes || '', createdBy: r.created_by || '', createdAt: r.created_at });
@@ -3072,6 +3079,7 @@ export default function App() {
     if (!hasPermission('create_order')) { triggerNotification('error', 'Nemáte prístup do správy nákladov.'); return; }
     let parsedValue = value;
     if (field === 'value') parsedValue = parseFloat(value) || 0;
+    else if (field === 'amortizacia_hod' || field === 'praca_hod') parsedValue = value.trim() === '' ? 0 : (parseFloat(value) || 0);
     else if (field === 'power_kw' || field === 'hours_per_month' || field === 'vykon_za_hodinu') parsedValue = value.trim() === '' ? null : (parseFloat(value) || 0);
     else if (field === 'company') parsedValue = value === '' ? null : value;
     const { error } = await supabase.from('cost_metrics').update({ [field]: parsedValue }).eq('id', id);
@@ -3854,12 +3862,13 @@ export default function App() {
     return Math.round(sum * 100) / 100;
   };
 
-  // Strihanie/kompletaz — vykon krajcirskej dielne (ATAK), jedna sadzba (€/100cm2), pocitana z
+  // Strihanie/kompletaz — vykon krajcirskej dielne (ATAK), jedna sadzba (€/m2 plochy latky), pocitana z
   // celkovej plochy vsetkych pouzitych latok (cim vacsia spotreba, tym vacsi naklad na vystrihnutie).
   const vypocitajCenuStrihania = (p) => {
     if (!p.strihaSaRezeVyseka) return 0;
     const totalPlocha = vypocitajPlochaCm2ZLatky(p.layer1) + vypocitajPlochaCm2ZLatky(p.layer2) + vypocitajPlochaCm2ZLatky(p.layer3);
-    return Math.round((totalPlocha / 100) * cenaStrihania100cm2 * 100) / 100;
+    // Sadzba je v €/m² (stlpec v DB sa historicky vola cena_strihania_100cm2). totalPlocha je v cm² -> /10000 = m².
+    return Math.round((totalPlocha / 10000) * cenaStrihania100cm2 * 100) / 100;
   };
 
   // Laser — vlastny stroj PBT, SAMOSTATNE od Strihania/kompletaze. Sadzba €/jednotku sa neta zvlast
@@ -7850,7 +7859,7 @@ export default function App() {
                             <span className="text-emerald-400 font-mono text-[11px] ml-auto">{vypocitajCenuStrihania(aktualnyFormularProdukt).toFixed(2)} €/ks</span>
                           )}
                         </label>
-                        <p className="text-[10px] text-slate-500 mt-1">Výkon krajčírskej dielne (ATAK). Z celkovej plochy použitých látok × sadzba {cenaStrihania100cm2.toFixed(2)} €/100cm² (Cenotvorba).</p>
+                        <p className="text-[10px] text-slate-500 mt-1">Výkon krajčírskej dielne (ATAK). Z celkovej plochy použitých látok × sadzba {cenaStrihania100cm2.toFixed(2)} €/m² (Cenotvorba). Plocha: {((vypocitajPlochaCm2ZLatky(aktualnyFormularProdukt.layer1) + vypocitajPlochaCm2ZLatky(aktualnyFormularProdukt.layer2) + vypocitajPlochaCm2ZLatky(aktualnyFormularProdukt.layer3)) / 10000).toFixed(3)} m².</p>
                         {(editingProduct ? editingProduct.strihaSaRezeVyseka : newModelStrihaSaRezeVyseka) && (cenaStrihania100cm2 <= 0 || vypocitajPlochaCm2ZLatky(aktualnyFormularProdukt.layer1) <= 0) && (
                           <p className="text-[10px] text-amber-300 mt-1">⚠️ {cenaStrihania100cm2 <= 0 ? 'Sadzba strihania je 0 (nastav v Cenotvorbe, prípadne spusti migráciu migration_krajcirky_a_strihanie.sql).' : 'Plocha látky je 0 (chýba šírka látky vo Sklade alebo spotreba), preto vychádza 0 €.'}</p>
                         )}
@@ -7871,7 +7880,18 @@ export default function App() {
                         {(editingProduct ? editingProduct.laserZariadenieId : newModelLaserZariadenieId) && (
                           <span className="text-emerald-400 font-mono text-[11px] block mt-1">{vypocitajCenuLasera(aktualnyFormularProdukt).toFixed(4)} €/ks</span>
                         )}
-                        <p className="text-[10px] text-slate-500 mt-1">Vlastný stroj (Financie → Réžia firiem → register zariadení). Sadzba €/cm² sa počíta z elektriny + výkonu daného stroja. Stroj sa dá zvoliť, až keď má v registri vyplnený príkon (kW) aj <strong>výkon za hodinu</strong> (napr. 15000 cm²/hod).</p>
+                        {(editingProduct ? editingProduct.laserZariadenieId : newModelLaserZariadenieId) && (() => {
+                          const zar = costMetrics.find(m => m.id === (editingProduct ? editingProduct.laserZariadenieId : newModelLaserZariadenieId));
+                          const casti = zar ? calculateDeviceHourlyParts(zar, costMetrics) : null;
+                          if (!casti) return null;
+                          return (
+                            <p className="text-[10px] text-slate-400 mt-1 font-mono">
+                              Na hodinu: elektrina {casti.elektrina.toFixed(2)} € + amortizácia {casti.amortizacia.toFixed(2)} € + práca {casti.praca.toFixed(2)} € = {(casti.elektrina + casti.amortizacia + casti.praca).toFixed(2)} €/hod ÷ {Number(zar.vykonZaHodinu).toLocaleString('sk-SK')} {zar.vykonJednotka || 'jedn.'}/hod
+                              {(casti.amortizacia + casti.praca) === 0 ? ' — amortizácia a práca sú 0 (doplň v Prehľady → Všeobecná tabuľka nákladov)' : ''}
+                            </p>
+                          );
+                        })()}
+                        <p className="text-[10px] text-slate-500 mt-1">Vlastný stroj (Prehľady → Všeobecná tabuľka nákladov). Sadzba €/cm² = (elektrina + amortizácia + práca obsluhy) na hodinu ÷ výkon stroja. Stroj sa dá zvoliť, až keď má v registri vyplnený príkon (kW) aj <strong>výkon za hodinu</strong> (napr. 15000 cm²/hod).</p>
                       </div>
                     </div>
 
@@ -9906,12 +9926,12 @@ export default function App() {
                       <th className="px-3 py-3 text-center">Hodnota</th><th className="px-3 py-3 text-center">Jednotka</th>
                       <th className="px-3 py-3 text-center">Výkon (kW)</th><th className="px-3 py-3 text-center">Hod./mesiac</th>
                       <th className="px-3 py-3 text-center">Mesačný náklad</th>
-                      <th className="px-3 py-3 text-center">Výkon (jedn./hod)</th><th className="px-3 py-3 text-center">Jedn. výkonu</th><th className="px-3 py-3 text-center">Sadzba €/jedn.</th>
+                      <th className="px-3 py-3 text-center">Výkon (jedn./hod)</th><th className="px-3 py-3 text-center">Jedn. výkonu</th><th className="px-3 py-3 text-center">Amortizácia (€/hod)</th><th className="px-3 py-3 text-center">Práca (€/hod)</th><th className="px-3 py-3 text-center">Sadzba €/jedn.</th>
                       <th className="px-3 py-3">Popis / vzorec / zdroj</th><th className="px-3 py-3"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800">
-                    {costMetrics.length === 0 && (<tr><td colSpan={14} className="px-4 py-6 text-center text-slate-500 italic">Zatiaľ žiadne metriky.</td></tr>)}
+                    {costMetrics.length === 0 && (<tr><td colSpan={16} className="px-4 py-6 text-center text-slate-500 italic">Zatiaľ žiadne metriky.</td></tr>)}
                     {costMetrics.map(m => {
                       const monthlyCost = calculateDeviceMonthlyCost(m, costMetrics);
                       const ratePerUnit = calculateDeviceRatePerUnit(m, costMetrics);
@@ -9950,7 +9970,9 @@ export default function App() {
                           <td className="px-3 py-3 text-center font-bold text-emerald-400">{monthlyCost !== null ? `${monthlyCost.toFixed(2)} €` : '—'}</td>
                           <td className="px-3 py-3 text-center"><input type="number" step="0.01" defaultValue={m.vykonZaHodinu ?? ''} onBlur={(e) => handleUpdateCostMetric(m.id, 'vykon_za_hodinu', e.target.value)} placeholder="—" className="w-16 bg-slate-950 border border-slate-800 rounded p-1 text-center text-white" /></td>
                           <td className="px-3 py-3 text-center"><input type="text" defaultValue={m.vykonJednotka} onBlur={(e) => handleUpdateCostMetric(m.id, 'vykon_jednotka', e.target.value)} placeholder="napr. cm²" className="w-16 bg-slate-950 border border-slate-800 rounded p-1 text-center text-white" /></td>
-                          <td className="px-3 py-3 text-center font-bold text-teal-400">{ratePerUnit !== null ? `${ratePerUnit.toFixed(4)} €` : '—'}</td>
+                          <td className="px-3 py-3 text-center"><input type="number" step="0.01" defaultValue={m.amortizaciaHod ?? ''} onBlur={(e) => handleUpdateCostMetric(m.id, 'amortizacia_hod', e.target.value)} placeholder="—" title="Amortizácia stroja na 1 hodinu prevádzky (cena stroja ÷ roky ÷ hodiny za rok)" className="w-16 bg-slate-950 border border-slate-800 rounded p-1 text-center text-white" /></td>
+                          <td className="px-3 py-3 text-center"><input type="number" step="0.01" defaultValue={m.pracaHod ?? ''} onBlur={(e) => handleUpdateCostMetric(m.id, 'praca_hod', e.target.value)} placeholder="—" title="Hodinová cena práce obsluhy stroja" className="w-16 bg-slate-950 border border-slate-800 rounded p-1 text-center text-white" /></td>
+                          <td className="px-3 py-3 text-center font-bold text-teal-400">{ratePerUnit !== null ? `${ratePerUnit.toFixed(7)} €` : '—'}</td>
                           <td className="px-3 py-3"><input type="text" defaultValue={m.description} onBlur={(e) => handleUpdateCostMetric(m.id, 'description', e.target.value)} placeholder="odkiaľ pochádza toto číslo" className="w-40 bg-slate-950 border border-slate-800 rounded p-1 text-white" /></td>
                           <td className="px-3 py-3 text-center"><button onClick={() => handleDeleteCostMetric(m)} className="text-rose-400 hover:text-rose-300"><Trash2 className="h-3.5 w-3.5" /></button></td>
                         </tr>
