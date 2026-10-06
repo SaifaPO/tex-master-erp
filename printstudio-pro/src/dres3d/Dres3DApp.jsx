@@ -3,7 +3,8 @@ import { RotateCcw, Share2, Users, ShoppingCart, Grid3x3, Palette, Type, Image a
 import AskQuestion from '../AskQuestion';
 import { nacitajDresKatalog } from './dresData';
 import { DEFAULT_CONFIG_STATE, GOOGLE_FONTS_HREF } from './dresPresets';
-import { vypocitajCenuDresu } from './dres3dCenotvorba';
+import { vypocitajCenuDresu, ucinneKusy } from './dres3dCenotvorba';
+import { farbyTrenirok } from './trenirkyRenderer';
 import ThreeViewport from './ThreeViewport';
 import VzoryTab from './VzoryTab';
 import FarbyZonyTab from './FarbyZonyTab';
@@ -38,7 +39,7 @@ export default function Dres3DApp({ supabase, produktId }) {
   const [osobnyOdber, setOsobnyOdber] = useState(false);
   const b2b = useB2bKod(supabase);
   // 3D trenírky: zatiaľ skryté pred zákazníkmi, zapnú sa len odkazom s ?trenky=1 (kým nie je hotová cena a objednávka).
-  const trenkyPovolene = useMemo(() => new URLSearchParams(window.location.search).get('trenky') === '1', []);
+  const trenkyUrl = useMemo(() => new URLSearchParams(window.location.search).get('trenky') === '1', []);
   const [zostava, setZostava] = useState('komplet'); // 'dres' | 'trenky' | 'komplet'
 
   const viewportRef = useRef(null);
@@ -81,7 +82,7 @@ export default function Dres3DApp({ supabase, produktId }) {
         }));
 
         const prvaVelkost = data.velkosti[Math.floor(data.velkosti.length / 2)] || 'L';
-        setRoster([{ id: 1, meno: 'RONALDO', cislo: '7', velkost: prvaVelkost }]);
+        setRoster([{ id: 1, meno: 'RONALDO', cislo: '7', velkost: prvaVelkost, maDres: true, maTrenirky: true, velkostTrenirok: prvaVelkost }]);
       } catch (e) {
         if (!zrusene) setLoadError(e.message || 'Katalóg sa nepodarilo načítať.');
       }
@@ -90,12 +91,17 @@ export default function Dres3DApp({ supabase, produktId }) {
     return () => { zrusene = true; };
   }, [supabase, produktId]);
 
+  // Trenírky sa ponúkajú, keď ich admin zapol pri produkte (ERP → Výroba dresov → Nastavenia → Trenírky), alebo pri skúške cez ?trenky=1.
+  const trenkyPovolene = trenkyUrl || katalog?.nastavenia?.trenirky_povolene === true;
+  const zostavaEf = trenkyPovolene ? zostava : 'dres';
+  const kusy = useMemo(() => ucinneKusy(roster, zostavaEf), [roster, zostavaEf]);
+
   const material = useMemo(() => katalog?.materialy.find(m => m.kod === configState.materialKod), [katalog, configState.materialKod]);
 
   const cenaLokalna = useMemo(() => vypocitajCenuDresu({
     zakladnaCena: katalog?.produkt?.zakladna_cena || 0,
     priplatokMaterial: material?.priplatok_eur || 0,
-    pocetHracov: roster.length,
+    pocetHracov: kusy.dresov || 1,
     zlavy: katalog?.zlavy || [],
     doprava: osobnyOdber ? 0 : cenaDoprava,
   }), [katalog, material, roster.length, cenaDoprava, osobnyOdber]);
@@ -107,11 +113,11 @@ export default function Dres3DApp({ supabase, produktId }) {
     if (!katalog?.produkt?.id) return;
     let zrusene = false;
     const t = setTimeout(async () => {
-      const { data, error } = await supabase.functions.invoke('dres-price-preview', { body: { produktId: katalog.produkt.id, materialKod: configState.materialKod, pocetHracov: roster.length, osobnyOdber, b2bKod: b2b.kod } });
+      const { data, error } = await supabase.functions.invoke('dres-price-preview', { body: { produktId: katalog.produkt.id, materialKod: configState.materialKod, pocetHracov: kusy.dresov, pocetTrenirok: kusy.trenirok, osobnyOdber, b2bKod: b2b.kod } });
       if (!zrusene) setCenaServer(!error && !data?.error && data?.cena ? data.cena : null);
     }, 300);
     return () => { zrusene = true; clearTimeout(t); };
-  }, [supabase, katalog, configState.materialKod, roster.length, osobnyOdber, b2b.kod]);
+  }, [supabase, katalog, configState.materialKod, kusy.dresov, kusy.trenirok, osobnyOdber, b2b.kod]);
   const cena = cenaServer ?? cenaLokalna;
 
   const handleZmenText = (patch) => {
@@ -219,7 +225,7 @@ export default function Dres3DApp({ supabase, produktId }) {
 
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
         <div className="p-2 lg:p-4 flex-1 flex min-h-0">
-          <ThreeViewport ref={viewportRef} configState={configState} onDragLogo={handleDragLogo} zostava={trenkyPovolene ? zostava : 'dres'} />
+          <ThreeViewport ref={viewportRef} configState={configState} onDragLogo={handleDragLogo} zostava={zostavaEf} />
         </div>
 
         <div className="w-full lg:w-[480px] xl:w-[520px] bg-slate-900 border-t lg:border-t-0 lg:border-l border-slate-800 flex flex-col h-[58vh] sm:h-[50vh] lg:h-auto min-h-0">
@@ -252,7 +258,7 @@ export default function Dres3DApp({ supabase, produktId }) {
               />
             )}
             {aktivnyTab === 'farby' && (
-              <FarbyZonyTab configState={configState} onZmenFarbu={handleZmenFarbu} aktivnaZona={aktivnaZona} onZmenAktivnuZonu={setAktivnaZona} zobrazTrenirky={trenkyPovolene && zostava !== 'dres'} onZmenTrenirky={handleZmenTrenirky} />
+              <FarbyZonyTab configState={configState} onZmenFarbu={handleZmenFarbu} aktivnaZona={aktivnaZona} onZmenAktivnuZonu={setAktivnaZona} zobrazTrenirky={zostavaEf !== 'dres'} onZmenTrenirky={handleZmenTrenirky} />
             )}
             {aktivnyTab === 'text' && (
               <PotlacTab configState={configState} fonty={katalog.fonty} onZmenText={handleZmenText} onZmenCislo={handleZmenCislo} />
@@ -291,7 +297,7 @@ export default function Dres3DApp({ supabase, produktId }) {
       </div>
 
       {zobrazitRoster && (
-        <RosterModal roster={roster} velkosti={katalog.velkosti} cena={cena} onZmenRoster={handleZmenRoster} onClose={() => setZobrazitRoster(false)} />
+        <RosterModal roster={roster} velkosti={katalog.velkosti} cena={cena} zostava={zostavaEf} onZmenRoster={handleZmenRoster} onClose={() => setZobrazitRoster(false)} />
       )}
       {zobrazitSuhrn && (
         <SuhrnModal
@@ -302,6 +308,8 @@ export default function Dres3DApp({ supabase, produktId }) {
           materialy={katalog.materialy}
           cena={cena}
           b2bKod={b2b.kod}
+          zostava={zostavaEf}
+          trenirkyFarby={farbyTrenirok(configState)}
           osobnyOdber={osobnyOdber}
           onOsobnyOdber={setOsobnyOdber}
           snapshotUrl={snapshotUrl}

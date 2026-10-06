@@ -3,7 +3,7 @@ import { X, Download } from 'lucide-react';
 
 const BUCKET = 'print-designs';
 
-export default function SuhrnModal({ supabase, produkt, configState, roster, materialy, cena, b2bKod, osobnyOdber, onOsobnyOdber, snapshotUrl, onClose, onBackToEdit }) {
+export default function SuhrnModal({ supabase, produkt, configState, roster, materialy, cena, b2bKod, zostava = 'dres', trenirkyFarby = null, osobnyOdber, onOsobnyOdber, snapshotUrl, onClose, onBackToEdit }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [techPanel, setTechPanel] = useState('');
@@ -52,7 +52,9 @@ export default function SuhrnModal({ supabase, produkt, configState, roster, mat
         materialKod: configState.materialKod,
         font: configState.text.fontRodina,
         timText: configState.text.zobrazitTimText ? configState.text.timText : '',
-        roster: roster.map(h => ({ meno: h.meno, cislo: h.cislo, velkost: h.velkost })),
+        roster: roster.map(h => ({ meno: h.meno, cislo: h.cislo, velkost: h.velkost, maDres: h.maDres !== false, maTrenirky: h.maTrenirky !== false, velkostTrenirok: h.velkostTrenirok || h.velkost })),
+        zostava,
+        trenirkyFarby: zostava !== 'dres' ? trenirkyFarby : null,
         osobnyOdber,
         nahladUrl,
         b2bKod,
@@ -107,7 +109,7 @@ export default function SuhrnModal({ supabase, produkt, configState, roster, mat
               </div>
               <div className="flex justify-between py-1 border-b border-slate-800">
                 <span className="text-slate-400">Počet kusov:</span>
-                <span className="font-bold text-indigo-400">{cena.pocet} ks</span>
+                <span className="font-bold text-indigo-400">{zostava !== 'trenky' ? `${cena.pocet} dresov` : ''}{zostava === 'komplet' && cena.trenirky ? ' + ' : ''}{cena.trenirky ? `${cena.trenirky.pocet} trenírok` : ''}</span>
               </div>
               {cena.b2bZlavaPercent > 0 && (
                 <div className="flex justify-between py-1 border-b border-slate-800">

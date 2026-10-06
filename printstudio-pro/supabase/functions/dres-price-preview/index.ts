@@ -50,6 +50,18 @@ async function b2bZlava(supabase: ReturnType<typeof createClient>, kod: unknown)
   return Math.min(Math.max(Number(data?.zlava_percent) || 0, 0), 90);
 }
 
+// Trenírky (set s dresom): predajna cena z nakupnej ceny trenirok (produkt_dres_naklady.trenirky_naklad_ks) cez rovnaky
+// marzovy vzorec ako dres — marza podla poctu trenirok v zostave. Cena je s DPH, B2B zlava sa uplatni rovnako ako pri dresoch.
+async function cenaTrenirok(supabase: ReturnType<typeof createClient>, produktId: unknown, pocet: number, pricingConfig: PricingConfig, b2bP: number) {
+  if (!(pocet > 0)) return null;
+  const { data } = await supabase.from('produkt_dres_naklady').select('trenirky_naklad_ks').eq('produkt_id', produktId).maybeSingle();
+  const naklad = Number(data?.trenirky_naklad_ks) || 0;
+  if (naklad <= 0) throw new Error('Cena trenírok nie je nastavená (ERP → Výroba dresov → Nastavenia → Trenírky).');
+  const dphK = 1 + (Number(pricingConfig.dphPercent) || 0) / 100;
+  const jednotkova = Math.round(priceAt(naklad, pocet, pricingConfig) * dphK * (1 - Math.min(Math.max(b2bP, 0), 90) / 100) * 100) / 100;
+  return { pocet, jednotkovaCena: jednotkova, spolu: Math.round(jednotkova * pocet * 100) / 100 };
+}
+
 function vypocitajCenuDresu(p: {
   zakladnaCena: number; priplatokMaterial: number; pocetHracov: number; zlavy: DresZlava[]; doprava: number;
   nakladKs: number; nakladMaterial: number; pricingConfig: PricingConfig; b2bZlavaPercent?: number;
@@ -80,7 +92,7 @@ Deno.serve(async (req) => {
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
   try {
-    const { produktId, materialKod = null, pocetHracov = 1, osobnyOdber = false, b2bKod = null } = await req.json();
+    const { produktId, materialKod = null, pocetHracov = 1, pocetTrenirok = 0, osobnyOdber = false, b2bKod = null } = await req.json();
     if (!produktId) throw new Error('Chýba produktId.');
 
     const [{ data: produkt }, { data: material }, { data: zlavy }, { data: nastavenia }, { data: naklad }, { data: cfg }] = await Promise.all([
@@ -116,7 +128,11 @@ Deno.serve(async (req) => {
       pricingConfig,
       b2bZlavaPercent: await b2bZlava(supabase, b2bKod),
     });
-    return odpoved({ cena });
+    // Dresy (pocetHracov = pocet dresov, moze byt 0 ak sa objednavaju len trenirky) + volitelne trenirky.
+    const dresov = Math.max(0, Math.round(Number(pocetHracov) || 0));
+    const trenirky = await cenaTrenirok(supabase, produktId, Math.max(0, Math.round(Number(pocetTrenirok) || 0)), pricingConfig, cena.b2bZlavaPercent || 0);
+    const dresySpolu = dresov > 0 ? cena.jednotkovaCena * cena.pocet : 0;
+    return odpoved({ cena: { ...cena, pocet: dresov, trenirky, cenaSpolu: dresySpolu + (trenirky?.spolu || 0) + cena.doprava } });
   } catch (e) {
     return odpoved({ error: e instanceof Error ? e.message : String(e) });
   }

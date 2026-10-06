@@ -45,6 +45,7 @@ export default function DresNastaveniaTab({ supabase }) {
   const [skladMaterialy, setSkladMaterialy] = useState([]);
   const [naklad, setNaklad] = useState(0); // nakupna cena 1 dresu bez DPH (0 = stary rezim s pevnou cenou)
   const [materialNaklady, setMaterialNaklady] = useState({}); // { [material_id]: nakupny priplatok }
+  const [trenirkyNaklad, setTrenirkyNaklad] = useState(0); // nakupna cena 1 paru trenirok bez DPH (set s dresom)
   const [isLoading, setIsLoading] = useState(true);
 
   const nacitajZoznamProduktov = async () => {
@@ -84,6 +85,9 @@ export default function DresNastaveniaTab({ supabase }) {
       supabase.from('produkt_dres_naklady').select('naklad_ks').eq('produkt_id', produktId).maybeSingle(),
     ]);
     setNaklad(Number(nk?.naklad_ks) || 0);
+    // Trenírky — samostatný dotaz (stĺpec vznikne až migráciou migration_dres_trenirky.sql, nesmie zhodiť načítanie ceny dresu)
+    const { data: tn } = await supabase.from('produkt_dres_naklady').select('trenirky_naklad_ks').eq('produkt_id', produktId).maybeSingle();
+    setTrenirkyNaklad(Number(tn?.trenirky_naklad_ks) || 0);
     const ids = (m || []).map(x => x.id);
     const { data: mn } = ids.length ? await supabase.from('produkt_dres_material_naklady').select('*').in('material_id', ids) : { data: [] };
     setMaterialNaklady(Object.fromEntries((mn || []).map(r => [r.material_id, Number(r.naklad_eur) || 0])));
@@ -104,6 +108,11 @@ export default function DresNastaveniaTab({ supabase }) {
   const ulozNaklad = async (v) => {
     setNaklad(v);
     await supabase.from('produkt_dres_naklady').upsert({ produkt_id: vybranyId, naklad_ks: v });
+  };
+  const ulozTrenirkyNaklad = async (v) => {
+    setTrenirkyNaklad(v);
+    const { error } = await supabase.from('produkt_dres_naklady').upsert({ produkt_id: vybranyId, trenirky_naklad_ks: v });
+    if (error) window.alert('Uloženie ceny trenírok zlyhalo (spustil si migration_dres_trenirky.sql?): ' + error.message);
   };
   const ulozMaterialNaklad = async (materialId, v) => {
     setMaterialNaklady(n => ({ ...n, [materialId]: v }));
@@ -211,6 +220,19 @@ export default function DresNastaveniaTab({ supabase }) {
             <div className="flex items-center gap-2">
               <NumberInput step="0.5" value={naklad} onChange={ulozNaklad} fallback={0} className="w-28 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /> <span className="text-xs text-slate-400">€ / dres (nákup)</span>
             </div>
+          </div>
+
+          <div className="bg-slate-900/60 rounded-2xl border border-indigo-900/40 p-4">
+            <h3 className="font-bold text-sm text-white mb-1">Trenírky (set k dresu)</h3>
+            <p className="text-xs text-slate-400 mb-3">Keď zapneš, zákazník si v konfigurátore môže vybrať <strong className="text-slate-200">Dres / Trenírky / Komplet</strong> a pri hráčovi zvoliť veľkosť dresu aj trenírok. Cena trenírok sa dopočíta z nákupnej ceny a marže (Cenotvorba) podľa počtu trenírok v objednávke, rovnako ako pri dresoch. Vyžaduje SQL migráciu <code className="bg-slate-950 px-1 rounded">migration_dres_trenirky.sql</code>.</p>
+            <label className="flex items-center gap-2 mb-3 cursor-pointer">
+              <input type="checkbox" checked={!!nastavenia.trenirky_povolene} onChange={(e) => uprav({ trenirky_povolene: e.target.checked })} className="rounded border-slate-700 bg-slate-950" />
+              <span className="text-sm text-slate-200 font-semibold">Ponúkať trenírky zákazníkom pri tomto dresovom produkte</span>
+            </label>
+            <div className="flex items-center gap-2">
+              <NumberInput step="0.5" value={trenirkyNaklad} onChange={ulozTrenirkyNaklad} fallback={0} className="w-28 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /> <span className="text-xs text-slate-400">€ / pár trenírok (nákup bez DPH)</span>
+            </div>
+            {nastavenia.trenirky_povolene && trenirkyNaklad <= 0 && <p className="text-[11px] text-amber-400 mt-2">⚠️ Trenírky sú zapnuté, ale nákupná cena je 0 — objednávka s trenírkami zlyhá, kým ju nezadáš.</p>}
           </div>
 
           <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4">

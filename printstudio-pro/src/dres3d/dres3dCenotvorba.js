@@ -28,3 +28,11 @@ export function vypocitajCenuDresu({ zakladnaCena, priplatokMaterial = 0, pocetH
     cenaSpolu,
   };
 }
+
+// Počet dresov a trenírok v súpiske podľa zostavy ('dres' | 'trenky' | 'komplet'). Pri komplete si hráč môže zvoliť len dres
+// alebo len trenírky (príznaky maDres / maTrenirky na riadku súpisky; chýbajúci príznak = áno). Rovnaké pravidlo ako na serveri.
+export function ucinneKusy(roster, zostava) {
+  const dresov = zostava === 'trenky' ? 0 : roster.filter((h) => h.maDres !== false).length;
+  const trenirok = zostava === 'dres' ? 0 : roster.filter((h) => zostava === 'trenky' || h.maTrenirky !== false).length;
+  return { dresov, trenirok };
+}

@@ -46,6 +46,18 @@ async function b2bZlava(supabase: ReturnType<typeof createClient>, kod: unknown)
   return Math.min(Math.max(Number(data?.zlava_percent) || 0, 0), 90);
 }
 
+// Trenírky (set s dresom): predajna cena z nakupnej ceny trenirok (produkt_dres_naklady.trenirky_naklad_ks) cez rovnaky
+// marzovy vzorec ako dres — marza podla poctu trenirok v zostave. Cena je s DPH, B2B zlava sa uplatni rovnako ako pri dresoch.
+async function cenaTrenirok(supabase: ReturnType<typeof createClient>, produktId: unknown, pocet: number, pricingConfig: PricingConfig, b2bP: number) {
+  if (!(pocet > 0)) return null;
+  const { data } = await supabase.from('produkt_dres_naklady').select('trenirky_naklad_ks').eq('produkt_id', produktId).maybeSingle();
+  const naklad = Number(data?.trenirky_naklad_ks) || 0;
+  if (naklad <= 0) throw new Error('Cena trenírok nie je nastavená (ERP → Výroba dresov → Nastavenia → Trenírky).');
+  const dphK = 1 + (Number(pricingConfig.dphPercent) || 0) / 100;
+  const jednotkova = Math.round(priceAt(naklad, pocet, pricingConfig) * dphK * (1 - Math.min(Math.max(b2bP, 0), 90) / 100) * 100) / 100;
+  return { pocet, jednotkovaCena: jednotkova, spolu: Math.round(jednotkova * pocet * 100) / 100 };
+}
+
 function vypocitajCenuDresu(p: {
   zakladnaCena: number; priplatokMaterial: number; pocetHracov: number; zlavy: DresZlava[]; doprava: number;
   nakladKs: number; nakladMaterial: number; pricingConfig: PricingConfig; b2bZlavaPercent?: number;
@@ -87,6 +99,7 @@ Deno.serve(async (req) => {
     const {
       designId, produktId, vzorKod, farby = {}, golierTyp, materialKod, font, timText,
       roster = [], osobnyOdber = false, nahladUrl, b2bKod = null,
+      zostava = 'dres', trenirkyFarby = null,
     } = body;
 
     if (!produktId) throw new Error('Chýba produktId.');
@@ -115,11 +128,19 @@ Deno.serve(async (req) => {
       ? { coefA: Number(cfg.coef_a), coefB: Number(cfg.coef_b), marginFloor: Number(cfg.margin_floor), coefP: Number(cfg.coef_p), cielovaHodnotaZakazky: Number(cfg.cielova_hodnota_zakazky ?? 25000), dphPercent: Number(cfg.dph_percent ?? 23) }
       : { coefA: 300, coefB: 54, marginFloor: 30, coefP: 1.3, cielovaHodnotaZakazky: 25000, dphPercent: 23 };
 
+    // Zostava: 'dres' (len dresy), 'trenky' (len trenirky), 'komplet' (hrac moze mat dres aj trenirky, alebo len jedno z nich).
+    // Pocty kusov sa VZDY prepocitaju na serveri zo supisky — klient nic o cene neurcuje.
+    const zostavaOk = zostava === 'trenky' || zostava === 'komplet' ? zostava : 'dres';
+    const maDres = (h: { maDres?: boolean }) => zostavaOk !== 'trenky' && h.maDres !== false;
+    const maTrenirky = (h: { maTrenirky?: boolean }) => zostavaOk !== 'dres' && (zostavaOk === 'trenky' || h.maTrenirky !== false);
+    const pocetDresov = roster.filter(maDres).length;
+    const pocetTrenirok = roster.filter(maTrenirky).length;
+    if (pocetDresov + pocetTrenirok === 0) throw new Error('Súpiska neobsahuje žiadny dres ani trenírky.');
     const doprava = osobnyOdber ? 0 : (Number(nastavenia?.cena_doprava) || 0);
     const cena = vypocitajCenuDresu({
       zakladnaCena: produkt.zakladna_cena,
       priplatokMaterial: material?.priplatok_eur || 0,
-      pocetHracov: roster.length,
+      pocetHracov: Math.max(1, pocetDresov),
       zlavy: zlavy || [],
       doprava,
       nakladKs: Number(naklad?.naklad_ks) || 0,
@@ -128,12 +149,20 @@ Deno.serve(async (req) => {
       b2bZlavaPercent: await b2bZlava(supabase, b2bKod),
     });
 
+    const trenirky = await cenaTrenirok(supabase, produktId, pocetTrenirok, pricingConfig, cena.b2bZlavaPercent || 0);
+    const dresySpolu = pocetDresov > 0 ? cena.jednotkovaCena * cena.pocet : 0;
+    const cenaSpoluVsetko = Math.round((dresySpolu + (trenirky?.spolu || 0) + cena.doprava) * 100) / 100;
+    const rosterUlozeny = roster.map((h: { meno: string; cislo: string; velkost: string; velkostTrenirok?: string }) => ({
+      meno: h.meno, cislo: h.cislo, velkost: h.velkost,
+      maDres: maDres(h), maTrenirky: maTrenirky(h), velkostTrenirok: h.velkostTrenirok || h.velkost,
+    }));
+
     const domain = Deno.env.get('SHOPIFY_STORE_DOMAIN');
     const token = Deno.env.get('SHOPIFY_ADMIN_TOKEN');
     if (!domain || !token) throw new Error('SHOPIFY_STORE_DOMAIN alebo SHOPIFY_ADMIN_TOKEN nie je nastavený v Supabase secrets.');
 
-    const rosterText = roster.map((h: { meno: string; cislo: string; velkost: string }) => `${h.cislo} ${h.meno} (${h.velkost})`).join(', ');
-    const nazovPolozky = `Dres 3D — ${produkt.nazov}`;
+    const rosterText = rosterUlozeny.map((h: { meno: string; cislo: string; velkost: string; maDres: boolean; maTrenirky: boolean; velkostTrenirok: string }) => `${h.cislo} ${h.meno} (${[h.maDres ? `dres ${h.velkost}` : '', h.maTrenirky ? `trenírky ${h.velkostTrenirok}` : ''].filter(Boolean).join(', ')})`).join(', ');
+    const nazovPolozky = `Dres 3D — ${produkt.nazov}` + (pocetTrenirok > 0 ? (pocetDresov > 0 ? ' + trenírky' : ' — trenírky') : '');
     const properties: Record<string, string> = {
       _dres_order: 'true',
       _design_id: designId || '',
@@ -149,7 +178,11 @@ Deno.serve(async (req) => {
       _farba_rukava: farby.rukava || '',
       _farba_golier: farby.golier || '',
       _roster: rosterText,
-      _roster_json: JSON.stringify(roster),
+      _roster_json: JSON.stringify(rosterUlozeny),
+      _zostava: zostavaOk,
+      _pocet_dresov: String(pocetDresov),
+      _pocet_trenirok: String(pocetTrenirok),
+      _trenirky_farby: pocetTrenirok > 0 && trenirkyFarby ? JSON.stringify(trenirkyFarby) : '',
       _doprava: doprava.toFixed(2),
       _osobny_odber: osobnyOdber ? 'áno' : 'nie',
       _nahlad_url: nahladUrl || '',
@@ -165,14 +198,14 @@ Deno.serve(async (req) => {
             // Doprava je flat jednorazovy poplatok, nie za kus — rozpocita sa rovnomerne do
             // jednotkovej ceny (quantity = pocet hracov), aby sucet quantity*price presne
             // sedel s cena.cenaSpolu (rovnaky vzor ako beachflag/zastava-create-draft-order).
-            price: (cena.cenaSpolu / roster.length).toFixed(2),
+            price: (cenaSpoluVsetko / roster.length).toFixed(2),
             quantity: roster.length,
             taxable: false, // cena už zahŕňa DPH (produkty.zakladna_cena) aj dopravu — Shopify ju druhýkrát nepripočíta
             requires_shipping: !osobnyOdber,
             properties: Object.entries(properties).map(([name, value]) => ({ name, value })),
           },
         ],
-        note: `Dres 3D objednávka — dizajn ${designId || '—'} (${roster.length} ks)`,
+        note: `Dres 3D objednávka — dizajn ${designId || '—'} (${pocetDresov} dresov, ${pocetTrenirok} trenírok)`,
         tags: 'dres3d',
         use_customer_default_address: true,
       },
@@ -191,7 +224,7 @@ Deno.serve(async (req) => {
     const draftOrder = data?.draft_order;
     if (!draftOrder?.invoice_url) throw new Error('Shopify nevrátil odkaz na platbu draft objednávky.');
 
-    return odpoved({ draftOrderId: draftOrder.id, checkoutUrl: draftOrder.invoice_url, cenaSpolu: cena.cenaSpolu });
+    return odpoved({ draftOrderId: draftOrder.id, checkoutUrl: draftOrder.invoice_url, cenaSpolu: cenaSpoluVsetko });
   } catch (e) {
     return odpoved({ error: e instanceof Error ? e.message : String(e) });
   }

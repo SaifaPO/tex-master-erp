@@ -94,6 +94,14 @@ Deno.serve(async (req) => {
       raw_shopify_payload: order,
     };
 
+    // Trenirky (set): ukladaju sa len ak ide o komplet / len trenirky — stlpce vyzaduju migration_dres_trenirky.sql.
+    const zostava = najdiVlastnost(props, '_zostava');
+    if (zostava === 'komplet' || zostava === 'trenky') {
+      let farby: unknown = null;
+      try { farby = JSON.parse(najdiVlastnost(props, '_trenirky_farby') || 'null'); } catch { farby = null; }
+      Object.assign(riadok, { zostava, trenirky_farby: farby });
+    }
+
     const { error } = await supabase.from('dres_objednavky').insert(riadok);
     if (error) throw error;
 

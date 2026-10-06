@@ -2,12 +2,16 @@ import React from 'react';
 import { X, Plus, Trash2 } from 'lucide-react';
 import { VELKOSTI_FALLBACK } from './dresPresets';
 
-export default function RosterModal({ roster, velkosti, cena, onZmenRoster, onClose }) {
+export default function RosterModal({ roster, velkosti, cena, onZmenRoster, onClose, zostava = 'dres' }) {
+  const komplet = zostava === 'komplet';
+  const ukazDres = zostava !== 'trenky';
+  const ukazTrenirky = zostava !== 'dres';
   const velkostiOptions = velkosti && velkosti.length > 0 ? velkosti : VELKOSTI_FALLBACK;
 
   const pridajHraca = () => {
     const dalsieCislo = roster.length + 1;
-    onZmenRoster([...roster, { id: Date.now(), meno: `HRÁČ ${dalsieCislo}`, cislo: `${dalsieCislo}`, velkost: velkostiOptions[Math.floor(velkostiOptions.length / 2)] || 'L' }]);
+    const stredVelkost = velkostiOptions[Math.floor(velkostiOptions.length / 2)] || 'L';
+    onZmenRoster([...roster, { id: Date.now(), meno: `HRÁČ ${dalsieCislo}`, cislo: `${dalsieCislo}`, velkost: stredVelkost, maDres: true, maTrenirky: true, velkostTrenirok: stredVelkost }]);
   };
 
   const zmazHraca = (idx) => {
@@ -42,7 +46,10 @@ export default function RosterModal({ roster, velkosti, cena, onZmenRoster, onCl
                   <th className="py-2.5 px-2.5 w-10 text-center">#</th>
                   <th className="py-2.5 px-2.5">Meno</th>
                   <th className="py-2.5 px-2.5 w-20 text-center">Číslo</th>
-                  <th className="py-2.5 px-2.5 w-24 text-center">Veľkosť</th>
+                  {ukazDres && komplet && <th className="py-2.5 px-1 w-12 text-center">Dres</th>}
+                  {ukazDres && <th className="py-2.5 px-2.5 w-24 text-center">{komplet ? 'Veľk. dresu' : 'Veľkosť'}</th>}
+                  {ukazTrenirky && komplet && <th className="py-2.5 px-1 w-14 text-center">Trenírky</th>}
+                  {ukazTrenirky && <th className="py-2.5 px-2.5 w-24 text-center">{komplet ? 'Veľk. trenírok' : 'Veľkosť trenírok'}</th>}
                   <th className="py-2.5 px-2.5 w-10 text-center" />
                 </tr>
               </thead>
@@ -64,15 +71,36 @@ export default function RosterModal({ roster, velkosti, cena, onZmenRoster, onCl
                         className="w-14 bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-center text-white font-bold text-xs focus:border-indigo-500"
                       />
                     </td>
-                    <td className="py-2 px-2 text-center">
-                      <select
-                        value={h.velkost}
-                        onChange={(e) => zmenHraca(idx, { velkost: e.target.value })}
-                        className="bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-white font-semibold text-xs focus:border-indigo-500"
-                      >
-                        {velkostiOptions.map(v => <option key={v} value={v}>{v}</option>)}
-                      </select>
-                    </td>
+                    {ukazDres && komplet && (
+                      <td className="py-2 px-1 text-center"><input type="checkbox" checked={h.maDres !== false} onChange={(e) => zmenHraca(idx, { maDres: e.target.checked })} className="rounded border-slate-700 bg-slate-900" /></td>
+                    )}
+                    {ukazDres && (
+                      <td className="py-2 px-2 text-center">
+                        <select
+                          value={h.velkost}
+                          disabled={komplet && h.maDres === false}
+                          onChange={(e) => zmenHraca(idx, { velkost: e.target.value, ...(h.velkostTrenirok === undefined || h.velkostTrenirok === h.velkost ? { velkostTrenirok: e.target.value } : {}) })}
+                          className="bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-white font-semibold text-xs focus:border-indigo-500 disabled:opacity-40"
+                        >
+                          {velkostiOptions.map(v => <option key={v} value={v}>{v}</option>)}
+                        </select>
+                      </td>
+                    )}
+                    {ukazTrenirky && komplet && (
+                      <td className="py-2 px-1 text-center"><input type="checkbox" checked={h.maTrenirky !== false} onChange={(e) => zmenHraca(idx, { maTrenirky: e.target.checked })} className="rounded border-slate-700 bg-slate-900" /></td>
+                    )}
+                    {ukazTrenirky && (
+                      <td className="py-2 px-2 text-center">
+                        <select
+                          value={h.velkostTrenirok || h.velkost}
+                          disabled={komplet && h.maTrenirky === false}
+                          onChange={(e) => zmenHraca(idx, { velkostTrenirok: e.target.value })}
+                          className="bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-white font-semibold text-xs focus:border-indigo-500 disabled:opacity-40"
+                        >
+                          {velkostiOptions.map(v => <option key={v} value={v}>{v}</option>)}
+                        </select>
+                      </td>
+                    )}
                     <td className="py-2 px-2 text-center">
                       {roster.length > 1 ? (
                         <button onClick={() => zmazHraca(idx)} className="text-slate-400 hover:text-red-400 p-1">
@@ -93,7 +121,7 @@ export default function RosterModal({ roster, velkosti, cena, onZmenRoster, onCl
           <div className="grid grid-cols-3 gap-2 sm:gap-3 pt-2">
             <div className="bg-slate-950 p-2.5 sm:p-3 rounded-xl border border-slate-800 text-center sm:text-left">
               <span className="text-[10px] text-slate-400 block">Kusov</span>
-              <span className="text-sm sm:text-base font-bold text-white">{cena.pocet} ks</span>
+              <span className="text-sm sm:text-base font-bold text-white">{ukazDres ? `${cena.pocet} dres` : ''}{ukazDres && cena.trenirky ? ' + ' : ''}{cena.trenirky ? `${cena.trenirky.pocet} tren.` : ''}{!ukazDres && !cena.trenirky ? '—' : ''}</span>
             </div>
             <div className="bg-slate-950 p-2.5 sm:p-3 rounded-xl border border-slate-800 text-center sm:text-left">
               <span className="text-[10px] text-slate-400 block">Zľava</span>

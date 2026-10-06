@@ -73,10 +73,13 @@ export default function DresObjednavkyTab({ supabase }) {
                     {o.farba_zakladna && <span className="inline-flex items-center gap-1">· <span className="inline-block w-3 h-3 rounded-sm border border-slate-700" style={{ background: o.farba_zakladna }} /></span>}
                   </div>
                   {o.tim_text && <div className="text-xs text-slate-500 mt-0.5">Tímový text: "{o.tim_text}"</div>}
+                  {(o.zostava === 'komplet' || o.zostava === 'trenky') && (
+                    <div className="text-xs text-sky-300 mt-0.5">Zostava: {o.zostava === 'komplet' ? 'dres + trenírky' : 'len trenírky'}{o.trenirky_farby ? ` • farby trenírok: ${Object.entries(o.trenirky_farby).map(([k, v]) => `${k} ${v}`).join(', ')}` : ''}</div>
+                  )}
                   {roster.length > 0 && (
                     <div className="text-xs text-slate-500 mt-1.5">
                       <span className="text-slate-400 font-semibold">Súpiska:</span>{' '}
-                      {roster.map((h, i) => `${h.cislo} ${h.meno} (${h.velkost})`).join(', ')}
+                      {roster.map((h, i) => `${h.cislo} ${h.meno} (${[h.maDres === false ? '' : `dres ${h.velkost}`, h.maTrenirky ? `trenírky ${h.velkostTrenirok || h.velkost}` : ''].filter(Boolean).join(', ') || h.velkost})`).join(', ')}
                     </div>
                   )}
                   {(o.zakaznik_meno || o.zakaznik_email) && (
