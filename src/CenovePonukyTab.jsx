@@ -4,7 +4,7 @@ import {
   Image as ImageIcon, Upload, Award, ListChecks, Clock, ShoppingCart, Loader2, Paperclip, Download
 } from 'lucide-react';
 import { priceAt, marginAt } from './printstudio/pricingEngine';
-import { nacitajKostru, vcSublimaciaGarment, vcDtfGarment, vcVysivka, vcSietotlacCelkom, plochaFormatuSietotlac, vcRezanyTransfer, minCenaPotlace } from './printstudio/vyrobneNaklady';
+import { nacitajKostru, vcSublimaciaGarmentRozpis, vcDtfGarmentRozpis, vcRezanyTransferRozpis, vcVysivka, vcSietotlacCelkom, plochaFormatuSietotlac, vcRezanyTransfer, minCenaPotlace } from './printstudio/vyrobneNaklady';
 
 // --- Lokálne konštanty (duplicitne s App.jsx, aby tento súbor zostal samostatný) ---
 const TIER_LABELS = { standard: 'Standard', bronze: 'Bronze', silver: 'Silver', gold: 'Gold' };
@@ -422,12 +422,25 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
   // rozmeru (spotreba farby je viazana na format), Rezany transfer nasobi cely naklad poctom farieb
   // (kazda farba = samostatna vrstva folie, rovnaky princip ako doterajsi zivy vzorec pre zakaznikov).
   let calcVc = 0, calcPlochaPouzita = calcPlocha;
+  // Transfer a nazehlenie su dva osobne naklady (iny clovek, ine casy a riziko) — ukazuju sa osobitne.
+  let calcCasti = [];
   if (kostra) {
-    if (calcMethod === 'sublimacia') calcVc = vcSublimaciaGarment(kostra, calcPlocha);
-    else if (calcMethod === 'dtf') calcVc = vcDtfGarment(kostra, calcPlocha);
+    if (calcMethod === 'sublimacia') {
+      const rz = vcSublimaciaGarmentRozpis(kostra, calcPlocha);
+      calcVc = rz?.spolu ?? 0;
+      if (rz) calcCasti = [{ label: 'Sublimačný transfer (papier, atrament, tlač)', vc: rz.transfer }, { label: 'Nažehlenie sublimačného papiera na textil', vc: rz.nazehlenie }];
+    } else if (calcMethod === 'dtf') {
+      const rz = vcDtfGarmentRozpis(kostra, calcPlocha);
+      calcVc = rz.spolu;
+      calcCasti = [{ label: `DTF transfer (fólia, farby, tlač, odpad ${Number(rz.odpadPercent).toFixed(0)} %)`, vc: rz.transfer }, { label: 'Nažehlenie DTF transferu na textil', vc: rz.nazehlenie }];
+    }
     else if (calcMethod === 'vysivka') calcVc = vcVysivka(kostra, calcPlocha, calcKs);
     else if (calcMethod === 'sietotlac') { calcVc = vcSietotlacCelkom(kostra, calc.velkostId, calc.tmavy, calcFarby, calcKs); calcPlochaPouzita = plochaFormatuSietotlac(kostra, calc.velkostId); }
-    else if (calcMethod === 'rezany') calcVc = vcRezanyTransfer(kostra, calc.foliaId, calcPlocha) * calcFarby;
+    else if (calcMethod === 'rezany') {
+      const rz = vcRezanyTransferRozpis(kostra, calc.foliaId, calcPlocha);
+      calcVc = rz.spolu * calcFarby;
+      calcCasti = [{ label: `Rezaný transfer (fólia, rezanie, vyľupovanie${calcFarby > 1 ? `, ${calcFarby} farby` : ''})`, vc: rz.transfer * calcFarby }, { label: 'Nažehlenie rezaného transferu na textil', vc: rz.nazehlenie * calcFarby }];
+    }
   }
   const calcUnitPrice = kostra ? Math.max(priceAt(calcVc, calcKs, kostra.pricingConfig), minCenaPotlace(kostra, calcMethod)) : 0;
   // Zobrazena marza vychadza zo SKUTOCNE uctovanej ceny (po pripadnom floor-e "min. cena ukonu"),
@@ -469,7 +482,8 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
     const tmavyLabel = calcMethod === 'sietotlac' ? (calc.tmavy ? ' — tmavý textil' : ' — svetlý textil') : '';
     const foliaLabel = calcMethod === 'rezany' ? ` — ${vybranaFoliaRezany?.nazov}` : '';
     const title = `${calcMethodDef?.label || calcMethod} — ${rozmerLabel}${foliaLabel}${farbyLabel}${tmavyLabel}`;
-    const desc = `VC ${calcVc.toFixed(3)}€/ks × marža ${calcMarza.toFixed(0)}% (pri ${calcKs}ks) = ${calcUnitPrice.toFixed(2)} €/ks`;
+    const casti = calcCasti.length > 1 && calcVc > 0 ? ` [${calcCasti.map(c => `${c.label.split(' (')[0]} ${(calcUnitPrice * c.vc / calcVc).toFixed(2)} €`).join(' + ')}]` : '';
+    const desc = `VC ${calcVc.toFixed(3)}€/ks × marža ${calcMarza.toFixed(0)}% (pri ${calcKs}ks) = ${calcUnitPrice.toFixed(2)} €/ks${casti}`;
     setForm(prev => ({ ...prev, items: [...prev.items, { key: `it-${Date.now()}`, title, desc, badge: '', price: Number(calcUnitPrice.toFixed(2)), qty: calcKs }] }));
     triggerNotification('success', 'Položka z kalkulačky tlače pridaná do ponuky.');
   };
@@ -795,7 +809,24 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
                         </div>
                       </div>
 
-                      <p className="text-[10px] text-slate-500">VC {calcVc.toFixed(3)}€/ks • marža {calcMarza.toFixed(0)}% pri {calcKs}ks (podľa krivky v Cenotvorbe — čím viac kusov, tým nižšia marža)</p>
+                      {calcCasti.length > 1 && calcVc > 0 && (
+                        <div className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden text-[11px]">
+                          <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 px-3 py-1.5 text-slate-500 uppercase tracking-wide text-[10px] bg-slate-950/60"><span>Zložka</span><span className="text-right">VC</span><span className="text-right">v cene</span></div>
+                          {calcCasti.map(c => (
+                            <div key={c.label} className="grid grid-cols-[1fr_auto_auto] gap-x-3 px-3 py-1.5 border-t border-slate-800 text-slate-300">
+                              <span>{c.label}</span>
+                              <span className="text-right font-mono">{c.vc.toFixed(3)} €</span>
+                              <span className="text-right font-mono text-emerald-400">{(calcUnitPrice * c.vc / calcVc).toFixed(2)} €</span>
+                            </div>
+                          ))}
+                          <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 px-3 py-1.5 border-t border-slate-700 text-slate-200 font-semibold">
+                            <span>VC spolu → marža {calcMarza.toFixed(0)} %</span>
+                            <span className="text-right font-mono">{calcVc.toFixed(3)} €</span>
+                            <span className="text-right font-mono text-emerald-400">{calcUnitPrice.toFixed(2)} €</span>
+                          </div>
+                        </div>
+                      )}
+                      <p className="text-[10px] text-slate-500">VC {calcVc.toFixed(3)}€/ks • marža {calcMarza.toFixed(0)}% pri {calcKs}ks (podľa krivky v Cenotvorbe — čím viac kusov, tým nižšia marža){calcCasti.length > 1 ? '. Marža sa počíta z VC spolu, v stĺpci „v cene“ je cena rozdelená podľa podielu VC.' : ''}</p>
                       <div className="flex items-center justify-between bg-slate-900 border border-slate-800 rounded-lg px-3 py-2">
                         <span className="text-[11px] text-slate-400">Cena za kus: <strong className="text-emerald-400">{fmtMoney(calcUnitPrice)}</strong> &nbsp;•&nbsp; Spolu ({calcKs} ks): <strong className="text-emerald-400">{fmtMoney(calcUnitPrice * calcKs)}</strong></span>
                         <button onClick={addCalcItemToForm} disabled={(calcMethod === 'sietotlac' && !vybranyFormatSietotlac) || (calcMethod === 'rezany' && !vybranaFoliaRezany)} className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center gap-1"><Plus className="h-3 w-3" /> Pridať do ponuky</button>

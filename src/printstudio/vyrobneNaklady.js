@@ -103,33 +103,53 @@ export function vcSublimaciaGarmentRozpis(kostra, plochaCm2) {
   const zaklad = papierCena + atramentCena + protekcnyPapierCena + manipulacia + praca + elektrinaTlaciarenCena + elektrinaLisCena;
   const koeficientPercent = parseFloat(sublimaciaGarment.koeficient_rizika_percent) || 0;
   const spolu = zaklad * (1 + koeficientPercent / 100);
-  return { papierBm, papierCena, atramentMl, atramentCena, protekcnyPapierCena, manipulacia, casNazehlovaniaMin, praca, casTlaceSekund, elektrinaTlaciarenCena, elektrinaLisCena, koeficientPercent, spolu };
+  // TRANSFER = sublimacny papier + atrament + tlac (elektrina tlaciarne); NAZEHLENIE = ochranny papier + manipulacia + praca lisu + elektrina lisu.
+  // Riziko (koeficient) sa rozdeli rovnako na obe casti.
+  const rizikoK = 1 + koeficientPercent / 100;
+  const transfer = (papierCena + atramentCena + elektrinaTlaciarenCena) * rizikoK;
+  const nazehlenie = (protekcnyPapierCena + manipulacia + praca + elektrinaLisCena) * rizikoK;
+  return { papierBm, papierCena, atramentMl, atramentCena, protekcnyPapierCena, manipulacia, casNazehlovaniaMin, praca, casTlaceSekund, elektrinaTlaciarenCena, elektrinaLisCena, koeficientPercent, transfer, nazehlenie, spolu };
 }
 
 // DTF — potlac textilu. Elektrina: TLACIAREN a FIXACNY TUNEL bezia obe proporcionalne k ploche
 // (56cm siroky pas, rovnaky rolkovy princip ako pri sublimacii), kazda svojou vlastnou rychlostou.
 // TRANSFEROVY LIS (nazehlenie na textil) bezi flat cas na kus (cas_nazehlovania_min).
 const DTF_ROLL_WIDTH_CM = 56;
-export function vcDtfGarment(kostra, plochaCm2) {
+// Predvolený odpad na rolke (medzery medzi logami, okraje pásu) — Martinov príklad 30× 33×25cm = 5 bm / 2,8 m²
+// vs 2,475 m² čistej plochy = 13 %. Nastavuje sa v Kostre cien -> DTF (dtf_naklady.odpad_percent).
+export const DTF_ODPAD_PREDVOLENY_PERCENT = 13;
+
+// DTF — potlac textilu rozdelena na DVE OSOBITNE casti (kazdu robi iny clovek, inak sa predava):
+//  1) TRANSFER (samotna potlacena folia) — presne to iste ako metraz: folia + lepidlo + CMYK + biela + praca pri tlaci
+//     + elektrina tlaciarne a fixacneho tunela, na plochu logo + odpad na rolke (jedno % pre vsetky velkosti).
+//  2) NAZEHLENIE na textil — manipulacia + cas lisu (praca) + elektrina lisu.
+export function vcDtfGarmentRozpis(kostra, plochaCm2) {
   const n = kostra.dtf;
-  if (!n) return 0;
-  const plochaM2 = plochaCm2 / 10000;
-  const filmM2 = (parseFloat(n.cena_folie_bm) || 0) / (DTF_ROLL_WIDTH_CM / 100); // €/bm -> €/m2 cez sirku pasu
-  const material = plochaM2 * (
+  if (!n) return { transfer: 0, nazehlenie: 0, spolu: 0, odpadPercent: 0 };
+  const sirkaM = DTF_ROLL_WIDTH_CM / 100;
+  const filmM2 = (parseFloat(n.cena_folie_bm) || 0) / sirkaM; // €/bm -> €/m2 cez sirku pasu
+  const materialM2 =
     filmM2 +
     (parseFloat(n.cena_cmyk_kg) || 0) * (parseFloat(n.spotreba_cmyk_m2) || 0) +
     (parseFloat(n.cena_biela_kg) || 0) * (parseFloat(n.spotreba_biela_m2) || 0) +
-    (parseFloat(n.cena_lepidlo_kg) || 0) * (parseFloat(n.spotreba_lepidlo_m2) || 0)
-  );
-  const praca = ((parseFloat(n.cas_nazehlovania_min) || 0) / 60) * (parseFloat(n.cena_prace_hod) || 0);
+    (parseFloat(n.cena_lepidlo_kg) || 0) * (parseFloat(n.spotreba_lepidlo_m2) || 0);
+  const rychlostTlace = Math.max(0.01, parseFloat(n.rychlost_tlace_m_hod) || 1);
+  const pracaTlaceM2 = (parseFloat(n.cena_prace_hod) || 0) / (rychlostTlace * sirkaM); // operator pri tlaci, rovnako ako v metrazi
   const dlzkaBmDtf = plochaCm2 / (DTF_ROLL_WIDTH_CM * 100); // plocha (cm2) na 56cm sirokom pase -> bezne metre
   const tlaciarenEurHod = elektrinaZariadeniaEurZaHod(kostra.costMetrics, n.tlaciaren_zariadenie_id);
-  const elektrinaTlaciaren = tlaciarenEurHod * (dlzkaBmDtf / Math.max(0.01, parseFloat(n.rychlost_tlace_m_hod) || 1));
   const tunelEurHod = elektrinaZariadeniaEurZaHod(kostra.costMetrics, n.fixacny_tunel_zariadenie_id);
-  const elektrinaTunel = tunelEurHod * (dlzkaBmDtf / Math.max(0.01, parseFloat(n.rychlost_tunela_m_hod) || 1));
+  const elektrinaBm = tlaciarenEurHod / rychlostTlace + tunelEurHod / Math.max(0.01, parseFloat(n.rychlost_tunela_m_hod) || 1);
+  const odpadPercent = n.odpad_percent == null || n.odpad_percent === '' ? DTF_ODPAD_PREDVOLENY_PERCENT : Math.max(0, parseFloat(n.odpad_percent) || 0);
+  const transfer = dlzkaBmDtf * ((materialM2 + pracaTlaceM2) * sirkaM + elektrinaBm) * (1 + odpadPercent / 100);
+
+  const praca = ((parseFloat(n.cas_nazehlovania_min) || 0) / 60) * (parseFloat(n.cena_prace_hod) || 0);
   const lisEurHod = elektrinaZariadeniaEurZaHod(kostra.costMetrics, n.transferovy_lis_zariadenie_id);
   const elektrinaLis = lisEurHod * ((parseFloat(n.cas_nazehlovania_min) || 0) / 60);
-  return material + (parseFloat(n.naklady_manipulacia) || 0) + praca + elektrinaTlaciaren + elektrinaTunel + elektrinaLis;
+  const nazehlenie = (parseFloat(n.naklady_manipulacia) || 0) + praca + elektrinaLis;
+  return { transfer, nazehlenie, spolu: transfer + nazehlenie, odpadPercent };
+}
+export function vcDtfGarment(kostra, plochaCm2) {
+  return vcDtfGarmentRozpis(kostra, plochaCm2).spolu;
 }
 
 // Vysivka — digitalizacia rozpocitana na pocet kusov + cena od vysivaca na plochu.
@@ -212,7 +232,7 @@ export function plochaFormatuSietotlac(kostra, velkostId) {
 // cas rezania/vylupovania zavisi od plochy motivu, nazehlovanie a manipulacia su fixne na kus.
 // Elektrina: PLOTTER bezi pocas rezania (cas_rezania_min je uz min/cm², vylupovanie je rucna
 // praca, nie strojovy cas), TRANSFEROVY LIS bezi pocas flat casu nazehlovania.
-export function vcRezanyTransfer(kostra, foliaId, plochaCm2) {
+export function vcRezanyTransferRozpis(kostra, foliaId, plochaCm2) {
   const rezany = kostra.rezany;
   const folia = (kostra.folie || []).find(f => f.id === foliaId);
   const sirkaVyuz = parseFloat(rezany?.sirka_vyuzitelna_cm) || 49;
@@ -224,7 +244,13 @@ export function vcRezanyTransfer(kostra, foliaId, plochaCm2) {
   const elektrinaPloterCm2 = ploterEurHod * ((parseFloat(rezany?.cas_rezania_min) || 0) / 60) * plochaCm2;
   const lisEurHod = elektrinaZariadeniaEurZaHod(kostra.costMetrics, rezany?.transferovy_lis_zariadenie_id);
   const elektrinaLisFlat = lisEurHod * ((parseFloat(rezany?.cas_nazehlovania_min) || 0) / 60);
-  return material + (parseFloat(rezany?.naklady_manipulacia) || 0) + pracaFlat + pracaCm2 + elektrinaPloterCm2 + elektrinaLisFlat;
+  // TRANSFER = folia + rezanie + vylupovanie (+ plotter); NAZEHLENIE = manipulacia + cas lisu (+ elektrina lisu)
+  const transfer = material + pracaCm2 + elektrinaPloterCm2;
+  const nazehlenie = (parseFloat(rezany?.naklady_manipulacia) || 0) + pracaFlat + elektrinaLisFlat;
+  return { transfer, nazehlenie, spolu: transfer + nazehlenie };
+}
+export function vcRezanyTransfer(kostra, foliaId, plochaCm2) {
+  return vcRezanyTransferRozpis(kostra, foliaId, plochaCm2).spolu;
 }
 
 // Laserove rezanie vlastnych dielcov zo zakazkovej latky (nie potlac) — cas rezania zavisi od

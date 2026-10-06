@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Layers3, Plus, Trash2 } from 'lucide-react';
-import { elektrinaZariadeniaEurZaHod, vcSietotlacCelkom, vcLaserRezanie } from './vyrobneNaklady';
+import { elektrinaZariadeniaEurZaHod, vcSietotlacCelkom, vcLaserRezanie, vcDtfGarmentRozpis, DTF_ODPAD_PREDVOLENY_PERCENT } from './vyrobneNaklady';
 import NumberInput from '../NumberInput';
 
 const inputCls = 'w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white';
@@ -260,7 +260,8 @@ export default function KostraCienTab({ supabase }) {
   const dtfDlzkaBmGarment = REF_PLOCHA_CM2 / (56 * 100);
   const dtfElektrinaGarmentTlacTunel = dtfDlzkaBmGarment * (dtfTlaciarenEurHod / Math.max(0.01, dtf.rychlost_tlace_m_hod || 1) + dtfTunelEurHod / Math.max(0.01, dtf.rychlost_tunela_m_hod || 1));
   const dtfElektrinaGarmentLis = dtfLisEurHod * ((dtf.cas_nazehlovania_min || 0) / 60);
-  const vcDtfGarment = REF_PLOCHA_M2 * dtfMaterialM2 + (dtf.naklady_manipulacia || 0) + dtfGarmentPraca + dtfElektrinaGarmentTlacTunel + dtfElektrinaGarmentLis;
+  const vcDtfGarmentRozpisRef = vcDtfGarmentRozpis({ dtf, costMetrics }, REF_PLOCHA_CM2);
+  const vcDtfGarment = vcDtfGarmentRozpisRef.spolu;
 
   // Vysivka
   const vysivkaRefKs = 10;
@@ -499,8 +500,11 @@ export default function KostraCienTab({ supabase }) {
             <div className="grid grid-cols-2 gap-3">
               <Field label="Manipulácia strihania (€/ks)" value={dtf.naklady_manipulacia} step="0.01" onChange={(v) => ulozDtf({ naklady_manipulacia: v })} />
               <Field label="Čas nažehlovania (min/ks)" value={dtf.cas_nazehlovania_min} step="0.1" onChange={(v) => ulozDtf({ cas_nazehlovania_min: v })} hint={casFlatHint(dtf.cas_nazehlovania_min)} />
+              <Field label="Odpad na rolke (%)" value={dtf.odpad_percent ?? DTF_ODPAD_PREDVOLENY_PERCENT} step="0.5" onChange={(v) => ulozDtf({ odpad_percent: v })} hint="Jedno % pre všetky veľkosti log: medzery medzi logami a okraje pásu. Pripočíta sa len k transferu." />
             </div>
-            <VysledokVC label={`VC pri ${REF_PLOCHA_CM2}cm² (10×10cm)`} value={vcDtfGarment} unit="€/ks" />
+            <VysledokVC label={`1) Transfer pri ${REF_PLOCHA_CM2}cm² (rovnaký vzorec ako metráž + odpad)`} value={vcDtfGarmentRozpisRef.transfer} unit="€/ks" />
+            <VysledokVC label="2) Nažehlenie na textil (manipulácia + lis)" value={vcDtfGarmentRozpisRef.nazehlenie} unit="€/ks" />
+            <VysledokVC label={`VC spolu pri ${REF_PLOCHA_CM2}cm² (10×10cm)`} value={vcDtfGarment} unit="€/ks" />
             <p className="text-[11px] text-slate-500 -mt-2">≈ {(vcDtfGarment / REF_PLOCHA_CM2).toFixed(4)} €/cm² priemerne pri tejto ploche</p>
           </div>
         </div>
