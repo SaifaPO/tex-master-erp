@@ -280,8 +280,8 @@ const FALLBACK_ACL = {
 const mapMaterialFromDb = (r) => ({ id: r.id, name: r.name, color: r.color, colorHex: r.color_hex || '', width: r.width, weight: r.weight, pricePerM: r.price_per_m, qty: r.qty, unit: r.unit, minQty: r.min_qty, warehouseId: r.warehouse_id || 'sklad-1', manufacturer: r.manufacturer || '', productType: r.product_type || '', deliveryNoteNumber: r.delivery_note_number || '', deliveryNoteDate: r.delivery_note_date || '', zakazkaOdberatel: r.zakazka_odberatel || '', history: r.history || [] });
 const mapMaterialToDb = (m) => ({ id: m.id, name: m.name, color: m.color, color_hex: m.colorHex || null, width: m.width, weight: m.weight, price_per_m: m.pricePerM, qty: m.qty, unit: m.unit, min_qty: m.minQty, warehouse_id: m.warehouseId, manufacturer: m.manufacturer || null, product_type: m.productType || null, delivery_note_number: m.deliveryNoteNumber || null, delivery_note_date: m.deliveryNoteDate || null, zakazka_odberatel: m.zakazkaOdberatel || null, history: m.history });
 
-const mapProductFromDb = (r) => ({ id: r.id, customCode: r.custom_code, name: r.name, sports: r.sports || [], layer1: r.layer1, layer2: r.layer2, layer3: r.layer3, threadM: r.thread_m, womenRatioPercent: r.women_ratio_percent ?? 90, childrenRatioPercent: r.children_ratio_percent ?? 65, productionCost: r.production_cost ?? null, priceGroup: r.price_group || '', redukovanyVykon: r.redukovany_vykon ?? null, attachments: r.attachments || [], minutySitia: r.minuty_sitia ?? null, reziaKs: r.rezia_ks ?? null, reziaPoznamka: r.rezia_poznamka || '', reziaPolozky: r.rezia_polozky || [], cenaPotlaceKs: r.cena_potlace_ks ?? null, tlacSublimacia: !!r.tlac_sublimacia, tlacDtf: !!r.tlac_dtf, cenaPotlaceDtfKs: r.cena_potlace_dtf_ks ?? null, tlacSietotlac: !!r.tlac_sietotlac, cenaPotlaceSietotlacKs: r.cena_potlace_sietotlac_ks ?? null, sietotlacVelkostId: r.sietotlac_velkost_id ?? null, sietotlacJeTmavy: !!r.sietotlac_je_tmavy, sietotlacPocetFarieb: r.sietotlac_pocet_farieb ?? 1, tlacRezanyTransfer: !!r.tlac_rezany_transfer, cenaPotlaceRezanyTransferKs: r.cena_potlace_rezany_transfer_ks ?? null, rezanyTransferFoliaId: r.rezany_transfer_folia_id ?? null, rezanyTransferPlochaCm2: r.rezany_transfer_plocha_cm2 ?? null, tlacVysivka: !!r.tlac_vysivka, cenaPotlaceVysivkaKs: r.cena_potlace_vysivka_ks ?? null, strihaSaRezeVyseka: !!r.striha_sa_reze_vyseka, laserZariadenieId: r.laser_zariadenie_id || null });
-const mapProductToDb = (p) => ({ id: p.id, custom_code: p.customCode, name: p.name, sports: p.sports, layer1: p.layer1, layer2: p.layer2, layer3: p.layer3, thread_m: p.threadM, women_ratio_percent: p.womenRatioPercent, children_ratio_percent: p.childrenRatioPercent, production_cost: p.productionCost ?? null, price_group: p.priceGroup || null, redukovany_vykon: p.redukovanyVykon ?? null, attachments: p.attachments || [], minuty_sitia: p.minutySitia ?? null, rezia_ks: p.reziaKs ?? null, rezia_poznamka: p.reziaPoznamka || null, rezia_polozky: p.reziaPolozky || [], cena_potlace_ks: p.cenaPotlaceKs ?? null, tlac_sublimacia: !!p.tlacSublimacia, tlac_dtf: !!p.tlacDtf, cena_potlace_dtf_ks: p.cenaPotlaceDtfKs ?? null, tlac_sietotlac: !!p.tlacSietotlac, cena_potlace_sietotlac_ks: p.cenaPotlaceSietotlacKs ?? null, sietotlac_velkost_id: p.sietotlacVelkostId ?? null, sietotlac_je_tmavy: !!p.sietotlacJeTmavy, sietotlac_pocet_farieb: p.sietotlacPocetFarieb ?? 1, tlac_rezany_transfer: !!p.tlacRezanyTransfer, cena_potlace_rezany_transfer_ks: p.cenaPotlaceRezanyTransferKs ?? null, rezany_transfer_folia_id: p.rezanyTransferFoliaId ?? null, rezany_transfer_plocha_cm2: p.rezanyTransferPlochaCm2 ?? null, tlac_vysivka: !!p.tlacVysivka, cena_potlace_vysivka_ks: p.cenaPotlaceVysivkaKs ?? null, striha_sa_reze_vyseka: !!p.strihaSaRezeVyseka, laser_zariadenie_id: p.laserZariadenieId || null });
+const mapProductFromDb = (r) => ({ id: r.id, customCode: r.custom_code, name: r.name, sports: r.sports || [], layer1: r.layer1, layer2: r.layer2, layer3: r.layer3, threadM: r.thread_m, womenRatioPercent: r.women_ratio_percent ?? 90, childrenRatioPercent: r.children_ratio_percent ?? 65, productionCost: r.production_cost ?? null, priceGroup: r.price_group || '', redukovanyVykon: r.redukovany_vykon ?? null, attachments: r.attachments || [], minutySitia: r.minuty_sitia ?? null, reziaKs: r.rezia_ks ?? null, reziaPoznamka: r.rezia_poznamka || '', reziaPolozky: r.rezia_polozky || [], cenaPotlaceKs: r.cena_potlace_ks ?? null, tlacSublimacia: !!r.tlac_sublimacia, tlacDtf: !!r.tlac_dtf, cenaPotlaceDtfKs: r.cena_potlace_dtf_ks ?? null, tlacSietotlac: !!r.tlac_sietotlac, cenaPotlaceSietotlacKs: r.cena_potlace_sietotlac_ks ?? null, sietotlacVelkostId: r.sietotlac_velkost_id ?? null, sietotlacJeTmavy: !!r.sietotlac_je_tmavy, sietotlacPocetFarieb: r.sietotlac_pocet_farieb ?? 1, tlacRezanyTransfer: !!r.tlac_rezany_transfer, cenaPotlaceRezanyTransferKs: r.cena_potlace_rezany_transfer_ks ?? null, rezanyTransferFoliaId: r.rezany_transfer_folia_id ?? null, rezanyTransferPlochaCm2: r.rezany_transfer_plocha_cm2 ?? null, tlacVysivka: !!r.tlac_vysivka, cenaPotlaceVysivkaKs: r.cena_potlace_vysivka_ks ?? null, strihaSaRezeVyseka: !!r.striha_sa_reze_vyseka, laserZariadenieId: r.laser_zariadenie_id || null, ksNaBmSublimacie: r.ks_na_bm_sublimacie ?? null });
+const mapProductToDb = (p) => ({ id: p.id, custom_code: p.customCode, name: p.name, sports: p.sports, layer1: p.layer1, layer2: p.layer2, layer3: p.layer3, thread_m: p.threadM, women_ratio_percent: p.womenRatioPercent, children_ratio_percent: p.childrenRatioPercent, production_cost: p.productionCost ?? null, price_group: p.priceGroup || null, redukovany_vykon: p.redukovanyVykon ?? null, attachments: p.attachments || [], minuty_sitia: p.minutySitia ?? null, rezia_ks: p.reziaKs ?? null, rezia_poznamka: p.reziaPoznamka || null, rezia_polozky: p.reziaPolozky || [], cena_potlace_ks: p.cenaPotlaceKs ?? null, tlac_sublimacia: !!p.tlacSublimacia, tlac_dtf: !!p.tlacDtf, cena_potlace_dtf_ks: p.cenaPotlaceDtfKs ?? null, tlac_sietotlac: !!p.tlacSietotlac, cena_potlace_sietotlac_ks: p.cenaPotlaceSietotlacKs ?? null, sietotlac_velkost_id: p.sietotlacVelkostId ?? null, sietotlac_je_tmavy: !!p.sietotlacJeTmavy, sietotlac_pocet_farieb: p.sietotlacPocetFarieb ?? 1, tlac_rezany_transfer: !!p.tlacRezanyTransfer, cena_potlace_rezany_transfer_ks: p.cenaPotlaceRezanyTransferKs ?? null, rezany_transfer_folia_id: p.rezanyTransferFoliaId ?? null, rezany_transfer_plocha_cm2: p.rezanyTransferPlochaCm2 ?? null, tlac_vysivka: !!p.tlacVysivka, cena_potlace_vysivka_ks: p.cenaPotlaceVysivkaKs ?? null, striha_sa_reze_vyseka: !!p.strihaSaRezeVyseka, laser_zariadenie_id: p.laserZariadenieId || null, ...(p.ksNaBmSublimacie != null ? { ks_na_bm_sublimacie: p.ksNaBmSublimacie } : {}) });
 
 const mapTierFromDb = (r) => ({ id: r.id, name: r.name, fit: r.fit, ventilation: r.ventilation, desc: r.description });
 const mapTierToDb = (t) => ({ id: t.id, name: t.name, fit: t.fit, ventilation: t.ventilation, description: t.desc });
@@ -1565,6 +1565,7 @@ export default function App() {
   const [newModelTlacVysivka, setNewModelTlacVysivka] = useState(false);
   const [newModelCenaPotlaceVysivkaKs, setNewModelCenaPotlaceVysivkaKs] = useState('');
   const [newModelStrihaSaRezeVyseka, setNewModelStrihaSaRezeVyseka] = useState(false);
+  const [newModelKsNaBm, setNewModelKsNaBm] = useState('');
   const [newModelLaserZariadenieId, setNewModelLaserZariadenieId] = useState('');
 
   const [newSportInput, setNewSportInput] = useState('');
@@ -3784,6 +3785,16 @@ export default function App() {
     return consumptionM * widthCm * 100;
   };
 
+  // Plocha sublimacnej potlace na 1 kus. Hotovy vyrobok na kusy (napr. bezsvova buffka) nema spotrebu latky v metroch —
+  // plocha sa berie z toho, kolko kusov sa vojde na 1 bezny meter sublimacneho papiera (rolka 160 cm = 16000 cm2/bm).
+  // Ak je vyplnene ksNaBmSublimacie, ma prednost pred plochou z latky.
+  const SUBLIMACNY_PAPIER_CM2_NA_BM = 16000;
+  const vypocitajPlochuSublimacieCm2 = (p) => {
+    const ks = parseFloat(p?.ksNaBmSublimacie);
+    if (ks > 0) return SUBLIMACNY_PAPIER_CM2_NA_BM / ks;
+    return vypocitajPlochaCm2ZLatky(p?.layer1);
+  };
+
   // Sublimacna potlac — realne odpocitanie papiera/atramentu/protekcneho papiera zo Skladu, podla
   // plochy potlace pre CELU zakazku (rovnaky princip ako odpocet latky cez calculateLayerConsumption).
   // Ak admin v Kostre cien nepriradil ku konkretnemu spotrebnemu materialu ziadnu polozku zo Skladu,
@@ -3793,7 +3804,8 @@ export default function App() {
     const latka = materials.find(m => m.id === product.layer1.materialId);
     const latkaWidthCm = parseFloat(latka?.width) || 0;
     const totalConsumptionM = calculateLayerConsumption(product, gender, 'layer1', qty);
-    const totalPlochaCm2 = totalConsumptionM * latkaWidthCm * 100;
+    const ksNaBm = parseFloat(product.ksNaBmSublimacie);
+    const totalPlochaCm2 = ksNaBm > 0 ? (Number(qty) || 0) * (SUBLIMACNY_PAPIER_CM2_NA_BM / ksNaBm) : totalConsumptionM * latkaWidthCm * 100;
     if (totalPlochaCm2 <= 0) return [];
     const { papier_material_id, atrament_material_id, protekcny_papier_material_id, spotreba_atrament_ml_m2 } = kostra.textilSub;
     const result = [];
@@ -3841,7 +3853,7 @@ export default function App() {
     const anyChecked = p.tlacSublimacia || p.tlacDtf || p.tlacSietotlac || p.tlacRezanyTransfer || p.tlacVysivka;
     if (!anyChecked) return null;
     let sum = 0;
-    if (p.tlacSublimacia && kostra) sum += vcSublimaciaGarment(kostra, vypocitajPlochaCm2ZLatky(p.layer1));
+    if (p.tlacSublimacia && kostra) sum += vcSublimaciaGarment(kostra, vypocitajPlochuSublimacieCm2(p));
     if (p.tlacDtf) sum += parseFloat(p.cenaPotlaceDtfKs) || 0;
     if (p.tlacSietotlac) sum += vypocitajCenuSietotlace(p) ?? (parseFloat(p.cenaPotlaceSietotlacKs) || 0);
     if (p.tlacRezanyTransfer) sum += vypocitajCenuRezanehoTransferu(p) ?? (parseFloat(p.cenaPotlaceRezanyTransferKs) || 0);
@@ -3936,7 +3948,7 @@ export default function App() {
         tlacRezanyTransfer: newModelTlacRezanyTransfer, cenaPotlaceRezanyTransferKs: newModelCenaPotlaceRezanyTransferKs,
         rezanyTransferFoliaId: newModelRezanyTransferFoliaId || null, rezanyTransferPlochaCm2: newModelRezanyTransferPlochaCm2 === '' ? null : parseFloat(newModelRezanyTransferPlochaCm2) || 0,
         tlacVysivka: newModelTlacVysivka, cenaPotlaceVysivkaKs: newModelCenaPotlaceVysivkaKs,
-        strihaSaRezeVyseka: newModelStrihaSaRezeVyseka, laserZariadenieId: newModelLaserZariadenieId || null,
+        strihaSaRezeVyseka: newModelStrihaSaRezeVyseka, laserZariadenieId: newModelLaserZariadenieId || null, ksNaBmSublimacie: newModelKsNaBm === '' ? null : (parseFloat(newModelKsNaBm) || null),
       };
       const vypocitana = vypocitajVyrobnuCenuZRozpisu(noveModel);
       const cenaPotlacEfektivna = vypocitajCenuPotlaceZRozpisu(noveModel);
@@ -3955,7 +3967,7 @@ export default function App() {
         tlacRezanyTransfer: newModelTlacRezanyTransfer, cenaPotlaceRezanyTransferKs: newModelCenaPotlaceRezanyTransferKs,
         rezanyTransferFoliaId: noveModel.rezanyTransferFoliaId, rezanyTransferPlochaCm2: noveModel.rezanyTransferPlochaCm2,
         tlacVysivka: newModelTlacVysivka, cenaPotlaceVysivkaKs: newModelCenaPotlaceVysivkaKs,
-        strihaSaRezeVyseka: newModelStrihaSaRezeVyseka, laserZariadenieId: newModelLaserZariadenieId || null,
+        strihaSaRezeVyseka: newModelStrihaSaRezeVyseka, laserZariadenieId: newModelLaserZariadenieId || null, ksNaBmSublimacie: newModelKsNaBm === '' ? null : (parseFloat(newModelKsNaBm) || null),
         attachments: [],
         threadM: 15
       };
@@ -3971,7 +3983,7 @@ export default function App() {
       setNewModelTlacSietotlac(false); setNewModelCenaPotlaceSietotlacKs(''); setNewModelSietotlacVelkostId(''); setNewModelSietotlacJeTmavy(false); setNewModelSietotlacPocetFarieb(1);
       setNewModelTlacRezanyTransfer(false); setNewModelCenaPotlaceRezanyTransferKs(''); setNewModelRezanyTransferFoliaId(''); setNewModelRezanyTransferPlochaCm2('');
       setNewModelTlacVysivka(false); setNewModelCenaPotlaceVysivkaKs('');
-      setNewModelStrihaSaRezeVyseka(false); setNewModelLaserZariadenieId('');
+      setNewModelStrihaSaRezeVyseka(false); setNewModelLaserZariadenieId(''); setNewModelKsNaBm('');
       setNewModelLayer1Alt([]); setNewModelLayer2Alt([]); setNewModelLayer3Alt([]);
       triggerNotification('success', `Model "${created.name}" pridaný do katalógu.`);
     }
@@ -6133,7 +6145,7 @@ export default function App() {
     tlacRezanyTransfer: newModelTlacRezanyTransfer, cenaPotlaceRezanyTransferKs: newModelCenaPotlaceRezanyTransferKs,
     rezanyTransferFoliaId: newModelRezanyTransferFoliaId || null, rezanyTransferPlochaCm2: newModelRezanyTransferPlochaCm2,
     tlacVysivka: newModelTlacVysivka, cenaPotlaceVysivkaKs: newModelCenaPotlaceVysivkaKs,
-    strihaSaRezeVyseka: newModelStrihaSaRezeVyseka, laserZariadenieId: newModelLaserZariadenieId || null,
+    strihaSaRezeVyseka: newModelStrihaSaRezeVyseka, laserZariadenieId: newModelLaserZariadenieId || null, ksNaBmSublimacie: newModelKsNaBm === '' ? null : (parseFloat(newModelKsNaBm) || null),
     layer1: newModelPrimary ? { materialId: newModelPrimary, consumption: { lt5: parseFloat(newModelLayer1Lt5) || 0, ge5: parseFloat(newModelLayer1Ge5) || 0 } } : null,
     layer2: newModelSecondary ? { materialId: newModelSecondary, consumption: { lt5: parseFloat(newModelLayer2Lt5) || 0, ge5: parseFloat(newModelLayer2Ge5) || 0 } } : null,
     layer3: newModelTertiary ? { materialId: newModelTertiary, consumption: { lt5: parseFloat(newModelLayer3Lt5) || 0, ge5: parseFloat(newModelLayer3Ge5) || 0 } } : null,
@@ -7697,7 +7709,7 @@ export default function App() {
                           <input type="checkbox" checked={editingProduct ? !!editingProduct.tlacSublimacia : newModelTlacSublimacia} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, tlacSublimacia: e.target.checked }) : setNewModelTlacSublimacia(e.target.checked)} className="rounded border-slate-700 bg-slate-950" />
                           <span className="text-slate-200 font-semibold flex-1">Sublimácia</span>
                           {(editingProduct ? editingProduct.tlacSublimacia : newModelTlacSublimacia) && kostra && (
-                            <span className="text-emerald-400 font-mono text-[11px]">{vcSublimaciaGarment(kostra, vypocitajPlochaCm2ZLatky(aktualnyFormularProdukt.layer1)).toFixed(2)} €/ks</span>
+                            <span className="text-emerald-400 font-mono text-[11px]">{vcSublimaciaGarment(kostra, vypocitajPlochuSublimacieCm2(aktualnyFormularProdukt)).toFixed(2)} €/ks</span>
                           )}
                         </label>
                         {[
@@ -7773,20 +7785,26 @@ export default function App() {
 
                     {/* ROZPIS SUBLIMACNEJ POTLACE — papier/atrament/protekcny papier zvlast + cas tlace */}
                     {(editingProduct ? editingProduct.tlacSublimacia : newModelTlacSublimacia) && kostra && (() => {
-                      const plochaLatkyCm2 = vypocitajPlochaCm2ZLatky(aktualnyFormularProdukt.layer1);
+                      const plochaLatkyCm2 = vypocitajPlochuSublimacieCm2(aktualnyFormularProdukt);
+                      const sublimaciaZKs = parseFloat(aktualnyFormularProdukt.ksNaBmSublimacie) > 0;
                       const rozpis = vcSublimaciaGarmentRozpis(kostra, plochaLatkyCm2);
                       if (!rozpis) return null;
                       const latkaL1 = materials.find(m => m.id === aktualnyFormularProdukt.layer1?.materialId);
                       return (
                         <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
                           <label className="block text-slate-400 font-semibold mb-2">Rozpis sublimačnej potlače (Kostra cien)</label>
-                          <p className="text-[11px] text-slate-400 mb-2">Plocha potlače: <strong className="text-white">{plochaLatkyCm2.toFixed(0)} cm²</strong> (spotreba látky × šírka látky zo Skladu).</p>
-                          {plochaLatkyCm2 <= 0 && (
+                          <p className="text-[11px] text-slate-400 mb-2">Plocha potlače: <strong className="text-white">{plochaLatkyCm2.toFixed(0)} cm²</strong> ({sublimaciaZKs ? `16 000 cm² (1 bm papiera) ÷ ${aktualnyFormularProdukt.ksNaBmSublimacie} ks na 1 bm` : 'spotreba látky × šírka látky zo Skladu'}).</p>
+                          {plochaLatkyCm2 <= 0 && !sublimaciaZKs && (
                             <p className="text-[11px] text-amber-300 bg-amber-950/30 border border-amber-800/40 rounded p-2 mb-2">
                               ⚠️ Plocha látky vychádza 0, preto papier, atrament, strihanie aj laser vychádzajú 0.{' '}
                               {!aktualnyFormularProdukt.layer1?.materialId ? 'Nie je vybraná hlavná látka (vrstva 1).' : (!(parseFloat(latkaL1?.width) > 0) ? `Látka "${latkaL1?.name || '?'}" nemá vo Sklade vyplnenú šírku (cm) — doplň ju v Sklad → Materiály.` : 'Spotreba látky (m/ks) nie je vyplnená.')}
                             </p>
                           )}
+                          <div className="mb-2 bg-slate-900 border border-slate-800 rounded p-2">
+                            <label className="block text-[11px] text-slate-300 font-semibold mb-1">Hotový výrobok na kusy (napr. bezšvová buffka)? Koľko kusov sa vojde na 1 bm sublimačného papiera</label>
+                            <input type="number" step="0.5" min="0" placeholder="napr. 5 (nechaj prázdne pre látku podľa spotreby)" value={editingProduct ? (editingProduct.ksNaBmSublimacie ?? '') : newModelKsNaBm} onChange={(e) => { const v = e.target.value === '' ? null : (parseFloat(e.target.value) || null); editingProduct ? setEditingProduct({ ...editingProduct, ksNaBmSublimacie: v }) : setNewModelKsNaBm(e.target.value); }} className="w-56 bg-slate-950 border border-slate-800 rounded p-1.5 text-white text-[11px]" />
+                            <p className="text-[10px] text-slate-500 mt-1">Ak vyplníš, plocha potlače = 16 000 cm² ÷ tento počet (rolka papiera 160 cm). Spotreba látky a šírka zo Skladu sa vtedy pre sublimáciu nepoužijú. Napr. 5 ks/bm = 3 200 cm² na kus.</p>
+                          </div>
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
                             <div className="bg-slate-900 rounded p-2">
                               <p className="text-slate-500">Papier</p>
