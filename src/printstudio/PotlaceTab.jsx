@@ -10,10 +10,13 @@ const kostraNoteCls = 'text-[11px] text-amber-400/90 bg-amber-950/20 border bord
 
 // Zhrnutie vysledku nakladovej kalkulacky — spolocne pre vsetky technologie. Marza sa berie
 // z jednotneho maržového modulu (záložka "Cenotvorba" v PrintStudio Pro), nie z vlastneho nastavenia.
-function NakladovyVysledok({ vc, ks, config, plochaCm2, jednotka, onPouzit, disabled, casti }) {
+function NakladovyVysledok({ vc, ks, config, plochaCm2, jednotka, onPouzit, disabled, casti, zlavaPercent = 0 }) {
   const predajna = priceAt(vc, ks, config);
   const marza = marginAt(vc, ks, config);
   const cenaCm2 = plochaCm2 > 0 ? predajna / plochaCm2 : 0;
+  // Rezim klienta: len nahlad ceny po zlave (predajna sadzba ulozena tlacidlom ostava BEZ zlavy)
+  const cenaKlient = Math.round(predajna * (1 - zlavaPercent / 100) * 100) / 100;
+  const marzaKlient = vc > 0 ? ((cenaKlient / vc) - 1) * 100 : 0;
   return (
     <div className="bg-slate-950 rounded-xl border border-indigo-900/40 p-4 mt-3 space-y-2">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
@@ -27,6 +30,13 @@ function NakladovyVysledok({ vc, ks, config, plochaCm2, jednotka, onPouzit, disa
           {casti.map(c => (
             <div key={c.label} className="flex justify-between gap-3"><span>{c.label}</span><span className="font-mono text-slate-300">VC {c.vc.toFixed(3)} € • v cene {(predajna * c.vc / vc).toFixed(2)} €</span></div>
           ))}
+        </div>
+      )}
+      {zlavaPercent > 0 && (
+        <div className="rounded-lg border border-amber-500/50 bg-amber-950/25 px-3 py-2 text-xs space-y-0.5">
+          <div className="flex justify-between gap-3"><span className="text-amber-300 font-semibold">Cena pre klienta (−{zlavaPercent} %)</span><span className="text-amber-300 font-bold">{cenaKlient.toFixed(2)} €/ks • {(cenaKlient * ks).toFixed(2)} € spolu za {ks} ks</span></div>
+          <div className="flex justify-between gap-3 text-slate-400"><span>Rozdiel oproti bežnej cene</span><span className="font-mono">−{(predajna - cenaKlient).toFixed(2)} €/ks • −{((predajna - cenaKlient) * ks).toFixed(2)} € za {ks} ks</span></div>
+          <div className={`flex justify-between gap-3 ${marzaKlient < config.marginFloor ? 'text-rose-400' : 'text-slate-400'}`}><span>Marža po zľave{marzaKlient < config.marginFloor ? ' (pod minimom z Cenotvorby!)' : ''}</span><span className="font-mono">{marzaKlient.toFixed(0)} %</span></div>
         </div>
       )}
       <button onClick={() => onPouzit(cenaCm2)} disabled={disabled} className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs py-2 rounded-lg flex items-center justify-center gap-1.5"><TrendingUp className="w-3.5 h-3.5" /> Použiť ako predajnú sadzbu</button>
@@ -70,6 +80,8 @@ export default function PotlaceTab({ supabase }) {
   const [testW, setTestW] = useState(10);
   const [testH, setTestH] = useState(10);
   const [testKs, setTestKs] = useState(1);
+  const [klientRezim, setKlientRezim] = useState(false);
+  const [klientPercent, setKlientPercent] = useState(15);
   const [testFarby, setTestFarby] = useState(1);
   const [testTmavyTextil, setTestTmavyTextil] = useState(false);
   const [testFoliaId, setTestFoliaId] = useState(null);
@@ -157,6 +169,7 @@ export default function PotlaceTab({ supabase }) {
   };
 
   const plocha = Math.round((parseFloat(testW) || 0) * (parseFloat(testH) || 0) * 10) / 10;
+  const klientZlava = klientRezim ? Math.min(90, Math.max(0, Number(klientPercent) || 0)) : 0;
   const ks = Math.max(1, parseInt(testKs) || 1);
 
   // --- Vyrobne ceny (VC) — vzorce zdielane s Cenovymi ponukami cez vyrobneNaklady.js, nic sa tu
@@ -221,6 +234,14 @@ export default function PotlaceTab({ supabase }) {
           <div><label className={labelCls}>Výška (cm)</label><input type="number" value={testH} onChange={(e) => setTestH(e.target.value)} className={inputCls} /></div>
           <div><label className={labelCls}>Počet ks</label><input type="number" min="1" value={testKs} onChange={(e) => setTestKs(e.target.value)} className={inputCls} /></div>
         </div>
+        <div className={`mt-3 rounded-xl border px-3 py-2 flex flex-wrap items-center gap-3 ${klientRezim ? 'border-amber-500/60 bg-amber-950/25' : 'border-slate-800 bg-slate-950'}`}>
+          <button type="button" onClick={() => setKlientRezim(v => !v)} className={`px-3 py-1.5 rounded-lg text-xs font-bold border-2 transition ${klientRezim ? 'border-amber-500 bg-amber-600/20 text-amber-300' : 'border-slate-700 text-slate-400 hover:text-slate-200'}`}>Režim klienta: {klientRezim ? 'ZAP' : 'VYP'}</button>
+          <label className="text-xs text-slate-400 flex items-center gap-1.5">Zľava klienta
+            <NumberInput step="1" min="0" max="90" value={klientPercent} onChange={setKlientPercent} fallback={0} className="w-16 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /> %
+          </label>
+          {[10, 15, 20].map(p => <button key={p} type="button" onClick={() => { setKlientPercent(p); setKlientRezim(true); }} className="px-2 py-1 rounded-md text-[11px] font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700">{p} %</button>)}
+          <span className="text-[11px] text-slate-500">V kalkulačkách nižšie pribudne oranžový riadok s cenou po zľave a rozdielom. Uložená predajná sadzba ostáva bez zľavy.</span>
+        </div>
         <p className="text-[11px] text-slate-500 mt-2">Plocha: <strong className="text-white">{plocha} cm²</strong> • Marža sa nastavuje v záložke <strong className="text-white">Cenotvorba</strong>.</p>
       </div>
 
@@ -232,7 +253,7 @@ export default function PotlaceTab({ supabase }) {
           <div><label className={labelCls}>Minimálna cena úkonu (€)</label><NumberInput step="0.1" value={sublimacia.min_cena} onChange={(v) => ulozSublimacia({ min_cena: v })} fallback={0} className={inputCls} /><NavrhMinCeny vc={vcSublimaciaPodlaha} config={pricingConfig} onPouzit={(v) => ulozSublimacia({ min_cena: v })} /></div>
         </div>
         <p className={kostraNoteCls}>Výrobné náklady sa berú živo z <strong>Kostra cien → Sublimácia → Potlač na tričká</strong>.</p>
-        <NakladovyVysledok casti={rzSub ? dvaCasti(rzSub, 'Sublimačný transfer', 'Nažehlenie na textil') : null} vc={vcSublimacia} ks={ks} config={pricingConfig} plochaCm2={plocha} onPouzit={(cena) => ulozSublimacia({ cena_cm2: Number(cena.toFixed(4)) })} disabled={plocha === 0} />
+        <NakladovyVysledok zlavaPercent={klientZlava} casti={rzSub ? dvaCasti(rzSub, 'Sublimačný transfer', 'Nažehlenie na textil') : null} vc={vcSublimacia} ks={ks} config={pricingConfig} plochaCm2={plocha} onPouzit={(cena) => ulozSublimacia({ cena_cm2: Number(cena.toFixed(4)) })} disabled={plocha === 0} />
       </div>
 
       {/* DTF */}
@@ -247,7 +268,7 @@ export default function PotlaceTab({ supabase }) {
         ) : (
           <>
             <p className={kostraNoteCls}>Výrobné náklady sa berú živo z <strong>Kostra cien → DTF → Potlač textilu</strong>.</p>
-            <NakladovyVysledok casti={dvaCasti(rzDtf, 'DTF transfer', 'Nažehlenie na textil')} vc={vcDtf} ks={ks} config={pricingConfig} plochaCm2={plocha} onPouzit={(cena) => ulozDtf({ cena_cm2: Number(cena.toFixed(4)) })} disabled={plocha === 0} />
+            <NakladovyVysledok zlavaPercent={klientZlava} casti={dvaCasti(rzDtf, 'DTF transfer', 'Nažehlenie na textil')} vc={vcDtf} ks={ks} config={pricingConfig} plochaCm2={plocha} onPouzit={(cena) => ulozDtf({ cena_cm2: Number(cena.toFixed(4)) })} disabled={plocha === 0} />
           </>
         )}
       </div>
@@ -283,7 +304,7 @@ export default function PotlaceTab({ supabase }) {
                 <input type="number" min="1" value={testFarby} onChange={(e) => setTestFarby(e.target.value)} className={`${inputCls} w-24`} />
               </div>
             </div>
-            <NakladovyVysledok vc={vcSietotlac} ks={ks} config={pricingConfig} plochaCm2={plochaSietotlacCm2} onPouzit={(cena) => ulozSietotlac(testTmavyTextil ? { cena_cm2_tmavy: Number(cena.toFixed(4)) } : { cena_cm2: Number(cena.toFixed(4)) })} disabled={plochaSietotlacCm2 === 0} />
+            <NakladovyVysledok zlavaPercent={klientZlava} vc={vcSietotlac} ks={ks} config={pricingConfig} plochaCm2={plochaSietotlacCm2} onPouzit={(cena) => ulozSietotlac(testTmavyTextil ? { cena_cm2_tmavy: Number(cena.toFixed(4)) } : { cena_cm2: Number(cena.toFixed(4)) })} disabled={plochaSietotlacCm2 === 0} />
             <p className="text-[11px] text-slate-500 mt-2">VC vyššie je len za <strong>1. farbu</strong> (základná predajná sadzba). Rozpad nižšie pri {pocetFariebSiet} {pocetFariebSiet === 1 ? 'farbe' : 'farbách'} (nastav "Počet farieb" v referenčnej objednávke hore) ukazuje, koľko stojí každá ďalšia farba — spotreba farby klesá o 20% na farbu, sito sa počíta za každú znova:</p>
             <div className="bg-slate-950 rounded-xl border border-indigo-900/40 p-3 mt-1 space-y-1 text-xs">
               {sietotlacFarbyRozpad.map(r => (
@@ -339,7 +360,7 @@ export default function PotlaceTab({ supabase }) {
             <div className="flex justify-between border-t border-slate-800 pt-0.5 font-semibold"><span>Čas spolu</span><span className="font-mono">{(rzRezany.casRezaniaMin + rzRezany.casVylupovaniaMin + rzRezany.casNazehlovaniaMin).toFixed(1)} min/ks • {(((rzRezany.casRezaniaMin + rzRezany.casVylupovaniaMin + rzRezany.casNazehlovaniaMin) * ks) / 60).toFixed(1)} hod / {ks} ks</span></div>
           </div>
         )}
-        <NakladovyVysledok casti={dvaCasti(rzRezany, 'Rezaný transfer', 'Nažehlenie na textil')} vc={vcRezany} ks={ks} config={pricingConfig} plochaCm2={plocha} onPouzit={(cena) => testFoliaId && upravFoliu(testFoliaId, { cena_cm2: Number(cena.toFixed(4)) })} disabled={plocha === 0 || !testFoliaId} />
+        <NakladovyVysledok zlavaPercent={klientZlava} casti={dvaCasti(rzRezany, 'Rezaný transfer', 'Nažehlenie na textil')} vc={vcRezany} ks={ks} config={pricingConfig} plochaCm2={plocha} onPouzit={(cena) => testFoliaId && upravFoliu(testFoliaId, { cena_cm2: Number(cena.toFixed(4)) })} disabled={plocha === 0 || !testFoliaId} />
       </div>
 
       {/* LASEROVÉ REZANIE */}
@@ -371,7 +392,7 @@ export default function PotlaceTab({ supabase }) {
             </select>
           </div>
         )}
-        <NakladovyVysledok vc={vcLaser} ks={ks} config={pricingConfig} plochaCm2={plocha} onPouzit={(cena) => testHrubkaId && upravHrubku(testHrubkaId, { cena_cm2: Number(cena.toFixed(4)) })} disabled={plocha === 0 || !testHrubkaId} />
+        <NakladovyVysledok zlavaPercent={klientZlava} vc={vcLaser} ks={ks} config={pricingConfig} plochaCm2={plocha} onPouzit={(cena) => testHrubkaId && upravHrubku(testHrubkaId, { cena_cm2: Number(cena.toFixed(4)) })} disabled={plocha === 0 || !testHrubkaId} />
       </div>
 
       {/* VÝŠIVKA */}
@@ -386,7 +407,7 @@ export default function PotlaceTab({ supabase }) {
         ) : (
           <>
             <p className={kostraNoteCls}>Cena digitalizácie a cena od vyšívača sa nastavujú v <strong>Kostra cien → Výšivka</strong>.</p>
-            <NakladovyVysledok vc={vcVysivka} ks={ks} config={pricingConfig} plochaCm2={plocha} onPouzit={(cena) => ulozVysivka({ cena_cm2: Number(cena.toFixed(4)) })} disabled={plocha === 0} />
+            <NakladovyVysledok zlavaPercent={klientZlava} vc={vcVysivka} ks={ks} config={pricingConfig} plochaCm2={plocha} onPouzit={(cena) => ulozVysivka({ cena_cm2: Number(cena.toFixed(4)) })} disabled={plocha === 0} />
           </>
         )}
       </div>

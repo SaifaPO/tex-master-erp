@@ -348,6 +348,7 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
   const [kostra, setKostra] = useState(null);
   const [itemsMode, setItemsMode] = useState('vyroba');
   const [calcMethod, setCalcMethod] = useState('sublimacia');
+  const [calcKlient, setCalcKlient] = useState({ on: false, pct: 15 });
   const [calc, setCalc] = useState({ sirka: 10, vyska: 10, ks: 1, farby: 1, tmavy: false, velkostId: '', foliaId: '' });
   const [documents, setDocuments] = useState([]);
   const [newDocumentDraft, setNewDocumentDraft] = useState({ category: DOCUMENT_CATEGORIES[0], name: '', description: '', file: null });
@@ -450,6 +451,11 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
   // marze, nez aku klient v skutocnosti plati.
   const calcMarza = kostra && calcVc > 0 ? ((calcUnitPrice / calcVc) - 1) * 100 : 0;
   const sietotlacVlastny = calc.velkostId === 'vlastny';
+  // Rezim klienta: rucne zadana % zlava, len pre tuto kalkulacku (cena sa pridava do ponuky uz po zlave)
+  const calcKlientZlava = calcKlient.on ? Math.min(90, Math.max(0, Number(calcKlient.pct) || 0)) : 0;
+  const calcUnitPriceKlient = Math.round(calcUnitPrice * (1 - calcKlientZlava / 100) * 100) / 100;
+  const calcUnitPriceEff = calcKlientZlava > 0 ? calcUnitPriceKlient : calcUnitPrice;
+  const calcMarzaKlient = calcVc > 0 ? ((calcUnitPriceKlient / calcVc) - 1) * 100 : 0;
   const vybranyFormatSietotlac = sietotlacVlastny ? { label: `${calc.sirka}×${calc.vyska}cm` } : kostra?.sietotlacVelkosti.find(v => v.id === calc.velkostId);
   const vybranaFoliaRezany = kostra?.folie.find(f => f.id === calc.foliaId);
 
@@ -486,8 +492,8 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
     const foliaLabel = calcMethod === 'rezany' ? ` — ${vybranaFoliaRezany?.nazov}` : '';
     const title = `${calcMethodDef?.label || calcMethod} — ${rozmerLabel}${foliaLabel}${farbyLabel}${tmavyLabel}`;
     const casti = calcCasti.length > 1 && calcVc > 0 ? ` [${calcCasti.map(c => `${c.label.split(' (')[0]} ${(calcUnitPrice * c.vc / calcVc).toFixed(2)} €`).join(' + ')}]` : '';
-    const desc = `VC ${calcVc.toFixed(3)}€/ks × marža ${calcMarza.toFixed(0)}% (pri ${calcKs}ks) = ${calcUnitPrice.toFixed(2)} €/ks${casti}`;
-    setForm(prev => ({ ...prev, items: [...prev.items, { key: `it-${Date.now()}`, title, desc, badge: '', price: Number(calcUnitPrice.toFixed(2)), qty: calcKs }] }));
+    const desc = `VC ${calcVc.toFixed(3)}€/ks × marža ${calcMarza.toFixed(0)}% (pri ${calcKs}ks) = ${calcUnitPrice.toFixed(2)} €/ks${casti}${calcKlientZlava > 0 ? ` • zľava klienta ${calcKlientZlava} % → ${calcUnitPriceEff.toFixed(2)} €/ks` : ''}`;
+    setForm(prev => ({ ...prev, items: [...prev.items, { key: `it-${Date.now()}`, title, desc, badge: '', price: Number(calcUnitPriceEff.toFixed(2)), qty: calcKs }] }));
     triggerNotification('success', 'Položka z kalkulačky tlače pridaná do ponuky.');
   };
 
@@ -845,8 +851,21 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
                         </div>
                       )}
                       <p className="text-[10px] text-slate-500">VC {calcVc.toFixed(3)}€/ks • marža {calcMarza.toFixed(0)}% pri {calcKs}ks (podľa krivky v Cenotvorbe — čím viac kusov, tým nižšia marža){calcCasti.length > 1 ? '. Marža sa počíta z VC spolu, v stĺpci „v cene“ je cena rozdelená podľa podielu VC.' : ''}</p>
+                      <div className={`rounded-lg border px-3 py-2 flex flex-wrap items-center gap-2 ${calcKlient.on ? 'border-amber-500/60 bg-amber-950/25' : 'border-slate-800 bg-slate-900'}`}>
+                        <button type="button" onClick={() => setCalcKlient(prev => ({ ...prev, on: !prev.on }))} className={`px-2.5 py-1 rounded-md text-[11px] font-bold border-2 ${calcKlient.on ? 'border-amber-500 bg-amber-600/20 text-amber-300' : 'border-slate-700 text-slate-400 hover:text-slate-200'}`}>Režim klienta: {calcKlient.on ? 'ZAP' : 'VYP'}</button>
+                        <label className="text-[11px] text-slate-400 flex items-center gap-1">Zľava <input type="number" min="0" max="90" step="1" value={calcKlient.pct} onChange={(e) => setCalcKlient(prev => ({ ...prev, pct: e.target.value }))} className="w-14 px-1.5 py-1 bg-slate-950 border border-slate-800 rounded text-xs text-white" /> %</label>
+                        {[10, 15, 20].map(p => <button key={p} type="button" onClick={() => setCalcKlient({ on: true, pct: p })} className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700">{p} %</button>)}
+                        {calcKlientZlava > 0 && (
+                          <div className="w-full text-[11px] space-y-0.5 pt-1 border-t border-amber-500/30">
+                            <div className="flex justify-between"><span className="text-slate-400">Bežná cena</span><span className="font-mono text-slate-300">{fmtMoney(calcUnitPrice)}/ks • {fmtMoney(calcUnitPrice * calcKs)} za {calcKs} ks</span></div>
+                            <div className="flex justify-between"><span className="text-amber-300 font-semibold">Cena pre klienta (−{calcKlientZlava} %)</span><span className="font-mono text-amber-300 font-bold">{fmtMoney(calcUnitPriceKlient)}/ks • {fmtMoney(calcUnitPriceKlient * calcKs)} za {calcKs} ks</span></div>
+                            <div className="flex justify-between"><span className="text-slate-400">Rozdiel</span><span className="font-mono text-slate-300">−{fmtMoney(calcUnitPrice - calcUnitPriceKlient)}/ks • −{fmtMoney((calcUnitPrice - calcUnitPriceKlient) * calcKs)} za {calcKs} ks</span></div>
+                            <div className={calcMarzaKlient < (kostra?.pricingConfig?.marginFloor ?? 0) ? 'flex justify-between text-rose-400' : 'flex justify-between text-slate-400'}><span>Marža po zľave{calcMarzaKlient < (kostra?.pricingConfig?.marginFloor ?? 0) ? ' (pod minimom z Cenotvorby!)' : ''}</span><span className="font-mono">{calcMarzaKlient.toFixed(0)} %</span></div>
+                          </div>
+                        )}
+                      </div>
                       <div className="flex items-center justify-between bg-slate-900 border border-slate-800 rounded-lg px-3 py-2">
-                        <span className="text-[11px] text-slate-400">Cena za kus: <strong className="text-emerald-400">{fmtMoney(calcUnitPrice)}</strong> &nbsp;•&nbsp; Spolu ({calcKs} ks): <strong className="text-emerald-400">{fmtMoney(calcUnitPrice * calcKs)}</strong></span>
+                        <span className="text-[11px] text-slate-400">Cena za kus{calcKlientZlava > 0 ? ' (pre klienta)' : ''}: <strong className={calcKlientZlava > 0 ? 'text-amber-300' : 'text-emerald-400'}>{fmtMoney(calcUnitPriceEff)}</strong> &nbsp;•&nbsp; Spolu ({calcKs} ks): <strong className={calcKlientZlava > 0 ? 'text-amber-300' : 'text-emerald-400'}>{fmtMoney(calcUnitPriceEff * calcKs)}</strong></span>
                         <button onClick={addCalcItemToForm} disabled={(calcMethod === 'sietotlac' && !vybranyFormatSietotlac) || (calcMethod === 'rezany' && !vybranaFoliaRezany)} className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center gap-1"><Plus className="h-3 w-3" /> Pridať do ponuky</button>
                       </div>
                     </>
