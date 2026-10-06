@@ -164,19 +164,30 @@ export function vcVysivka(kostra, plochaCm2, ks) {
 // (pripravi sa raz, nie na kazdy kus znova) — rozpocitava sa preto rovnomerne na pocetKs, aby
 // vacsia objednavka mala nizsiu cenu na kus (bez tohto delenia by 1ks aj 500ks stali za sito
 // rovnako, co bolo povodnou pricinou, preco sa cena sietotlace vobec neznizovala pri odbere).
-export function nakladFarbySietotlac(kostra, velkostId, jeTmavy, n, pocetKs) {
+// Spotreba farby pre VLASTNY rozmer motivu (nie jeden z pevnych formatov): spotreba je umerna ploche, preto sa vezme
+// format s najblizsou plochou, z neho sa vyrata g/cm² a vynasobi plochou motivu (25x1 cm vyjde nizsie ako 50x50 cm).
+export function gramazPreVlastnuPlochu(kostra, jeTmavy, plochaCm2) {
+  const plocha = parseFloat(plochaCm2) || 0;
+  const formaty = (kostra.sietotlacVelkosti || [])
+    .map(v => ({ plocha: (parseFloat(v.sirka_cm) || 0) * (parseFloat(v.vyska_cm) || 0), g: parseFloat(jeTmavy ? v.spotreba_g_tmavy : v.spotreba_g_svetly) || 0 }))
+    .filter(v => v.plocha > 0 && v.g > 0);
+  if (plocha <= 0 || formaty.length === 0) return 0;
+  const najblizsi = formaty.reduce((best, v) => (Math.abs(v.plocha - plocha) < Math.abs(best.plocha - plocha) ? v : best), formaty[0]);
+  return (najblizsi.g / najblizsi.plocha) * plocha;
+}
+export function nakladFarbySietotlac(kostra, velkostId, jeTmavy, n, pocetKs, plochaVlastnaCm2) {
   const sietotlac = kostra.sietotlac;
   const velkost = (kostra.sietotlacVelkosti || []).find(v => v.id === velkostId);
-  const baseGramaz = velkost ? (parseFloat(jeTmavy ? velkost.spotreba_g_tmavy : velkost.spotreba_g_svetly) || 0) : 0;
+  const baseGramaz = velkost ? (parseFloat(jeTmavy ? velkost.spotreba_g_tmavy : velkost.spotreba_g_svetly) || 0) : gramazPreVlastnuPlochu(kostra, jeTmavy, plochaVlastnaCm2);
   const gramazN = baseGramaz * Math.pow(0.8, n - 1);
   const farbaCena = ((parseFloat(sietotlac?.cena_farba_kg) || 0) / 1000) * gramazN;
   const sitoCena = (parseFloat(sietotlac?.naklad_sito_zakazka) || 0) / Math.max(1, pocetKs || 1);
   return { n, gramaz: gramazN, farbaCena, sitoCena, spolu: farbaCena + sitoCena };
 }
 // Rozpad nakladov po vsetkych farbach zakazky (na zobrazenie/kontrolu).
-export function vcSietotlacRozpad(kostra, velkostId, jeTmavy, pocetFarieb, pocetKs) {
+export function vcSietotlacRozpad(kostra, velkostId, jeTmavy, pocetFarieb, pocetKs, plochaVlastnaCm2) {
   const n = Math.max(1, pocetFarieb || 1);
-  return Array.from({ length: n }, (_, i) => nakladFarbySietotlac(kostra, velkostId, jeTmavy, i + 1, pocetKs));
+  return Array.from({ length: n }, (_, i) => nakladFarbySietotlac(kostra, velkostId, jeTmavy, i + 1, pocetKs, plochaVlastnaCm2));
 }
 // Na tmavy textil sa tlaci svetlou/bielou farbou, ktora potrebuje 2 vrstvy (prekrytie), preto
 // tlac na tmavy textil trva podstatne dlhsie ako na svetly (podla Martina cca 2x) — cas_tlace_min
@@ -210,22 +221,22 @@ function pracaSietotlacFlat(kostra, jeTmavy) {
 // zakazky rozpocitane na pocetKs (rovnaky dovod ako pri site vyssie — jednorazovy naklad na celu
 // zakazku, nie na kazdy kus). pocetKs je VOLITELNY — bez neho (napr. stare volania) sa sito aj
 // cistenie spravaju ako doteraz (delia sa 1-timi, teda naplno na kazdy kus).
-export function vcSietotlacCelkom(kostra, velkostId, jeTmavy, pocetFarieb, pocetKs) {
+export function vcSietotlacCelkom(kostra, velkostId, jeTmavy, pocetFarieb, pocetKs, plochaVlastnaCm2) {
   const sietotlac = kostra.sietotlac;
-  const rozpad = vcSietotlacRozpad(kostra, velkostId, jeTmavy, pocetFarieb, pocetKs);
+  const rozpad = vcSietotlacRozpad(kostra, velkostId, jeTmavy, pocetFarieb, pocetKs, plochaVlastnaCm2);
   const cistenieNaKus = (parseFloat(sietotlac?.naklad_cistenie_zakazka) || 0) / Math.max(1, pocetKs || 1);
   return rozpad.reduce((s, r) => s + r.spolu, 0) + (parseFloat(sietotlac?.naklady_manipulacia) || 0) + cistenieNaKus + pracaSietotlacFlat(kostra, jeTmavy) + elektrinaSietotlacFlat(kostra, jeTmavy);
 }
 // VC len za 1. farbu (zakladna predajna sadzba, bez dalsich farieb — tie sa predavaju cez priplatok).
-export function vcSietotlacZaklad(kostra, velkostId, jeTmavy, pocetKs) {
+export function vcSietotlacZaklad(kostra, velkostId, jeTmavy, pocetKs, plochaVlastnaCm2) {
   const sietotlac = kostra.sietotlac;
-  const prva = nakladFarbySietotlac(kostra, velkostId, jeTmavy, 1, pocetKs);
+  const prva = nakladFarbySietotlac(kostra, velkostId, jeTmavy, 1, pocetKs, plochaVlastnaCm2);
   const cistenieNaKus = (parseFloat(sietotlac?.naklad_cistenie_zakazka) || 0) / Math.max(1, pocetKs || 1);
   return prva.spolu + (parseFloat(sietotlac?.naklady_manipulacia) || 0) + cistenieNaKus + pracaSietotlacFlat(kostra, jeTmavy) + elektrinaSietotlacFlat(kostra, jeTmavy);
 }
-export function plochaFormatuSietotlac(kostra, velkostId) {
+export function plochaFormatuSietotlac(kostra, velkostId, plochaVlastnaCm2) {
   const velkost = (kostra.sietotlacVelkosti || []).find(v => v.id === velkostId);
-  return velkost ? (parseFloat(velkost.sirka_cm) || 0) * (parseFloat(velkost.vyska_cm) || 0) : 0;
+  return velkost ? (parseFloat(velkost.sirka_cm) || 0) * (parseFloat(velkost.vyska_cm) || 0) : (parseFloat(plochaVlastnaCm2) || 0);
 }
 
 // Rezany transfer — naklad materialu je per-folia (€/bm prepocitane cez efektivnu sirku rolky),

@@ -406,7 +406,7 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
     if (!kostra) return;
     setCalc(prev => ({
       ...prev,
-      velkostId: kostra.sietotlacVelkosti.some(v => v.id === prev.velkostId) ? prev.velkostId : (kostra.sietotlacVelkosti[0]?.id || ''),
+      velkostId: (prev.velkostId === 'vlastny' || kostra.sietotlacVelkosti.some(v => v.id === prev.velkostId)) ? prev.velkostId : 'vlastny',
       foliaId: kostra.folie.some(f => f.id === prev.foliaId) ? prev.foliaId : (kostra.folie[0]?.id || ''),
     }));
   }, [calcMethod, kostra]);
@@ -435,7 +435,7 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
       calcCasti = [{ label: `DTF transfer (fólia, farby, tlač, odpad ${Number(rz.odpadPercent).toFixed(0)} %)`, vc: rz.transfer }, { label: 'Nažehlenie DTF transferu na textil', vc: rz.nazehlenie }];
     }
     else if (calcMethod === 'vysivka') calcVc = vcVysivka(kostra, calcPlocha, calcKs);
-    else if (calcMethod === 'sietotlac') { calcVc = vcSietotlacCelkom(kostra, calc.velkostId, calc.tmavy, calcFarby, calcKs); calcPlochaPouzita = plochaFormatuSietotlac(kostra, calc.velkostId); }
+    else if (calcMethod === 'sietotlac') { calcVc = vcSietotlacCelkom(kostra, calc.velkostId, calc.tmavy, calcFarby, calcKs, calcPlocha); calcPlochaPouzita = plochaFormatuSietotlac(kostra, calc.velkostId, calcPlocha); }
     else if (calcMethod === 'rezany') {
       const rz = vcRezanyTransferRozpis(kostra, calc.foliaId, calcPlocha);
       calcVc = rz.spolu * calcFarby;
@@ -447,7 +447,8 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
   // nie z holej krivky — inak by pri lacnych materialoch (floor casto zasiahne) ukazovala nizsie %
   // marze, nez aku klient v skutocnosti plati.
   const calcMarza = kostra && calcVc > 0 ? ((calcUnitPrice / calcVc) - 1) * 100 : 0;
-  const vybranyFormatSietotlac = kostra?.sietotlacVelkosti.find(v => v.id === calc.velkostId);
+  const sietotlacVlastny = calc.velkostId === 'vlastny';
+  const vybranyFormatSietotlac = sietotlacVlastny ? { label: `${calc.sirka}×${calc.vyska}cm` } : kostra?.sietotlacVelkosti.find(v => v.id === calc.velkostId);
   const vybranaFoliaRezany = kostra?.folie.find(f => f.id === calc.foliaId);
 
   const updateForm = (patch) => setForm(prev => ({ ...prev, ...patch }));
@@ -770,12 +771,19 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
                         </div>
                       )}
 
+                      {calcMethodDef?.needsFormat && sietotlacVlastny && (
+                        <div className="grid grid-cols-2 gap-2">
+                          <div><label className={labelCls}>Šírka motívu (cm)</label><input type="number" value={calc.sirka} onChange={(e) => setCalc(prev => ({ ...prev, sirka: e.target.value }))} className={inputCls} /></div>
+                          <div><label className={labelCls}>Výška motívu (cm)</label><input type="number" value={calc.vyska} onChange={(e) => setCalc(prev => ({ ...prev, vyska: e.target.value }))} className={inputCls} /></div>
+                        </div>
+                      )}
+
                       {calcMethodDef?.needsFormat && (
                         <div className="grid grid-cols-2 gap-2">
                           <div>
                             <label className={labelCls}>Formát</label>
-                            <select value={calc.velkostId} onChange={(e) => setCalc(prev => ({ ...prev, velkostId: e.target.value }))} className={inputCls}>
-                              {kostra.sietotlacVelkosti.length === 0 && <option value="">-- žiadny formát (pridaj v Kostra cien) --</option>}
+                            <select value={calc.velkostId} onChange={(e) => setCalc(prev => ({ ...prev, velkostId: e.target.value === 'vlastny' ? 'vlastny' : (parseInt(e.target.value) || e.target.value) }))} className={inputCls}>
+                              <option value="vlastny">Vlastný rozmer (zadaj šírku × výšku)</option>
                               {kostra.sietotlacVelkosti.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
                             </select>
                           </div>

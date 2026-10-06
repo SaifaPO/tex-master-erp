@@ -108,7 +108,7 @@ export default function PotlaceTab({ supabase }) {
     setDtfNaklady(dtfNak || null);
     setVysivkaNaklady(vysNak || null);
     setSietotlacVelkosti(sietoVel || []);
-    if ((sietoVel || []).length > 0) setTestVelkostId(sietoVel[0].id);
+    if ((sietoVel || []).length > 0) setTestVelkostId('vlastny');
     if (laserNak) setLaser({ min_cena: laserNak.min_cena || 0, cena_prace_hod: laserNak.cena_prace_hod || 0, naklady_manipulacia: laserNak.naklady_manipulacia || 0, laser_zariadenie_id: laserNak.laser_zariadenie_id || null });
     setLaserHrubky(laserHrub || []);
     if ((laserHrub || []).length > 0) setTestHrubkaId(laserHrub[0].id);
@@ -168,13 +168,17 @@ export default function PotlaceTab({ supabase }) {
   const vcVysivka = vcVysivkaZo(kostraLive, plocha, ks);
 
   const vybranaVelkost = sietotlacVelkosti.find(v => v.id === testVelkostId);
+  // 'vlastny' = rozmer z poli Sirka x Vyska hore (spotreba farby sa prepocita podla plochy motivu)
+  const sietotlacVlastny = testVelkostId === 'vlastny';
+  const plochaVlastnaSiet = sietotlacVlastny ? plocha : 0;
+  const sietotlacPlatny = !!vybranaVelkost || sietotlacVlastny;
   const pocetFariebSiet = Math.max(1, parseInt(testFarby) || 1);
-  const sietotlacFarbyRozpad = vybranaVelkost ? Array.from({ length: pocetFariebSiet }, (_, i) => nakladFarbySietotlac(kostraLive, testVelkostId, testTmavyTextil, i + 1, ks)) : [];
+  const sietotlacFarbyRozpad = sietotlacPlatny ? Array.from({ length: pocetFariebSiet }, (_, i) => nakladFarbySietotlac(kostraLive, testVelkostId, testTmavyTextil, i + 1, ks, plochaVlastnaSiet)) : [];
   // VC pre zakladnu predajnu sadzbu (cena_cm2) je vzdy len za 1. farbu — dalsie farby sa predavaju
   // cez samostatny "priplatok za farbu" nizsie, nie namiesane do zakladnej sadzby.
-  const vcSietotlac = vybranaVelkost ? vcSietotlacZaklad(kostraLive, testVelkostId, testTmavyTextil, ks) : 0;
-  const navrhPriplatokFarbaVC = vybranaVelkost ? nakladFarbySietotlac(kostraLive, testVelkostId, testTmavyTextil, 2, ks).spolu : 0;
-  const plochaSietotlacCm2 = plochaFormatuSietotlac(kostraLive, testVelkostId);
+  const vcSietotlac = sietotlacPlatny ? vcSietotlacZaklad(kostraLive, testVelkostId, testTmavyTextil, ks, plochaVlastnaSiet) : 0;
+  const navrhPriplatokFarbaVC = sietotlacPlatny ? nakladFarbySietotlac(kostraLive, testVelkostId, testTmavyTextil, 2, ks, plochaVlastnaSiet).spolu : 0;
+  const plochaSietotlacCm2 = plochaFormatuSietotlac(kostraLive, testVelkostId, plochaVlastnaSiet);
 
   const vcRezany = vcRezanyTransferZo(kostraLive, testFoliaId, plocha);
   const rzSub = vcSublimaciaGarmentRozpis(kostraLive, plocha);
@@ -195,7 +199,7 @@ export default function PotlaceTab({ supabase }) {
   const velkyPocet = 10000;
   const vcSublimaciaPodlaha = vcSublimaciaGarmentZo(kostraLive, 0);
   const vcDtfPodlaha = vcDtfGarmentZo(kostraLive, 0);
-  const vcSietotlacPodlaha = vybranaVelkost ? vcSietotlacZaklad(kostraLive, testVelkostId, testTmavyTextil, velkyPocet) : 0;
+  const vcSietotlacPodlaha = sietotlacPlatny ? vcSietotlacZaklad(kostraLive, testVelkostId, testTmavyTextil, velkyPocet, plochaVlastnaSiet) : 0;
   const vcRezanyPodlaha = vcRezanyTransferZo(kostraLive, testFoliaId, 0);
   const vcLaserPodlaha = testHrubkaId ? vcLaserRezaniaZo(kostraLive, testHrubkaId, 0) : 0;
   const vcVysivkaPodlaha = vcVysivkaZo(kostraLive, 0, velkyPocet);
@@ -265,7 +269,8 @@ export default function PotlaceTab({ supabase }) {
             <div className="flex flex-wrap items-center gap-3 mb-2">
               <div>
                 <label className={labelCls}>Formát pre výpočet</label>
-                <select value={testVelkostId || ''} onChange={(e) => setTestVelkostId(parseInt(e.target.value))} className={`${inputCls} w-48`}>
+                <select value={testVelkostId || ''} onChange={(e) => setTestVelkostId(e.target.value === 'vlastny' ? 'vlastny' : parseInt(e.target.value))} className={`${inputCls} w-64`}>
+                  <option value="vlastny">Vlastný rozmer (šírka × výška hore)</option>
                   {sietotlacVelkosti.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
                 </select>
               </div>
