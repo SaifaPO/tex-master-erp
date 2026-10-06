@@ -3872,7 +3872,8 @@ export default function App() {
     const sadzba = calculateDeviceRatePerUnit(zariadenie, costMetrics);
     if (sadzba == null) return 0;
     const totalPlocha = vypocitajPlochaCm2ZLatky(p.layer1) + vypocitajPlochaCm2ZLatky(p.layer2) + vypocitajPlochaCm2ZLatky(p.layer3);
-    return Math.round(totalPlocha * sadzba * 100) / 100;
+    // Laser je len elektrina (casto pod 1 cent/ks) — zaokruhlujeme na 4 desatinne miesta, nie na centy, aby cena nezmizla.
+    return Math.round(totalPlocha * sadzba * 10000) / 10000;
   };
 
   // Redukovany vykon (€) = minuty sitia x sadzba RV — overene z realnych historickych dat (Vydaj
@@ -7868,7 +7869,7 @@ export default function App() {
                           })}
                         </select>
                         {(editingProduct ? editingProduct.laserZariadenieId : newModelLaserZariadenieId) && (
-                          <span className="text-emerald-400 font-mono text-[11px] block mt-1">{vypocitajCenuLasera(aktualnyFormularProdukt).toFixed(2)} €/ks</span>
+                          <span className="text-emerald-400 font-mono text-[11px] block mt-1">{vypocitajCenuLasera(aktualnyFormularProdukt).toFixed(4)} €/ks</span>
                         )}
                         <p className="text-[10px] text-slate-500 mt-1">Vlastný stroj (Financie → Réžia firiem → register zariadení). Sadzba €/cm² sa počíta z elektriny + výkonu daného stroja. Stroj sa dá zvoliť, až keď má v registri vyplnený príkon (kW) aj <strong>výkon za hodinu</strong> (napr. 15000 cm²/hod).</p>
                       </div>
@@ -7897,7 +7898,7 @@ export default function App() {
                           return (
                             <div className="mt-2 bg-slate-900 border border-slate-800 rounded p-2 space-y-0.5 text-[11px]">
                               {zlozky.map(z => (
-                                <div key={z.label} className="flex justify-between text-slate-400"><span>{z.label}</span><span className={`font-mono ${z.v > 0 ? 'text-slate-200' : 'text-slate-600'}`}>{z.v.toFixed(2)} €</span></div>
+                                <div key={z.label} className="flex justify-between text-slate-400"><span>{z.label}</span><span className={`font-mono ${z.v > 0 ? 'text-slate-200' : 'text-slate-600'}`}>{z.v.toFixed(z.v > 0 && z.v < 0.01 ? 4 : 2)} €</span></div>
                               ))}
                               <div className="flex justify-between border-t border-slate-800 pt-0.5 font-semibold text-emerald-400"><span>Spolu</span><span className="font-mono">{zlozky.reduce((a, z) => a + z.v, 0).toFixed(2)} €</span></div>
                             </div>
