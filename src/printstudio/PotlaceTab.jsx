@@ -331,6 +331,14 @@ export default function PotlaceTab({ supabase }) {
             </select>
           </div>
         )}
+        {plocha > 0 && (
+          <div className="bg-slate-950 rounded-xl border border-slate-800 px-3 py-2 mb-2 text-[11px] text-slate-300 space-y-0.5">
+            <div className="flex justify-between"><span>Čas rezania</span><span className="font-mono">{rzRezany.casRezaniaMin.toFixed(1)} min/ks • {(rzRezany.casRezaniaMin * ks).toFixed(0)} min / {ks} ks</span></div>
+            <div className="flex justify-between"><span>Čas vyľupovania</span><span className="font-mono">{rzRezany.casVylupovaniaMin.toFixed(1)} min/ks • {(rzRezany.casVylupovaniaMin * ks).toFixed(0)} min / {ks} ks</span></div>
+            <div className="flex justify-between"><span>Čas nažehlenia</span><span className="font-mono">{rzRezany.casNazehlovaniaMin.toFixed(1)} min/ks • {(rzRezany.casNazehlovaniaMin * ks).toFixed(0)} min / {ks} ks</span></div>
+            <div className="flex justify-between border-t border-slate-800 pt-0.5 font-semibold"><span>Čas spolu</span><span className="font-mono">{(rzRezany.casRezaniaMin + rzRezany.casVylupovaniaMin + rzRezany.casNazehlovaniaMin).toFixed(1)} min/ks • {(((rzRezany.casRezaniaMin + rzRezany.casVylupovaniaMin + rzRezany.casNazehlovaniaMin) * ks) / 60).toFixed(1)} hod / {ks} ks</span></div>
+          </div>
+        )}
         <NakladovyVysledok casti={dvaCasti(rzRezany, 'Rezaný transfer', 'Nažehlenie na textil')} vc={vcRezany} ks={ks} config={pricingConfig} plochaCm2={plocha} onPouzit={(cena) => testFoliaId && upravFoliu(testFoliaId, { cena_cm2: Number(cena.toFixed(4)) })} disabled={plocha === 0 || !testFoliaId} />
       </div>
 

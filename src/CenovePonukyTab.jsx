@@ -424,6 +424,7 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
   let calcVc = 0, calcPlochaPouzita = calcPlocha;
   // Transfer a nazehlenie su dva osobne naklady (iny clovek, ine casy a riziko) — ukazuju sa osobitne.
   let calcCasti = [];
+  let calcCasyRezany = null; // casy rezania/vylupovania/nazehlenia (min/ks) pri rezanom transfere
   if (kostra) {
     if (calcMethod === 'sublimacia') {
       const rz = vcSublimaciaGarmentRozpis(kostra, calcPlocha);
@@ -439,6 +440,7 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
     else if (calcMethod === 'rezany') {
       const rz = vcRezanyTransferRozpis(kostra, calc.foliaId, calcPlocha);
       calcVc = rz.spolu * calcFarby;
+      calcCasyRezany = { rezanie: rz.casRezaniaMin * calcFarby, vylupovanie: rz.casVylupovaniaMin * calcFarby, nazehlenie: rz.casNazehlovaniaMin * calcFarby };
       calcCasti = [{ label: `Rezaný transfer (fólia, rezanie, vyľupovanie${calcFarby > 1 ? `, ${calcFarby} farby` : ''})`, vc: rz.transfer * calcFarby }, { label: 'Nažehlenie rezaného transferu na textil', vc: rz.nazehlenie * calcFarby }];
     }
   }
@@ -832,6 +834,14 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
                             <span className="text-right font-mono">{calcVc.toFixed(3)} €</span>
                             <span className="text-right font-mono text-emerald-400">{calcUnitPrice.toFixed(2)} €</span>
                           </div>
+                        </div>
+                      )}
+                      {calcCasyRezany && (
+                        <div className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-[11px] text-slate-300 space-y-0.5">
+                          <div className="flex justify-between"><span>Čas rezania</span><span className="font-mono">{calcCasyRezany.rezanie.toFixed(1)} min/ks • {(calcCasyRezany.rezanie * calcKs).toFixed(0)} min / {calcKs} ks</span></div>
+                          <div className="flex justify-between"><span>Čas vyľupovania</span><span className="font-mono">{calcCasyRezany.vylupovanie.toFixed(1)} min/ks • {(calcCasyRezany.vylupovanie * calcKs).toFixed(0)} min / {calcKs} ks</span></div>
+                          <div className="flex justify-between"><span>Čas nažehlenia</span><span className="font-mono">{calcCasyRezany.nazehlenie.toFixed(1)} min/ks • {(calcCasyRezany.nazehlenie * calcKs).toFixed(0)} min / {calcKs} ks</span></div>
+                          <div className="flex justify-between border-t border-slate-800 pt-0.5 font-semibold"><span>Čas spolu</span><span className="font-mono">{(calcCasyRezany.rezanie + calcCasyRezany.vylupovanie + calcCasyRezany.nazehlenie).toFixed(1)} min/ks • {(((calcCasyRezany.rezanie + calcCasyRezany.vylupovanie + calcCasyRezany.nazehlenie) * calcKs) / 60).toFixed(1)} hod / {calcKs} ks</span></div>
                         </div>
                       )}
                       <p className="text-[10px] text-slate-500">VC {calcVc.toFixed(3)}€/ks • marža {calcMarza.toFixed(0)}% pri {calcKs}ks (podľa krivky v Cenotvorbe — čím viac kusov, tým nižšia marža){calcCasti.length > 1 ? '. Marža sa počíta z VC spolu, v stĺpci „v cene“ je cena rozdelená podľa podielu VC.' : ''}</p>

@@ -258,7 +258,11 @@ export function vcRezanyTransferRozpis(kostra, foliaId, plochaCm2) {
   // TRANSFER = folia + rezanie + vylupovanie (+ plotter); NAZEHLENIE = manipulacia + cas lisu (+ elektrina lisu)
   const transfer = material + pracaCm2 + elektrinaPloterCm2;
   const nazehlenie = (parseFloat(rezany?.naklady_manipulacia) || 0) + pracaFlat + elektrinaLisFlat;
-  return { transfer, nazehlenie, spolu: transfer + nazehlenie };
+  // Casy v minutach na 1 ks (rezanie a vylupovanie sa nasobia plochou, nazehlenie je flat) — len na prehlad pri porovnavani cien.
+  const casRezaniaMin = (parseFloat(rezany?.cas_rezania_min) || 0) * plochaCm2;
+  const casVylupovaniaMin = (parseFloat(rezany?.cas_vylupovania_min) || 0) * plochaCm2;
+  const casNazehlovaniaMin = parseFloat(rezany?.cas_nazehlovania_min) || 0;
+  return { transfer, nazehlenie, spolu: transfer + nazehlenie, casRezaniaMin, casVylupovaniaMin, casNazehlovaniaMin };
 }
 export function vcRezanyTransfer(kostra, foliaId, plochaCm2) {
   return vcRezanyTransferRozpis(kostra, foliaId, plochaCm2).spolu;
