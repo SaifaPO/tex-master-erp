@@ -150,7 +150,7 @@ export default function CenotvorbaTab({ supabase }) {
 
   const handleExportCsv = () => {
     const modeLabel = priceView === 'voc' ? 'VOC' : 'MOC';
-    const header = ['Názov', 'Skupina', 'Výrobná cena', ...QUANTITY_LEVELS.map(q => `Cena (${modeLabel}) @ ${q}ks`)];
+    const header = ['Názov', 'Skupina', 'Výrobná cena (bez DPH)', ...QUANTITY_LEVELS.map(q => `Cena (${modeLabel}) @ ${q}ks bez DPH`)];
     const lines = [header.map(csvEscape).join(';')];
     sortedProducts.forEach(p => {
       const cost = p.productionCost;
@@ -308,6 +308,8 @@ export default function CenotvorbaTab({ supabase }) {
         </button>
       </div>
 
+      <p className="text-[11px] font-semibold text-sky-300 bg-sky-950/30 border border-sky-900/40 rounded-lg px-3 py-2">💶 Všetky ceny v tejto záložke (výrobné aj predajné) sú <strong>BEZ DPH</strong>. DPH ({Number(config.dphPercent) || 0} %) sa pripočíta až na konci — v zákazníckych konfigurátoroch, v Cenových ponukách a na faktúre.</p>
+
       {/* Tabulka produktov + cennik (katalog produktov z hlavneho ERP) */}
       <div className="overflow-x-auto bg-slate-900 border border-slate-800 rounded-lg">
         <table className="w-full text-xs">
@@ -315,12 +317,12 @@ export default function CenotvorbaTab({ supabase }) {
             <tr className="border-b border-slate-800 text-slate-400">
               <th className="text-left p-2 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('name')}>Názov<SortIcon field="name" /></th>
               <th className="text-left p-2 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('group')}>Skupina<SortIcon field="group" /></th>
-              <th className="text-left p-2 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('cost')}>Výrobná cena<SortIcon field="cost" /></th>
+              <th className="text-left p-2 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('cost')}>Výrobná cena (bez DPH)<SortIcon field="cost" /></th>
               <th className="text-left p-2 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('redukovanyVykon')}>Red. výkon<SortIcon field="redukovanyVykon" /></th>
               <th className="text-left p-2 cursor-pointer select-none whitespace-nowrap bg-amber-950/20" onClick={() => handleSort('capMargin')}>🧪 €/jedn. RV<SortIcon field="capMargin" /></th>
-              <th className="text-left p-2 whitespace-nowrap bg-indigo-950/40">Cena @ {refQty}ks {priceView === 'voc' ? '🏭 VOC' : '(MOC)'}</th>
+              <th className="text-left p-2 whitespace-nowrap bg-indigo-950/40">Cena @ {refQty}ks {priceView === 'voc' ? '🏭 VOC' : '(MOC)'} bez DPH</th>
               <th className="text-left p-2 whitespace-nowrap bg-amber-950/20">🧪 Cena so 6. koef. {priceView === 'voc' ? '(VOC)' : ''}</th>
-              {QUANTITY_LEVELS.map(q => <th key={q} className="text-left p-2 whitespace-nowrap">{q}ks</th>)}
+              {QUANTITY_LEVELS.map(q => <th key={q} className="text-left p-2 whitespace-nowrap">{q}ks <span className="text-slate-600 font-normal">bez DPH</span></th>)}
             </tr>
           </thead>
           <tbody>

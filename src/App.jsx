@@ -7690,7 +7690,7 @@ export default function App() {
 
                     {/* CENA POTLACE — rozpis podla technologie */}
                     <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 space-y-2.5">
-                      <label className="block text-slate-400 font-semibold">Potlač — technológie a cena</label>
+                      <label className="block text-slate-400 font-semibold">Potlač — technológie a cena <span className="text-sky-300 font-normal">(výrobné náklady, bez DPH)</span></label>
                       <p className="text-[10px] text-slate-500 -mt-1.5">Sublimácia sa počíta automaticky z plochy látky (Kostra cien) — potlačí sa celá plocha strihu. Ostatné technológie sú vždy ručné €/ks (lokálny motív, neviaže sa na spotrebu materiálu).</p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         <label className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-2 cursor-pointer">
@@ -7897,7 +7897,7 @@ export default function App() {
 
                     <div className="grid grid-cols-2 gap-3 bg-slate-950 p-3 rounded-lg border border-slate-800">
                       <div>
-                        <label className="block text-slate-400 font-semibold mb-1">Výrobná cena (€/ks)</label>
+                        <label className="block text-slate-400 font-semibold mb-1">Výrobná cena (€/ks, bez DPH)</label>
                         {(() => {
                           const vypocitana = vypocitajVyrobnuCenuZRozpisu(aktualnyFormularProdukt);
                           if (vypocitana !== null) {

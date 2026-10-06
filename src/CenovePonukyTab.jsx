@@ -827,7 +827,7 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
 
                       {calcCasti.length > 1 && calcVc > 0 && (
                         <div className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden text-[11px]">
-                          <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 px-3 py-1.5 text-slate-500 uppercase tracking-wide text-[10px] bg-slate-950/60"><span>Zložka</span><span className="text-right">VC</span><span className="text-right">v cene</span></div>
+                          <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 px-3 py-1.5 text-slate-500 uppercase tracking-wide text-[10px] bg-slate-950/60"><span>Zložka</span><span className="text-right">VC</span><span className="text-right">v cene bez DPH</span></div>
                           {calcCasti.map(c => (
                             <div key={c.label} className="grid grid-cols-[1fr_auto_auto] gap-x-3 px-3 py-1.5 border-t border-slate-800 text-slate-300">
                               <span>{c.label}</span>
@@ -850,6 +850,7 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
                           <div className="flex justify-between border-t border-slate-800 pt-0.5 font-semibold"><span>Čas spolu</span><span className="font-mono">{(calcCasyRezany.rezanie + calcCasyRezany.vylupovanie + calcCasyRezany.nazehlenie).toFixed(1)} min/ks • {(((calcCasyRezany.rezanie + calcCasyRezany.vylupovanie + calcCasyRezany.nazehlenie) * calcKs) / 60).toFixed(1)} hod / {calcKs} ks</span></div>
                         </div>
                       )}
+                      <p className="text-[10px] text-sky-300/90 font-semibold">💶 Ceny v tejto kalkulačke sú BEZ DPH — DPH sa pripočíta v súčte ponuky.</p>
                       <p className="text-[10px] text-slate-500">VC {calcVc.toFixed(3)}€/ks • marža {calcMarza.toFixed(0)}% pri {calcKs}ks (podľa krivky v Cenotvorbe — čím viac kusov, tým nižšia marža){calcCasti.length > 1 ? '. Marža sa počíta z VC spolu, v stĺpci „v cene“ je cena rozdelená podľa podielu VC.' : ''}</p>
                       <div className={`rounded-lg border px-3 py-2 flex flex-wrap items-center gap-2 ${calcKlient.on ? 'border-amber-500/60 bg-amber-950/25' : 'border-slate-800 bg-slate-900'}`}>
                         <button type="button" onClick={() => setCalcKlient(prev => ({ ...prev, on: !prev.on }))} className={`px-2.5 py-1 rounded-md text-[11px] font-bold border-2 ${calcKlient.on ? 'border-amber-500 bg-amber-600/20 text-amber-300' : 'border-slate-700 text-slate-400 hover:text-slate-200'}`}>Režim klienta: {calcKlient.on ? 'ZAP' : 'VYP'}</button>
@@ -857,15 +858,15 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
                         {[10, 15, 20].map(p => <button key={p} type="button" onClick={() => setCalcKlient({ on: true, pct: p })} className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700">{p} %</button>)}
                         {calcKlientZlava > 0 && (
                           <div className="w-full text-[11px] space-y-0.5 pt-1 border-t border-amber-500/30">
-                            <div className="flex justify-between"><span className="text-slate-400">Bežná cena</span><span className="font-mono text-slate-300">{fmtMoney(calcUnitPrice)}/ks • {fmtMoney(calcUnitPrice * calcKs)} za {calcKs} ks</span></div>
-                            <div className="flex justify-between"><span className="text-amber-300 font-semibold">Cena pre klienta (−{calcKlientZlava} %)</span><span className="font-mono text-amber-300 font-bold">{fmtMoney(calcUnitPriceKlient)}/ks • {fmtMoney(calcUnitPriceKlient * calcKs)} za {calcKs} ks</span></div>
+                            <div className="flex justify-between"><span className="text-slate-400">Bežná cena bez DPH</span><span className="font-mono text-slate-300">{fmtMoney(calcUnitPrice)}/ks • {fmtMoney(calcUnitPrice * calcKs)} za {calcKs} ks</span></div>
+                            <div className="flex justify-between"><span className="text-amber-300 font-semibold">Cena pre klienta bez DPH (−{calcKlientZlava} %)</span><span className="font-mono text-amber-300 font-bold">{fmtMoney(calcUnitPriceKlient)}/ks • {fmtMoney(calcUnitPriceKlient * calcKs)} za {calcKs} ks</span></div>
                             <div className="flex justify-between"><span className="text-slate-400">Rozdiel</span><span className="font-mono text-slate-300">−{fmtMoney(calcUnitPrice - calcUnitPriceKlient)}/ks • −{fmtMoney((calcUnitPrice - calcUnitPriceKlient) * calcKs)} za {calcKs} ks</span></div>
                             <div className={calcMarzaKlient < (kostra?.pricingConfig?.marginFloor ?? 0) ? 'flex justify-between text-rose-400' : 'flex justify-between text-slate-400'}><span>Marža po zľave{calcMarzaKlient < (kostra?.pricingConfig?.marginFloor ?? 0) ? ' (pod minimom z Cenotvorby!)' : ''}</span><span className="font-mono">{calcMarzaKlient.toFixed(0)} %</span></div>
                           </div>
                         )}
                       </div>
                       <div className="flex items-center justify-between bg-slate-900 border border-slate-800 rounded-lg px-3 py-2">
-                        <span className="text-[11px] text-slate-400">Cena za kus{calcKlientZlava > 0 ? ' (pre klienta)' : ''}: <strong className={calcKlientZlava > 0 ? 'text-amber-300' : 'text-emerald-400'}>{fmtMoney(calcUnitPriceEff)}</strong> &nbsp;•&nbsp; Spolu ({calcKs} ks): <strong className={calcKlientZlava > 0 ? 'text-amber-300' : 'text-emerald-400'}>{fmtMoney(calcUnitPriceEff * calcKs)}</strong></span>
+                        <span className="text-[11px] text-slate-400">Cena za kus bez DPH{calcKlientZlava > 0 ? ' (pre klienta)' : ''}: <strong className={calcKlientZlava > 0 ? 'text-amber-300' : 'text-emerald-400'}>{fmtMoney(calcUnitPriceEff)}</strong> &nbsp;•&nbsp; Spolu ({calcKs} ks): <strong className={calcKlientZlava > 0 ? 'text-amber-300' : 'text-emerald-400'}>{fmtMoney(calcUnitPriceEff * calcKs)}</strong></span>
                         <button onClick={addCalcItemToForm} disabled={(calcMethod === 'sietotlac' && !vybranyFormatSietotlac) || (calcMethod === 'rezany' && !vybranaFoliaRezany)} className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center gap-1"><Plus className="h-3 w-3" /> Pridať do ponuky</button>
                       </div>
                     </>
@@ -879,7 +880,7 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
                     <div className="flex items-center gap-2">
                       <input type="text" value={it.title} onChange={(e) => updateItem(it.key, 'title', e.target.value)} placeholder="Názov položky" className="flex-1 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-white" />
                       <input type="number" min="1" value={it.qty} onChange={(e) => updateItem(it.key, 'qty', e.target.value)} className="w-14 bg-slate-900 border border-slate-800 rounded px-1.5 py-1 text-xs text-white text-center" />
-                      <input type="number" step="0.01" value={it.price} onChange={(e) => updateItem(it.key, 'price', e.target.value)} className="w-24 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-emerald-400 font-bold text-right" />
+                      <input type="number" step="0.01" title="Cena za 1 ks BEZ DPH" value={it.price} onChange={(e) => updateItem(it.key, 'price', e.target.value)} className="w-24 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-emerald-400 font-bold text-right" />
                       <button onClick={() => removeFormItem(it.key)} className="text-slate-500 hover:text-rose-400 p-1"><Trash2 className="h-3.5 w-3.5" /></button>
                     </div>
                     <div className="grid grid-cols-3 gap-2">
@@ -1002,7 +1003,7 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
               )}
             </div>
             <div className="text-[11px] text-slate-500 flex items-center gap-4 px-1">
-              <span>Medzisúčet: <strong className="text-slate-300">{fmtMoney(totals.subtotal)}</strong></span>
+              <span>Medzisúčet bez DPH (ceny položiek sú bez DPH): <strong className="text-slate-300">{fmtMoney(totals.subtotal)}</strong></span>
               {form.discountPercent > 0 && <span>Zľava: <strong className="text-amber-400">-{fmtMoney(totals.discountVal)}</strong></span>}
               <span>Spolu s DPH: <strong className="text-emerald-400">{fmtMoney(totals.total)}</strong></span>
             </div>
@@ -1076,7 +1077,7 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
             <select value={newPriceItem.category} onChange={(e) => setNewPriceItem({ ...newPriceItem, category: e.target.value })} className="col-span-2 bg-slate-900 border border-slate-800 rounded px-2 py-1.5 text-xs text-white">
               {PRICE_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
             </select>
-            <input type="number" step="0.01" value={newPriceItem.price} onChange={(e) => setNewPriceItem({ ...newPriceItem, price: e.target.value })} placeholder="Cena €" className="col-span-2 bg-slate-900 border border-slate-800 rounded px-2 py-1.5 text-xs text-white" />
+            <input type="number" step="0.01" value={newPriceItem.price} onChange={(e) => setNewPriceItem({ ...newPriceItem, price: e.target.value })} placeholder="Cena € bez DPH" className="col-span-2 bg-slate-900 border border-slate-800 rounded px-2 py-1.5 text-xs text-white" />
             <button onClick={addPriceListItem} className="col-span-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded flex items-center justify-center"><Plus className="h-4 w-4" /></button>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
