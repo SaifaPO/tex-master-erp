@@ -396,8 +396,8 @@ export default function KostraCienTab({ supabase }) {
         <p className="text-[11px] text-slate-500 mb-2">Čas rezania a vyľupovania závisí od zložitosti grafiky, preto sa zadáva orientačne na 1cm² plochy motívu (nie fixne na kus) — napr. 0,01 min/cm² znamená 1 minútu pri 100cm² (10×10cm). Nažehlovanie a manipulácia sú fixné na kus.</p>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 p-3 bg-slate-950 rounded-xl border border-slate-800 mb-3">
           <Field label="Cena práce (€/hod)" value={rezany.cena_prace_hod} step="0.5" onChange={(v) => ulozRezany({ cena_prace_hod: v })} />
-          <Field label="Čas rezania (min/cm²)" value={rezany.cas_rezania_min} step="0.01" onChange={(v) => ulozRezany({ cas_rezania_min: v })} hint={casNaCm2Hint(rezany.cas_rezania_min, REF_PLOCHA_CM2)} />
-          <Field label="Čas vyľupovania (min/cm²)" value={rezany.cas_vylupovania_min} step="0.01" onChange={(v) => ulozRezany({ cas_vylupovania_min: v })} hint={casNaCm2Hint(rezany.cas_vylupovania_min, REF_PLOCHA_CM2)} />
+          <Field label="Čas rezania (min/cm²)" value={rezany.cas_rezania_min} step="0.001" onChange={(v) => ulozRezany({ cas_rezania_min: v })} hint={casNaCm2Hint(rezany.cas_rezania_min, REF_PLOCHA_CM2)} />
+          <Field label="Čas vyľupovania (min/cm²)" value={rezany.cas_vylupovania_min} step="0.001" onChange={(v) => ulozRezany({ cas_vylupovania_min: v })} hint={casNaCm2Hint(rezany.cas_vylupovania_min, REF_PLOCHA_CM2)} />
           <Field label="Čas nažehlovania (min/ks)" value={rezany.cas_nazehlovania_min} step="0.1" onChange={(v) => ulozRezany({ cas_nazehlovania_min: v })} hint={casFlatHint(rezany.cas_nazehlovania_min)} />
           <Field label="Manipulácia (€/ks)" value={rezany.naklady_manipulacia} step="0.01" onChange={(v) => ulozRezany({ naklady_manipulacia: v })} />
         </div>
