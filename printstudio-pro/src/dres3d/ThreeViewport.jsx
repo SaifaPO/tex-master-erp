@@ -4,12 +4,17 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { RotateCcw, Camera } from 'lucide-react';
 import { updateJerseyTexture, logaVyrobcuReady, orezOffset } from './dresRenderer';
+import { vykresliTrenirky, postavCestyZon, zonaKusu } from './trenirkyRenderer';
+
+// Trenírky sa v komplete posunú o toľko cm nižšie, aby pás nohavíc sedel pod spodným lemom dresu (v pôvodnom
+// súradnicovom systéme avatara sa oba kusy čiastočne prekrývajú — dres je prehodený cez pás).
+const TRENIRKY_POSUN_Y_CM = -12;
 
 // 3D náhľad dresu — vlastní celú Three.js scénu (kamera/svetlá/geometria/OrbitControls)
 // a offscreen 2D canvas s textúrou. Portované z init3D/setupLighting/createJerseyModel/
 // setViewAngle/captureSnapshotAndDownload v 3d_konfigurator_dresov.html, prepojené na React
 // cez konfigState prop namiesto globálneho mutovateľného stavu.
-const ThreeViewport = forwardRef(function ThreeViewport({ configState, onDragLogo }, ref) {
+const ThreeViewport = forwardRef(function ThreeViewport({ configState, onDragLogo, zostava = 'dres' }, ref) {
   const containerRef = useRef(null);
   const textureCanvasRef = useRef(null);
   const sceneRef = useRef(null);
@@ -25,6 +30,16 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState, onDragLog
   const jerseyMeshesRef = useRef([]);
   const dragRegionsRef = useRef([]);
   const draggingRef = useRef(null);
+  // 3D trenírky — vlastný koreň, vlastné plátno/textúra, Path2D zón z UV; zostava = 'dres' | 'trenky' | 'komplet'.
+  const jerseyRootRef = useRef(null);
+  const shortsRootRef = useRef(null);
+  const jerseyBoxRef = useRef(null);
+  const shortsBoxRef = useRef(null);
+  const shortsCanvasRef = useRef(null);
+  const shortsTextureRef = useRef(null);
+  const shortsPathsRef = useRef(null);
+  const zostavaRef = useRef(zostava);
+  zostavaRef.current = zostava;
   const configStateRef = useRef(configState);
   configStateRef.current = configState;
   const onDragLogoRef = useRef(onDragLogo);
@@ -43,6 +58,41 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState, onDragLog
   };
 
   useImperativeHandle(ref, () => ({ captureSnapshot }));
+
+  // Rozloženie modelov podľa zostavy — dres sám, trenírky samé, alebo komplet (trenírky pod dresom).
+  // Spoločný bounding box (v cm) sa vycentruje a zmenší tak, aby sa zmestil do kamery.
+  const nastavRozlozenie = () => {
+    const jr = jerseyRootRef.current, sr = shortsRootRef.current;
+    const jb = jerseyBoxRef.current, sb = shortsBoxRef.current;
+    const z = zostavaRef.current;
+    if (jr) jr.visible = z !== 'trenky';
+    if (sr) sr.visible = z !== 'dres';
+    const zobrazDres = !!(jr && jb && z !== 'trenky');
+    const zobrazTrenky = !!(sr && sb && z !== 'dres');
+    const boxy = [];
+    if (zobrazDres) boxy.push(jb.clone());
+    if (zobrazTrenky) boxy.push(sb.clone().translate(new THREE.Vector3(0, TRENIRKY_POSUN_Y_CM, 0)));
+    if (boxy.length === 0) return;
+    const spolu = boxy.reduce((a, b) => a.union(b));
+    const size = spolu.getSize(new THREE.Vector3());
+    const center = spolu.getCenter(new THREE.Vector3());
+    const s = (z === 'komplet' ? 2.45 : 2.1) / Math.max(size.x, size.y, size.z);
+    const yOff = z === 'komplet' ? 0.05 : -0.15;
+    const umiestni = (root, posunYcm) => {
+      root.scale.setScalar(s);
+      root.position.set(-center.x * s, -center.y * s + yOff + posunYcm * s, -center.z * s);
+    };
+    if (zobrazDres) umiestni(jr, 0);
+    if (zobrazTrenky) umiestni(sr, TRENIRKY_POSUN_Y_CM);
+  };
+
+  const prekresliTrenirky = () => {
+    const canvas = shortsCanvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx || !shortsPathsRef.current || !shortsTextureRef.current) return;
+    vykresliTrenirky(ctx, canvas, shortsPathsRef.current, configStateRef.current);
+    shortsTextureRef.current.needsUpdate = true;
+  };
 
   // Inicializácia scény — raz pri mounte
   useEffect(() => {
@@ -85,8 +135,26 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState, onDragLog
     floor.receiveShadow = true;
     scene.add(floor);
 
-    const canvasTexture = vytvorDresGeometriu(scene, textureCanvasRef.current, jerseyMeshesRef);
+    const canvasTexture = vytvorDresGeometriu(scene, textureCanvasRef.current, jerseyMeshesRef, (root, box) => {
+      jerseyRootRef.current = root;
+      jerseyBoxRef.current = box;
+      nastavRozlozenie();
+    });
     canvasTextureRef.current = canvasTexture;
+
+    // Trenírky — načítajú sa vždy (1 MB), zobrazia sa podľa zostavy. Textúra sa vykreslí z UV zón.
+    const shortsCanvas = document.createElement('canvas');
+    shortsCanvas.width = 2048;
+    shortsCanvas.height = 2048;
+    shortsCanvasRef.current = shortsCanvas;
+    vytvorTrenirky(scene, shortsCanvas, (root, box, cesty, textura) => {
+      shortsRootRef.current = root;
+      shortsBoxRef.current = box;
+      shortsPathsRef.current = cesty;
+      shortsTextureRef.current = textura;
+      prekresliTrenirky();
+      nastavRozlozenie();
+    });
 
     let animId;
     const animate = () => {
@@ -144,6 +212,7 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState, onDragLog
     };
     const onPointerDown = (e) => {
       if (e.button !== undefined && e.button !== 0) return;
+      if (zostavaRef.current === 'trenky') return; // dres je skrytý — nie je čo ťahať
       const bod = bodNaTexture(e.clientX, e.clientY);
       if (!bod) return;
       const region = najdiRegion(bod.px, bod.py);
@@ -220,6 +289,10 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState, onDragLog
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => { nastavRozlozenie(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [zostava]);
+
+  useEffect(() => { prekresliTrenirky(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [configState.farby, configState.trenirky]);
 
   useEffect(() => {
     if (sceneRef.current && rendererRef.current) aplikujOsvetlenie(sceneRef.current, lightsRef, rendererRef.current, svetlo);
@@ -359,7 +432,7 @@ function aplikujOsvetlenie(scene, lightsRef, renderer, type) {
 // necháva tak, ako je, a naša plátnová textúra sa nakreslí do rovnakého rozloženia, aké malo
 // pôvodné (referenčné) textúrové pozadie modelu (predok/zadok v ľavej/pravej polovici, rukávy
 // dole, lemy v úzkom pruhu úplne dole) — pozri dresRenderer.js.
-function vytvorDresGeometriu(scene, textureCanvas, jerseyMeshesRef) {
+function vytvorDresGeometriu(scene, textureCanvas, jerseyMeshesRef, onLoaded) {
   const canvasTexture = new THREE.CanvasTexture(textureCanvas);
   canvasTexture.anisotropy = 16;
   canvasTexture.generateMipmaps = true;
@@ -427,21 +500,71 @@ function vytvorDresGeometriu(scene, textureCanvas, jerseyMeshesRef) {
         child.parent.add(vnutro);
       });
 
-      // Model prichádza vo vlastnej mierke/polohe — vycentrovanie a normalizácia na výšku ~2
-      // jednotky (rovnaký rád veľkosti, aký očakáva kamera/OrbitControls nastavené nižšie).
+      // Model prichádza vo vlastnej mierke/polohe (cm) — vycentrovanie a normalizácia na výšku ~2
+      // jednotky robí nastavRozlozenie() v komponente (podľa zostavy dres / trenírky / komplet).
       const box = new THREE.Box3().setFromObject(root);
-      const size = box.getSize(new THREE.Vector3());
-      const center = box.getCenter(new THREE.Vector3());
-      const scale = 2.1 / Math.max(size.x, size.y, size.z);
-      root.scale.setScalar(scale);
-      root.position.set(-center.x * scale, -center.y * scale - 0.15, -center.z * scale);
       scene.add(root);
+      onLoaded?.(root, box);
     },
     undefined,
     (err) => console.error('Nepodarilo sa načítať 3D model dresu:', err),
   );
 
   return canvasTexture;
+}
+
+// Trenírky: skutočný CLO3D strih (public/models/shorts-base.glb, 1 MB) — už zbavený prešívania a vnútorných vrstiev (pozri
+// tools/optimize-shorts-glb.mjs). Každý strihový kus sa zaradí do farebnej zóny (trenirkyRenderer.zonaKusu) a textúra sa
+// maľuje z UV trojuholníkov zón. Textúra aj normálová mapa majú flipY=false ako pri dresi (konvencia glTF UV).
+function vytvorTrenirky(scene, textureCanvas, onLoaded) {
+  const textura = new THREE.CanvasTexture(textureCanvas);
+  textura.anisotropy = 16;
+  textura.wrapS = THREE.RepeatWrapping;
+  textura.wrapT = THREE.RepeatWrapping;
+  textura.flipY = false;
+  textura.colorSpace = THREE.SRGBColorSpace;
+
+  const normalTexture = new THREE.TextureLoader().load('/models/shorts-normal.png');
+  normalTexture.wrapS = THREE.RepeatWrapping;
+  normalTexture.wrapT = THREE.RepeatWrapping;
+  normalTexture.flipY = false;
+
+  const material = new THREE.MeshStandardMaterial({
+    map: textura,
+    normalMap: normalTexture,
+    normalScale: new THREE.Vector2(0.6, 0.6),
+    roughness: 0.65,
+    metalness: 0.05,
+    side: THREE.FrontSide,
+  });
+  const interiorMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, metalness: 0, side: THREE.BackSide });
+
+  new GLTFLoader().load(
+    '/models/shorts-base.glb',
+    (gltf) => {
+      const root = gltf.scene;
+      root.updateMatrixWorld(true);
+      const meshe = [];
+      root.traverse((child) => { if (child.isMesh) meshe.push(child); });
+      const zaradene = meshe.map((mesh) => ({ mesh, zona: zonaKusu(new THREE.Box3().setFromObject(mesh)) }));
+      zaradene.forEach(({ mesh }) => {
+        mesh.material = material;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        const vnutro = new THREE.Mesh(mesh.geometry, interiorMaterial);
+        vnutro.position.copy(mesh.position);
+        vnutro.rotation.copy(mesh.rotation);
+        vnutro.scale.copy(mesh.scale);
+        mesh.parent.add(vnutro);
+      });
+      const cesty = postavCestyZon(zaradene, textureCanvas.width, textureCanvas.height);
+      const box = new THREE.Box3().setFromObject(root);
+      scene.add(root);
+      onLoaded?.(root, box, cesty, textura);
+    },
+    undefined,
+    (err) => console.error('Nepodarilo sa načítať 3D model trenírok:', err),
+  );
 }
 
 // CLO3D exportuje látku ako "škrupinu" s hrúbkou — každý strihový kus (predok, zadok, rukáv...)

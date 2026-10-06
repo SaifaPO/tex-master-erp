@@ -60,7 +60,10 @@ export const VELKOSTI_FALLBACK = ['XS', 'S', 'M', 'L', 'XL', '2XL'];
 
 export const GOOGLE_FONTS_HREF = 'https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=Inter:wght@400;500;600;700;800&family=Oswald:wght@500;700&family=Teko:wght@600;700&display=swap';
 
+import { DEFAULT_TRENIRKY } from './trenirkyRenderer';
+
 export const DEFAULT_CONFIG_STATE = {
+  trenirky: DEFAULT_TRENIRKY,
   vzor: 'stripes',
   farby: {
     zakladna: '#1e3a8a',

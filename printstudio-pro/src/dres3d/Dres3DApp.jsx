@@ -37,6 +37,9 @@ export default function Dres3DApp({ supabase, produktId }) {
   const [cenaDoprava, setCenaDoprava] = useState(0);
   const [osobnyOdber, setOsobnyOdber] = useState(false);
   const b2b = useB2bKod(supabase);
+  // 3D trenírky: zatiaľ skryté pred zákazníkmi, zapnú sa len odkazom s ?trenky=1 (kým nie je hotová cena a objednávka).
+  const trenkyPovolene = useMemo(() => new URLSearchParams(window.location.search).get('trenky') === '1', []);
+  const [zostava, setZostava] = useState('komplet'); // 'dres' | 'trenky' | 'komplet'
 
   const viewportRef = useRef(null);
 
@@ -136,6 +139,8 @@ export default function Dres3DApp({ supabase, produktId }) {
     setConfigState(prev => ({ ...prev, farby: { zakladna: pal.base, vzor: pal.pattern, akcent: pal.accent, rukava: pal.sleeves, golier: pal.collar } }));
   };
 
+  const handleZmenTrenirky = (patch) => setConfigState(prev => ({ ...prev, trenirky: { ...prev.trenirky, ...patch } }));
+
   const handleZmenLoga = (patch) => setConfigState(prev => ({ ...prev, loga: { ...prev.loga, ...patch } }));
 
   // Ťahanie loga/erbu priamo na 3D modeli (pozri ThreeViewport.jsx) — dragId identifikuje,
@@ -187,6 +192,13 @@ export default function Dres3DApp({ supabase, produktId }) {
       <AskQuestion zdroj="Dres 3D konfigurátor" />
       <div className="w-full flex items-center justify-between gap-2 p-2.5 bg-slate-900/90 border-b border-slate-800 shrink-0 z-20">
         <span className="text-xs font-bold text-slate-300 truncate">{katalog.produkt.nazov}</span>
+        {trenkyPovolene && (
+          <div className="flex gap-1 bg-slate-950/70 p-1 rounded-xl border border-slate-800 shrink-0">
+            {[{ id: 'dres', label: 'Dres' }, { id: 'komplet', label: 'Komplet' }, { id: 'trenky', label: 'Trenírky' }].map(o => (
+              <button key={o.id} onClick={() => setZostava(o.id)} className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition ${zostava === o.id ? 'bg-indigo-500 text-slate-950' : 'text-slate-400 hover:text-white'}`}>{o.label}</button>
+            ))}
+          </div>
+        )}
         <div className="flex items-center gap-1.5 ml-auto">
           <button onClick={resetKonfiguraciu} title="Resetovať konfiguráciu" className="p-2 rounded-lg border border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white transition bg-slate-800/60">
             <RotateCcw className="w-4 h-4" />
@@ -207,7 +219,7 @@ export default function Dres3DApp({ supabase, produktId }) {
 
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
         <div className="p-2 lg:p-4 flex-1 flex min-h-0">
-          <ThreeViewport ref={viewportRef} configState={configState} onDragLogo={handleDragLogo} />
+          <ThreeViewport ref={viewportRef} configState={configState} onDragLogo={handleDragLogo} zostava={trenkyPovolene ? zostava : 'dres'} />
         </div>
 
         <div className="w-full lg:w-[480px] xl:w-[520px] bg-slate-900 border-t lg:border-t-0 lg:border-l border-slate-800 flex flex-col h-[58vh] sm:h-[50vh] lg:h-auto min-h-0">
@@ -240,7 +252,7 @@ export default function Dres3DApp({ supabase, produktId }) {
               />
             )}
             {aktivnyTab === 'farby' && (
-              <FarbyZonyTab configState={configState} onZmenFarbu={handleZmenFarbu} aktivnaZona={aktivnaZona} onZmenAktivnuZonu={setAktivnaZona} />
+              <FarbyZonyTab configState={configState} onZmenFarbu={handleZmenFarbu} aktivnaZona={aktivnaZona} onZmenAktivnuZonu={setAktivnaZona} zobrazTrenirky={trenkyPovolene && zostava !== 'dres'} onZmenTrenirky={handleZmenTrenirky} />
             )}
             {aktivnyTab === 'text' && (
               <PotlacTab configState={configState} fonty={katalog.fonty} onZmenText={handleZmenText} onZmenCislo={handleZmenCislo} />

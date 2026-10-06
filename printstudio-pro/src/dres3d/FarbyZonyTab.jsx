@@ -1,5 +1,6 @@
 import React from 'react';
 import { RYCHLE_FARBY } from './dresPresets';
+import { ZONY_TRENIROK, farbyTrenirok } from './trenirkyRenderer';
 
 const ZONY = [
   { key: 'zakladna', cislo: 1, nazov: 'Hlavné telo (Základ)', popis: 'Dominantná farba' },
@@ -9,7 +10,10 @@ const ZONY = [
   { key: 'golier', cislo: 5, nazov: 'Golier & Lemy', popis: 'Lemovanie krku' },
 ];
 
-export default function FarbyZonyTab({ configState, onZmenFarbu, aktivnaZona, onZmenAktivnuZonu }) {
+export default function FarbyZonyTab({ configState, onZmenFarbu, aktivnaZona, onZmenAktivnuZonu, zobrazTrenirky = false, onZmenTrenirky }) {
+  const trenirky = configState.trenirky || {};
+  const prepojene = trenirky.prepojit !== false;
+  const farbyT = farbyTrenirok(configState);
   return (
     <div className="space-y-5">
       <div>
@@ -57,6 +61,37 @@ export default function FarbyZonyTab({ configState, onZmenFarbu, aktivnaZona, on
           ))}
         </div>
       </div>
+
+      {zobrazTrenirky && (
+        <div className="pt-4 border-t border-slate-800 space-y-3">
+          <div>
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-1">Farebné zóny trenírok</h3>
+            <p className="text-xs text-slate-400">Trenírky môžu mať farby dresu, alebo vlastné.</p>
+          </div>
+          <label className="flex items-center gap-2 bg-slate-950 p-3 rounded-xl border border-slate-800/80 cursor-pointer">
+            <input type="checkbox" checked={prepojene} onChange={(e) => onZmenTrenirky?.({ prepojit: e.target.checked, ...(e.target.checked ? {} : { farby: { ...farbyT } }) })} className="rounded border-slate-700 bg-slate-950" />
+            <span className="text-xs font-bold text-white">Farby trenírok podľa dresu</span>
+          </label>
+          {ZONY_TRENIROK.map(z => (
+            <div key={z.key} className="bg-slate-950 p-3 rounded-xl border border-slate-800/80 flex items-center justify-between">
+              <div>
+                <span className="text-xs font-bold text-white block">{z.cislo}. {z.nazov}</span>
+                <span className="text-[10px] sm:text-[11px] text-slate-400">{prepojene ? 'preberá farbu dresu' : z.popis}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={farbyT[z.key]}
+                  disabled={prepojene}
+                  onChange={(e) => onZmenTrenirky?.({ farby: { ...farbyT, [z.key]: e.target.value } })}
+                  className={`w-9 h-9 rounded-lg bg-transparent border-0 p-0 ${prepojene ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                />
+                <span className="text-xs font-mono font-bold text-slate-300">{farbyT[z.key].toUpperCase()}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
