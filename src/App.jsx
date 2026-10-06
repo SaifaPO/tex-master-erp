@@ -3905,6 +3905,18 @@ export default function App() {
     return Math.round((parseFloat(p.minutySitia) || 0) * sadzbaRvMin * 100) / 100;
   };
 
+  // Material (latka alebo hotovy kus zo Skladu) na 1 ks produktu = spotreba (m alebo ks, bulk sadzba 5+ ks, inak 1-4 ks)
+  // x nakupna cena zo Skladu (€/m alebo €/ks) — pre vsetky vrstvy. Zahrna sa do vyrobnej ceny.
+  const vypocitajCenuMaterialu = (p) => {
+    return ['layer1', 'layer2', 'layer3'].reduce((sum, key) => {
+      const layer = p?.[key];
+      if (!layer?.materialId) return sum;
+      const mat = materials.find(m => m.id === layer.materialId);
+      const spotreba = parseFloat(layer.consumption?.ge5 ?? layer.consumption?.lt5) || 0;
+      return sum + spotreba * (parseFloat(mat?.pricePerM) || 0);
+    }, 0);
+  };
+
   // Ak su minuty sitia vyplnene, vyrobna cena sa DOPOCITA (minuty x sadzba sitia z Cenotvorby + rezia
   // + cena potlace + cena strihania) namiesto rucneho zadavania. Ak minuty sitia nie su vyplnene
   // (null/prazdne), sprava sa presne ako doteraz — vyrobna cena ostava cisto rucne pole (spatna
@@ -3916,7 +3928,7 @@ export default function App() {
     const cenaPotlacEfektivna = vypocitajCenuPotlaceZRozpisu(p) ?? (parseFloat(p.cenaPotlaceKs) || 0);
     const cenaStrih = vypocitajCenuStrihania(p);
     const cenaLaser = vypocitajCenuLasera(p);
-    return Math.round((ms * cenaMinutySitia + rezia + cenaPotlacEfektivna + cenaStrih + cenaLaser) * 100) / 100;
+    return Math.round((vypocitajCenuMaterialu(p) + ms * cenaMinutySitia + rezia + cenaPotlacEfektivna + cenaStrih + cenaLaser) * 100) / 100;
   };
 
   const handleSaveModel = async (e) => {
@@ -7923,10 +7935,11 @@ export default function App() {
                           }
                           return <input type="number" step="0.01" placeholder="nezadané" value={editingProduct ? (editingProduct.productionCost ?? '') : newModelProductionCost} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, productionCost: e.target.value === '' ? null : parseFloat(e.target.value) || 0 }) : setNewModelProductionCost(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" />;
                         })()}
-                        <p className="text-[10px] text-slate-500 mt-0.5">{vypocitajVyrobnuCenuZRozpisu(aktualnyFormularProdukt) !== null ? 'Dopočítané automaticky z minút šitia + réžie + potlače + strihania + lasera (vyplň minúty šitia vyššie, ak chceš zadávať ručne).' : 'Rovnaké pole ako v Cenotvorbe (PrintStudio Pro) — materiál + šitie + režia + potlač na 1ks. Vyplň "Minúty šitia" vyššie, ak chceš, aby sa počítalo automaticky.'}</p>
+                        <p className="text-[10px] text-slate-500 mt-0.5">{vypocitajVyrobnuCenuZRozpisu(aktualnyFormularProdukt) !== null ? 'Dopočítané automaticky z materiálu (Sklad) + minút šitia + réžie + potlače + strihania + lasera (vymaž minúty šitia, ak chceš zadávať ručne).' : 'Rovnaké pole ako v Cenotvorbe (PrintStudio Pro) — materiál + šitie + režia + potlač na 1ks. Vyplň "Minúty šitia" vyššie, ak chceš, aby sa počítalo automaticky.'}</p>
                         {vypocitajVyrobnuCenuZRozpisu(aktualnyFormularProdukt) !== null && (() => {
                           const p = aktualnyFormularProdukt;
                           const zlozky = [
+                            { label: 'Materiál (látka / hotový kus zo Skladu)', v: vypocitajCenuMaterialu(p) },
                             { label: 'Šitie', v: (parseFloat(p.minutySitia) || 0) * cenaMinutySitia },
                             { label: 'Réžia', v: vypocitajCenuReziePolozky(p) ?? (parseFloat(p.reziaKs) || 0) },
                             { label: 'Potlač', v: vypocitajCenuPotlaceZRozpisu(p) ?? (parseFloat(p.cenaPotlaceKs) || 0) },
