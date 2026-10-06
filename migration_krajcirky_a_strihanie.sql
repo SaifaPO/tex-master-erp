@@ -44,5 +44,7 @@ insert into vyrobna_kapacita_nastavenia (id) values (1) on conflict (id) do noth
 alter table krajcirky enable row level security;
 alter table vyrobna_kapacita_nastavenia enable row level security;
 
+drop policy if exists "admin plny pristup krajcirky" on krajcirky;
 create policy "admin plny pristup krajcirky" on krajcirky for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+drop policy if exists "admin plny pristup vyrobna kapacita nastavenia" on vyrobna_kapacita_nastavenia;
 create policy "admin plny pristup vyrobna kapacita nastavenia" on vyrobna_kapacita_nastavenia for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');

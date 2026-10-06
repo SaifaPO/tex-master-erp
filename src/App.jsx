@@ -1658,7 +1658,7 @@ export default function App() {
           supabase.from('help_requests').select('*').order('created_at', { ascending: false }).limit(200),
           supabase.from('intercompany_rates').select('*'),
           supabase.from('intercompany_closed_periods').select('*'),
-          supabase.from('pricing_config').select('cena_minuty_sitia, cena_strihania_100cm2, sadzba_rv_min, coef_a, coef_b, margin_floor, coef_p, cielova_hodnota_zakazky').eq('id', 1).maybeSingle(),
+          supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
           supabase.from('krajcirky').select('*').order('poradie').order('id'),
           supabase.from('vyrobna_kapacita_nastavenia').select('*').eq('id', 1).maybeSingle(),
           supabase.from('laser_scan_checks').select('*').order('captured_at', { ascending: false }).limit(200)
@@ -7631,6 +7631,13 @@ export default function App() {
                       <div>
                         <label className="block text-slate-400 font-semibold mb-1">Minúty šitia (min/ks)</label>
                         <input type="number" step="0.5" placeholder="nezadané" value={editingProduct ? (editingProduct.minutySitia ?? '') : newModelMinutySitia} onChange={(e) => { const v = e.target.value === '' ? null : parseFloat(e.target.value) || 0; editingProduct ? setEditingProduct({ ...editingProduct, minutySitia: v }) : setNewModelMinutySitia(e.target.value); }} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" />
+                        {(() => {
+                          const msRaw = editingProduct ? editingProduct.minutySitia : newModelMinutySitia;
+                          const ms = msRaw === null || msRaw === undefined || msRaw === '' ? null : (parseFloat(msRaw) || 0);
+                          return ms !== null && (
+                            <p className={`text-[11px] font-mono mt-1 ${cenaMinutySitia > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>= {ms} min × {cenaMinutySitia.toFixed(2)} €/min = {(ms * cenaMinutySitia).toFixed(2)} €/ks{cenaMinutySitia > 0 ? '' : ' — sadzba šitia je 0! Nastav ju v Cenotvorbe (PrintStudio Pro)'}</p>
+                          );
+                        })()}
                         <p className="text-[10px] text-slate-500 mt-0.5">Ak vyplníš, Výrobná cena sa dopočíta automaticky (sadzba šitia sa nastavuje v Cenotvorbe, aktuálne {cenaMinutySitia.toFixed(2)} €/min).</p>
                       </div>
                       <div>
@@ -7756,11 +7763,20 @@ export default function App() {
 
                     {/* ROZPIS SUBLIMACNEJ POTLACE — papier/atrament/protekcny papier zvlast + cas tlace */}
                     {(editingProduct ? editingProduct.tlacSublimacia : newModelTlacSublimacia) && kostra && (() => {
-                      const rozpis = vcSublimaciaGarmentRozpis(kostra, vypocitajPlochaCm2ZLatky(aktualnyFormularProdukt.layer1));
+                      const plochaLatkyCm2 = vypocitajPlochaCm2ZLatky(aktualnyFormularProdukt.layer1);
+                      const rozpis = vcSublimaciaGarmentRozpis(kostra, plochaLatkyCm2);
                       if (!rozpis) return null;
+                      const latkaL1 = materials.find(m => m.id === aktualnyFormularProdukt.layer1?.materialId);
                       return (
                         <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
                           <label className="block text-slate-400 font-semibold mb-2">Rozpis sublimačnej potlače (Kostra cien)</label>
+                          <p className="text-[11px] text-slate-400 mb-2">Plocha potlače: <strong className="text-white">{plochaLatkyCm2.toFixed(0)} cm²</strong> (spotreba látky × šírka látky zo Skladu).</p>
+                          {plochaLatkyCm2 <= 0 && (
+                            <p className="text-[11px] text-amber-300 bg-amber-950/30 border border-amber-800/40 rounded p-2 mb-2">
+                              ⚠️ Plocha látky vychádza 0, preto papier, atrament, strihanie aj laser vychádzajú 0.{' '}
+                              {!aktualnyFormularProdukt.layer1?.materialId ? 'Nie je vybraná hlavná látka (vrstva 1).' : (!(parseFloat(latkaL1?.width) > 0) ? `Látka "${latkaL1?.name || '?'}" nemá vo Sklade vyplnenú šírku (cm) — doplň ju v Sklad → Materiály.` : 'Spotreba látky (m/ks) nie je vyplnená.')}
+                            </p>
+                          )}
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
                             <div className="bg-slate-900 rounded p-2">
                               <p className="text-slate-500">Papier</p>
@@ -7834,6 +7850,9 @@ export default function App() {
                           )}
                         </label>
                         <p className="text-[10px] text-slate-500 mt-1">Výkon krajčírskej dielne (ATAK). Z celkovej plochy použitých látok × sadzba {cenaStrihania100cm2.toFixed(2)} €/100cm² (Cenotvorba).</p>
+                        {(editingProduct ? editingProduct.strihaSaRezeVyseka : newModelStrihaSaRezeVyseka) && (cenaStrihania100cm2 <= 0 || vypocitajPlochaCm2ZLatky(aktualnyFormularProdukt.layer1) <= 0) && (
+                          <p className="text-[10px] text-amber-300 mt-1">⚠️ {cenaStrihania100cm2 <= 0 ? 'Sadzba strihania je 0 (nastav v Cenotvorbe, prípadne spusti migráciu migration_krajcirky_a_strihanie.sql).' : 'Plocha látky je 0 (chýba šírka látky vo Sklade alebo spotreba), preto vychádza 0 €.'}</p>
+                        )}
                       </div>
                       <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
                         <label className="block text-slate-200 font-semibold mb-1.5">Laser (rezanie/vysekávanie)</label>
@@ -7843,14 +7862,15 @@ export default function App() {
                           className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white"
                         >
                           <option value="">— nepoužíva sa —</option>
-                          {costMetrics.filter(m => m.category === 'zariadenie' && m.powerKw != null && m.vykonZaHodinu != null).map(m => (
-                            <option key={m.id} value={m.id}>{m.name}</option>
-                          ))}
+                          {costMetrics.filter(m => m.category === 'zariadenie').map(m => {
+                            const hotove = m.powerKw != null && m.vykonZaHodinu != null && m.vykonZaHodinu > 0;
+                            return <option key={m.id} value={m.id} disabled={!hotove}>{m.name}{hotove ? '' : ' — chýba výkon/hod (Financie → Réžia firiem)'}</option>;
+                          })}
                         </select>
                         {(editingProduct ? editingProduct.laserZariadenieId : newModelLaserZariadenieId) && (
                           <span className="text-emerald-400 font-mono text-[11px] block mt-1">{vypocitajCenuLasera(aktualnyFormularProdukt).toFixed(2)} €/ks</span>
                         )}
-                        <p className="text-[10px] text-slate-500 mt-1">Vlastný stroj (Financie → Réžia firiem → register zariadení). Sadzba €/cm² sa počíta z elektriny + výkonu daného stroja.</p>
+                        <p className="text-[10px] text-slate-500 mt-1">Vlastný stroj (Financie → Réžia firiem → register zariadení). Sadzba €/cm² sa počíta z elektriny + výkonu daného stroja. Stroj sa dá zvoliť, až keď má v registri vyplnený príkon (kW) aj <strong>výkon za hodinu</strong> (napr. 15000 cm²/hod).</p>
                       </div>
                     </div>
 
@@ -7865,6 +7885,24 @@ export default function App() {
                           return <input type="number" step="0.01" placeholder="nezadané" value={editingProduct ? (editingProduct.productionCost ?? '') : newModelProductionCost} onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, productionCost: e.target.value === '' ? null : parseFloat(e.target.value) || 0 }) : setNewModelProductionCost(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" />;
                         })()}
                         <p className="text-[10px] text-slate-500 mt-0.5">{vypocitajVyrobnuCenuZRozpisu(aktualnyFormularProdukt) !== null ? 'Dopočítané automaticky z minút šitia + réžie + potlače + strihania + lasera (vyplň minúty šitia vyššie, ak chceš zadávať ručne).' : 'Rovnaké pole ako v Cenotvorbe (PrintStudio Pro) — materiál + šitie + režia + potlač na 1ks. Vyplň "Minúty šitia" vyššie, ak chceš, aby sa počítalo automaticky.'}</p>
+                        {vypocitajVyrobnuCenuZRozpisu(aktualnyFormularProdukt) !== null && (() => {
+                          const p = aktualnyFormularProdukt;
+                          const zlozky = [
+                            { label: 'Šitie', v: (parseFloat(p.minutySitia) || 0) * cenaMinutySitia },
+                            { label: 'Réžia', v: vypocitajCenuReziePolozky(p) ?? (parseFloat(p.reziaKs) || 0) },
+                            { label: 'Potlač', v: vypocitajCenuPotlaceZRozpisu(p) ?? (parseFloat(p.cenaPotlaceKs) || 0) },
+                            { label: 'Strihanie / kompletáž', v: vypocitajCenuStrihania(p) },
+                            { label: 'Laser', v: vypocitajCenuLasera(p) },
+                          ];
+                          return (
+                            <div className="mt-2 bg-slate-900 border border-slate-800 rounded p-2 space-y-0.5 text-[11px]">
+                              {zlozky.map(z => (
+                                <div key={z.label} className="flex justify-between text-slate-400"><span>{z.label}</span><span className={`font-mono ${z.v > 0 ? 'text-slate-200' : 'text-slate-600'}`}>{z.v.toFixed(2)} €</span></div>
+                              ))}
+                              <div className="flex justify-between border-t border-slate-800 pt-0.5 font-semibold text-emerald-400"><span>Spolu</span><span className="font-mono">{zlozky.reduce((a, z) => a + z.v, 0).toFixed(2)} €</span></div>
+                            </div>
+                          );
+                        })()}
                       </div>
                       <div>
                         <label className="block text-slate-400 font-semibold mb-1">Redukovaný výkon (€/ks)</label>
