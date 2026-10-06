@@ -8,7 +8,7 @@ import { vykresliTrenirky, postavCestyZon, zonaKusu } from './trenirkyRenderer';
 
 // Trenírky sa v komplete posunú o toľko cm nižšie, aby pás nohavíc sedel pod spodným lemom dresu (v pôvodnom
 // súradnicovom systéme avatara sa oba kusy čiastočne prekrývajú — dres je prehodený cez pás).
-const TRENIRKY_POSUN_Y_CM = -12;
+const TRENIRKY_POSUN_Y_CM = -25;
 
 // 3D náhľad dresu — vlastní celú Three.js scénu (kamera/svetlá/geometria/OrbitControls)
 // a offscreen 2D canvas s textúrou. Portované z init3D/setupLighting/createJerseyModel/
@@ -444,6 +444,9 @@ function vytvorDresGeometriu(scene, textureCanvas, jerseyMeshesRef, onLoaded) {
   // (referenčná) textúra modelu, čo pri zápornych/wrapovaných UV hodnotách tohto strihu
   // spôsobovalo vzorkovanie z nesprávnej/zrkadlenej časti plátna (skomolený text).
   canvasTexture.flipY = false;
+  // Farebný priestor: plátno s farbami je sRGB. Bez tohto nastavenia three.js berie textúru ako lineárnu a farby dresu
+  // vyzerajú vyblednuto/tmavo (trenírky mali sRGB nastavené hneď, dres nie — preto bol dres oproti nim fádny).
+  canvasTexture.colorSpace = THREE.SRGBColorSpace;
 
   // Skutočná normálová mapa látky z kúpeného modelu (švy, rebrovanie manžiet/lemu) — dáva
   // jemný reliéf tkaniny namiesto úplne plochého povrchu. Nepoužíva sa aj priložená roughness
