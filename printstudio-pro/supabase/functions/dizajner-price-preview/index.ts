@@ -70,23 +70,27 @@ function vcSublimaciaGarment(textilSub: Riadok | null, sublimaciaGarment: Riadok
 const DTF_ROLL_WIDTH_CM = 56;
 function vcDtfGarment(n: Riadok | null, costMetrics: Riadok[], plochaCm2: number) {
   if (!n) return 0;
-  const plochaM2 = plochaCm2 / 10000;
-  const filmM2 = (parseFloat(n.cena_folie_bm) || 0) / (DTF_ROLL_WIDTH_CM / 100);
-  const material = plochaM2 * (
+  // Rovnaky vzorec ako src/printstudio/vyrobneNaklady.js (vcDtfGarmentRozpis): TRANSFER (ako metraz — folia, lepidlo,
+  // CMYK, biela, praca pri tlaci, elektrina tlaciarne + tunela, plus odpad na rolke) + NAZEHLENIE (manipulacia, lis).
+  const sirkaM = DTF_ROLL_WIDTH_CM / 100;
+  const filmM2 = (parseFloat(n.cena_folie_bm) || 0) / sirkaM;
+  const materialM2 =
     filmM2 +
     (parseFloat(n.cena_cmyk_kg) || 0) * (parseFloat(n.spotreba_cmyk_m2) || 0) +
     (parseFloat(n.cena_biela_kg) || 0) * (parseFloat(n.spotreba_biela_m2) || 0) +
-    (parseFloat(n.cena_lepidlo_kg) || 0) * (parseFloat(n.spotreba_lepidlo_m2) || 0)
-  );
-  const praca = ((parseFloat(n.cas_nazehlovania_min) || 0) / 60) * (parseFloat(n.cena_prace_hod) || 0);
+    (parseFloat(n.cena_lepidlo_kg) || 0) * (parseFloat(n.spotreba_lepidlo_m2) || 0);
+  const rychlostTlace = Math.max(0.01, parseFloat(n.rychlost_tlace_m_hod) || 1);
+  const pracaTlaceM2 = (parseFloat(n.cena_prace_hod) || 0) / (rychlostTlace * sirkaM);
   const dlzkaBmDtf = plochaCm2 / (DTF_ROLL_WIDTH_CM * 100);
   const tlaciarenEurHod = elektrinaZariadeniaEurZaHod(costMetrics, n.tlaciaren_zariadenie_id);
-  const elektrinaTlaciaren = tlaciarenEurHod * (dlzkaBmDtf / Math.max(0.01, parseFloat(n.rychlost_tlace_m_hod) || 1));
   const tunelEurHod = elektrinaZariadeniaEurZaHod(costMetrics, n.fixacny_tunel_zariadenie_id);
-  const elektrinaTunel = tunelEurHod * (dlzkaBmDtf / Math.max(0.01, parseFloat(n.rychlost_tunela_m_hod) || 1));
+  const elektrinaBm = tlaciarenEurHod / rychlostTlace + tunelEurHod / Math.max(0.01, parseFloat(n.rychlost_tunela_m_hod) || 1);
+  const odpadPercent = n.odpad_percent == null || n.odpad_percent === '' ? 13 : Math.max(0, parseFloat(n.odpad_percent) || 0);
+  const transfer = dlzkaBmDtf * ((materialM2 + pracaTlaceM2) * sirkaM + elektrinaBm) * (1 + odpadPercent / 100);
+  const praca = ((parseFloat(n.cas_nazehlovania_min) || 0) / 60) * (parseFloat(n.cena_prace_hod) || 0);
   const lisEurHod = elektrinaZariadeniaEurZaHod(costMetrics, n.transferovy_lis_zariadenie_id);
   const elektrinaLis = lisEurHod * ((parseFloat(n.cas_nazehlovania_min) || 0) / 60);
-  return material + (parseFloat(n.naklady_manipulacia) || 0) + praca + elektrinaTlaciaren + elektrinaTunel + elektrinaLis;
+  return transfer + (parseFloat(n.naklady_manipulacia) || 0) + praca + elektrinaLis;
 }
 
 // Zakaznik v Dizajneri kresli motiv na volne velkej ploche (nie z preddefinovaneho formatu ako
