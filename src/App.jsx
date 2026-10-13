@@ -6,6 +6,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { encode as encodeBySquare, CurrencyCode, PaymentOptions } from 'bysquare/pay';
 import { Html5Qrcode } from 'html5-qrcode';
 import CenovePonukyTab from './CenovePonukyTab';
+import PrijateFakturyTab from './PrijateFakturyTab';
 import PrintStudioAdmin from './printstudio/PrintStudioAdmin';
 import GlobalSearchPalette from './GlobalSearchPalette';
 import { nacitajKostru, vcSublimaciaGarment, vcSublimaciaGarmentRozpis, vcRezanyTransfer, vcSietotlacCelkom, vcSietotlacRozpad } from './printstudio/vyrobneNaklady';
@@ -614,7 +615,7 @@ function printWithFilename(suggestedName) {
 
 const mapMismatchFromDb = (r) => ({ id: r.id, employeeId: r.employee_id, employeeName: r.employee_name, stationId: r.station_id, date: r.assignment_date, createdAt: r.created_at });
 
-const mapBankTxFromDb = (r) => ({ id: r.id, date: r.tx_date, sender: r.sender || '', amount: r.amount || 0, variableSymbol: r.variable_symbol || '', matched: !!r.matched, invoiceId: r.invoice_id || null, orderId: r.order_id || null, importedAt: r.imported_at });
+const mapBankTxFromDb = (r) => ({ id: r.id, date: r.tx_date, sender: r.sender || '', amount: r.amount || 0, variableSymbol: r.variable_symbol || '', matched: !!r.matched, invoiceId: r.invoice_id || null, orderId: r.order_id || null, prijataFakturaId: r.prijata_faktura_id || null, importedAt: r.imported_at });
 const mapJournalFromDb = (r) => ({ id: r.id, date: r.entry_date, description: r.description, mdAccount: r.md_account, dalAccount: r.dal_account, amount: r.amount || 0, invoiceId: r.invoice_id || null, createdAt: r.created_at });
 
 const mapTaxDeadlineFromDb = (r) => ({ id: r.id, title: r.title, dueDate: r.due_date, note: r.note || '', createdBy: r.created_by || '' });
@@ -2989,7 +2990,7 @@ export default function App() {
           amount: parseFloat(String(amountRaw).replace(',', '.').replace(/[^\d.-]/g, '')) || 0,
           variable_symbol: String(vsRaw || '').trim(), matched: false, invoice_id: null
         };
-      }).filter(r => r.amount > 0);
+      }).filter(r => r.amount !== 0); // aj odchádzajúce platby (záporná suma) — párujú sa na prijaté faktúry
 
       if (toInsert.length === 0) { triggerNotification('error', 'Nepodarilo sa rozpoznať žiadne platné riadky (skontroluj, či výpis má stĺpce Dátum, Suma, Variabilný symbol).'); return; }
       const { error } = await supabase.from('bank_transactions').insert(toInsert);
@@ -3006,7 +3007,7 @@ export default function App() {
     setIsAutoMatching(true);
     let matchedCount = 0;
     let matchedToOrderCount = 0;
-    for (const tx of bankTransactions.filter(t => !t.matched)) {
+    for (const tx of bankTransactions.filter(t => !t.matched && t.amount > 0)) {
       const found = invoices.find(inv => inv.status !== 'paid' && inv.variableSymbol === tx.variableSymbol && Math.abs(inv.total - tx.amount) < 0.01);
       if (found) {
         await supabase.from('invoices').update({ status: 'paid', paid_at: new Date().toISOString() }).eq('id', found.id);
@@ -10505,6 +10506,7 @@ export default function App() {
                 <button onClick={() => setFinanceSubTab('overview')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'overview' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Prehľad</button>
                 <button onClick={() => setFinanceSubTab('queue')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'queue' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Fronta pre účtovníka {pendingReviewOrders.length > 0 && `(${pendingReviewOrders.length})`}</button>
                 <button onClick={() => setFinanceSubTab('invoices')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'invoices' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Faktúry</button>
+                <button onClick={() => setFinanceSubTab('received')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'received' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Prijaté faktúry</button>
                 <button onClick={() => setFinanceSubTab('cash')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'cash' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Pokladňa</button>
                 <button onClick={() => setFinanceSubTab('bank')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'bank' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Banka</button>
                 <button onClick={() => setFinanceSubTab('journal')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'journal' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Účtovný denník</button>
@@ -10817,6 +10819,10 @@ export default function App() {
                 </>
               )}
 
+              {financeSubTab === 'received' && (
+                <PrijateFakturyTab supabase={supabase} currentUser={currentUser} canEdit={hasPermission('view_finance')} triggerNotification={triggerNotification} bankTransactions={bankTransactions} />
+              )}
+
               {financeSubTab === 'bank' && (
                 <div className="space-y-4">
                   <div className="bg-slate-950 border border-slate-800 rounded-xl p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -10843,11 +10849,11 @@ export default function App() {
                           <tr key={tx.id} className="hover:bg-slate-800/40">
                             <td className="px-3 py-3">{tx.date}</td>
                             <td className="px-3 py-3 font-bold text-white">{tx.sender}</td>
-                            <td className="px-3 py-3 text-center font-mono">{tx.amount.toFixed(2)} €</td>
+                            <td className={`px-3 py-3 text-center font-mono ${tx.amount < 0 ? 'text-rose-300' : ''}`}>{tx.amount.toFixed(2)} €</td>
                             <td className="px-3 py-3 text-center font-mono text-slate-400">{tx.variableSymbol}</td>
-                            <td className="px-3 py-3 text-center">{tx.matched ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-950/40 text-emerald-300">Spárované</span> : <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-950/40 text-amber-300">Nespárované</span>}</td>
+                            <td className="px-3 py-3 text-center">{tx.amount < 0 && !tx.matched ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">Výdavok</span> : tx.amount < 0 && tx.matched ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-950/40 text-emerald-300">Spárované s prijatou faktúrou</span> : tx.matched ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-950/40 text-emerald-300">Spárované</span> : <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-950/40 text-amber-300">Nespárované</span>}</td>
                             <td className="px-3 py-3 text-center">
-                              {!tx.matched && (
+                              {!tx.matched && tx.amount > 0 && (
                                 manualMatchingTx?.id === tx.id ? (
                                   <select autoFocus onChange={(e) => handleManualMatchPayment(tx, e.target.value)} onBlur={() => setManualMatchingTx(null)} className="bg-slate-950 border border-indigo-600 rounded p-1 text-[10px] text-white">
                                     <option value="">-- Vyber faktúru --</option>
