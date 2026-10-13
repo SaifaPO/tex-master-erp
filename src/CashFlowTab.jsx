@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, Copy, Mail, AlertTriangle, TrendingDown, TrendingUp } from 'lucide-react';
+import UpomienkySekcia from './UpomienkySekcia';
 
 // CASH FLOW + UPOMIENKY: predpoved penazi na 2/4/8 tyzdnov z neuhradenych vydanych faktur (prijmy) a prijatych faktur (vydavky)
 // + pravidelne vydavky, ktore nie su na faktúrach (mzdy, odvody, najom). A zoznam faktur po splatnosti s hotovym textom upomienky.
@@ -181,6 +182,8 @@ export default function CashFlowTab({ supabase, invoices = [], customers = [], c
           </div>
         )}
       </section>
+
+      <UpomienkySekcia supabase={supabase} nazvyZakaznikovPoSplatnosti={poSplatnosti.map((i) => i.customerName).filter(Boolean)} triggerNotification={triggerNotification} />
     </div>
   );
 }
