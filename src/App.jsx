@@ -9,6 +9,8 @@ import CenovePonukyTab from './CenovePonukyTab';
 import PrijateFakturyTab from './PrijateFakturyTab';
 import MesacnyBalikTab from './MesacnyBalikTab';
 import MzdyPodkladyTab from './MzdyPodkladyTab';
+import CashFlowTab from './CashFlowTab';
+import MesacnyReportTab from './MesacnyReportTab';
 import PrintStudioAdmin from './printstudio/PrintStudioAdmin';
 import GlobalSearchPalette from './GlobalSearchPalette';
 import { nacitajKostru, vcSublimaciaGarment, vcSublimaciaGarmentRozpis, vcRezanyTransfer, vcSietotlacCelkom, vcSietotlacRozpad } from './printstudio/vyrobneNaklady';
@@ -2150,7 +2152,7 @@ export default function App() {
     const financeVisible = hasPermission('view_finance') && canSeeTab(role, 'invoices');
     push(entries, 'Financie', null, financeVisible, () => { setActiveTab('invoices'); setFinanceSubTab('overview'); });
     const financeSub = [
-      ['overview', 'Prehľad'], ['queue', 'Fronta pre účtovníka'], ['invoices', 'Faktúry'], ['received', 'Prijaté faktúry'], ['balik', 'Balík pre účtovníčku'], ['cash', 'Pokladňa'],
+      ['overview', 'Prehľad'], ['queue', 'Fronta pre účtovníka'], ['invoices', 'Faktúry'], ['received', 'Prijaté faktúry'], ['balik', 'Balík pre účtovníčku'], ['cashflow', 'Cash flow a upomienky'], ['report', 'Mesačný report'], ['cash', 'Pokladňa'],
       ['bank', 'Banka'], ['journal', 'Účtovný denník'], ['assets', 'Majetok'], ['customers', 'Zákazníci'],
       ['ai', 'AI Asistent'],
     ];
@@ -10514,6 +10516,8 @@ export default function App() {
                 {(currentUser.role === 'master' || currentUser.role === 'uctovnik') && (
                   <button onClick={() => setFinanceSubTab('mzdy')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'mzdy' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Podklady pre mzdy</button>
                 )}
+                <button onClick={() => setFinanceSubTab('cashflow')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'cashflow' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Cash flow a upomienky</button>
+                <button onClick={() => setFinanceSubTab('report')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'report' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Mesačný report</button>
                 <button onClick={() => setFinanceSubTab('cash')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'cash' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Pokladňa</button>
                 <button onClick={() => setFinanceSubTab('bank')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'bank' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Banka</button>
                 <button onClick={() => setFinanceSubTab('journal')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'journal' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Účtovný denník</button>
@@ -10836,6 +10840,14 @@ export default function App() {
 
               {financeSubTab === 'mzdy' && (currentUser.role === 'master' || currentUser.role === 'uctovnik') && (
                 <MzdyPodkladyTab supabase={supabase} employees={employees} currentUser={currentUser} triggerNotification={triggerNotification} />
+              )}
+
+              {financeSubTab === 'cashflow' && (
+                <CashFlowTab supabase={supabase} invoices={invoices} customers={customers} companySettings={companySettings} employees={employees} triggerNotification={triggerNotification} />
+              )}
+
+              {financeSubTab === 'report' && (
+                <MesacnyReportTab supabase={supabase} invoices={invoices} triggerNotification={triggerNotification} />
               )}
 
               {financeSubTab === 'bank' && (
