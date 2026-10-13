@@ -11,6 +11,7 @@ import MesacnyBalikTab from './MesacnyBalikTab';
 import MzdyPodkladyTab from './MzdyPodkladyTab';
 import CashFlowTab from './CashFlowTab';
 import MesacnyReportTab from './MesacnyReportTab';
+import OdovzdanieZakazky from './OdovzdanieZakazky';
 import PrintStudioAdmin from './printstudio/PrintStudioAdmin';
 import GlobalSearchPalette from './GlobalSearchPalette';
 import { nacitajKostru, vcSublimaciaGarment, vcSublimaciaGarmentRozpis, vcRezanyTransfer, vcSietotlacCelkom, vcSietotlacRozpad } from './printstudio/vyrobneNaklady';
@@ -12277,6 +12278,10 @@ export default function App() {
                 <button onClick={() => openOrderDetails(null)} className="bg-slate-800 hover:bg-slate-750 text-slate-400 px-3 py-2 rounded-lg text-xs">Zatvoriť</button>
               </div>
             </div>
+
+            {!isEditingOrder && (
+              <OdovzdanieZakazky key={selectedOrderDetails.id} supabase={supabase} order={selectedOrderDetails} currentUser={currentUser} firmaNazov={companySettings.companyName} pridajLog={(text) => handleAddOrderLogEntry(selectedOrderDetails, text, '')} triggerNotification={triggerNotification} />
+            )}
 
             {(() => {
               if (!selectedOrderDetails.lastModifiedAt) return null;
