@@ -7,6 +7,7 @@ import { encode as encodeBySquare, CurrencyCode, PaymentOptions } from 'bysquare
 import { Html5Qrcode } from 'html5-qrcode';
 import CenovePonukyTab from './CenovePonukyTab';
 import PrijateFakturyTab from './PrijateFakturyTab';
+import MesacnyBalikTab from './MesacnyBalikTab';
 import PrintStudioAdmin from './printstudio/PrintStudioAdmin';
 import GlobalSearchPalette from './GlobalSearchPalette';
 import { nacitajKostru, vcSublimaciaGarment, vcSublimaciaGarmentRozpis, vcRezanyTransfer, vcSietotlacCelkom, vcSietotlacRozpad } from './printstudio/vyrobneNaklady';
@@ -2148,7 +2149,7 @@ export default function App() {
     const financeVisible = hasPermission('view_finance') && canSeeTab(role, 'invoices');
     push(entries, 'Financie', null, financeVisible, () => { setActiveTab('invoices'); setFinanceSubTab('overview'); });
     const financeSub = [
-      ['overview', 'Prehľad'], ['queue', 'Fronta pre účtovníka'], ['invoices', 'Faktúry'], ['cash', 'Pokladňa'],
+      ['overview', 'Prehľad'], ['queue', 'Fronta pre účtovníka'], ['invoices', 'Faktúry'], ['received', 'Prijaté faktúry'], ['balik', 'Balík pre účtovníčku'], ['cash', 'Pokladňa'],
       ['bank', 'Banka'], ['journal', 'Účtovný denník'], ['assets', 'Majetok'], ['customers', 'Zákazníci'],
       ['ai', 'AI Asistent'],
     ];
@@ -10507,6 +10508,7 @@ export default function App() {
                 <button onClick={() => setFinanceSubTab('queue')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'queue' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Fronta pre účtovníka {pendingReviewOrders.length > 0 && `(${pendingReviewOrders.length})`}</button>
                 <button onClick={() => setFinanceSubTab('invoices')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'invoices' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Faktúry</button>
                 <button onClick={() => setFinanceSubTab('received')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'received' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Prijaté faktúry</button>
+                <button onClick={() => setFinanceSubTab('balik')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'balik' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Balík pre účtovníčku</button>
                 <button onClick={() => setFinanceSubTab('cash')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'cash' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Pokladňa</button>
                 <button onClick={() => setFinanceSubTab('bank')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'bank' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Banka</button>
                 <button onClick={() => setFinanceSubTab('journal')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'journal' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Účtovný denník</button>
@@ -10821,6 +10823,10 @@ export default function App() {
 
               {financeSubTab === 'received' && (
                 <PrijateFakturyTab supabase={supabase} currentUser={currentUser} canEdit={hasPermission('view_finance')} triggerNotification={triggerNotification} bankTransactions={bankTransactions} />
+              )}
+
+              {financeSubTab === 'balik' && (
+                <MesacnyBalikTab supabase={supabase} invoices={invoices} cashDocuments={cashDocuments} bankTransactions={bankTransactions} pendingReviewCount={pendingReviewOrders.length} triggerNotification={triggerNotification} />
               )}
 
               {financeSubTab === 'bank' && (
