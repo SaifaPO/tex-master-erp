@@ -1,16 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { RotateCcw, Share2, Users, ShoppingCart, Grid3x3, Palette, Type, Image as ImageIcon, Shirt } from 'lucide-react';
+import { RotateCcw, Share2, Users, ShoppingCart, Grid3x3, Palette, Type, Image as ImageIcon, Shirt, Layers } from 'lucide-react';
 import AskQuestion from '../AskQuestion';
 import { nacitajDresKatalog } from './dresData';
 import { DEFAULT_CONFIG_STATE, GOOGLE_FONTS_HREF } from './dresPresets';
 import { vypocitajCenuDresu, ucinneKusy } from './dres3dCenotvorba';
-import { farbyTrenirok } from './trenirkyRenderer';
+import { farbyTrenirok, popisLogaTrenirok } from './trenirkyRenderer';
 import ThreeViewport from './ThreeViewport';
 import VzoryTab from './VzoryTab';
 import FarbyZonyTab from './FarbyZonyTab';
 import PotlacTab from './PotlacTab';
 import LogaTab from './LogaTab';
 import GolierMaterialTab from './GolierMaterialTab';
+import TrenirkyTab from './TrenirkyTab';
 import RosterModal from './RosterModal';
 import SuhrnModal from './SuhrnModal';
 import { useB2bKod } from '../b2b';
@@ -23,6 +24,7 @@ const TABY = [
   { id: 'loga', label: 'Logá', icon: ImageIcon },
   { id: 'golier', label: 'Strih', icon: Shirt },
 ];
+const TAB_TRENIRKY = { id: 'trenirky', label: 'Trenírky', icon: Layers };
 
 export default function Dres3DApp({ supabase, produktId }) {
   const [katalog, setKatalog] = useState(null);
@@ -201,7 +203,7 @@ export default function Dres3DApp({ supabase, produktId }) {
         {trenkyPovolene && (
           <div className="flex gap-1 bg-slate-950/70 p-1 rounded-xl border border-slate-800 shrink-0">
             {[{ id: 'dres', label: 'Dres' }, { id: 'komplet', label: 'Komplet' }, { id: 'trenky', label: 'Trenírky' }].map(o => (
-              <button key={o.id} onClick={() => setZostava(o.id)} className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition ${zostava === o.id ? 'bg-indigo-500 text-slate-950' : 'text-slate-400 hover:text-white'}`}>{o.label}</button>
+              <button key={o.id} onClick={() => { setZostava(o.id); if (o.id === 'trenky') setAktivnyTab('trenirky'); }} className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition ${zostava === o.id ? 'bg-indigo-500 text-slate-950' : 'text-slate-400 hover:text-white'}`}>{o.label}</button>
             ))}
           </div>
         )}
@@ -230,7 +232,7 @@ export default function Dres3DApp({ supabase, produktId }) {
 
         <div className="w-full lg:w-[480px] xl:w-[520px] bg-slate-900 border-t lg:border-t-0 lg:border-l border-slate-800 flex flex-col h-[48vh] sm:h-[44vh] lg:h-auto min-h-0 shrink-0 lg:shrink">
           <div className="flex border-b border-slate-800 bg-slate-950/70 p-1.5 sm:p-2 gap-1 overflow-x-auto">
-            {TABY.map(t => {
+            {(zostavaEf !== 'dres' ? [TAB_TRENIRKY, ...TABY] : TABY).map(t => {
               const Icon = t.icon;
               const active = aktivnyTab === t.id;
               return (
@@ -256,6 +258,9 @@ export default function Dres3DApp({ supabase, produktId }) {
                 onVlastnyVzor={handleVlastnyVzor}
                 onPreset={handlePreset}
               />
+            )}
+            {aktivnyTab === 'trenirky' && zostavaEf !== 'dres' && (
+              <TrenirkyTab configState={configState} onZmenTrenirky={handleZmenTrenirky} />
             )}
             {aktivnyTab === 'farby' && (
               <FarbyZonyTab configState={configState} onZmenFarbu={handleZmenFarbu} aktivnaZona={aktivnaZona} onZmenAktivnuZonu={setAktivnaZona} zobrazTrenirky={zostavaEf !== 'dres'} onZmenTrenirky={handleZmenTrenirky} />
@@ -309,7 +314,7 @@ export default function Dres3DApp({ supabase, produktId }) {
           cena={cena}
           b2bKod={b2b.kod}
           zostava={zostavaEf}
-          trenirkyFarby={farbyTrenirok(configState)}
+          trenirkyFarby={{ ...farbyTrenirok(configState), ...popisLogaTrenirok(configState.trenirky) }}
           osobnyOdber={osobnyOdber}
           onOsobnyOdber={setOsobnyOdber}
           snapshotUrl={snapshotUrl}

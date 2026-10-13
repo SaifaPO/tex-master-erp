@@ -107,7 +107,7 @@ function renderMenoText(c, text, centerX, spodnyOkrajY, maxWidth, baseFontPx, te
 // Vykreslí obrázok so zachovaním pomeru strán (bez deformácie) tak, aby sa celý zmestil do
 // maxW×maxH okolo stredu (cx,cy). Vracia skutočne vykreslené rozmery — potrebné napr. pri
 // skladaní viacerých log nad sebou (aby sa vedelo, koľko miesta logo reálne zabralo).
-function drawImageFit(c, img, cx, cy, maxW, maxH) {
+export function drawImageFit(c, img, cx, cy, maxW, maxH) {
   if (!img || !img.naturalWidth) return { w: 0, h: 0 };
   const iw = img.naturalWidth, ih = img.naturalHeight;
   const scale = Math.min(maxW / iw, maxH / ih);
@@ -119,7 +119,7 @@ function drawImageFit(c, img, cx, cy, maxW, maxH) {
 // Rovnaké ako drawImageFit, ale obrázok (očakáva sa čierna kresba na priehľadnom pozadí,
 // napr. logo výrobcu) sa najprv prefarbí na zvolenú farbu — používa sa na logá výrobcu, ktoré
 // sa musia automaticky prepínať medzi bielou a čiernou podľa svetlosti podkladu.
-function drawTintedImageFit(c, img, cx, cy, maxW, maxH, farba) {
+export function drawTintedImageFit(c, img, cx, cy, maxW, maxH, farba) {
   if (!img || !img.naturalWidth) return { w: 0, h: 0 };
   const iw = img.naturalWidth, ih = img.naturalHeight;
   const scale = Math.min(maxW / iw, maxH / ih);
@@ -137,7 +137,7 @@ function drawTintedImageFit(c, img, cx, cy, maxW, maxH, farba) {
 }
 
 // Biela na tmavom podklade, čierna na svetlom — podľa vnímanej svetlosti (luminance) farby.
-function kontrastnaFarba(hex) {
+export function kontrastnaFarba(hex) {
   if (!hex) return '#ffffff';
   const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
   const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
@@ -147,7 +147,7 @@ function kontrastnaFarba(hex) {
 // Fixné logo výrobcu (logo_pred.png / logo_zad.png) — permanentné, zákazník ho nemôže vypnúť
 // ani nahradiť, len (pri prednom) presunúť. Dodané ako čierna kresba na priehľadnom pozadí,
 // preto sa vždy prefarbí na bielu/čiernu podľa podkladu (pozri drawTintedImageFit).
-const logoPredVyrobcu = new Image();
+export const logoPredVyrobcu = new Image();
 const logoZadVyrobcu = new Image();
 export const logaVyrobcuReady = Promise.all([
   new Promise((resolve) => { logoPredVyrobcu.onload = resolve; logoPredVyrobcu.onerror = resolve; }),
@@ -524,7 +524,7 @@ function renderBackDetails(c, x, y, w, h, configState) {
 // Generátor "blank" klubového znaku — zákazník napíše vlastný text (napr. "FC TORNAĽA"),
 // ktorý sa vykreslí do zvoleného tvaru (kruh/štít/erb/ovál). Ak má nahraté vlastné logo
 // (typErbu === 'custom'), použije sa namiesto generátora.
-function renderClubCrest(c, cx, cy, size, configState) {
+export function renderClubCrest(c, cx, cy, size, configState) {
   c.save();
   if (configState.loga.typErbu === 'custom' && configState.loga.vlastnyErbImg) {
     drawImageFit(c, configState.loga.vlastnyErbImg, cx, cy, size, size);

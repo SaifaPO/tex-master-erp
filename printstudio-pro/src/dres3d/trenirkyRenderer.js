@@ -14,9 +14,18 @@ export const ZONY_TRENIROK = [
   { key: 'lem', cislo: 5, nazov: 'Lemy nohavíc', popis: 'Spodný lem nohavice', prevezmeZ: 'rukava' },
 ];
 
+import * as THREE from 'three';
+import { renderClubCrest, drawTintedImageFit, kontrastnaFarba, logoPredVyrobcu } from './dresRenderer';
+
 export const DEFAULT_TRENIRKY = {
   prepojit: true, // farby trenírok preberajú farby dresu (zóna → zóna, pozri prevezmeZ vyššie)
   farby: { noha: '#1e3a8a', bok: '#dc2626', pasik: '#f59e0b', pas: '#ffffff', lem: '#1e3a8a' },
+  // Logá a číslo na prednej strane nohavíc (strany sú z pohľadu nositeľa): logo výrobcu je vždy na ľavej nohe (rovnako veľké ako na drese),
+  // klubový erb (ten z hrude dresu) je predvolene na pravej nohe a malé číslo na ľavej nohe nad logom výrobcu. Zákazník to môže vypnúť
+  // alebo vymeniť (číslo na pravú nohu → erb sa presunie na ľavú nohu nad logo výrobcu).
+  erbZobrazit: true,
+  cisloZobrazit: true,
+  cisloNoha: 'lava', // 'lava' | 'prava'
 };
 
 // Skutočné farby zón trenírok podľa konfigurácie: buď prevzaté z dresu, alebo vlastné.
@@ -68,9 +77,118 @@ export function postavCestyZon(meshe, W, H) {
   return cesty;
 }
 
+// Predné panely nohavíc: pre každú nohu (z pohľadu nositeľa; model je otočený čelom k +z, ľavá noha nositeľa má +x) sa z vrcholov
+// vypočíta lineárne zobrazenie 3D súradníc (cm) → UV, aby sa logá dali umiestniť na presné miesto na nohe v cm. Plátno je vykreslené
+// vzpriamene (u rastie s x, v klesá s y), takže stačí posun a mierka.
+export function vypocitajPanelyNoh(meshe) {
+  const panely = {};
+  const v = new THREE.Vector3();
+  meshe.forEach(({ mesh, zona }) => {
+    if (zona !== 'noha') return;
+    const box = new THREE.Box3().setFromObject(mesh);
+    const cz = (box.min.z + box.max.z) / 2;
+    if (cz <= 0) return; // zadné diely
+    const cx = (box.min.x + box.max.x) / 2;
+    const noha = cx > 0 ? 'lava' : 'prava';
+    const pos = mesh.geometry.attributes.position, uv = mesh.geometry.attributes.uv;
+    if (!pos || !uv) return;
+    let n = 0, sx = 0, sy = 0, su = 0, sv = 0, sxx = 0, syy = 0, sxu = 0, syv = 0;
+    for (let k = 0; k < pos.count; k++) {
+      v.set(pos.getX(k), pos.getY(k), pos.getZ(k)).applyMatrix4(mesh.matrixWorld);
+      const u = uv.getX(k), w = uv.getY(k);
+      n++; sx += v.x; sy += v.y; su += u; sv += w; sxx += v.x * v.x; syy += v.y * v.y; sxu += v.x * u; syv += v.y * w;
+    }
+    const ax = (n * sxu - sx * su) / (n * sxx - sx * sx || 1);
+    const bx = (su - ax * sx) / n;
+    const ay = (n * syv - sy * sv) / (n * syy - sy * sy || 1);
+    const by = (sv - ay * sy) / n;
+    panely[noha] = { ax, bx, ay, by, xmin: box.min.x, xmax: box.max.x, ymin: box.min.y, ymax: box.max.y, cx, cy: (box.min.y + box.max.y) / 2 };
+  });
+  return panely;
+}
+
+// Kto kde je na prednej strane nohavíc: [{ noha, typ, yOffset }] — yOffset je výška stredu prvku nad spodnou základnou čiarou (cm).
+const LOGO_VYROBCU_CM = { w: 6.0, h: 2.6 };
+const ERB_CM = 6.0;
+const CISLO_VYSKA_CM = 7.0;
+export function rozlozenieLogaTrenirok(t) {
+  const cisloNoha = t?.cisloNoha === 'prava' ? 'prava' : 'lava';
+  const erbNoha = cisloNoha === 'lava' ? 'prava' : 'lava';
+  const polozky = [{ noha: 'lava', typ: 'vyrobca', yOffset: 0 }];
+  const GAP = 1.2;
+  const nadVyrobcom = (vyskaCm) => LOGO_VYROBCU_CM.h / 2 + GAP + vyskaCm / 2;
+  if (t?.cisloZobrazit !== false) {
+    polozky.push({ noha: cisloNoha, typ: 'cislo', yOffset: cisloNoha === 'lava' ? nadVyrobcom(CISLO_VYSKA_CM) : 3 });
+  }
+  if (t?.erbZobrazit !== false) {
+    polozky.push({ noha: erbNoha, typ: 'erb', yOffset: erbNoha === 'lava' ? nadVyrobcom(ERB_CM) : 3 });
+  }
+  return polozky;
+}
+
+// Text pre objednávku (výroba vie, kde majú byť logá).
+export function popisLogaTrenirok(t) {
+  const polozky = rozlozenieLogaTrenirok(t);
+  const nazov = (n) => (n === 'lava' ? 'ľavá noha' : 'pravá noha');
+  const out = { _logo_vyrobcu: 'ľavá noha vpredu (rovnaká veľkosť ako na drese)' };
+  const e = polozky.find(p => p.typ === 'erb'); const c = polozky.find(p => p.typ === 'cislo');
+  out._erb = e ? `${nazov(e.noha)} vpredu${e.noha === 'lava' ? ' (nad logom výrobcu)' : ''}` : 'bez erbu';
+  out._cislo_vpredu = c ? `malé číslo, ${nazov(c.noha)} vpredu${c.noha === 'lava' ? ' (nad logom výrobcu)' : ''}` : 'bez čísla';
+  return out;
+}
+
+function nakresliCisloNaNohu(ctx, text, cx, cy, vyskaPx, pxPerCm, configState, farbaPodkladu) {
+  const cislo = configState.cislo || {};
+  const px = vyskaPx * 1.18; // výška číslic ~ 0,85 em pri písme Teko
+  ctx.save();
+  ctx.font = `bold ${px}px "${configState.text.fontRodina}", sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.miterLimit = 1;
+  const mmPx = pxPerCm / 10;
+  const t1 = Math.max(0, cislo.obrys1HrubkaMm ?? 0) * mmPx * 0.5;
+  const t2 = cislo.zobrazitObrys2 ? Math.max(0, cislo.obrys2HrubkaMm ?? 0) * mmPx * 0.5 : 0;
+  if (t2 > 0) { ctx.strokeStyle = cislo.farbaObrys2; ctx.lineWidth = 2 * (t1 + t2); ctx.strokeText(text, cx, cy); }
+  if (t1 > 0) { ctx.strokeStyle = cislo.farbaObrys1; ctx.lineWidth = 2 * t1; ctx.strokeText(text, cx, cy); }
+  // ak by výplň splynula s farbou nohavíc, použije sa kontrastná
+  const vypln = cislo.farbaVypln || '#ffffff';
+  const lum = (hex) => { const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16); return (0.299 * r + 0.587 * g + 0.114 * b) / 255; };
+  ctx.fillStyle = (/^#[0-9a-f]{6}$/i.test(vypln) && Math.abs(lum(vypln) - lum(farbaPodkladu)) < 0.2 && t1 === 0) ? kontrastnaFarba(farbaPodkladu) : vypln;
+  ctx.fillText(text, cx, cy);
+  ctx.restore();
+}
+
+// Logá + číslo na prednej strane nohavíc.
+function nakresliLogaTrenirok(ctx, canvas, panely, configState, farbaNohy) {
+  if (!panely) return;
+  const t = configState.trenirky || DEFAULT_TRENIRKY;
+  const W = canvas.width, H = canvas.height;
+  rozlozenieLogaTrenirok(t).forEach((p) => {
+    const pan = panely[p.noha];
+    if (!pan) return;
+    const pxPerCmX = Math.abs(pan.ax) * W, pxPerCmY = Math.abs(pan.ay) * H;
+    const pxPerCm = (pxPerCmX + pxPerCmY) / 2;
+    const yZaklad = pan.ymin + 0.27 * (pan.ymax - pan.ymin); // spodná základná čiara loga výrobcu (cm)
+    const xs = pan.cx;
+    const ys = yZaklad + p.yOffset;
+    const px = (pan.ax * xs + pan.bx) * W;
+    const py = (pan.ay * ys + pan.by) * H;
+    if (p.typ === 'vyrobca') {
+      drawTintedImageFit(ctx, logoPredVyrobcu, px, py, LOGO_VYROBCU_CM.w * pxPerCm, LOGO_VYROBCU_CM.h * pxPerCm, kontrastnaFarba(farbaNohy));
+    } else if (p.typ === 'erb') {
+      ctx.save();
+      renderClubCrest(ctx, px, py, ERB_CM * pxPerCm, configState);
+      ctx.restore();
+    } else if (p.typ === 'cislo') {
+      const text = String(configState.text.cisloHraca || '').trim();
+      if (text) nakresliCisloNaNohu(ctx, text, px, py, CISLO_VYSKA_CM * pxPerCm, pxPerCm, configState, farbaNohy);
+    }
+  });
+}
+
 // Vykreslí textúru trenírok: každá zóna vyplnená svojou farbou (+ tenký obrys, aby medzi susednými
 // trojuholníkmi nevznikli svetlé škáry).
-export function vykresliTrenirky(ctx, canvas, cesty, configState) {
+export function vykresliTrenirky(ctx, canvas, cesty, configState, panely = null) {
   const farby = farbyTrenirok(configState);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = '#ffffff';
@@ -85,4 +203,5 @@ export function vykresliTrenirky(ctx, canvas, cesty, configState) {
     ctx.fill(path);
     ctx.stroke(path);
   });
+  nakresliLogaTrenirok(ctx, canvas, panely, configState, farby.noha);
 }

@@ -4,7 +4,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { RotateCcw, Camera } from 'lucide-react';
 import { updateJerseyTexture, logaVyrobcuReady, orezOffset } from './dresRenderer';
-import { vykresliTrenirky, postavCestyZon, zonaKusu } from './trenirkyRenderer';
+import { vykresliTrenirky, postavCestyZon, zonaKusu, vypocitajPanelyNoh } from './trenirkyRenderer';
 
 // Trenírky sa v komplete posunú o toľko cm nižšie, aby pás nohavíc sedel pod spodným lemom dresu (v pôvodnom
 // súradnicovom systéme avatara sa oba kusy čiastočne prekrývajú — dres je prehodený cez pás).
@@ -38,6 +38,7 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState, onDragLog
   const shortsCanvasRef = useRef(null);
   const shortsTextureRef = useRef(null);
   const shortsPathsRef = useRef(null);
+  const shortsPanelsRef = useRef(null);
   const zostavaRef = useRef(zostava);
   zostavaRef.current = zostava;
   const configStateRef = useRef(configState);
@@ -90,7 +91,7 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState, onDragLog
     const canvas = shortsCanvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx || !shortsPathsRef.current || !shortsTextureRef.current) return;
-    vykresliTrenirky(ctx, canvas, shortsPathsRef.current, configStateRef.current);
+    vykresliTrenirky(ctx, canvas, shortsPathsRef.current, configStateRef.current, shortsPanelsRef.current);
     shortsTextureRef.current.needsUpdate = true;
   };
 
@@ -147,7 +148,8 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState, onDragLog
     shortsCanvas.width = 2048;
     shortsCanvas.height = 2048;
     shortsCanvasRef.current = shortsCanvas;
-    vytvorTrenirky(scene, shortsCanvas, (root, box, cesty, textura) => {
+    vytvorTrenirky(scene, shortsCanvas, (root, box, cesty, textura, panely) => {
+      shortsPanelsRef.current = panely;
       shortsRootRef.current = root;
       shortsBoxRef.current = box;
       shortsPathsRef.current = cesty;
@@ -296,7 +298,9 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState, onDragLog
 
   useEffect(() => { nastavRozlozenie(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [zostava]);
 
-  useEffect(() => { prekresliTrenirky(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [configState.farby, configState.trenirky]);
+  useEffect(() => { prekresliTrenirky(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [configState.farby, configState.trenirky, configState.cislo, configState.loga, configState.text.cisloHraca, configState.text.fontRodina, configState.vzor]);
+  // obrazok loga vyrobcu a pisma sa nacitaju asynchronne — po nacitani sa trenirky prekreslia
+  useEffect(() => { logaVyrobcuReady.then(() => prekresliTrenirky()); if (document.fonts?.ready) document.fonts.ready.then(() => prekresliTrenirky()); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
   useEffect(() => {
     if (sceneRef.current && rendererRef.current) aplikujOsvetlenie(sceneRef.current, lightsRef, rendererRef.current, svetlo);
@@ -567,7 +571,7 @@ function vytvorTrenirky(scene, textureCanvas, onLoaded) {
       const cesty = postavCestyZon(zaradene, textureCanvas.width, textureCanvas.height);
       const box = new THREE.Box3().setFromObject(root);
       scene.add(root);
-      onLoaded?.(root, box, cesty, textura);
+      onLoaded?.(root, box, cesty, textura, vypocitajPanelyNoh(zaradene));
     },
     undefined,
     (err) => console.error('Nepodarilo sa načítať 3D model trenírok:', err),
