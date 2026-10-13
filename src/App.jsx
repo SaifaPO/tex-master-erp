@@ -19,7 +19,7 @@ import {
   ClipboardList, Package, Cpu, QrCode, Plus, User, Clock, Layers, Search, Check, X, Calendar,
   Palette, Scissors, Printer, Sliders, Sparkles, ZoomIn, ZoomOut, FileText, PlusCircle, Table,
   Shield, Users, Lock, Edit2, Trash2, Tag, Scale, CalendarDays, FileEdit, Gift, Loader2, AlertTriangle,
-  Shirt, Box, Banknote, GripVertical, Download, Upload, ArrowUp, ArrowDown, BarChart3, Camera, Bot, Zap, Star, RefreshCw, BookOpen, Paperclip
+  Shirt, Box, Banknote, GripVertical, Download, Upload, ArrowUp, ArrowDown, BarChart3, Camera, Bot, Zap, Star, RefreshCw, BookOpen, Paperclip, Copy
 } from 'lucide-react';
 
 // ============================================================
@@ -1466,6 +1466,7 @@ export default function App() {
 
   const [catalogSportFilter, setCatalogSportFilter] = useState('vsetko');
   const [catalogViewMode, setCatalogViewMode] = useState('karty'); // 'karty' | 'riadky'
+  const [catalogSort, setCatalogSort] = useState('povodne'); // povodne | najnovsie | abeceda | kod | sport | material | cena_asc | cena_desc
 
   const [newOrderCustomer, setNewOrderCustomer] = useState('');
   const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
@@ -4009,6 +4010,21 @@ export default function App() {
     }
   };
 
+  // Duplikat modelu: skopiruje vsetko (latky, spotreby, potlac, rezia…), kod dostane koncovku -KOPIA a otvori sa na upravu
+  const handleDuplicateModel = async (p) => {
+    if (!hasPermission('manage_catalog')) { triggerNotification('error', 'Prístup zamietnutý do správy katalógu.'); return; }
+    const zaklad = `${p.customCode}-KOPIA`;
+    let kod = zaklad, n = 2;
+    while (products.some(x => x.customCode === kod)) { kod = `${zaklad}${n}`; n++; }
+    const kopia = { ...JSON.parse(JSON.stringify(p)), id: `prod-${Date.now()}`, customCode: kod, name: `${p.name} (kópia)`, attachments: [] };
+    const { error } = await supabase.from('products').insert(mapProductToDb(kopia));
+    if (error) { triggerNotification('error', error.message); return; }
+    setProducts(prev => [...prev, kopia]);
+    setEditingProduct(kopia);
+    triggerNotification('success', `Vytvorený duplikát ${kod} — uprav názov, kód a čo treba, a ulož.`);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const handleDeleteModel = async (id) => {
     if (!hasPermission('manage_catalog')) return;
     if (!window.confirm('Naozaj vymazať tento model z katalógu?')) return;
@@ -6142,7 +6158,23 @@ export default function App() {
     return rowSortDirection === 'asc' ? cmp : -cmp;
   });
 
-  const catalogFilteredProducts = products.filter(p => catalogSportFilter === 'vsetko' ? true : p.sports?.includes(catalogSportFilter));
+  const catalogFilteredProducts = (() => {
+    const list = products.filter(p => catalogSportFilter === 'vsetko' ? true : p.sports?.includes(catalogSportFilter));
+    if (catalogSort === 'povodne') return list;
+    const cmpText = (a, b) => String(a || '').localeCompare(String(b || ''), 'sk', { sensitivity: 'base', numeric: true });
+    const matName = (p) => (p.layer1 ? (materials.find(m => m.id === p.layer1?.materialId)?.name || '') : '');
+    const pridanie = (p) => { const m = /(\d{10,})$/.exec(String(p.id)); return m ? Number(m[1]) : 0; }; // id novych modelov = prod-<cas pridania>
+    const cena = (p, nahradaPrazdnej) => (p.productionCost != null ? Number(p.productionCost) : nahradaPrazdnej);
+    const sorted = [...list];
+    if (catalogSort === 'najnovsie') sorted.sort((a, b) => pridanie(b) - pridanie(a));
+    else if (catalogSort === 'abeceda') sorted.sort((a, b) => cmpText(a.name, b.name));
+    else if (catalogSort === 'kod') sorted.sort((a, b) => cmpText(a.customCode, b.customCode));
+    else if (catalogSort === 'sport') sorted.sort((a, b) => cmpText((a.sports || [])[0], (b.sports || [])[0]) || cmpText(a.name, b.name));
+    else if (catalogSort === 'material') sorted.sort((a, b) => cmpText(matName(a), matName(b)) || cmpText(a.name, b.name));
+    else if (catalogSort === 'cena_asc') sorted.sort((a, b) => cena(a, Infinity) - cena(b, Infinity));
+    else if (catalogSort === 'cena_desc') sorted.sort((a, b) => cena(b, -Infinity) - cena(a, -Infinity));
+    return sorted;
+  })();
   // Ziskovosť podľa zákazky — vyhľadávanie podľa názvu (zákazka/odberateľ) + zoradenie podľa
   // ľubovoľného stĺpca (klik na hlavičku, rovnaky vzor ako triedenie skladu).
   const ziskovostFilteredSorted = sortGeneric(
@@ -8070,8 +8102,8 @@ export default function App() {
                 </div>
                 <div className="space-y-1.5">
                   {krajcirky.map(k => (
-                    <div key={k.id} className="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs">
-                      <input type="text" value={k.meno} onChange={(e) => handleUpravKrajcirku(k.id, { meno: e.target.value })} className="flex-1 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-white" />
+                    <div key={k.id} className="flex flex-wrap items-center gap-2 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs">
+                      <input type="text" value={k.meno} onChange={(e) => handleUpravKrajcirku(k.id, { meno: e.target.value })} className="flex-1 min-w-[10rem] bg-slate-900 border border-slate-800 rounded px-2 py-1 text-white" />
                       <NumberInput step="0.5" value={k.vykon_za_smenu} onChange={(v) => handleUpravKrajcirku(k.id, { vykon_za_smenu: v })} fallback={0} className="w-24 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-white text-right" title="Výkon za smenu (red. jednotky)" />
                       <label className="flex items-center gap-1 text-slate-400 shrink-0">
                         <input type="checkbox" checked={k.aktivna} onChange={(e) => handleUpravKrajcirku(k.id, { aktivna: e.target.checked })} /> aktívna
@@ -8081,10 +8113,10 @@ export default function App() {
                   ))}
                   {krajcirky.length === 0 && <p className="text-xs text-slate-500">Zatiaľ žiadne krajčírky.</p>}
                 </div>
-                <div className="flex gap-2 pt-1">
-                  <input type="text" placeholder="Meno krajčírky" value={newKrajcirkaMeno} onChange={(e) => setNewKrajcirkaMeno(e.target.value)} className="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white" />
-                  <input type="number" step="0.5" placeholder="Výkon/smenu" value={newKrajcirkaVykon} onChange={(e) => setNewKrajcirkaVykon(e.target.value)} className="w-28 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white" />
-                  <button onClick={handleAddKrajcirka} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 rounded-lg flex items-center gap-1"><Plus className="h-3.5 w-3.5" /> Pridať</button>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <input type="text" placeholder="Meno krajčírky" value={newKrajcirkaMeno} onChange={(e) => setNewKrajcirkaMeno(e.target.value)} className="flex-1 min-w-[10rem] bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white" />
+                  <input type="number" step="0.5" placeholder="Výkon/smenu" value={newKrajcirkaVykon} onChange={(e) => setNewKrajcirkaVykon(e.target.value)} className="w-28 min-w-0 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white" />
+                  <button onClick={handleAddKrajcirka} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1 shrink-0"><Plus className="h-3.5 w-3.5" /> Pridať</button>
                 </div>
                 {krajcirky.filter(k => k.aktivna).length > 0 && (
                   <p className="text-[11px] text-emerald-500/80 pt-1 border-t border-slate-800">
@@ -8099,11 +8131,22 @@ export default function App() {
                     <h3 className="font-bold text-base text-white">Register modelov v katalógu</h3>
                     <p className="text-xs text-slate-400">Kliknutím na "Upraviť" môžete meniť zloženie aj vlastný kód.</p>
                   </div>
-                  <div className="flex items-center gap-2 bg-slate-900 p-2 rounded-xl border border-slate-800 text-xs">
+                  <div className="flex flex-wrap items-center gap-2 bg-slate-900 p-2 rounded-xl border border-slate-800 text-xs">
                     <span className="text-slate-400 font-bold">Filtrovať Šport:</span>
                     <select value={catalogSportFilter} onChange={(e) => setCatalogSportFilter(e.target.value)} className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-white">
                       <option value="vsetko">Všetky Športy</option>
                       {sports.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                    <span className="text-slate-400 font-bold">Zoradiť:</span>
+                    <select value={catalogSort} onChange={(e) => setCatalogSort(e.target.value)} className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-white">
+                      <option value="povodne">Pôvodné poradie</option>
+                      <option value="najnovsie">Najnovšie pridané</option>
+                      <option value="abeceda">Abecedne (názov)</option>
+                      <option value="kod">Podľa kódu</option>
+                      <option value="sport">Podľa športu</option>
+                      <option value="material">Podľa materiálu</option>
+                      <option value="cena_asc">Cena: od najlacnejšieho</option>
+                      <option value="cena_desc">Cena: od najdrahšieho</option>
                     </select>
                     <div className="flex items-center gap-1 ml-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
                       <button type="button" onClick={() => setCatalogViewMode('karty')} className={`px-2 py-1 rounded text-[11px] font-bold transition-all ${catalogViewMode === 'karty' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}>Karty</button>
@@ -8136,7 +8179,8 @@ export default function App() {
                             <td className="p-2.5 text-slate-300 whitespace-nowrap">{p.productionCost != null ? `${Number(p.productionCost).toFixed(2)} €` : <span className="italic text-slate-600">—</span>}</td>
                             <td className="p-2.5 text-right whitespace-nowrap">
                               <div className="flex gap-1 justify-end">
-                                <button onClick={() => setEditingProduct(p)} className="bg-slate-800 hover:bg-slate-750 text-indigo-400 p-1.5 rounded transition-all"><FileEdit className="h-3.5 w-3.5" /></button>
+                                <button onClick={() => setEditingProduct(p)} title="Upraviť" className="bg-slate-800 hover:bg-slate-750 text-indigo-400 p-1.5 rounded transition-all"><FileEdit className="h-3.5 w-3.5" /></button>
+                                {hasPermission('manage_catalog') && <button onClick={() => handleDuplicateModel(p)} title="Duplikovať model" className="bg-slate-800 hover:bg-slate-700 text-emerald-400 p-1.5 rounded transition-all"><Copy className="h-3.5 w-3.5" /></button>}
                                 <button onClick={() => handleDeleteModel(p.id)} className="bg-slate-800 hover:bg-rose-900 text-rose-400 p-1.5 rounded transition-all"><Trash2 className="h-3.5 w-3.5" /></button>
                               </div>
                             </td>
@@ -8156,6 +8200,7 @@ export default function App() {
                         <div><span className="font-mono text-indigo-400 text-[10px] font-bold block">{p.id}</span><span className="font-mono text-slate-300 font-bold text-xs">{p.customCode}</span></div>
                         <div className="flex gap-1">
                           <button onClick={() => setEditingProduct(p)} className="bg-slate-800 hover:bg-slate-750 text-indigo-400 p-1.5 rounded transition-all flex items-center gap-1 font-bold text-[10px]"><FileEdit className="h-3.5 w-3.5" /> Upraviť</button>
+                          {hasPermission('manage_catalog') && <button onClick={() => handleDuplicateModel(p)} title="Duplikovať model" className="bg-slate-800 hover:bg-slate-700 text-emerald-400 p-1.5 rounded transition-all flex items-center gap-1 font-bold text-[10px]"><Copy className="h-3.5 w-3.5" /> Duplikovať</button>}
                           <button onClick={() => handleDeleteModel(p.id)} className="bg-slate-800 hover:bg-rose-900 text-rose-400 p-1.5 rounded transition-all"><Trash2 className="h-3.5 w-3.5" /></button>
                         </div>
                       </div>
