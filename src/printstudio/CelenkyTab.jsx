@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import NumberInput from '../NumberInput';
 import { Waves, Download, Settings, Trash2, AlertTriangle } from 'lucide-react';
+import FotoSlot from './FotoSlot';
 import { priceAt, marginAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 
 const BUCKET = 'print-designs';
@@ -18,17 +19,25 @@ export default function CelenkyTab({ supabase }) {
   const [pricingConfig, setPricingConfig] = useState(DEFAULT_PRICING_CONFIG);
   const [objednavky, setObjednavky] = useState([]);
   const [produkty, setProdukty] = useState([]);
+  const [materialy, setMaterialy] = useState([]);
+  const [varianty, setVarianty] = useState([]);
+  const [variantyChyba, setVariantyChyba] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
   const nacitaj = async () => {
     setIsLoading(true);
-    const [{ data: n }, { data: s }, { data: cfg }, { data: o }, { data: p }] = await Promise.all([
+    const [{ data: n }, { data: s }, { data: cfg }, { data: o }, { data: p }, { data: mat, error: matErr }, { data: vr }] = await Promise.all([
       supabase.from('celenky_naklady').select('*').eq('id', 1).maybeSingle(),
       supabase.from('celenky_nastavenia').select('*').eq('id', 1).maybeSingle(),
       supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
       supabase.from('celenky_objednavky').select('*').order('created_at', { ascending: false }).limit(50),
       supabase.from('produkty').select('id, nazov, zakladna_cena, aktivny').eq('aktivny', true).order('nazov'),
+      supabase.from('celenky_materialy').select('*').order('poradie'),
+      supabase.from('celenky_varianty').select('*').order('poradie').order('material_kod'),
     ]);
+    setVariantyChyba(matErr ? 'Varianty a fotky materiálov ešte nie sú k dispozícii — spusti v Supabase SQL migráciu migration_celenky_varianty_a_fotky.sql (priečinok printstudio-pro).' : '');
+    setMaterialy(mat || []);
+    setVarianty(vr || []);
     if (n) setNaklady(n);
     if (s) setNastavenia(s);
     if (cfg) setPricingConfig(mapConfigFromDb(cfg));
@@ -70,6 +79,15 @@ export default function CelenkyTab({ supabase }) {
     await supabase.from('celenky_objednavky').delete().eq('id', id);
   };
 
+  const ulozMaterial = async (kod, patch) => {
+    setMaterialy(m => m.map(x => x.kod === kod ? { ...x, ...patch } : x));
+    await supabase.from('celenky_materialy').update(patch).eq('kod', kod);
+  };
+  const ulozVariant = async (velkostKod, materialKod, patch) => {
+    setVarianty(v => v.map(x => (x.velkost_kod === velkostKod && x.material_kod === materialKod) ? { ...x, ...patch } : x));
+    await supabase.from('celenky_varianty').update(patch).eq('velkost_kod', velkostKod).eq('material_kod', materialKod);
+  };
+
   const vybranyProdukt = produkty.find(p => p.id === naklady.produkt_id);
   const nakladKs = Number(vybranyProdukt?.zakladna_cena) || 0;
 
@@ -103,6 +121,57 @@ export default function CelenkyTab({ supabase }) {
             <p className="text-[10px] text-slate-500 mt-1">Nastavuje sa centrálne v záložke Cenotvorba pre celý PrintStudio Pro.</p>
           </div>
         </div>
+      </div>
+
+      {/* MATERIÁLY (FOTKY) A VARIANTY (VEĽKOSŤ × MATERIÁL) */}
+      <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-5 space-y-5">
+        <div>
+          <h3 className="font-bold text-sm text-white mb-1">Materiály a veľkosti</h3>
+          <p className="text-xs text-slate-400">Zákazník si vyberá veľkosť (dospelý štandard / vysoká, detská) a materiál (hladký / počesaný). Rozmer strihu závisí od materiálu. Každý variant má vlastný produkt zo záložky Produkty — jeho "Základná cena" je nákupná cena a z nej sa počíta predajná cena. Variant bez produktu použije pôvodný jednotný náklad nižšie.</p>
+        </div>
+        {variantyChyba && <div className="bg-amber-950/40 border border-amber-800/50 text-amber-200 text-xs rounded-lg p-3">{variantyChyba}</div>}
+        {materialy.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {materialy.map(m => (
+              <div key={m.kod} className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
+                <div className="flex items-start gap-3">
+                  <FotoSlot supabase={supabase} url={m.foto_url} priecinok="celenky-materialy" onZmena={(url) => ulozMaterial(m.kod, { foto_url: url })} />
+                  <div className="flex-1 space-y-1.5">
+                    <input type="text" value={m.nazov} onChange={(e) => ulozMaterial(m.kod, { nazov: e.target.value })} className="w-full px-2 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs font-bold" />
+                    <input type="text" value={m.popis || ''} onChange={(e) => ulozMaterial(m.kod, { popis: e.target.value })} placeholder="Krátky popis materiálu pre zákazníka" className="w-full px-2 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-slate-300 text-[11px]" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {varianty.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left">
+              <thead><tr className="text-slate-400 border-b border-slate-800"><th className="py-2 pr-3">Veľkosť</th><th className="py-2 pr-3">Materiál</th><th className="py-2 pr-3">Šírka (cm)</th><th className="py-2 pr-3">Výška (cm)</th><th className="py-2">Produkt (nákupná cena)</th></tr></thead>
+              <tbody className="divide-y divide-slate-800">
+                {varianty.map(v => {
+                  const p = produkty.find(x => x.id === v.produkt_id);
+                  return (
+                    <tr key={`${v.velkost_kod}-${v.material_kod}`}>
+                      <td className="py-2 pr-3 text-white font-semibold">{v.velkost_nazov}</td>
+                      <td className="py-2 pr-3 text-slate-300">{materialy.find(m => m.kod === v.material_kod)?.nazov || v.material_kod}</td>
+                      <td className="py-2 pr-3"><NumberInput step="0.5" value={v.sirka_cm} onChange={(val) => ulozVariant(v.velkost_kod, v.material_kod, { sirka_cm: val })} fallback={0} className="w-20 px-2 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono" /></td>
+                      <td className="py-2 pr-3"><NumberInput step="0.5" value={v.vyska_cm} onChange={(val) => ulozVariant(v.velkost_kod, v.material_kod, { vyska_cm: val })} fallback={0} className="w-20 px-2 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono" /></td>
+                      <td className="py-2">
+                        <select value={v.produkt_id || ''} onChange={(e) => ulozVariant(v.velkost_kod, v.material_kod, { produkt_id: e.target.value ? Number(e.target.value) : null })} className="w-full min-w-[14rem] px-2 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs">
+                          <option value="">-- jednotný náklad (nižšie) --</option>
+                          {produkty.map(pr => <option key={pr.id} value={pr.id}>{pr.nazov} — {Number(pr.zakladna_cena).toFixed(2)} €/ks</option>)}
+                        </select>
+                        {!p && <span className="text-[10px] text-amber-500">použije sa jednotný náklad</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* VÝROBNÉ NÁKLADY + CENOVÉ HLADINY */}

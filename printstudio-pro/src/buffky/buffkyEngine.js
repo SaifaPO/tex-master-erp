@@ -6,7 +6,9 @@
 // nizkorozlisenu ukazku (960px), plnu kvalitu (300 DPI, 5906x5906px) vidi az admin po objednani.
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { makeFlatlockTexture, makeCoverstitchTexture, overlayMaterial } from '../stitchTextures';
 
+const CAM_DIST = 40; // vzdialenost kamery — valec je vysoky ako je obvod (1:1 ako strih 50x50 cm)
 const CANON = 1000; // kanonicky priestor kreslenia — stvorec, zhodny s 50x50cm formatom
 // Premium ma horny a spodny okraj obsity/zahnuty dovnutra (2cm lem) — tam sa grafika neda
 // vidiet po zositi. 2cm z 50cm formatu = 40 kanonickych jednotiek (1000/50*2).
@@ -56,7 +58,8 @@ export function initBuffkyEngine(root, opts = {}) {
   const canvas = q('#designCanvas');
   const ctx = canvas.getContext('2d');
 
-  let scene, camera, renderer, controls, buffMesh, buffTexture, seamLine1, seamLine2;
+  let scene, camera, renderer, controls, buffMesh, buffTexture, seamLine1, seamLine2, seamMesh;
+  const seamBadges = [];
   let rafId = null;
   const container3D = q('#threeContainer');
 
@@ -254,48 +257,66 @@ export function initBuffkyEngine(root, opts = {}) {
     scene = new THREE.Scene();
     const aspect = container3D.clientWidth / container3D.clientHeight;
     camera = new THREE.PerspectiveCamera(40, aspect, 0.1, 1000);
-    camera.position.set(0, 5, 26);
+    camera.position.set(0, 6, CAM_DIST);
 
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.NoToneMapping; // bez filmoveho mapovania — farby musia sediet so strihom
     renderer.setSize(container3D.clientWidth, container3D.clientHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container3D.appendChild(renderer.domElement);
 
     controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true; controls.dampingFactor = 0.05;
-    controls.minDistance = 14; controls.maxDistance = 45;
+    controls.minDistance = 20; controls.maxDistance = 75;
     controls.maxPolarAngle = Math.PI * 0.85; controls.minPolarAngle = Math.PI * 0.15;
     controls.autoRotate = state.autoRotate; controls.autoRotateSpeed = 2.0;
 
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x334155, 0.9));
-    const keyLight = new THREE.DirectionalLight(0xffffff, 0.55); keyLight.position.set(12, 18, 15); scene.add(keyLight);
-    const fillLight = new THREE.DirectionalLight(0xf8fafc, 0.35); fillLight.position.set(-12, 8, 10); scene.add(fillLight);
-    const backLight = new THREE.DirectionalLight(0xffffff, 0.25); backLight.position.set(0, 6, -15); scene.add(backLight);
+    // Svetla: intenzity su v "fyzikalnych" jednotkach three.js (~ pi x pozadovany jas). Sucet pri celnom osvetleni je cca 1,
+    // takze farba na 3D modeli = farba v strihu (ziadne vyblednutie ani prepalenie).
+    scene.add(new THREE.HemisphereLight(0xffffff, 0xc4ccd8, 0.70 * Math.PI));
+    const keyLight = new THREE.DirectionalLight(0xffffff, 0.38 * Math.PI); keyLight.position.set(12, 18, 22); scene.add(keyLight);
+    const fillLight = new THREE.DirectionalLight(0xffffff, 0.14 * Math.PI); fillLight.position.set(-14, 8, 14); scene.add(fillLight);
+    const backLight = new THREE.DirectionalLight(0xffffff, 0.12 * Math.PI); backLight.position.set(0, 6, -20); scene.add(backLight);
 
-    const radius = 4.2, height = 11.5;
-    const geometry = new THREE.CylinderGeometry(radius, radius, height, 72, 40, true);
-    geometry.rotateY(-Math.PI / 2);
-    const pos = geometry.attributes.position;
-    for (let i = 0; i < pos.count; i++) {
-      const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
-      const angle = Math.atan2(z, x);
-      const fold = Math.sin(y * 1.5 + angle * 2) * 0.12 + Math.cos(angle * 4) * 0.08;
-      const radiusModifier = 1.0 - 0.04 * Math.cos((y / height) * Math.PI) + fold * 0.5;
-      pos.setX(i, x * radiusModifier); pos.setZ(i, z * radiusModifier);
-    }
-    geometry.computeVertexNormals();
+    // Buffka: obvod 50 cm, vyska 50 cm (strih 50x50 cm) -> valec s rovnakym pomerom stran ako plocha strihu.
+    // Potlac sa tak nenatiahne do sirky. Basic: potlac na tubularnu latku, panely A/B; Premium: jeden sev vzadu.
+    const radius = 3.6, height = 2 * Math.PI * radius;
+    const rotY = isPremium ? Math.PI : -Math.PI / 2; // premium: sev (okraj plochy strihu, u=0) vzadu; basic: A spredu, B zozadu
+    const deform = (geo) => {
+      const pos = geo.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+        const angle = Math.atan2(z, x);
+        const fold = Math.sin(y * 1.2 + angle * 2) * 0.07 + Math.cos(angle * 4) * 0.05;
+        const radiusModifier = 1.0 - 0.02 * Math.cos((y / height) * Math.PI) + fold * 0.12;
+        pos.setX(i, x * radiusModifier); pos.setZ(i, z * radiusModifier);
+      }
+      geo.computeVertexNormals();
+      return geo;
+    };
+    const makeTube = (r, h, y, thetaStart = 0, thetaLength = Math.PI * 2, widthSegs = 96, heightSegs = 48) => {
+      const g = new THREE.CylinderGeometry(r, r, h, widthSegs, heightSegs, true, thetaStart, thetaLength);
+      g.rotateY(rotY); g.translate(0, y, 0);
+      return deform(g);
+    };
 
     buffTexture = new THREE.CanvasTexture(canvas);
+    buffTexture.colorSpace = THREE.SRGBColorSpace; // KLUCOVE: bez toho su farby na 3D modeli vyblednute oproti strihu
     buffTexture.wrapS = THREE.RepeatWrapping;
     buffTexture.wrapT = THREE.ClampToEdgeWrapping;
     buffTexture.flipY = true;
+    buffTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
 
-    const material = new THREE.MeshStandardMaterial({ map: buffTexture, roughness: 0.98, metalness: 0.0, side: THREE.DoubleSide });
-    buffMesh = new THREE.Mesh(geometry, material);
+    // Vonkajsok = potlac; vnutro buffky je VZDY biele (sublimacia sa prenasa len na vonkajsiu stranu).
+    const outerMaterial = new THREE.MeshStandardMaterial({ map: buffTexture, roughness: 0.95, metalness: 0.0, side: THREE.FrontSide });
+    buffMesh = new THREE.Mesh(makeTube(radius, height, 0), outerMaterial);
     scene.add(buffMesh);
+    const innerMesh = new THREE.Mesh(makeTube(radius * 0.997, height, 0), new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.95, metalness: 0, side: THREE.BackSide }));
+    buffMesh.add(innerMesh);
 
+    if (isPremium) addRealStitching(radius, height, makeTube);
     createSeamIndicators(radius, height);
-    if (isPremium) createHemIndicators(radius, height);
 
     const shadowGeo = new THREE.PlaneGeometry(30, 30);
     const shadowMat = new THREE.ShadowMaterial({ opacity: 0.25 });
@@ -307,32 +328,38 @@ export function initBuffkyEngine(root, opts = {}) {
     rafId = requestAnimationFrame(animateThree);
   }
 
+  // PREMIUM: realisticky plochy sev (flatlock) vzadu + lem so zakrytovym stehom (coverstitch) 2 cm zhora aj zdola — ako rukav trika.
+  function addRealStitching(radius, height, makeTube) {
+    const seamLen = (0.6 / 50) * Math.PI * 2; // sev siroky cca 6 mm z 50 cm obvodu
+    const seamTex = makeFlatlockTexture({ repeatY: Math.round(50 / 1.6), anisotropy: renderer.capabilities.getMaxAnisotropy() });
+    const seam = new THREE.Mesh(makeTube(radius * 1.004, height, 0, -seamLen / 2, seamLen, 6, 48), overlayMaterial(seamTex));
+    buffMesh.add(seam);
+    seamMesh = seam;
+
+    const hemH = height * (2 / 50);
+    const topTex = makeCoverstitchTexture({ anisotropy: renderer.capabilities.getMaxAnisotropy() });
+    const bottomTex = topTex.clone(); bottomTex.repeat.set(2, -1); bottomTex.offset.set(0, 1); bottomTex.needsUpdate = true;
+    buffMesh.add(new THREE.Mesh(makeTube(radius * 1.004, hemH, height / 2 - hemH / 2, 0, Math.PI * 2, 96, 1), overlayMaterial(topTex)));
+    buffMesh.add(new THREE.Mesh(makeTube(radius * 1.004, hemH, -height / 2 + hemH / 2, 0, Math.PI * 2, 96, 1), overlayMaterial(bottomTex)));
+  }
+
   function createSeamIndicators(radius, height) {
     const seamGeo = new THREE.CylinderGeometry(0.04, 0.04, height * 1.02, 16);
     const seamMat = new THREE.MeshBasicMaterial({ color: 0xf43f5e });
-    // Tubular Basic je bezsvova (potlac priamo na tubularnu pletenu latku) — cervene linie tu len
-    // oznacuju okraj laveho/praveho panelu v ploche navrhu (A/B), nie realny fyzicky sev. Premium
-    // ma NAOPAK jeden skutocny bocny sev (zosite ako rukav tricka) — len JEDNA linia.
-    seamLine1 = new THREE.Mesh(seamGeo, seamMat); seamLine1.position.set(radius * 1.01, 0, 0); buffMesh.add(seamLine1);
-    addSeamBadge('SPOJ', radius * 1.02, height * 0.45);
-    if (!isPremium) {
-      seamLine2 = new THREE.Mesh(seamGeo, seamMat); seamLine2.position.set(-radius * 1.01, 0, 0); buffMesh.add(seamLine2);
-      addSeamBadge('SPOJ', -radius * 1.02, height * 0.45);
+    if (isPremium) {
+      // Premium ma realny sev (viz addRealStitching) — tlacidlo "3D Spoj" prepina len stitok, ktory ho oznacuje (sev je vzadu = -z).
+      addSeamBadge('ŠEV', 0, height * 0.42, -radius * 1.0);
+      return;
     }
+    // Tubular Basic je bezsvova (potlac priamo na tubularnu pletenu latku) — cervene linie tu len
+    // oznacuju okraj laveho/praveho panelu v ploche navrhu (A/B), nie realny fyzicky sev.
+    seamLine1 = new THREE.Mesh(seamGeo, seamMat); seamLine1.position.set(radius * 1.01, 0, 0); buffMesh.add(seamLine1);
+    addSeamBadge('SPOJ', radius * 1.02, height * 0.42, 0);
+    seamLine2 = new THREE.Mesh(seamGeo, seamMat); seamLine2.position.set(-radius * 1.01, 0, 0); buffMesh.add(seamLine2);
+    addSeamBadge('SPOJ', -radius * 1.02, height * 0.42, 0);
   }
 
-  // Premium: horny a spodny okraj je obsity/zahnuty dovnutra (ako lem rukava tricka) — vizualne
-  // to naznacime tenkym tmavsim prstencom na oboch okrajoch valca.
-  function createHemIndicators(radius, height) {
-    const hemMat = new THREE.MeshBasicMaterial({ color: 0x1e293b, transparent: true, opacity: 0.85, side: THREE.DoubleSide });
-    const hemHeight = height * 0.05;
-    const hemGeoTop = new THREE.CylinderGeometry(radius * 1.015, radius * 1.005, hemHeight, 72, 1, true);
-    const hemTop = new THREE.Mesh(hemGeoTop, hemMat); hemTop.position.set(0, height / 2 - hemHeight / 2, 0); buffMesh.add(hemTop);
-    const hemGeoBottom = new THREE.CylinderGeometry(radius * 1.005, radius * 1.015, hemHeight, 72, 1, true);
-    const hemBottom = new THREE.Mesh(hemGeoBottom, hemMat); hemBottom.position.set(0, -height / 2 + hemHeight / 2, 0); buffMesh.add(hemBottom);
-  }
-
-  function addSeamBadge(text, x, y) {
+  function addSeamBadge(text, x, y, z = 0) {
     const badgeCanvas = document.createElement('canvas');
     badgeCanvas.width = 128; badgeCanvas.height = 48;
     const bCtx = badgeCanvas.getContext('2d');
@@ -345,9 +372,10 @@ export function initBuffkyEngine(root, opts = {}) {
     const bTex = new THREE.CanvasTexture(badgeCanvas);
     const bMat = new THREE.SpriteMaterial({ map: bTex, depthTest: false });
     const sprite = new THREE.Sprite(bMat);
-    sprite.position.set(x * 1.12, y, 0);
-    sprite.scale.set(1.4, 0.55, 1);
+    sprite.position.set(x * 1.12, y, z * 1.12);
+    sprite.scale.set(2.2, 0.82, 1);
     buffMesh.add(sprite);
+    seamBadges.push(sprite);
   }
 
   function onWindowResize() {
@@ -524,17 +552,18 @@ export function initBuffkyEngine(root, opts = {}) {
       state.show3DSeams = !state.show3DSeams;
       if (seamLine1) seamLine1.visible = state.show3DSeams;
       if (seamLine2) seamLine2.visible = state.show3DSeams;
+      seamBadges.forEach(b => { b.visible = state.show3DSeams; });
       btnToggle3DSeams.classList.toggle('text-rose-400', state.show3DSeams);
       btnToggle3DSeams.classList.toggle('text-slate-500', !state.show3DSeams);
       toast(state.show3DSeams ? '3D Spoj zobrazený' : '3D Spoj skrytý');
     });
 
-    on(q('#btnResetView'), 'click', () => { controls.reset(); camera.position.set(0, 5, 26); });
+    on(q('#btnResetView'), 'click', () => { controls.reset(); camera.position.set(0, 6, CAM_DIST); });
 
     qa('.cam-preset-btn').forEach(btn => on(btn, 'click', () => {
       controls.autoRotate = false; state.autoRotate = false;
       btnToggleRotate.classList.remove('text-cyan-400'); btnToggleRotate.classList.add('text-slate-500');
-      const deg = parseFloat(btn.dataset.angle), rad = (deg * Math.PI) / 180, dist = 26;
+      const deg = parseFloat(btn.dataset.angle), rad = (deg * Math.PI) / 180, dist = CAM_DIST;
       camera.position.set(Math.sin(rad) * dist, 4, Math.cos(rad) * dist);
       controls.target.set(0, 0, 0); controls.update();
     }));

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import NumberInput from '../NumberInput';
 import { Wind, Download, Settings, Trash2, AlertTriangle } from 'lucide-react';
+import FotoSlot from './FotoSlot';
 import { priceAt, marginAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 
 const BUCKET = 'print-designs';
@@ -57,6 +58,10 @@ export default function BuffkyTab({ supabase }) {
     setNastavenia(next);
     await supabase.from('buffky_nastavenia').upsert({ id: 1, ...next });
   };
+  const ulozFotoPremium = async (kod, url) => {
+    setPremiumMaterialy(pm => pm.map(m => m.kod === kod ? { ...m, foto_url: url } : m));
+    await supabase.from('buffky_premium_materialy').update({ foto_url: url }).eq('kod', kod);
+  };
   const pripojProduktPremium = async (kod, produktId) => {
     setPremiumMaterialy(pm => pm.map(m => m.kod === kod ? { ...m, produkt_id: produktId } : m));
     await supabase.from('buffky_premium_materialy').update({ produkt_id: produktId }).eq('kod', kod);
@@ -83,7 +88,9 @@ export default function BuffkyTab({ supabase }) {
   };
 
   const nakladPotlacKs = nakladBmSublimacia / BUFFIEK_NA_BM;
-  const nakladKsBasic = Number(naklady.cena_buffka_ks) + nakladPotlacKs;
+  const produktBasic = produkty.find(p => p.id === naklady.produkt_id);
+  const cenaCistaBuffka = produktBasic ? Number(produktBasic.zakladna_cena) : Number(naklady.cena_buffka_ks);
+  const nakladKsBasic = cenaCistaBuffka + nakladPotlacKs;
   const nakladKsPremium = (materialNakladKs) => Number(materialNakladKs || 0) + nakladPotlacKs + Number(naklady.cena_sitia_bok_ks || 0);
 
   if (isLoading) return <p className="text-sm text-slate-500">Načítavam…</p>;
@@ -124,7 +131,19 @@ export default function BuffkyTab({ supabase }) {
           <h3 className="font-bold text-sm text-white mb-1">Tubular Basic — vstupné náklady (na 1 ks)</h3>
           <p className="text-[11px] text-slate-500 mb-3">Bez švov, bez obšívania — potlač priamo na bezšvovú tubulárnu pletenú látku.</p>
           <div className="space-y-2.5 text-xs">
-            <Field label="Nákup čistej (nepotlačenej) buffky (€/ks, bez DPH)" value={naklady.cena_buffka_ks} step="0.05" onChange={(v) => ulozNaklady({ cena_buffka_ks: v })} />
+            <div>
+              <label className="block text-slate-400 mb-1">Nákup čistej (nepotlačenej) buffky — produkt zo záložky Produkty</label>
+              <select value={naklady.produkt_id || ''} onChange={(e) => ulozNaklady({ produkt_id: e.target.value ? Number(e.target.value) : null })} className="w-full px-2 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs">
+                <option value="">-- bez produktu: použije sa ručná cena nižšie --</option>
+                {produkty.map(p => <option key={p.id} value={p.id}>{p.nazov} — {Number(p.zakladna_cena).toFixed(2)} €/ks</option>)}
+              </select>
+              {produktBasic && <p className="text-[10px] text-emerald-400 mt-1">Použije sa skutočná nákupná cena produktu: {Number(produktBasic.zakladna_cena).toFixed(2)} €/ks.</p>}
+            </div>
+            <Field label="Ručná cena čistej buffky (€/ks, bez DPH) — len ak nie je vybraný produkt" value={naklady.cena_buffka_ks} step="0.05" onChange={(v) => ulozNaklady({ cena_buffka_ks: v })} />
+            <div className="flex items-center gap-3 p-2.5 bg-slate-950 rounded-xl border border-slate-800">
+              <FotoSlot supabase={supabase} url={nastavenia.foto_basic_url} priecinok="buffky-materialy" onZmena={(url) => ulozNastavenia({ foto_basic_url: url })} />
+              <span className="text-slate-400">Fotka materiálu Tubular Basic — zobrazí sa zákazníkovi v konfigurátore.</span>
+            </div>
             <div className="p-2.5 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between">
               <span className="text-slate-400">Potlač — 5 buffiek/1bm sublimácie (živo z Kostra cien)</span>
               <span className="text-white font-mono font-bold">{nakladBmSublimacia.toFixed(2)} € / bm ÷ {BUFFIEK_NA_BM} = {nakladPotlacKs.toFixed(2)} €/ks</span>
@@ -170,6 +189,7 @@ export default function BuffkyTab({ supabase }) {
                     <span className="font-bold text-white">{m.nazov}</span>
                     {produkt && <span className="text-emerald-400 font-mono">{Number(produkt.zakladna_cena).toFixed(2)} €/ks</span>}
                   </div>
+                  <FotoSlot supabase={supabase} url={m.foto_url} priecinok="buffky-materialy" onZmena={(url) => ulozFotoPremium(m.kod, url)} />
                   <select value={m.produkt_id || ''} onChange={(e) => pripojProduktPremium(m.kod, e.target.value ? Number(e.target.value) : null)} className="w-full px-2 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs">
                     <option value="">-- vyber produkt --</option>
                     {produkty.map(p => <option key={p.id} value={p.id}>{p.nazov} — {Number(p.zakladna_cena).toFixed(2)} €/ks</option>)}

@@ -69,7 +69,9 @@ export function elektrinaZariadeniaEurZaHod(costMetricsRiadky, zariadenieId) {
   const zariadenie = metriky.find(m => m.id === zariadenieId);
   const cenaElektriny = metriky.find(m => m.name === 'Cena elektriny');
   if (!zariadenie || !cenaElektriny) return 0;
-  return (parseFloat(zariadenie.power_kw) || 0) * (parseFloat(cenaElektriny.value) || 0);
+  // Elektrina (kW x cena kWh) + amortizacia stroja (€/hod, zadava sa pri zariadeni v tabulke nakladov) = reálna hodinova cena behu stroja.
+  // Praca operatora sa pocita zvlast (sadzba za hodinu pri konkretnej technologii).
+  return (parseFloat(zariadenie.power_kw) || 0) * (parseFloat(cenaElektriny.value) || 0) + (parseFloat(zariadenie.amortizacia_hod) || 0);
 }
 
 // Sublimacia — potlac na tricka. Papier sa reze z 160cm rolky podla plochy motivu. Deleguje na

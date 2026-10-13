@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ShoppingCart, CreditCard, Gift } from 'lucide-react';
+import { ShoppingCart, CreditCard, Gift, Mail } from 'lucide-react';
+import { vytvorB2bDopyt } from './b2bDopyt';
 import PbtHeader from './PbtHeader';
 import { priceAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG, QUANTITY_LEVELS } from './pricingEngine';
 import NumberInput from './NumberInput';
@@ -24,6 +25,7 @@ export default function Buffky({ supabase, onSpat }) {
   const [osobnyOdber, setOsobnyOdber] = useState(false);
   const b2b = useB2bKod(supabase);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [dopytBezi, setDopytBezi] = useState(false);
   const [confirmation, setConfirmation] = useState('');
   const [submitError, setSubmitError] = useState('');
 
@@ -102,6 +104,25 @@ export default function Buffky({ supabase, onSpat }) {
     }
   };
 
+  const poslatDopyt = async () => {
+    if (!engineRef.current) return;
+    if (typ === 'premium' && !materialKod) { setSubmitError('Vyber materiál buffky.'); return; }
+    setDopytBezi(true); setSubmitError(''); setConfirmation('');
+    try {
+      const d = await vytvorB2bDopyt(supabase, {
+        typ: 'buffka', produktNazov: typ === 'premium' ? 'Buffka Premium' : 'Buffka Tubular Basic',
+        popisVarianty: typ === 'premium' ? `${vybranyMaterial?.nazov || ''}, bočný šev, obšitý lem` : 'bezšvová tubulárna',
+        pocetKs, cenaKusBezDph: subtotal / pocetKs, cenaSpoluBezDph: subtotal, expres: deliverySpeed === 'express', osobnyOdber, b2b, engine: engineRef.current,
+      });
+      setConfirmation(`Dopyt DOPYT-${d.kod} je uložený. Otvára sa e-mail — doplňte firmu a termín dodania a odošlite ho.`);
+      window.location.href = d.mailto;
+    } catch (e) {
+      setSubmitError('Dopyt sa nepodarilo pripraviť: ' + e.message);
+    } finally {
+      setDopytBezi(false);
+    }
+  };
+
   if (isLoading) return <div className="min-h-screen flex items-center justify-center text-slate-500 text-sm">Načítavam…</div>;
   if (loadError) return <div className="min-h-screen flex items-center justify-center text-rose-600 text-sm px-4 text-center">{loadError}</div>;
   if (!nastavenia) return <div className="min-h-screen flex items-center justify-center text-slate-500 text-sm px-4 text-center">Buffky ešte nie sú nastavené — spusti migráciu `migration_buffky.sql`.</div>;
@@ -121,14 +142,22 @@ export default function Buffky({ supabase, onSpat }) {
           <button onClick={() => setTyp('premium')} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${typ === 'premium' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'}`}>Premium</button>
         </div>
         {typ === 'tubular_basic' ? (
-          <p className="text-[11px] text-slate-400">Bez švov, bez obšívania — potlač priamo na bezšvovú tubulárnu pletenú látku.</p>
+          <div className="flex items-center gap-3">
+            {nastavenia?.foto_basic_url && <img src={nastavenia.foto_basic_url} alt="Tubular Basic — materiál" className="w-12 h-12 rounded-lg object-cover border border-slate-700" />}
+            <p className="text-[11px] text-slate-400">Bez švov, bez obšívania — potlač priamo na bezšvovú tubulárnu pletenú látku.</p>
+          </div>
         ) : (
           <>
             <p className="text-[11px] text-slate-400">Jeden bočný šev, obšitý horný aj spodný okraj (ako rukáv trička).</p>
-            <select value={materialKod} onChange={(e) => setMaterialKod(e.target.value)} className="ml-auto bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
-              {premiumMaterialy.length === 0 && <option value="">-- materiály nie sú nastavené --</option>}
-              {premiumMaterialy.map(m => <option key={m.kod} value={m.kod}>{m.nazov}</option>)}
-            </select>
+            <div className="ml-auto flex flex-wrap items-stretch gap-2">
+              {premiumMaterialy.length === 0 && <span className="text-xs text-slate-500">-- materiály nie sú nastavené --</span>}
+              {premiumMaterialy.map(m => (
+                <button key={m.kod} type="button" onClick={() => setMaterialKod(m.kod)} title={m.popis || ''} className={`flex items-center gap-2 pr-3 rounded-xl border text-left transition overflow-hidden ${materialKod === m.kod ? 'border-cyan-500 bg-cyan-950/50 ring-1 ring-cyan-500/50' : 'border-slate-700 bg-slate-800 hover:border-slate-500'}`}>
+                  {m.foto_url ? <img src={m.foto_url} alt={m.nazov} className="w-12 h-12 object-cover" /> : <div className="w-12 h-12 bg-slate-700/60" />}
+                  <span className="text-xs font-bold text-white py-1.5">{m.nazov}</span>
+                </button>
+              ))}
+            </div>
           </>
         )}
       </div>
@@ -356,7 +385,7 @@ export default function Buffky({ supabase, onSpat }) {
             </div>
             <div className="bg-slate-800/60 rounded-xl p-2 border border-slate-700/50">
               <div className="text-slate-400 text-[10px] uppercase font-bold">Rozmery</div>
-              <div className="font-bold text-cyan-400 mt-0.5">50 × 25 cm (valec)</div>
+              <div className="font-bold text-cyan-400 mt-0.5">obvod 50 × dĺžka 50 cm</div>
             </div>
           </div>
 
@@ -406,6 +435,13 @@ export default function Buffky({ supabase, onSpat }) {
             <button onClick={odoslatObjednavku} disabled={isSubmitting} className="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 disabled:opacity-60 text-white font-bold text-sm shadow-lg shadow-indigo-500/25 flex items-center justify-center gap-2 transition">
               <ShoppingCart className="w-4 h-4" /> {isSubmitting ? 'Vytváram objednávku…' : 'Objednať a zaplatiť'}
             </button>
+
+            {b2b.kod && (
+              <button type="button" onClick={poslatDopyt} disabled={isSubmitting || dopytBezi} className="w-full py-3 rounded-xl bg-slate-800 border border-cyan-600/60 text-cyan-300 hover:bg-slate-700 disabled:opacity-60 font-bold text-sm flex items-center justify-center gap-2 transition">
+                <Mail className="w-4 h-4" /> {dopytBezi ? 'Pripravujem e-mail…' : 'Vyžiadať cenovú ponuku e-mailom'}
+              </button>
+            )}
+            {b2b.kod && <p className="text-[11px] text-slate-400">S B2B kódom môžete namiesto platby kartou poslať dopyt: otvorí sa Vám e-mail s predvyplneným výberom a cenou, stačí doplniť termín dodania a odoslať. Návrh sa uloží k dopytu.</p>}
             {confirmation && <p className="text-xs text-emerald-400">{confirmation}</p>}
             {submitError && <p className="text-xs text-rose-400">{submitError}</p>}
           </div>

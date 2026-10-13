@@ -13,13 +13,22 @@ export default function B2bKodyTab({ supabase }) {
   const [isLoading, setIsLoading] = useState(true);
   const [chyba, setChyba] = useState('');
   const [skopirovane, setSkopirovane] = useState('');
+  const [dopytEmail, setDopytEmail] = useState('');
+  const [dopytEmailChyba, setDopytEmailChyba] = useState('');
 
   const nacitaj = async () => {
     setIsLoading(true);
     const { data, error } = await supabase.from('b2b_kody').select('*').order('id');
     if (error) setChyba('Tabuľka B2B kódov sa nenačítala — spusti migráciu migration_b2b_kody.sql v Supabase. (' + error.message + ')');
     setKody(data || []);
+    const { data: n, error: nErr } = await supabase.from('b2b_dopyt_nastavenia').select('email').eq('id', 1).maybeSingle();
+    if (nErr) setDopytEmailChyba('Dopyty e-mailom ešte nie sú zapnuté — spusti migráciu migration_b2b_dopyty.sql v Supabase.');
+    else { setDopytEmailChyba(''); setDopytEmail(n?.email || ''); }
     setIsLoading(false);
+  };
+  const ulozDopytEmail = async () => {
+    const { error } = await supabase.from('b2b_dopyt_nastavenia').upsert({ id: 1, email: dopytEmail.trim() });
+    if (error) window.alert('Uloženie zlyhalo: ' + error.message);
   };
   useEffect(() => { nacitaj(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -53,6 +62,19 @@ export default function B2bKodyTab({ supabase }) {
           <p className="text-xs text-slate-400 mt-1 max-w-3xl">Agentúra zadá svoj kód v konfigurátore (alebo otvorí odkaz s kódom) a všetky ceny sa jej znížia o dohodnuté %. Zľava sa odpočíta z ceny tovaru (bez dopravy), počíta sa na serveri. Kód vypneš tlačidlom „Aktívny“ alebo zmažeš, bez zásahu do ostatných.</p>
         </div>
         <button onClick={pridaj} className="text-xs text-indigo-400 font-semibold hover:text-indigo-300 flex items-center gap-1"><Plus className="w-3.5 h-3.5" /> Pridať kód</button>
+      </div>
+
+      <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4 space-y-2">
+        <h3 className="font-bold text-sm text-white">Dopyty e-mailom</h3>
+        <p className="text-xs text-slate-400 max-w-3xl">Agentúra s B2B kódom môže v konfigurátore (čelenky, buffky) kliknúť „Vyžiadať cenovú ponuku e-mailom“ — otvorí sa jej e-mail s predvyplneným výberom a cenou, návrh sa uloží pod číslom DOPYT-XXXXXXXX. Keď ti príde odpoveď, prilep text e-mailu do <strong className="text-slate-200">AI zadanie zákazky</strong> (Zákazky) — zákazka sa načíta jedným klikom aj s grafikou a termínom, ktorý zákazník dopísal.</p>
+        {dopytEmailChyba && <p className="text-xs text-amber-300">{dopytEmailChyba}</p>}
+        <div className="flex items-end gap-2 flex-wrap">
+          <div>
+            <label className="block text-[10px] text-slate-400 font-semibold mb-0.5">E-mail, na ktorý majú chodiť dopyty</label>
+            <input type="email" value={dopytEmail} onChange={(e) => setDopytEmail(e.target.value)} onBlur={ulozDopytEmail} placeholder="napr. objednavky@vasafirma.sk" className="w-72 px-2 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white" />
+          </div>
+          {/example\.sk$/i.test(dopytEmail) && <span className="text-[11px] text-amber-300 pb-1.5">Adresa je zatiaľ fiktívna — nahraď ju skutočnou.</span>}
+        </div>
       </div>
 
       {chyba && <p className="text-xs text-rose-400 bg-rose-950/30 border border-rose-900/40 rounded-lg p-3">{chyba}</p>}

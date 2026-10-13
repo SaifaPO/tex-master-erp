@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Truck, Eye, ShoppingCart, CreditCard, Gift } from 'lucide-react';
+import { Truck, Eye, ShoppingCart, CreditCard, Gift, Mail } from 'lucide-react';
+import { vytvorB2bDopyt } from './b2bDopyt';
 import PbtHeader from './PbtHeader';
 import { priceAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG, QUANTITY_LEVELS } from './pricingEngine';
 import NumberInput from './NumberInput';
@@ -9,47 +10,70 @@ import { initCelenkyEngine } from './celenky/celenkyEngine';
 
 const BUCKET = 'print-designs';
 
+// Zaloha, ak tabulky variantov este nie su vytvorene (migration_celenky_varianty_a_fotky.sql): jedna veľkost, jeden material.
+const ZALOZNY_VARIANT = { velkost_kod: 'adult_standard', velkost_nazov: 'Dospelý — štandard', material_kod: 'combed', sirka_cm: 51, vyska_cm: 9, naklad_ks: null };
+
 export default function Celenky({ supabase, onSpat }) {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [nakladKs, setNakladKs] = useState(0);
   const [pricingConfig, setPricingConfig] = useState(DEFAULT_PRICING_CONFIG);
   const [nastavenia, setNastavenia] = useState(null);
+  const [varianty, setVarianty] = useState([]);
+  const [materialy, setMaterialy] = useState([]);
+  const [velkost, setVelkost] = useState('adult_standard');
+  const [material, setMaterial] = useState('combed');
 
   const [pocetKs, setPocetKs] = useState(1);
   const [deliverySpeed, setDeliverySpeed] = useState('standard');
   const [osobnyOdber, setOsobnyOdber] = useState(false);
   const b2b = useB2bKod(supabase);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [dopytBezi, setDopytBezi] = useState(false);
   const [confirmation, setConfirmation] = useState('');
   const [submitError, setSubmitError] = useState('');
 
   const rootRef = useRef(null);
   const engineRef = useRef(null);
+  const poslednyStavRef = useRef(null); // navrh sa pri zmene velkosti/materialu prenesie do noveho strihu
 
   useEffect(() => {
     if (!supabase) { setLoadError('Supabase klient nie je nakonfigurovaný.'); setIsLoading(false); return; }
     (async () => {
-      const [{ data: nak }, { data: cfg }, { data: n }] = await Promise.all([
+      const [{ data: nak }, { data: cfg }, { data: n }, { data: v }, { data: m }] = await Promise.all([
         supabase.from('celenky_naklady_verejny').select('naklad_ks').maybeSingle(),
         supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
         supabase.from('celenky_nastavenia').select('*').eq('id', 1).maybeSingle(),
+        supabase.from('celenky_varianty_verejny').select('*').order('poradie'),
+        supabase.from('celenky_materialy').select('*').order('poradie'),
       ]);
       setNakladKs(nak ? Number(nak.naklad_ks) : 0);
+      if (v && v.length > 0) {
+        setVarianty(v);
+        setMaterialy(m || []);
+        // predvolene: prvy dospely stand. vo vyssej kvalite ak existuje
+        const predv = v.find(x => x.velkost_kod === 'adult_standard' && x.material_kod === 'combed') || v[0];
+        setVelkost(predv.velkost_kod); setMaterial(predv.material_kod);
+      }
       if (cfg) setPricingConfig(mapConfigFromDb(cfg));
       setNastavenia(n || null);
       setIsLoading(false);
     })();
   }, [supabase]);
 
+  const velkosti = [...new Map(varianty.map(x => [x.velkost_kod, x.velkost_nazov])).entries()].map(([kod, nazov]) => ({ kod, nazov }));
+  const aktVariant = varianty.find(x => x.velkost_kod === velkost && x.material_kod === material) || varianty[0] || ZALOZNY_VARIANT;
+  const aktMaterial = materialy.find(x => x.kod === aktVariant.material_kod);
+
   useEffect(() => {
     if (isLoading || loadError || !nastavenia || !rootRef.current) return;
-    engineRef.current = initCelenkyEngine(rootRef.current);
-    return () => { engineRef.current?.destroy(); engineRef.current = null; };
-  }, [isLoading, loadError, nastavenia]);
+    engineRef.current = initCelenkyEngine(rootRef.current, { widthCm: Number(aktVariant.sirka_cm), heightCm: Number(aktVariant.vyska_cm), initialState: poslednyStavRef.current });
+    return () => { poslednyStavRef.current = engineRef.current?.getState?.() || null; engineRef.current?.destroy(); engineRef.current = null; };
+  }, [isLoading, loadError, nastavenia, aktVariant.velkost_kod, aktVariant.material_kod, aktVariant.sirka_cm, aktVariant.vyska_cm]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- Cena ----
-  const cenaKus = priceAt(nakladKs, pocetKs, pricingConfig);
+  const nakladVarianta = aktVariant.naklad_ks != null ? Number(aktVariant.naklad_ks) : nakladKs;
+  const cenaKus = priceAt(nakladVarianta, pocetKs, pricingConfig);
   const subtotalPredZlavou = Math.max(cenaKus * pocetKs, Number(nastavenia?.minimalna_cena_objednavky) || 0);
   // B2B zľava (kód agentúry) sa odpočíta z ceny tovaru — rovnako ako na serveri.
   const b2bZlavaEur = Math.round(subtotalPredZlavou * (Number(b2b.zlavaPercent) || 0)) / 100;
@@ -75,7 +99,7 @@ export default function Celenky({ supabase, onSpat }) {
       const dizajnJson = engineRef.current.getDesignJson();
 
       const { data, error } = await supabase.functions.invoke('celenky-create-draft-order', {
-        body: { pocetKs, deliverySpeed, osobnyOdber, b2bKod: b2b.kod, suborNazov: 'celenka.png', suborCesta: cesta, dizajnJson },
+        body: { pocetKs, velkost: aktVariant.velkost_kod, material: aktVariant.material_kod, deliverySpeed, osobnyOdber, b2bKod: b2b.kod, suborNazov: 'celenka.png', suborCesta: cesta, dizajnJson },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -87,6 +111,24 @@ export default function Celenky({ supabase, onSpat }) {
       setSubmitError('Objednávku sa nepodarilo odoslať: ' + e.message);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const poslatDopyt = async () => {
+    if (!engineRef.current) return;
+    setDopytBezi(true); setSubmitError(''); setConfirmation('');
+    try {
+      const d = await vytvorB2bDopyt(supabase, {
+        typ: 'celenka', produktNazov: 'Čelenka',
+        popisVarianty: `${aktVariant.velkost_nazov}, ${aktMaterial?.nazov || aktVariant.material_kod}, ${Number(aktVariant.sirka_cm)} × ${Number(aktVariant.vyska_cm)} cm`,
+        pocetKs, cenaKusBezDph: subtotal / pocetKs, cenaSpoluBezDph: subtotal, expres: deliverySpeed === 'express', osobnyOdber, b2b, engine: engineRef.current,
+      });
+      setConfirmation(`Dopyt DOPYT-${d.kod} je uložený. Otvára sa e-mail — doplňte firmu a termín dodania a odošlite ho.`);
+      window.location.href = d.mailto;
+    } catch (e) {
+      setSubmitError('Dopyt sa nepodarilo pripraviť: ' + e.message);
+    } finally {
+      setDopytBezi(false);
     }
   };
 
@@ -106,9 +148,37 @@ export default function Celenky({ supabase, onSpat }) {
       <main ref={rootRef} className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-4 grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
         {/* ĽAVÝ PANEL: nástroje, farby, text, grafiky, vrstvy */}
         <aside className="lg:col-span-4 bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden flex flex-col">
-          <div className="p-3 bg-gradient-to-r from-slate-50 to-indigo-50/40 border-b border-slate-200 flex items-center justify-between gap-2">
-            <span className="text-xs font-bold text-slate-700">✂️ Strih:</span>
-            <span className="text-xs font-bold bg-white text-indigo-700 border border-indigo-200 rounded-lg px-2.5 py-1.5">Štandard (51 × 9 cm)</span>
+          <div className="p-3 bg-gradient-to-r from-slate-50 to-indigo-50/40 border-b border-slate-200 space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-bold text-slate-700">✂️ Strih:</span>
+              <span className="text-xs font-bold bg-white text-indigo-700 border border-indigo-200 rounded-lg px-2.5 py-1.5">{aktVariant.velkost_nazov} · {Number(aktVariant.sirka_cm)} × {Number(aktVariant.vyska_cm)} cm</span>
+            </div>
+            {velkosti.length > 1 && (
+              <div className="grid grid-cols-3 gap-1">
+                {velkosti.map(v => (
+                  <button key={v.kod} type="button" onClick={() => setVelkost(v.kod)} className={`px-1.5 py-1.5 rounded-lg text-[11px] font-bold border transition ${velkost === v.kod ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}>{v.nazov}</button>
+                ))}
+              </div>
+            )}
+            {materialy.length > 1 && (
+              <div className="grid grid-cols-2 gap-2">
+                {materialy.filter(m => varianty.some(x => x.velkost_kod === velkost && x.material_kod === m.kod)).map(m => {
+                  const vm = varianty.find(x => x.velkost_kod === velkost && x.material_kod === m.kod);
+                  return (
+                    <button key={m.kod} type="button" onClick={() => setMaterial(m.kod)} className={`rounded-xl border overflow-hidden text-left transition ${material === m.kod ? 'border-indigo-600 ring-2 ring-indigo-200' : 'border-slate-200 hover:border-indigo-300'}`}>
+                      {m.foto_url
+                        ? <img src={m.foto_url} alt={m.nazov} className="w-full h-16 object-cover" loading="lazy" />
+                        : <div className="w-full h-16 bg-gradient-to-br from-slate-200 to-slate-100 flex items-center justify-center text-[10px] text-slate-400">foto materiálu</div>}
+                      <div className="p-1.5 bg-white">
+                        <div className="text-[11px] font-bold text-slate-800">{m.nazov}</div>
+                        <div className="text-[10px] text-slate-500">{Number(vm.sirka_cm)} × {Number(vm.vyska_cm)} cm</div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {aktMaterial?.popis && <p className="text-[10px] text-slate-500">{aktMaterial.popis}</p>}
           </div>
 
           <div className="flex border-b border-slate-200 bg-slate-50 p-1 gap-1 overflow-x-auto">
@@ -373,7 +443,7 @@ export default function Celenky({ supabase, onSpat }) {
             <div className="p-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-slate-800">📐 Rozložený strih čelenky</span>
-                <span className="text-[11px] font-mono font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded">51.0 × 9.0 cm</span>
+                <span className="text-[11px] font-mono font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded">{Number(aktVariant.sirka_cm).toFixed(1)} × {Number(aktVariant.vyska_cm).toFixed(1)} cm</span>
               </div>
               <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none">
                 <input type="checkbox" id="bleedGuideCheckbox" defaultChecked className="accent-indigo-600 rounded" />
@@ -444,6 +514,13 @@ export default function Celenky({ supabase, onSpat }) {
             <button onClick={odoslatObjednavku} disabled={isSubmitting} className="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white font-bold text-sm flex items-center justify-center gap-2 transition">
               <ShoppingCart className="w-4 h-4" /> {isSubmitting ? 'Vytváram objednávku…' : 'Objednať a zaplatiť'}
             </button>
+
+            {b2b.kod && (
+              <button type="button" onClick={poslatDopyt} disabled={isSubmitting || dopytBezi} className="w-full py-3 rounded-xl bg-white border border-indigo-300 text-indigo-700 hover:bg-indigo-50 disabled:opacity-60 font-bold text-sm flex items-center justify-center gap-2 transition">
+                <Mail className="w-4 h-4" /> {dopytBezi ? 'Pripravujem e-mail…' : 'Vyžiadať cenovú ponuku e-mailom'}
+              </button>
+            )}
+            {b2b.kod && <p className="text-[11px] text-slate-500">S B2B kódom môžete namiesto platby kartou poslať dopyt: otvorí sa Vám e-mail s predvyplneným výberom a cenou, stačí doplniť termín dodania a odoslať. Návrh sa uloží k dopytu.</p>}
             {confirmation && <p className="text-xs text-emerald-600">{confirmation}</p>}
             {submitError && <p className="text-xs text-rose-600">{submitError}</p>}
           </div>
@@ -471,8 +548,8 @@ export default function Celenky({ supabase, onSpat }) {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {QUANTITY_LEVELS.map(level => {
-                  const rate = priceAt(nakladKs, level, pricingConfig);
-                  const base = priceAt(nakladKs, QUANTITY_LEVELS[0], pricingConfig);
+                  const rate = priceAt(nakladVarianta, level, pricingConfig);
+                  const base = priceAt(nakladVarianta, QUANTITY_LEVELS[0], pricingConfig);
                   const discount = base > 0 ? Math.round(((base - rate) / base) * 100) : 0;
                   const isCurrent = pocetKs >= level && (level === QUANTITY_LEVELS[QUANTITY_LEVELS.length - 1] || pocetKs < QUANTITY_LEVELS[QUANTITY_LEVELS.indexOf(level) + 1]);
                   return (

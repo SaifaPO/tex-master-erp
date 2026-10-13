@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Layers3, Plus, Trash2 } from 'lucide-react';
 import { elektrinaZariadeniaEurZaHod, vcSietotlacCelkom, vcLaserRezanie, vcDtfGarmentRozpis, DTF_ODPAD_PREDVOLENY_PERCENT } from './vyrobneNaklady';
 import NumberInput from '../NumberInput';
@@ -78,7 +78,7 @@ export default function KostraCienTab({ supabase }) {
       supabase.from('cennik_sietotlac_velkosti').select('*').order('poradie'),
       supabase.from('kostra_vysivka').select('*').eq('id', 1).maybeSingle(),
       supabase.from('materials').select('id, name, unit').order('name'),
-      supabase.from('cost_metrics').select('id, name, category, value, power_kw, vykon_za_hodinu').order('name'),
+      supabase.from('cost_metrics').select('*').order('name'),
       supabase.from('cennik_laser_rezanie').select('*').eq('id', 1).maybeSingle(),
       supabase.from('cennik_laser_hrubky').select('*').order('poradie'),
     ]);
@@ -183,6 +183,19 @@ export default function KostraCienTab({ supabase }) {
     setSietotlacVelkosti(v => v.filter(x => x.id !== id));
     await supabase.from('cennik_sietotlac_velkosti').delete().eq('id', id);
   };
+
+  // Stroje (elektrina + amortizacia tlaciarne a kalandra) €/bm sa uklada do textil_naklady.stroje_bm, aby ich zahrnuli aj verejne
+  // ceny v zakaznickych appkach (Buffky, Textilna metraz...). Zapis sa robi len ak stlpec uz existuje (migration_sublimacia_stroje_bm.sql).
+  const strojeBmUlozeneRef = useRef(null);
+  useEffect(() => {
+    if (!textilSub || !costMetrics?.length || !('stroje_bm' in textilSub)) return;
+    const rychlost = Math.max(0.01, textilSub.rychlost_m_hod || 1);
+    const val = Math.round(((elektrinaZariadeniaEurZaHod(costMetrics, textilSub.tlaciaren_zariadenie_id) + elektrinaZariadeniaEurZaHod(costMetrics, textilSub.kalander_zariadenie_id)) / rychlost) * 10000) / 10000;
+    const ulozene = strojeBmUlozeneRef.current ?? (Number(textilSub.stroje_bm) || 0);
+    if (Math.abs(ulozene - val) < 0.00005) return;
+    strojeBmUlozeneRef.current = val;
+    supabase.from('textil_naklady').update({ stroje_bm: val }).eq('technologia', 'sublimacia');
+  }, [textilSub, costMetrics, supabase]);
 
   if (isLoading || !textilSub || !sublimaciaGarment || !rezany || !dtf || !sietotlac || !vysivka || !laserRezanie) {
     return <p className="text-sm text-slate-500">Načítavam…</p>;

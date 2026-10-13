@@ -64,18 +64,21 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json();
     const {
-      pocetKs, deliverySpeed = 'standard', osobnyOdber = false, b2bKod = null,
+      pocetKs, velkost = 'adult_standard', material = 'combed', deliverySpeed = 'standard', osobnyOdber = false, b2bKod = null,
       suborNazov = null, suborCesta = null, dizajnJson = null,
     } = body;
 
     const ks = Math.max(1, Math.round(Number(pocetKs)) || 1);
     if (!suborCesta) throw new Error('Chýba tlačový súbor čelenky.');
 
-    const [{ data: nak }, { data: cfg }, { data: nastavenia }] = await Promise.all([
+    // Variant (velkost x material) urcuje rozmer strihu aj nakupnu cenu; ak tabulka variantov este neexistuje, pouzije sa povodny jednotny naklad.
+    const { data: variant } = await supabase.from('celenky_varianty_verejny').select('*').eq('velkost_kod', String(velkost)).eq('material_kod', String(material)).maybeSingle();
+    const [{ data: nakPovodny }, { data: cfg }, { data: nastavenia }] = await Promise.all([
       supabase.from('celenky_naklady_verejny').select('naklad_ks').maybeSingle(),
       supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
       supabase.from('celenky_nastavenia').select('*').eq('id', 1).maybeSingle(),
     ]);
+    const nak = variant || nakPovodny;
     if (!nak) throw new Error('Výrobné náklady čeleniek nie sú nastavené.');
     if (!nastavenia) throw new Error('Nastavenia čeleniek sa nenašli.');
 
@@ -107,6 +110,7 @@ Deno.serve(async (req) => {
       subor_nazov: suborNazov,
       subor_cesta: suborCesta,
       osobny_odber: !!osobnyOdber,
+      ...(variant ? { velkost: variant.velkost_kod, material: variant.material_kod, sirka_cm: variant.sirka_cm, vyska_cm: variant.vyska_cm } : {}),
     });
     if (insertErr) throw insertErr;
 
@@ -120,7 +124,7 @@ Deno.serve(async (req) => {
       draft_order: {
         line_items: [
           {
-            title: `Čelenka — vlastný dizajn (${ks} ks)` + (osobnyOdber ? ' (osobný odber)' : ''),
+            title: `Čelenka — vlastný dizajn${variant ? ` (${variant.velkost_nazov}, ${variant.material_kod === 'smooth' ? 'hladký' : 'počesaný'} ${variant.sirka_cm}×${variant.vyska_cm} cm)` : ''} (${ks} ks)` + (osobnyOdber ? ' (osobný odber)' : ''),
             price: grandTotal.toFixed(2),
             quantity: 1,
             taxable: false, // cena uz zahrna DPH (vypocitana server-side) — Shopify ju druhykrat neprirata
@@ -128,6 +132,9 @@ Deno.serve(async (req) => {
             properties: [
               { name: '_objednavka_id', value: objednavkaId },
               { name: '_pocet_ks', value: String(ks) },
+              { name: '_velkost', value: variant ? String(variant.velkost_kod) : '' },
+              { name: '_material', value: variant ? String(variant.material_kod) : '' },
+              { name: '_rozmer_cm', value: variant ? `${variant.sirka_cm}x${variant.vyska_cm}` : '' },
               { name: '_subor', value: suborNazov || '' },
               { name: '_osobny_odber', value: osobnyOdber ? 'áno' : 'nie' },
               { name: '_b2b_kod', value: b2bZlavaPercent > 0 ? String(b2bKod).trim().toUpperCase() : '' },

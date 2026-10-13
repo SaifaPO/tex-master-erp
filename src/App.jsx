@@ -4245,10 +4245,57 @@ export default function App() {
     recognition.start();
   };
 
+  // E-mail s dopytom z PrintStudio (B2B): obsahuje cislo DOPYT-XXXXXXXX, podla ktoreho sa presne nacita vyber, mnozstvo a ulozeny navrh;
+  // firmu a termin dodania, ktore zakaznik dopisal do e-mailu, precita jednoduchym hladanim riadkov (bez AI).
+  const nacitajDopytZEmailu = async (text) => {
+    const m = /DOPYT-([0-9A-Fa-f]{8})/.exec(text);
+    if (!m) return null;
+    const kod = m[1].toUpperCase();
+    const { data: d, error } = await supabase.from('b2b_dopyty').select('*').eq('kod', kod).maybeSingle();
+    if (error) throw new Error(error.message.includes('b2b_dopyty') ? 'Tabuľka dopytov ešte neexistuje — spusti migráciu migration_b2b_dopyty.sql.' : error.message);
+    if (!d) throw new Error(`Dopyt DOPYT-${kod} sa v systéme nenašiel.`);
+    const riadok = (labelRegex) => { const mm = new RegExp(`^[>\\s]*${labelRegex}\\s*:\\s*(.*)$`, 'im').exec(text); return (mm?.[1] || '').trim(); };
+    const firma = riadok('Firma[^:\\n]*');
+    const ico = riadok('IČO');
+    const poznamkaZakaznika = riadok('Poznámka');
+    const terminText = riadok('Termín dodania[^:\\n]*');
+    let deliveryDate = '';
+    const dm = /(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})?/.exec(terminText);
+    if (dm) {
+      const den = Number(dm[1]), mes = Number(dm[2]);
+      let rok = dm[3] ? Number(dm[3]) : new Date().getFullYear();
+      if (!dm[3] && new Date(rok, mes - 1, den) < new Date()) rok += 1;
+      deliveryDate = `${rok}-${String(mes).padStart(2, '0')}-${String(den).padStart(2, '0')}`;
+    } else if (/\d{4}-\d{2}-\d{2}/.test(terminText)) deliveryDate = /\d{4}-\d{2}-\d{2}/.exec(terminText)[0];
+    let suborOdkaz = '';
+    if (d.subor_cesta) {
+      const { data: sig } = await supabase.storage.from('print-designs').createSignedUrl(d.subor_cesta, 60 * 60 * 24 * 14);
+      suborOdkaz = sig?.signedUrl || '';
+    }
+    const norm = (v) => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const token = d.produkt_typ === 'celenka' ? 'celenk' : d.produkt_typ === 'buffka' ? 'buff' : norm(d.produkt_nazov).slice(0, 6);
+    const zhoda = products.find(p => norm(p.name).includes(token));
+    const poznamky = [
+      `Dopyt DOPYT-${kod} z PrintStudio (B2B${d.agentura ? `, ${d.agentura}` : ''}): ${d.produkt_nazov}${d.popis_varianty ? ` — ${d.popis_varianty}` : ''}, ${d.pocet_ks} ks.`,
+      d.cena_spolu_bez_dph != null ? `Orientačná cena z konfigurátora: ${Number(d.cena_kus_bez_dph).toFixed(2)} €/ks, spolu ${Number(d.cena_spolu_bez_dph).toFixed(2)} € bez DPH.${d.expres ? ' Expres.' : ''}${d.osobny_odber ? ' Osobný odber.' : ''}` : '',
+      suborOdkaz ? `Návrh (tlačový súbor, odkaz platí 14 dní): ${suborOdkaz}` : '',
+      ico ? `IČO: ${ico}` : '',
+      poznamkaZakaznika ? `Poznámka zákazníka: ${poznamkaZakaznika}` : '',
+    ].filter(Boolean).join('\n');
+    return {
+      customerName: firma || d.agentura || '', deliveryDate, notes: poznamky, dopytKod: kod,
+      items: [{ tempId: 'dopyt-0', productId: zhoda?.id || '', productNameGuess: d.produkt_nazov, qty: d.pocet_ks, gender: 'men', notes: d.popis_varianty || '' }],
+    };
+  };
+
   const handleProcessAiOrderInput = async () => {
     setAiOrderError('');
     setIsProcessingAiOrder(true);
     try {
+      if (!aiOrderImageFile && /DOPYT-[0-9A-Fa-f]{8}/.test(aiOrderText)) {
+        const vysledok = await nacitajDopytZEmailu(aiOrderText);
+        if (vysledok) { setAiOrderResult(vysledok); return; }
+      }
       const body = {
         knownProducts: products.map(p => ({ id: p.id, name: p.name, customCode: p.customCode })),
         knownCustomers: Array.from(new Set(orders.map(o => o.customer).filter(Boolean)))
@@ -4310,6 +4357,7 @@ export default function App() {
     const unmatchedCount = aiOrderResult.items.length - matchedItems.length;
     const newPendingItems = matchedItems.map(buildPendingItemFromAiGuess).filter(Boolean);
     if (newPendingItems.length === 0) { triggerNotification('error', 'Žiadna položka sa nedala priradiť k produktu z katalógu — priraď produkty ručne pred potvrdením.'); return; }
+    if (aiOrderResult.dopytKod) supabase.from('b2b_dopyty').update({ stav: 'importovany', importovane_at: new Date().toISOString() }).eq('kod', aiOrderResult.dopytKod).then(() => {});
     if (aiOrderResult.customerName) setNewOrderCustomer(aiOrderResult.customerName);
     if (aiOrderResult.deliveryDate) setNewOrderDeliveryDate(aiOrderResult.deliveryDate);
     if (aiOrderResult.notes) setOrderNotes(prev => prev ? `${prev}\n${aiOrderResult.notes}` : aiOrderResult.notes);
@@ -11721,7 +11769,7 @@ export default function App() {
                           <Camera className="h-4 w-4" /> {isRecordingVoice ? 'Nahrávam... (klikni pre zastavenie)' : 'Spustiť nahrávanie'}
                         </button>
                       )}
-                      <textarea rows={6} value={aiOrderText} onChange={(e) => setAiOrderText(e.target.value)} placeholder={aiOrderInputMode === 'voice' ? 'Prepísaný text sa objaví tu, dá sa aj ručne doplniť...' : 'Prilep sem text emailu s rozpisom objednávky...'} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" />
+                      <textarea rows={6} value={aiOrderText} onChange={(e) => setAiOrderText(e.target.value)} placeholder={aiOrderInputMode === 'voice' ? 'Prepísaný text sa objaví tu, dá sa aj ručne doplniť...' : 'Prilep sem text emailu s rozpisom objednávky (alebo e-mail s dopytom z PrintStudio — obsahuje číslo DOPYT-…, vtedy sa načíta presne bez AI)...'} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white" />
                     </div>
                   )}
 

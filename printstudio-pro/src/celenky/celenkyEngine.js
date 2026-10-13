@@ -11,12 +11,17 @@
 //   - "Do kosika"/cart modal (fake Shopify) odstranene — objednavaciu logiku (cena, DPH, odoslanie)
 //     rieši React komponent Celenky.jsx, engine len kresli a hlasi hotovy navrh cez verejne API.
 import * as THREE from 'three';
+import { makeFlatlockTexture } from '../stitchTextures';
 
-const CANON_W = 1020; // kanonicky priestor kreslenia — 51:9 pomer strán (51/9 * 180 = 1020)
-const CANON_H = 180;
-const CENTER_X = CANON_W / 2; // 510 — stred cela
-
-export function initCelenkyEngine(root) {
+// Rozmer celenky (cm) sa predava zvonka (velkost + material: napr. 51x9 hreben, 48x9 hladka, 48x7 deti ...).
+// Kanonicky priestor kreslenia ma vzdy vysku 180 a sirku podla pomeru stran strihu (51:9 -> 1020).
+export function initCelenkyEngine(root, opts = {}) {
+  const widthCm = Number(opts.widthCm) || 51;
+  const heightCm = Number(opts.heightCm) || 9;
+  const CANON_H = 180;
+  const CANON_W = Math.round(CANON_H * widthCm / heightCm);
+  const CENTER_X = CANON_W / 2;
+  const BLEED_UNITS = 12 * 9 / heightCm; // 5 mm lem v kanonickych jednotkach (pri 9 cm vyske = 12)
   const STATE = {
     bgColor: '#0f172a',
     bgPattern: 'solid',
@@ -27,6 +32,14 @@ export function initCelenkyEngine(root) {
       { id: 'elem_text_1', type: 'text', text: 'PUSH YOUR LIMITS', x: CENTER_X, y: 90, font: 'Bebas Neue', size: 64, scale: 1, rotation: 0, color: '#ffffff', strokeColor: '#000000', strokeWidth: 2, bold: false, italic: false },
     ],
   };
+
+  if (opts.initialState) {
+    const old = opts.initialState;
+    const fx = old.canonW ? CANON_W / old.canonW : 1;
+    STATE.bgColor = old.bgColor ?? STATE.bgColor; STATE.bgPattern = old.bgPattern ?? STATE.bgPattern;
+    STATE.elements = (old.elements || []).map((e) => ({ ...e, x: e.x * fx, ...(e.type === 'stripes' ? {} : {}) }));
+    STATE.selectedId = STATE.elements[0]?.id || null;
+  }
 
   let editorCanvas, ctx2d;
   let textureCanvas, textureCtx;
@@ -132,7 +145,7 @@ export function initCelenkyEngine(root) {
 
     if (STATE.showBleed) {
       ctx2d.save();
-      const bleedH = h * (12 / CANON_H);
+      const bleedH = h * (BLEED_UNITS / CANON_H);
       ctx2d.fillStyle = 'rgba(239, 68, 68, 0.15)';
       ctx2d.fillRect(0, 0, w, bleedH);
       ctx2d.strokeStyle = 'rgba(239, 68, 68, 0.6)'; ctx2d.lineWidth = 1; ctx2d.setLineDash([6, 5]);
@@ -370,13 +383,17 @@ export function initCelenkyEngine(root) {
     threeCamera.position.set(0, 0, 3.8);
 
     threeRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    threeRenderer.outputColorSpace = THREE.SRGBColorSpace;
+    threeRenderer.toneMapping = THREE.NoToneMapping; // bez filmoveho mapovania — farby musia sediet so strihom
     threeRenderer.setSize(w, h);
     threeRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(threeRenderer.domElement);
 
-    threeScene.add(new THREE.AmbientLight(0xffffff, 1.2));
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1.5); dirLight.position.set(5, 5, 5); threeScene.add(dirLight);
-    const dirLight2 = new THREE.DirectionalLight(0x93c5fd, 0.8); dirLight2.position.set(-5, -3, -5); threeScene.add(dirLight2);
+    // Svetla v "fyzikalnych" jednotkach three.js (~ pi x pozadovany jas) — sucet pri celnom osvetleni cca 1,
+    // takze farba na 3D modeli = farba v strihu (ziadne vyblednutie).
+    threeScene.add(new THREE.HemisphereLight(0xffffff, 0xc4ccd8, 0.70 * Math.PI));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.38 * Math.PI); dirLight.position.set(5, 5, 8); threeScene.add(dirLight);
+    const dirLight2 = new THREE.DirectionalLight(0xffffff, 0.12 * Math.PI); dirLight2.position.set(-5, -3, -5); threeScene.add(dirLight2);
 
     buildHeadbandMesh();
     setup3DInteraction(container);
@@ -396,20 +413,29 @@ export function initCelenkyEngine(root) {
     canvasTexture.generateMipmaps = false;
     canvasTexture.wrapS = THREE.ClampToEdgeWrapping;
     canvasTexture.wrapT = THREE.ClampToEdgeWrapping;
+    canvasTexture.colorSpace = THREE.SRGBColorSpace; // KLUCOVE: bez toho su farby na 3D modeli vyblednute oproti strihu
+    canvasTexture.anisotropy = threeRenderer.capabilities.getMaxAnisotropy();
 
-    const widthCm = 51, heightCm = 9;
     const radius = 1.22;
     const circumference = 2 * Math.PI * radius;
     const height3D = circumference / (widthCm / heightCm);
 
     const outerGeo = new THREE.CylinderGeometry(radius, radius, height3D, 128, 1, true);
     outerGeo.rotateY(Math.PI);
-    const outerMat = new THREE.MeshStandardMaterial({ map: canvasTexture, roughness: 0.72, metalness: 0.04, side: THREE.FrontSide });
+    const outerMat = new THREE.MeshStandardMaterial({ map: canvasTexture, roughness: 0.9, metalness: 0.0, side: THREE.FrontSide });
     headbandGroup.add(new THREE.Mesh(outerGeo, outerMat));
+
+    // Zadny plochy sev (flatlock) — okraj strihu (u=0) lezi vzadu (-z); siroky cca 6 mm z obvodu.
+    const seamLen = (0.6 / widthCm) * Math.PI * 2;
+    const seamGeo = new THREE.CylinderGeometry(radius * 1.004, radius * 1.004, height3D, 6, 1, true, -seamLen / 2, seamLen);
+    seamGeo.rotateY(Math.PI);
+    const seamTex = makeFlatlockTexture({ repeatY: Math.max(4, Math.round(heightCm / 1.6)), anisotropy: threeRenderer.capabilities.getMaxAnisotropy() });
+    const seamMat = new THREE.MeshStandardMaterial({ map: seamTex, transparent: true, roughness: 0.95, metalness: 0, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    headbandGroup.add(new THREE.Mesh(seamGeo, seamMat));
 
     const innerGeo = new THREE.CylinderGeometry(radius - 0.012, radius - 0.012, height3D, 128, 1, true);
     innerGeo.rotateY(Math.PI);
-    const innerMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.9, side: THREE.BackSide });
+    const innerMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.95, metalness: 0, side: THREE.BackSide }); // vnutro je biele
     headbandGroup.add(new THREE.Mesh(innerGeo, innerMat));
 
     headbandGroup.scale.set(1.04, 1.0, 0.96);
@@ -841,6 +867,7 @@ export function initCelenkyEngine(root) {
   ctx2d = editorCanvas.getContext('2d');
   textureCanvas = document.createElement('canvas');
   textureCanvas.width = CANON_W * 2; textureCanvas.height = CANON_H * 2;
+  editorCanvas.width = 960; editorCanvas.height = Math.round(960 * CANON_H / CANON_W);
   textureCtx = textureCanvas.getContext('2d');
 
   initThreeEngine();
@@ -857,6 +884,8 @@ export function initCelenkyEngine(root) {
       if (threeRenderer) { threeRenderer.dispose(); threeRenderer.domElement?.remove(); }
     },
     hasContent() { return STATE.elements.length > 0; },
+    // Zivy stav (aj s obrazkami) — pouzije sa pri zmene velkosti/materialu, aby sa navrh neztratil.
+    getState() { return { bgColor: STATE.bgColor, bgPattern: STATE.bgPattern, elements: STATE.elements.map((e) => ({ ...e })), canonW: CANON_W }; },
     getLowResPreviewDataUrl() { return editorCanvas.toDataURL('image/png'); },
     getDesignJson() {
       return JSON.stringify({
@@ -869,7 +898,7 @@ export function initCelenkyEngine(root) {
     // zakaznikovi (ziadne <a download>/verejna URL) — vraca sa len ako Blob priamo volajucemu
     // (React komponent ho hned nahra do privatneho Storage a zahodi referenciu).
     async getProductionBlob() {
-      const PROD_W = 6024, PROD_H = 1063;
+      const PROD_W = Math.round(widthCm / 2.54 * 300), PROD_H = Math.round(heightCm / 2.54 * 300); // 300 DPI
       const prod = document.createElement('canvas');
       prod.width = PROD_W; prod.height = PROD_H;
       const pctx = prod.getContext('2d');
