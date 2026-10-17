@@ -1466,7 +1466,7 @@ export default function App() {
   const [showRedukovaneVykony, setShowRedukovaneVykony] = useState(false);
 
   const [catalogSportFilter, setCatalogSportFilter] = useState('vsetko');
-  const [catalogViewMode, setCatalogViewMode] = useState('karty'); // 'karty' | 'riadky'
+  const [catalogViewMode, setCatalogViewMode] = useState('riadky'); // 'karty' | 'riadky' — prvotne riadkove zobrazenie (s vyrobnou cenou)
   const [catalogSort, setCatalogSort] = useState('povodne'); // povodne | najnovsie | abeceda | kod | sport | material | cena_asc | cena_desc
 
   const [newOrderCustomer, setNewOrderCustomer] = useState('');

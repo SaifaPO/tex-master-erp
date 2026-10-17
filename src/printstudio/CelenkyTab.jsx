@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import NumberInput from '../NumberInput';
 import { Waves, Download, Settings, Trash2, AlertTriangle } from 'lucide-react';
 import FotoSlot from './FotoSlot';
+import KonfigGrafikaSprava from './KonfigGrafikaSprava';
 import { priceAt, marginAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 
 const BUCKET = 'print-designs';
@@ -249,6 +250,7 @@ export default function CelenkyTab({ supabase }) {
           </div>
         )}
       </div>
+      <KonfigGrafikaSprava supabase={supabase} typ="celenka" nazovProduktu="Čelenky" />
     </div>
   );
 }

@@ -15,6 +15,9 @@ export default function Buffky({ supabase, onSpat }) {
   const [loadError, setLoadError] = useState('');
   const [naklady, setNaklady] = useState(null); // { naklad_ks, naklad_potlac_ks, cena_sitia_bok_ks }
   const [premiumMaterialy, setPremiumMaterialy] = useState([]);
+  const [skryteVstavane, setSkryteVstavane] = useState(new Set());
+  const [vlastneVzory, setVlastneVzory] = useState([]);
+  const [grafiky, setGrafiky] = useState([]);
   const [pricingConfig, setPricingConfig] = useState(DEFAULT_PRICING_CONFIG);
   const [nastavenia, setNastavenia] = useState(null);
 
@@ -41,6 +44,14 @@ export default function Buffky({ supabase, onSpat }) {
         supabase.from('buffky_nastavenia').select('*').eq('id', 1).maybeSingle(),
         supabase.from('buffky_premium_materialy_verejny').select('*'),
       ]);
+      const [{ data: sv }, { data: kv }, { data: gr }] = await Promise.all([
+        supabase.from('konfig_vstavane_vzory').select('kluc, aktivny').eq('produkt_typ', 'buffka'),
+        supabase.from('konfig_vzory').select('id, nazov, url').eq('produkt_typ', 'buffka').eq('aktivny', true).order('poradie').order('id'),
+        supabase.from('grafiky').select('id, nazov, url, kategoria').order('nazov'),
+      ]);
+      setSkryteVstavane(new Set((sv || []).filter(x => x.aktivny === false).map(x => x.kluc)));
+      setVlastneVzory(kv || []);
+      setGrafiky((gr || []).filter(g => g.url));
       setNaklady(nak || null);
       if (cfg) setPricingConfig(mapConfigFromDb(cfg));
       setNastavenia(n || null);
@@ -202,17 +213,22 @@ export default function Buffky({ supabase, onSpat }) {
               <div className="flex-1 min-w-[280px]">
                 <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Rýchly motív šatky (10 moderných štýlov)</label>
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <button className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium pattern-btn transition hover:border-cyan-500" data-pattern="mountain">⛰️ Hory</button>
-                  <button className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium pattern-btn transition hover:border-emerald-500" data-pattern="camo">🌲 Camo</button>
-                  <button className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium pattern-btn transition hover:border-indigo-500" data-pattern="geo">📐 Geometria</button>
-                  <button className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium pattern-btn transition hover:border-purple-500" data-pattern="gradient">🌈 Gradient</button>
-                  <button className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium pattern-btn transition hover:border-cyan-400" data-pattern="topomap">🗺️ Topo Mapa</button>
-                  <button className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium pattern-btn transition hover:border-teal-400" data-pattern="cyber_hex">⚡ Hex Honeycomb</button>
-                  <button className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium pattern-btn transition hover:border-amber-400" data-pattern="splash">🎨 Paint Splash</button>
-                  <button className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium pattern-btn transition hover:border-rose-400" data-pattern="speed_stripes">🏁 Speed Racing</button>
-                  <button className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium pattern-btn transition hover:border-sky-300" data-pattern="nordic_tri">❄️ Nordic Frost</button>
-                  <button className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium pattern-btn transition hover:border-orange-500" data-pattern="lava_smoke">🌋 Láva & Dym</button>
+                  <button className={`px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium pattern-btn transition hover:border-cyan-500 ${skryteVstavane.has('mountain') ? 'hidden' : ''}`} data-pattern="mountain">⛰️ Hory</button>
+                  <button className={`px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium pattern-btn transition hover:border-emerald-500 ${skryteVstavane.has('camo') ? 'hidden' : ''}`} data-pattern="camo">🌲 Camo</button>
+                  <button className={`px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium pattern-btn transition hover:border-indigo-500 ${skryteVstavane.has('geo') ? 'hidden' : ''}`} data-pattern="geo">📐 Geometria</button>
+                  <button className={`px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium pattern-btn transition hover:border-purple-500 ${skryteVstavane.has('gradient') ? 'hidden' : ''}`} data-pattern="gradient">🌈 Gradient</button>
+                  <button className={`px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium pattern-btn transition hover:border-cyan-400 ${skryteVstavane.has('topomap') ? 'hidden' : ''}`} data-pattern="topomap">🗺️ Topo Mapa</button>
+                  <button className={`px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium pattern-btn transition hover:border-teal-400 ${skryteVstavane.has('cyber_hex') ? 'hidden' : ''}`} data-pattern="cyber_hex">⚡ Hex Honeycomb</button>
+                  <button className={`px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium pattern-btn transition hover:border-amber-400 ${skryteVstavane.has('splash') ? 'hidden' : ''}`} data-pattern="splash">🎨 Paint Splash</button>
+                  <button className={`px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium pattern-btn transition hover:border-rose-400 ${skryteVstavane.has('speed_stripes') ? 'hidden' : ''}`} data-pattern="speed_stripes">🏁 Speed Racing</button>
+                  <button className={`px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium pattern-btn transition hover:border-sky-300 ${skryteVstavane.has('nordic_tri') ? 'hidden' : ''}`} data-pattern="nordic_tri">❄️ Nordic Frost</button>
+                  <button className={`px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium pattern-btn transition hover:border-orange-500 ${skryteVstavane.has('lava_smoke') ? 'hidden' : ''}`} data-pattern="lava_smoke">🌋 Láva & Dym</button>
                   <button className="px-2.5 py-1.5 rounded-lg bg-slate-800/60 hover:bg-slate-700 border border-slate-700/60 text-xs font-medium pattern-btn text-slate-400 hover:text-white transition" data-pattern="none" title="Odstrániť vzor">✖ Čistá farba</button>
+                  {vlastneVzory.map(v => (
+                    <button key={v.id} type="button" onClick={() => engineRef.current?.setBackgroundImage(v.url)} title={v.nazov} className="px-1.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-cyan-700/60 text-xs font-medium transition flex items-center gap-1.5">
+                      <img src={v.url} alt="" className="w-6 h-6 rounded object-cover" /> {v.nazov}
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
@@ -247,6 +263,21 @@ export default function Buffky({ supabase, onSpat }) {
                   <input type="file" id="imageUpload" accept="image/*" className="hidden" />
                 </label>
               </div>
+              {grafiky.length > 0 && (
+                <>
+                  <div className="h-10 w-px bg-slate-800 hidden sm:block"></div>
+                  <div className="max-w-full">
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Knižnica grafík a log</label>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {grafiky.map(g => (
+                        <button key={g.id} type="button" onClick={() => engineRef.current?.addImageFromUrl(g.url)} title={g.nazov} className="w-9 h-9 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-cyan-500 p-0.5 overflow-hidden">
+                          <img src={g.url} alt={g.nazov} className="w-full h-full object-contain" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
               <div className="h-10 w-px bg-slate-800 hidden sm:block"></div>
               <div>
                 <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Športové ikony</label>

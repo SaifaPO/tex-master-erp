@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import NumberInput from '../NumberInput';
 import { Wind, Download, Settings, Trash2, AlertTriangle } from 'lucide-react';
 import FotoSlot from './FotoSlot';
+import KonfigGrafikaSprava from './KonfigGrafikaSprava';
 import { priceAt, marginAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 
 const BUCKET = 'print-designs';
@@ -273,6 +274,7 @@ export default function BuffkyTab({ supabase }) {
           </div>
         )}
       </div>
+      <KonfigGrafikaSprava supabase={supabase} typ="buffka" nazovProduktu="Buffky" />
     </div>
   );
 }

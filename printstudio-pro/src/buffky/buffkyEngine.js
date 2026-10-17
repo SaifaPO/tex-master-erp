@@ -30,6 +30,8 @@ export function initBuffkyEngine(root, opts = {}) {
   const state = {
     backgroundColor: '#0f172a',
     pattern: 'mountain',
+    bgImage: null,
+    bgImageUrl: '',
     showGuides: true,
     show3DSeams: true,
     autoRotate: true,
@@ -75,6 +77,15 @@ export function initBuffkyEngine(root, opts = {}) {
 
   /* ---------- 10 vzorov pozadia (identicke s povodnym navrhom) ---------- */
   function drawPattern(patternType, c, w, h) {
+    if (patternType === 'image') {
+      // vlastny vzor pozadia (obrazok z ERP): cover — vyplni cely strih, zachova pomer stran
+      if (state.bgImage) {
+        const iw = state.bgImage.naturalWidth || state.bgImage.width, ih = state.bgImage.naturalHeight || state.bgImage.height;
+        const k = Math.max(w / iw, h / ih);
+        c.drawImage(state.bgImage, (w - iw * k) / 2, (h - ih * k) / 2, iw * k, ih * k);
+      }
+      return;
+    }
     if (patternType === 'mountain') {
       const grad = c.createLinearGradient(0, 0, 0, h);
       grad.addColorStop(0, '#0f172a'); grad.addColorStop(0.5, '#1e293b'); grad.addColorStop(1, '#0284c7');
@@ -591,11 +602,30 @@ export function initBuffkyEngine(root, opts = {}) {
       if (renderer) { renderer.dispose(); renderer.domElement?.remove(); }
     },
     hasContent() { return state.items.length > 0; },
+    // Vlastny vzor pozadia (obrazok z ERP) a vlozenie grafiky z kniznice podla URL
+    setBackgroundImage(url) {
+      const img = new Image(); img.crossOrigin = 'anonymous';
+      img.onload = () => { state.bgImage = img; state.bgImageUrl = url; state.pattern = 'image'; render2D(); toast('Vzor pozadia zmenený'); };
+      img.onerror = () => toast('Vzor sa nepodarilo načítať');
+      img.src = url;
+    },
+    addImageFromUrl(url) {
+      const img = new Image(); img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        let w = img.width, h = img.height; const maxDim = 260;
+        if (w > maxDim || h > maxDim) { if (w > h) { h = (h / w) * maxDim; w = maxDim; } else { w = (w / h) * maxDim; h = maxDim; } }
+        state.items.push({ type: 'image', imgElement: img, width: w, height: h, x: isPremium ? 500 : 250, y: Math.max(500, 20 + hemMargin), scale: 1, rotation: 0 });
+        state.selectedItemIndex = state.items.length - 1; updateSelectedLabel(); render2D(); toast('Grafika vložená do návrhu');
+      };
+      img.onerror = () => toast('Grafiku sa nepodarilo načítať');
+      img.src = url;
+    },
     getLowResPreviewDataUrl() { return canvas.toDataURL('image/png'); },
     getDesignJson() {
       return JSON.stringify({
         backgroundColor: state.backgroundColor,
         pattern: state.pattern,
+        bgImageUrl: state.bgImageUrl || undefined,
         items: state.items.map(({ imgElement, ...rest }) => rest), // obrazky (logo) nie su JSON-serializovatelne
       });
     },

@@ -20,6 +20,9 @@ export default function Celenky({ supabase, onSpat }) {
   const [pricingConfig, setPricingConfig] = useState(DEFAULT_PRICING_CONFIG);
   const [nastavenia, setNastavenia] = useState(null);
   const [varianty, setVarianty] = useState([]);
+  const [skryteVstavane, setSkryteVstavane] = useState(new Set());
+  const [vlastneVzory, setVlastneVzory] = useState([]);
+  const [grafiky, setGrafiky] = useState([]);
   const [materialy, setMaterialy] = useState([]);
   const [velkost, setVelkost] = useState('adult_standard');
   const [material, setMaterial] = useState('combed');
@@ -47,6 +50,15 @@ export default function Celenky({ supabase, onSpat }) {
         supabase.from('celenky_varianty_verejny').select('*').order('poradie'),
         supabase.from('celenky_materialy').select('*').order('poradie'),
       ]);
+
+      const [{ data: sv }, { data: kv }, { data: gr }] = await Promise.all([
+        supabase.from('konfig_vstavane_vzory').select('kluc, aktivny').eq('produkt_typ', 'celenka'),
+        supabase.from('konfig_vzory').select('id, nazov, url').eq('produkt_typ', 'celenka').eq('aktivny', true).order('poradie').order('id'),
+        supabase.from('grafiky').select('id, nazov, url, kategoria').order('nazov'),
+      ]);
+      setSkryteVstavane(new Set((sv || []).filter(x => x.aktivny === false).map(x => x.kluc)));
+      setVlastneVzory(kv || []);
+      setGrafiky((gr || []).filter(g => g.url));
       setNakladKs(nak ? Number(nak.naklad_ks) : 0);
       if (v && v.length > 0) {
         setVarianty(v);
@@ -244,18 +256,31 @@ export default function Celenky({ supabase, onSpat }) {
           <div className="p-3.5 space-y-4 custom-scroll max-h-[460px] overflow-y-auto">
             {/* TAB 0: VZORY */}
             <div id="tab-templates" className="tab-content space-y-2.5">
+              {vlastneVzory.length > 0 && (
+                <div className="space-y-1.5">
+                  <span className="text-xs font-bold text-slate-700 block">Vlastné vzory pozadia:</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    {vlastneVzory.map(v => (
+                      <button key={v.id} type="button" onClick={() => engineRef.current?.setBackgroundImage(v.url)} className="rounded-xl border border-slate-200 hover:border-indigo-500 overflow-hidden text-left transition bg-white">
+                        <img src={v.url} alt={v.nazov} className="w-full h-12 object-cover" loading="lazy" />
+                        <span className="block px-2 py-1 text-[11px] font-bold text-slate-700 truncate">{v.nazov}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <span className="text-xs font-bold text-slate-700 block">Vyberte si hotový dizajnový motív:</span>
               <div className="grid grid-cols-2 gap-2">
-                <button data-template="1" className="template-card p-2 rounded-xl border border-slate-200 hover:border-indigo-500 bg-slate-900 text-white text-left text-xs font-bold transition flex flex-col gap-1 shadow-2xs"><span className="text-[10px] text-lime-400">#1 • Neon Limits</span><span className="truncate text-[11px] font-normal">Push Your Limits</span></button>
-                <button data-template="2" className="template-card p-2 rounded-xl border border-slate-200 hover:border-indigo-500 bg-blue-900 text-white text-left text-xs font-bold transition flex flex-col gap-1 shadow-2xs"><span className="text-[10px] text-blue-200">#2 • Alpine Peaks</span><span className="truncate text-[11px] font-normal">Mountains Calling</span></button>
-                <button data-template="3" className="template-card p-2 rounded-xl border border-slate-200 hover:border-indigo-500 bg-zinc-900 text-white text-left text-xs font-bold transition flex flex-col gap-1 shadow-2xs"><span className="text-[10px] text-pink-400">#3 • Cyber Run</span><span className="truncate text-[11px] font-normal">Run More</span></button>
-                <button data-template="4" className="template-card p-2 rounded-xl border border-slate-200 hover:border-indigo-500 bg-stone-900 text-white text-left text-xs font-bold transition flex flex-col gap-1 shadow-2xs"><span className="text-[10px] text-orange-400">#4 • Topo Trail</span><span className="truncate text-[11px] font-normal">Explore Train Repeat</span></button>
-                <button data-template="5" className="template-card p-2 rounded-xl border border-slate-200 hover:border-indigo-500 bg-slate-100 text-slate-900 text-left text-xs font-bold transition flex flex-col gap-1 shadow-2xs"><span className="text-[10px] text-indigo-600">#5 • Mono Shards</span><span className="truncate text-[11px] font-normal">Stronger Everyday</span></button>
-                <button data-template="6" className="template-card p-2 rounded-xl border border-slate-200 hover:border-indigo-500 bg-teal-950 text-white text-left text-xs font-bold transition flex flex-col gap-1 shadow-2xs"><span className="text-[10px] text-rose-300">#6 • Tropical Flora</span><span className="truncate text-[11px] font-normal">Good Energy ♡</span></button>
-                <button data-template="7" className="template-card p-2 rounded-xl border border-slate-200 hover:border-indigo-500 bg-neutral-900 text-white text-left text-xs font-bold transition flex flex-col gap-1 shadow-2xs"><span className="text-[10px] text-lime-300">#7 • Glitch Speed</span><span className="truncate text-[11px] font-normal">Faster Higher</span></button>
-                <button data-template="8" className="template-card p-2 rounded-xl border border-slate-200 hover:border-indigo-500 bg-sky-950 text-white text-left text-xs font-bold transition flex flex-col gap-1 shadow-2xs"><span className="text-[10px] text-sky-300">#8 • Aero Waves</span><span className="truncate text-[11px] font-normal">Run Bike Hike</span></button>
-                <button data-template="9" className="template-card p-2 rounded-xl border border-slate-200 hover:border-indigo-500 bg-black text-white text-left text-xs font-bold transition flex flex-col gap-1 shadow-2xs"><span className="text-[10px] text-amber-300">#9 • Liquid Marble</span><span className="truncate text-[11px] font-normal">Limitless</span></button>
-                <button data-template="10" className="template-card p-2 rounded-xl border border-slate-200 hover:border-indigo-500 bg-red-950 text-white text-left text-xs font-bold transition flex flex-col gap-1 shadow-2xs"><span className="text-[10px] text-red-300">#10 • Red Crystal</span><span className="truncate text-[11px] font-normal">Never Give Up</span></button>
+                <button data-template="1" className={`template-card ${skryteVstavane.has('template-1') ? 'hidden ' : ''}p-2 rounded-xl border border-slate-200 hover:border-indigo-500 bg-slate-900 text-white text-left text-xs font-bold transition flex flex-col gap-1 shadow-2xs`}><span className="text-[10px] text-lime-400">#1 • Neon Limits</span><span className="truncate text-[11px] font-normal">Push Your Limits</span></button>
+                <button data-template="2" className={`template-card ${skryteVstavane.has('template-2') ? 'hidden ' : ''}p-2 rounded-xl border border-slate-200 hover:border-indigo-500 bg-blue-900 text-white text-left text-xs font-bold transition flex flex-col gap-1 shadow-2xs`}><span className="text-[10px] text-blue-200">#2 • Alpine Peaks</span><span className="truncate text-[11px] font-normal">Mountains Calling</span></button>
+                <button data-template="3" className={`template-card ${skryteVstavane.has('template-3') ? 'hidden ' : ''}p-2 rounded-xl border border-slate-200 hover:border-indigo-500 bg-zinc-900 text-white text-left text-xs font-bold transition flex flex-col gap-1 shadow-2xs`}><span className="text-[10px] text-pink-400">#3 • Cyber Run</span><span className="truncate text-[11px] font-normal">Run More</span></button>
+                <button data-template="4" className={`template-card ${skryteVstavane.has('template-4') ? 'hidden ' : ''}p-2 rounded-xl border border-slate-200 hover:border-indigo-500 bg-stone-900 text-white text-left text-xs font-bold transition flex flex-col gap-1 shadow-2xs`}><span className="text-[10px] text-orange-400">#4 • Topo Trail</span><span className="truncate text-[11px] font-normal">Explore Train Repeat</span></button>
+                <button data-template="5" className={`template-card ${skryteVstavane.has('template-5') ? 'hidden ' : ''}p-2 rounded-xl border border-slate-200 hover:border-indigo-500 bg-slate-100 text-slate-900 text-left text-xs font-bold transition flex flex-col gap-1 shadow-2xs`}><span className="text-[10px] text-indigo-600">#5 • Mono Shards</span><span className="truncate text-[11px] font-normal">Stronger Everyday</span></button>
+                <button data-template="6" className={`template-card ${skryteVstavane.has('template-6') ? 'hidden ' : ''}p-2 rounded-xl border border-slate-200 hover:border-indigo-500 bg-teal-950 text-white text-left text-xs font-bold transition flex flex-col gap-1 shadow-2xs`}><span className="text-[10px] text-rose-300">#6 • Tropical Flora</span><span className="truncate text-[11px] font-normal">Good Energy ♡</span></button>
+                <button data-template="7" className={`template-card ${skryteVstavane.has('template-7') ? 'hidden ' : ''}p-2 rounded-xl border border-slate-200 hover:border-indigo-500 bg-neutral-900 text-white text-left text-xs font-bold transition flex flex-col gap-1 shadow-2xs`}><span className="text-[10px] text-lime-300">#7 • Glitch Speed</span><span className="truncate text-[11px] font-normal">Faster Higher</span></button>
+                <button data-template="8" className={`template-card ${skryteVstavane.has('template-8') ? 'hidden ' : ''}p-2 rounded-xl border border-slate-200 hover:border-indigo-500 bg-sky-950 text-white text-left text-xs font-bold transition flex flex-col gap-1 shadow-2xs`}><span className="text-[10px] text-sky-300">#8 • Aero Waves</span><span className="truncate text-[11px] font-normal">Run Bike Hike</span></button>
+                <button data-template="9" className={`template-card ${skryteVstavane.has('template-9') ? 'hidden ' : ''}p-2 rounded-xl border border-slate-200 hover:border-indigo-500 bg-black text-white text-left text-xs font-bold transition flex flex-col gap-1 shadow-2xs`}><span className="text-[10px] text-amber-300">#9 • Liquid Marble</span><span className="truncate text-[11px] font-normal">Limitless</span></button>
+                <button data-template="10" className={`template-card ${skryteVstavane.has('template-10') ? 'hidden ' : ''}p-2 rounded-xl border border-slate-200 hover:border-indigo-500 bg-red-950 text-white text-left text-xs font-bold transition flex flex-col gap-1 shadow-2xs`}><span className="text-[10px] text-red-300">#10 • Red Crystal</span><span className="truncate text-[11px] font-normal">Never Give Up</span></button>
               </div>
             </div>
 
@@ -385,6 +410,18 @@ export default function Celenky({ supabase, onSpat }) {
                   <button data-icon="pulse" className="icon-add-btn p-2 rounded-xl border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50 flex flex-col items-center gap-1 transition"><span className="text-xl">💓</span><span className="text-[10px] font-bold text-slate-600">Tep</span></button>
                 </div>
               </div>
+              {grafiky.length > 0 && (
+                <div className="pt-2 border-t border-slate-200 space-y-1.5">
+                  <span className="text-xs font-bold text-slate-700 block">Knižnica grafík a log:</span>
+                  <div className="grid grid-cols-4 gap-2">
+                    {grafiky.map(g => (
+                      <button key={g.id} type="button" onClick={() => engineRef.current?.addImageFromUrl(g.url)} title={g.nazov} className="aspect-square rounded-lg border border-slate-200 hover:border-indigo-500 bg-slate-100 p-1 overflow-hidden transition">
+                        <img src={g.url} alt={g.nazov} className="w-full h-full object-contain" loading="lazy" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="pt-2 border-t border-slate-200">
                 <span className="text-xs font-bold text-slate-700 block mb-1.5">Doplnky dizajnu:</span>
                 <div className="flex gap-2">

@@ -25,6 +25,8 @@ export function initCelenkyEngine(root, opts = {}) {
   const STATE = {
     bgColor: '#0f172a',
     bgPattern: 'solid',
+    bgImage: null,
+    bgImageUrl: '',
     showBleed: true,
     selectedId: 'elem_text_1',
     autoRotate: true,
@@ -37,6 +39,7 @@ export function initCelenkyEngine(root, opts = {}) {
     const old = opts.initialState;
     const fx = old.canonW ? CANON_W / old.canonW : 1;
     STATE.bgColor = old.bgColor ?? STATE.bgColor; STATE.bgPattern = old.bgPattern ?? STATE.bgPattern;
+    if (old.bgPattern === 'image' && old.bgImageUrl) { STATE.bgImageUrl = old.bgImageUrl; if (old.bgImage) STATE.bgImage = old.bgImage; }
     STATE.elements = (old.elements || []).map((e) => ({ ...e, x: e.x * fx, ...(e.type === 'stripes' ? {} : {}) }));
     STATE.selectedId = STATE.elements[0]?.id || null;
   }
@@ -88,6 +91,12 @@ export function initCelenkyEngine(root, opts = {}) {
       ctx.fillStyle = grad; ctx.fillRect(0, 0, CANON_W, CANON_H);
     } else if (STATE.bgPattern.startsWith('template-')) {
       drawStockTemplatePattern(ctx, CANON_W, CANON_H, STATE.bgPattern);
+    } else if (STATE.bgPattern === 'image' && STATE.bgImage) {
+      ctx.fillStyle = STATE.bgColor; ctx.fillRect(0, 0, CANON_W, CANON_H);
+      // vlastny vzor pozadia: obrazok vyplni cely strih (cover — zachova pomer stran, orezanie na okrajoch)
+      const iw = STATE.bgImage.naturalWidth || STATE.bgImage.width, ih = STATE.bgImage.naturalHeight || STATE.bgImage.height;
+      const k = Math.max(CANON_W / iw, CANON_H / ih);
+      ctx.drawImage(STATE.bgImage, (CANON_W - iw * k) / 2, (CANON_H - ih * k) / 2, iw * k, ih * k);
     }
 
     STATE.elements.forEach(el => {
@@ -885,12 +894,32 @@ export function initCelenkyEngine(root, opts = {}) {
     },
     hasContent() { return STATE.elements.length > 0; },
     // Zivy stav (aj s obrazkami) — pouzije sa pri zmene velkosti/materialu, aby sa navrh neztratil.
-    getState() { return { bgColor: STATE.bgColor, bgPattern: STATE.bgPattern, elements: STATE.elements.map((e) => ({ ...e })), canonW: CANON_W }; },
+    // Vlastny vzor pozadia (obrazok z ERP) a vlozenie grafiky z kniznice podla URL
+    setBackgroundImage(url) {
+      const img = new Image(); img.crossOrigin = 'anonymous';
+      img.onload = () => { STATE.bgImage = img; STATE.bgImageUrl = url; STATE.bgPattern = 'image'; render2D(); toast('Vzor pozadia zmenený'); };
+      img.onerror = () => toast('Vzor sa nepodarilo načítať');
+      img.src = url;
+    },
+    addImageFromUrl(url) {
+      const img = new Image(); img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const maxH = CANON_H * 0.65;
+        const scale = Math.min(maxH / img.height, 240 / img.width, 1);
+        const el = { id: 'elem_img_' + Date.now(), type: 'image', img, x: CENTER_X, y: CANON_H / 2, width: img.width * scale, height: img.height * scale, scale: 1, rotation: 0 };
+        STATE.elements.push(el); STATE.selectedId = el.id;
+        render2D(); updateLayersUI(); syncTransformPanel(); toast('Grafika vložená na čelenku');
+      };
+      img.onerror = () => toast('Grafiku sa nepodarilo načítať');
+      img.src = url;
+    },
+    getState() { return { bgColor: STATE.bgColor, bgPattern: STATE.bgPattern, bgImage: STATE.bgImage, bgImageUrl: STATE.bgImageUrl, elements: STATE.elements.map((e) => ({ ...e })), canonW: CANON_W }; },
     getLowResPreviewDataUrl() { return editorCanvas.toDataURL('image/png'); },
     getDesignJson() {
       return JSON.stringify({
         bgColor: STATE.bgColor,
         bgPattern: STATE.bgPattern,
+        bgImageUrl: STATE.bgImageUrl || undefined,
         elements: STATE.elements.map(({ img, ...rest }) => rest), // obrazky (logo) nie su JSON-serializovatelne, len metadata
       });
     },
