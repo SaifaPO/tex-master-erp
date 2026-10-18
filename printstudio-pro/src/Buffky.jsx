@@ -255,6 +255,24 @@ export default function Buffky({ supabase, onSpat }) {
             </div>
 
             <div id="tabContent-graphics" className="tab-content hidden flex flex-wrap items-center gap-4">
+              <div className="w-full p-2.5 rounded-xl border border-emerald-700/50 bg-emerald-950/30 space-y-1.5">
+                <label className="block text-[11px] font-semibold uppercase tracking-wider text-emerald-300">Hotová grafika pripravená na tlač</label>
+                {typ === 'premium' ? (
+                  <>
+                    <p className="text-[11px] text-emerald-200/80 leading-snug">Hotová šatka je 50 × 50 cm, súbor má mať <b>52 × 52 cm</b> (spadávka 1 cm dookola), pri 300 DPI <b>6142 × 6142 px</b>. Dôležité prvky daj ďalej od okrajov a mimo 2 cm lemu hore a dole.</p>
+                    <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-xs text-white font-bold"><i className="fa-solid fa-file-image"></i> Nahrať celú šatku (52 × 52 cm)<input type="file" id="fullGraphicInput" accept="image/*" className="hidden" /></label>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-[11px] text-emerald-200/80 leading-snug">Každý panel je hotový 25 × 50 cm, súbor panelu má mať <b>27 × 52 cm</b> (spadávka 1 cm dookola), pri 300 DPI <b>3189 × 6142 px</b>. Panel A je predná strana, panel B zadná.</p>
+                    <div className="flex flex-wrap gap-2">
+                      <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-xs text-white font-bold"><i className="fa-solid fa-file-image"></i> Panel A — predná (27 × 52 cm)<input type="file" id="panelAInput" accept="image/*" className="hidden" /></label>
+                      <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-xs text-white font-bold"><i className="fa-solid fa-file-image"></i> Panel B — zadná (27 × 52 cm)<input type="file" id="panelBInput" accept="image/*" className="hidden" /></label>
+                    </div>
+                  </>
+                )}
+                <button type="button" id="btnClearUploads" className="text-[11px] text-slate-400 hover:text-rose-300 underline">Odstrániť nahranú grafiku</button>
+              </div>
               <div>
                 <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Nahrať vlastné logo / grafiku (PNG, JPG, SVG)</label>
                 <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-cyan-400 font-semibold transition">
@@ -291,7 +309,10 @@ export default function Buffky({ supabase, onSpat }) {
               </div>
             </div>
 
-            <div id="tabContent-layers" className="tab-content hidden flex items-center justify-between w-full">
+            <div id="tabContent-layers" className="tab-content hidden w-full space-y-2">
+              <div className="text-[11px] text-slate-400">Poradie vrstiev: hore = navrchu (vpredu), dole = naspodku. Klikni na riadok pre výber objektu.</div>
+              <div id="layersList" className="space-y-1 max-h-56 overflow-y-auto pr-1"></div>
+              <div className="flex items-center justify-between w-full pt-1">
               <div className="text-xs text-slate-300 flex items-center gap-2">
                 <span>Aktuálny objekt:</span>
                 <span id="selectedItemLabel" className="font-bold text-cyan-400">Žiadny vybratý</span>
@@ -301,6 +322,7 @@ export default function Buffky({ supabase, onSpat }) {
                 <button id="btnLayerDown" className="p-1.5 px-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs border border-slate-700" title="Posunúť dozadu"><i className="fa-solid fa-arrow-down"></i></button>
                 <button id="btnDuplicate" className="p-1.5 px-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs border border-slate-700" title="Duplikovať"><i className="fa-solid fa-clone"></i></button>
                 <button id="btnDeleteSelected" className="p-1.5 px-2.5 rounded-lg bg-rose-950/80 hover:bg-rose-900 text-rose-300 text-xs border border-rose-700/60" title="Zmazať vybraté"><i className="fa-solid fa-trash-can"></i></button>
+              </div>
               </div>
             </div>
           </div>

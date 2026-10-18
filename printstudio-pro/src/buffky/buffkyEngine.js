@@ -34,6 +34,8 @@ export function initBuffkyEngine(root, opts = {}) {
     pattern: 'mountain',
     bgImage: null,
     bgImageUrl: '',
+    fullUpload: null, // hotova grafika celej satky 52x52 cm (Premium) — 50x50 + 1 cm spadavka dookola
+    panelA: null, panelB: null, // Basic: hotove panely A a B, kazdy 27x52 cm (25x50 + 1 cm dookola)
     showGuides: true,
     show3DSeams: true,
     autoRotate: true,
@@ -212,11 +214,65 @@ export function initBuffkyEngine(root, opts = {}) {
     }
   }
 
+  // Nahrane hotove grafiky: subor ma hotovy rozmer + 1 cm spadavky dookola — do nahladu sa vykresli len hotova plocha (spadavka sa orezava).
+  function kresliOrezanuSpadavku(c, img, dx, dy, dw, dh, cmSirka, cmVyska) {
+    const mx = img.width / cmSirka, my = img.height / cmVyska;
+    c.drawImage(img, mx, my, img.width - 2 * mx, img.height - 2 * my, dx, dy, dw, dh);
+  }
+  function kresliNahrane(c, w, h) {
+    if (state.fullUpload) kresliOrezanuSpadavku(c, state.fullUpload, 0, 0, w, h, 52, 52);
+    if (state.panelA) kresliOrezanuSpadavku(c, state.panelA, 0, 0, w / 2, h, 27, 52);
+    if (state.panelB) kresliOrezanuSpadavku(c, state.panelB, w / 2, 0, w / 2, h, 27, 52);
+  }
+
+  // Rozpis vrstiev (zhora = navrchu): kliknutim sa objekt vyberie, tlacidla posuvaju/mazu
+  let poslednyPodpisVrstiev = '';
+  function nazovVrstvy(item) {
+    const strana = isPremium ? '' : (item.x < 500 ? ' · A (predná)' : ' · B (zadná)');
+    if (item.type === 'text') return { ikona: 'T', text: `Text: "${(item.text || '').slice(0, 26)}"${strana}` };
+    if (item.type === 'icon') return { ikona: '★', text: `Ikona (${item.iconName || 'ikona'})${strana}` };
+    return { ikona: '🖼', text: `Obrázok / logo${strana}` };
+  }
+  function vykresliZoznamVrstiev(vynutit) {
+    const box = q('#layersList');
+    if (!box) return;
+    const podpis = state.items.map((i) => i.type + ':' + (i.text || i.iconName || 'g')).join('|') + '#' + state.selectedItemIndex;
+    if (!vynutit && podpis === poslednyPodpisVrstiev) return;
+    poslednyPodpisVrstiev = podpis;
+    box.innerHTML = '';
+    if (state.items.length === 0) { box.innerHTML = '<p class="text-xs text-slate-500 italic px-1 py-2">Zatiaľ žiadne objekty — pridaj text, ikonu alebo logo.</p>'; }
+    for (let idx = state.items.length - 1; idx >= 0; idx--) {
+      const item = state.items[idx];
+      const { ikona, text } = nazovVrstvy(item);
+      const riadok = document.createElement('div');
+      riadok.className = 'flex items-center gap-2 px-2.5 py-1.5 rounded-lg border cursor-pointer text-xs ' + (idx === state.selectedItemIndex ? 'bg-cyan-900/60 border-cyan-500 text-white' : 'bg-slate-800/70 border-slate-700 text-slate-300 hover:bg-slate-800');
+      riadok.innerHTML = '<span class="w-5 text-center text-slate-400">' + ikona + '</span><span class="flex-1 truncate">' + text.replace(/</g, '&lt;') + '</span>' +
+        '<span class="text-[10px] text-slate-500 mr-1">' + (idx === state.items.length - 1 ? 'navrchu' : (idx === 0 ? 'naspodku' : '')) + '</span>' +
+        '<button data-akcia="hore" title="Posunúť dopredu" class="px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-700 border border-slate-700">↑</button>' +
+        '<button data-akcia="dole" title="Posunúť dozadu" class="px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-700 border border-slate-700">↓</button>' +
+        '<button data-akcia="zmaz" title="Zmazať" class="px-1.5 py-0.5 rounded bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-800/60">✕</button>';
+      riadok.addEventListener('click', (e) => {
+        const akcia = e.target && e.target.getAttribute ? e.target.getAttribute('data-akcia') : null;
+        if (akcia === 'hore' && idx < state.items.length - 1) { const t = state.items[idx]; state.items[idx] = state.items[idx + 1]; state.items[idx + 1] = t; state.selectedItemIndex = idx + 1; }
+        else if (akcia === 'dole' && idx > 0) { const t = state.items[idx]; state.items[idx] = state.items[idx - 1]; state.items[idx - 1] = t; state.selectedItemIndex = idx - 1; }
+        else if (akcia === 'zmaz') { state.items.splice(idx, 1); state.selectedItemIndex = -1; }
+        else if (!akcia) { state.selectedItemIndex = idx; }
+        updateSelectedLabel(); render2D();
+      });
+      box.appendChild(riadok);
+    }
+    const pozadie = document.createElement('div');
+    pozadie.className = 'flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-dashed border-slate-700 text-xs text-slate-500';
+    pozadie.innerHTML = '<span class="w-5 text-center">▭</span><span class="flex-1">Pozadie (farba, vzor alebo nahraná grafika)</span><span class="text-[10px]">naspodku</span>';
+    box.appendChild(pozadie);
+  }
+
   function render2D() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = state.backgroundColor;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     if (state.pattern !== 'none') drawPattern(state.pattern, ctx, canvas.width, canvas.height);
+    kresliNahrane(ctx, canvas.width, canvas.height);
 
     const sc = canvas.width / CANON;
     state.items.forEach((item, index) => {
@@ -263,6 +319,7 @@ export function initBuffkyEngine(root, opts = {}) {
     });
 
     if (buffTexture) buffTexture.needsUpdate = true;
+    vykresliZoznamVrstiev(false);
   }
 
   /* ---------- THREE.JS 3D nahlad ---------- */
@@ -447,6 +504,7 @@ export function initBuffkyEngine(root, opts = {}) {
   function onCanvasUp() { state.isDragging = false; }
 
   function updateSelectedLabel() {
+    vykresliZoznamVrstiev(true);
     const label = q('#selectedItemLabel');
     if (!label) return;
     if (state.selectedItemIndex === -1) {
@@ -471,15 +529,16 @@ export function initBuffkyEngine(root, opts = {}) {
     }));
 
     const bgColorPicker = q('#bgColorPicker');
-    on(bgColorPicker, 'input', (e) => { state.backgroundColor = e.target.value; state.pattern = 'none'; render2D(); });
+    const zrusNahrane = () => { state.fullUpload = null; state.panelA = null; state.panelB = null; };
+    on(bgColorPicker, 'input', (e) => { zrusNahrane(); state.backgroundColor = e.target.value; state.pattern = 'none'; render2D(); });
 
     qa('.quick-color').forEach(btn => on(btn, 'click', () => {
-      state.backgroundColor = btn.dataset.color; bgColorPicker.value = btn.dataset.color; state.pattern = 'none';
+      zrusNahrane(); state.backgroundColor = btn.dataset.color; bgColorPicker.value = btn.dataset.color; state.pattern = 'none';
       render2D(); toast('Farba podkladu nastavená');
     }));
 
     qa('.pattern-btn').forEach(btn => on(btn, 'click', () => {
-      state.pattern = btn.dataset.pattern; render2D(); toast(`Aplikovaný motív: ${btn.textContent.trim()}`);
+      zrusNahrane(); state.pattern = btn.dataset.pattern; render2D(); toast(`Aplikovaný motív: ${btn.textContent.trim()}`);
     }));
 
     const defaultItemX = isPremium ? 500 : 250;
@@ -502,6 +561,28 @@ export function initBuffkyEngine(root, opts = {}) {
       state.items.push({ type: 'icon', unicode: ICON_UNICODE[iconKey], iconName: iconKey, x: defaultItemX, y: Math.max(350, 20 + hemMargin), fontSize: 70, color: '#38bdf8', scale: 1, rotation: 0 });
       state.selectedItemIndex = state.items.length - 1; updateSelectedLabel(); render2D(); toast('Ikona vložená do návrhu');
     }));
+
+    // Hotova grafika: Premium = cela satka 52x52 cm, Basic = panely A a B (27x52 cm). Spadavka 1 cm dookola sa pri nahlade orezava.
+    const nahrajHotovu = (selektor, kluc, ocakavanyPomer, popis) => on(q(selektor), 'change', (e) => {
+      const file = e.target.files[0];
+      e.target.value = '';
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const img = new Image();
+        img.onload = () => {
+          state[kluc] = img; render2D();
+          if (Math.abs((img.width / img.height) / ocakavanyPomer - 1) > 0.03) toast('Pomer strán súboru nesedí s ' + popis + ' — grafika sa roztiahne');
+          else toast('Hotová grafika vložená (' + popis + ')');
+        };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+    nahrajHotovu('#fullGraphicInput', 'fullUpload', 1, '52 × 52 cm');
+    nahrajHotovu('#panelAInput', 'panelA', 27 / 52, '27 × 52 cm');
+    nahrajHotovu('#panelBInput', 'panelB', 27 / 52, '27 × 52 cm');
+    on(q('#btnClearUploads'), 'click', () => { zrusNahrane(); render2D(); toast('Nahraná grafika odstránená'); });
 
     on(q('#imageUpload'), 'change', (e) => {
       const file = e.target.files[0];
@@ -640,6 +721,8 @@ export function initBuffkyEngine(root, opts = {}) {
       return JSON.stringify({
         backgroundColor: state.backgroundColor,
         pattern: state.pattern,
+        spadavkaCm: 1,
+        tlacovyFormatCm: [52, 52],
         bgImageUrl: state.bgImageUrl || undefined,
         items: state.items.map(({ imgElement, ...rest }) => rest), // obrazky (logo) nie su JSON-serializovatelne
       });
@@ -648,15 +731,16 @@ export function initBuffkyEngine(root, opts = {}) {
     // zakaznikovi (ziadne <a download>/verejna URL) — vraca sa len ako Blob priamo volajucemu.
     async getProductionBlob() {
       const PROD = 5906;
-      const prod = document.createElement('canvas');
-      prod.width = PROD; prod.height = PROD;
-      const pctx = prod.getContext('2d');
+      const fin = document.createElement('canvas');
+      fin.width = PROD; fin.height = PROD;
+      const pctx = fin.getContext('2d');
       const savedSelected = state.selectedItemIndex;
       state.selectedItemIndex = -1;
 
       pctx.fillStyle = state.backgroundColor;
       pctx.fillRect(0, 0, PROD, PROD);
       if (state.pattern !== 'none') drawPattern(state.pattern, pctx, PROD, PROD);
+      kresliNahrane(pctx, PROD, PROD);
       const sc = PROD / CANON;
       state.items.forEach((item) => {
         pctx.save();
@@ -678,6 +762,27 @@ export function initBuffkyEngine(root, opts = {}) {
       });
 
       state.selectedItemIndex = savedSelected;
+
+      // Tlacovy format = hotovy rozmer + 1 cm spadavky dookola (52 x 52 cm pri 300 DPI = 6142 px).
+      // Spadavka sa dotiahne z okrajov hotovej plochy; ak zakaznik nahral hotovu grafiku so spadavkou, pouzije sa jeho spadavka.
+      const BL = Math.round(1 / 2.54 * 300), BIG = PROD + 2 * BL;
+      const prod = document.createElement('canvas');
+      prod.width = BIG; prod.height = BIG;
+      const bc = prod.getContext('2d');
+      bc.fillStyle = state.backgroundColor; bc.fillRect(0, 0, BIG, BIG);
+      bc.drawImage(fin, 0, 0, 1, PROD, 0, BL, BL, PROD);
+      bc.drawImage(fin, PROD - 1, 0, 1, PROD, BL + PROD, BL, BL, PROD);
+      bc.drawImage(fin, 0, 0, PROD, 1, BL, 0, PROD, BL);
+      bc.drawImage(fin, 0, PROD - 1, PROD, 1, BL, BL + PROD, PROD, BL);
+      bc.drawImage(fin, 0, 0, 1, 1, 0, 0, BL, BL);
+      bc.drawImage(fin, PROD - 1, 0, 1, 1, BL + PROD, 0, BL, BL);
+      bc.drawImage(fin, 0, PROD - 1, 1, 1, 0, BL + PROD, BL, BL);
+      bc.drawImage(fin, PROD - 1, PROD - 1, 1, 1, BL + PROD, BL + PROD, BL, BL);
+      if (state.fullUpload) bc.drawImage(state.fullUpload, 0, 0, BIG, BIG);
+      const sirkaPanelu = Math.round(27 / 2.54 * 300);
+      if (state.panelA) bc.drawImage(state.panelA, 0, 0, sirkaPanelu, BIG);
+      if (state.panelB) bc.drawImage(state.panelB, BIG - sirkaPanelu, 0, sirkaPanelu, BIG);
+      bc.drawImage(fin, BL, BL);
       return await new Promise((resolve) => prod.toBlob(resolve, 'image/png'));
     },
   };
