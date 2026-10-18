@@ -635,7 +635,7 @@ const mapAddonTypeFromDb = (r) => ({ id: r.id, label: r.label, sortOrder: r.sort
 // Medzifiremne vyuctovanie sluzieb (ATAK <-> PBT) — ktore stanice patria ktorej firme, na urcenie smeru fakturacie
 const PBT_STATIONS = ['sublimacia', 'laser', 'transfer', 'sietotlac'];
 const ATAK_STATIONS = ['strihanie', 'sitie'];
-const mapIntercompanyRateFromDb = (r) => ({ serviceKey: r.service_key, label: r.label, unit: r.unit, price: r.price || 0, markupPercent: r.markup_percent || 0 });
+const mapIntercompanyRateFromDb = (r) => ({ serviceKey: r.service_key, label: r.label, unit: r.unit, price: r.price || 0, markupPercent: r.markup_percent || 0, marzaPercent: r.marza_percent == null ? null : Number(r.marza_percent) });
 const mapIntercompanyClosedPeriodFromDb = (r) => ({ id: `${r.direction}_${r.month}`, direction: r.direction, month: r.month, closedAt: r.closed_at, closedBy: r.closed_by || '', snapshot: r.snapshot });
 
 // Body na papierovom dotlačovom listku, ktoré vie predajňa rýchlo označiť (predné + zadné schéma trička/nohavíc).
@@ -1289,6 +1289,9 @@ export default function App() {
   const [intercompanyRates, setIntercompanyRates] = useState([]);
   const [intercompanyClosedPeriods, setIntercompanyClosedPeriods] = useState([]);
   const [showIntercompanyRateEditor, setShowIntercompanyRateEditor] = useState(false);
+  // Pevna marza medzifiremnych cien (plosna, prepisatelna pre kazdu sluzbu) + mesacne poplatky (napr. prenajom stroja).
+  const [intercompanyNastavenia, setIntercompanyNastavenia] = useState({ vychodziaMarza: 30, krivka: false });
+  const [intercompanyPoplatky, setIntercompanyPoplatky] = useState([]);
   const [intercompanyDirection, setIntercompanyDirection] = useState('ATAK_TO_PBT'); // ATAK_TO_PBT = PBT fakturuje ATAK; PBT_TO_ATAK = ATAK fakturuje PBT
   const [intercompanyMonth, setIntercompanyMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
   const [showAddonEditor, setShowAddonEditor] = useState(false);
@@ -4471,9 +4474,48 @@ export default function App() {
   };
 
   const handleUpdateIntercompanyRate = async (serviceKey, field, value) => {
-    setIntercompanyRates(prev => prev.map(r => r.serviceKey === serviceKey ? { ...r, [field]: Number(value) || 0 } : r));
-    const dbField = field === 'markupPercent' ? 'markup_percent' : field;
-    await supabase.from('intercompany_rates').update({ [dbField]: Number(value) || 0 }).eq('service_key', serviceKey);
+    // marzaPercent: prazdne pole = null = pouzije sa plosna (vychodzia) marza
+    const hodnota = field === 'marzaPercent' && (value === '' || value === null) ? null : (Number(value) || 0);
+    setIntercompanyRates(prev => prev.map(r => r.serviceKey === serviceKey ? { ...r, [field]: hodnota } : r));
+    const dbField = field === 'markupPercent' ? 'markup_percent' : field === 'marzaPercent' ? 'marza_percent' : field;
+    const { error } = await supabase.from('intercompany_rates').update({ [dbField]: hodnota }).eq('service_key', serviceKey);
+    if (error && field === 'marzaPercent') triggerNotification('error', 'Marža sa nedá uložiť — treba spustiť migration_medzifiremne_marza_poplatky.sql: ' + error.message);
+  };
+
+  useEffect(() => {
+    if (!supabase || currentUser?.role !== 'master') return;
+    (async () => {
+      const [nast, pop] = await Promise.all([
+        supabase.from('intercompany_nastavenia').select('*').eq('id', 1).maybeSingle(),
+        supabase.from('intercompany_mesacne_poplatky').select('*').order('id'),
+      ]);
+      if (!nast.error && nast.data) setIntercompanyNastavenia({ vychodziaMarza: Number(nast.data.vychodzia_marza_percent) || 0, krivka: !!nast.data.pouzit_marzovu_krivku });
+      if (!pop.error) setIntercompanyPoplatky((pop.data || []).map(p => ({ id: p.id, smer: p.smer, nazov: p.nazov || '', suma: Number(p.suma) || 0, aktivny: p.aktivny !== false })));
+    })();
+  }, [currentUser?.role]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleUpdateIntercompanyNastavenia = async (patch) => {
+    setIntercompanyNastavenia(prev => ({
+      ...prev,
+      ...(patch.vychodzia_marza_percent !== undefined ? { vychodziaMarza: patch.vychodzia_marza_percent } : {}),
+      ...(patch.pouzit_marzovu_krivku !== undefined ? { krivka: patch.pouzit_marzovu_krivku } : {}),
+    }));
+    const { error } = await supabase.from('intercompany_nastavenia').update(patch).eq('id', 1);
+    if (error) triggerNotification('error', 'Nastavenie sa nedá uložiť — treba spustiť migration_medzifiremne_marza_poplatky.sql: ' + error.message);
+  };
+  const handleAddIntercompanyPoplatok = async (smer) => {
+    const { data, error } = await supabase.from('intercompany_mesacne_poplatky').insert({ smer, nazov: 'Prenájom stroja', suma: 0 }).select().single();
+    if (error) { triggerNotification('error', 'Poplatok sa nedá pridať — treba spustiť migration_medzifiremne_marza_poplatky.sql: ' + error.message); return; }
+    setIntercompanyPoplatky(prev => [...prev, { id: data.id, smer: data.smer, nazov: data.nazov || '', suma: Number(data.suma) || 0, aktivny: data.aktivny !== false }]);
+  };
+  const handleUpdateIntercompanyPoplatok = async (id, patch) => {
+    setIntercompanyPoplatky(prev => prev.map(p => p.id === id ? { ...p, ...patch } : p));
+    await supabase.from('intercompany_mesacne_poplatky').update(patch).eq('id', id);
+  };
+  const handleDeleteIntercompanyPoplatok = async (id) => {
+    if (!window.confirm('Zmazať tento mesačný poplatok?')) return;
+    setIntercompanyPoplatky(prev => prev.filter(p => p.id !== id));
+    await supabase.from('intercompany_mesacne_poplatky').delete().eq('id', id);
   };
 
   const handleUpdateWarehouseCompany = async (warehouseId, company) => {
@@ -4529,6 +4571,8 @@ export default function App() {
       return ym === monthStr;
     });
     const lines = [];
+    // Marza sluzby: vlastna (ak je zadana) alebo plosna vychodzia (predvolene 30 %).
+    const marzaPre = (key) => { const rt = intercompanyRates.find(x => x.serviceKey === key); return rt?.marzaPercent ?? intercompanyNastavenia.vychodziaMarza; };
     relevantOrders.forEach(order => {
       (order.items || []).forEach(item => {
         const product = products.find(pr => pr.id === item.productId);
@@ -4538,9 +4582,12 @@ export default function App() {
           const rate = intercompanyRates.find(r => r.serviceKey === sid);
           const kostraCostPerKs = getKostraCostPerKsPreStanicu(product, sid);
           const itemKey = `${order.id}_${item.itemId}`;
-          if (kostraCostPerKs != null && marginCurveConfig && item.qty) {
-            const unitPrice = priceAt(kostraCostPerKs, item.qty, marginCurveConfig);
-            lines.push({ itemKey, baseProductName: item.productName, itemQty: item.qty, orderNumber: order.orderNumber || order.id, productName: `${item.productName} — ${rate?.label || sid} (z Kostry, ${item.qty}ks)`, unit: 'ks', qty: item.qty, unitPrice, total: parseFloat((item.qty * unitPrice).toFixed(2)) });
+          if (kostraCostPerKs != null && item.qty && (!intercompanyNastavenia.krivka || marginCurveConfig)) {
+            // Pevna marza (predvolene) = vyrobna cena z Kostry x (1 + marza); alebo volitelne mnozstvova krivka z Cenotvorby.
+            const marzaSluzby = marzaPre(sid);
+            const unitPrice = intercompanyNastavenia.krivka ? priceAt(kostraCostPerKs, item.qty, marginCurveConfig) : parseFloat((kostraCostPerKs * (1 + marzaSluzby / 100)).toFixed(2));
+            const popisMarze = intercompanyNastavenia.krivka ? '' : `, marža ${marzaSluzby} %`;
+            lines.push({ itemKey, baseProductName: item.productName, itemQty: item.qty, orderNumber: order.orderNumber || order.id, productName: `${item.productName} — ${rate?.label || sid} (z Kostry, ${item.qty}ks${popisMarze})`, unit: 'ks', qty: item.qty, unitPrice, total: parseFloat((item.qty * unitPrice).toFixed(2)) });
             return;
           }
           if (!rate) return;
@@ -4561,12 +4608,16 @@ export default function App() {
           const wh = warehouses.find(w => w.id === mat?.warehouseId);
           if (mat && wh?.company === invoicerCompany) {
             const matRate = intercompanyRates.find(r => r.serviceKey === 'material');
-            const markup = matRate?.markupPercent || 0;
+            const markup = marzaPre('material');
             const unitPrice = parseFloat(((mat.pricePerM || 0) * (1 + markup / 100)).toFixed(2));
             lines.push({ itemKey: `${order.id}_${item.itemId}`, baseProductName: item.productName, itemQty: item.qty, orderNumber: order.orderNumber || order.id, productName: `${item.productName} — Materiál (${mat.name})`, unit: mat.unit || 'm', qty: needed.qtyNeeded, unitPrice, total: parseFloat((needed.qtyNeeded * unitPrice).toFixed(2)) });
           }
         });
       });
+    });
+    // Mesacne poplatky (napr. prenajom stroja) — fakturuje ich firma, ktora v tomto smere fakturuje.
+    intercompanyPoplatky.filter(p => p.smer === direction && p.aktivny && p.suma > 0).forEach(p => {
+      lines.push({ itemKey: `poplatok_${p.id}`, baseProductName: p.nazov, itemQty: 1, orderNumber: '—', productName: `${p.nazov} (mesačný poplatok)`, unit: 'mes.', qty: 1, unitPrice: p.suma, total: parseFloat(p.suma.toFixed(2)) });
     });
     return lines.map((l, i) => ({ seq: i + 1, ...l }));
   };
@@ -10603,7 +10654,7 @@ export default function App() {
                 </div>
               )}
 
-              <div className="flex items-center gap-2 bg-slate-900 p-1.5 rounded-xl border border-slate-800 w-fit overflow-x-auto">
+              <div className="flex flex-wrap items-center gap-1.5 bg-slate-900 p-1.5 rounded-xl border border-slate-800 max-w-full">
                 <button onClick={() => setFinanceSubTab('overview')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'overview' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Prehľad</button>
                 <button onClick={() => setFinanceSubTab('queue')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'queue' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Fronta pre účtovníka {pendingReviewOrders.length > 0 && `(${pendingReviewOrders.length})`}</button>
                 <button onClick={() => setFinanceSubTab('invoices')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'invoices' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Faktúry</button>
@@ -11173,19 +11224,42 @@ export default function App() {
                     {showIntercompanyRateEditor && (
                       <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-2">
                         <span className="text-xs font-bold text-slate-300 uppercase block mb-1">Cenník medzifiremných služieb (bez DPH) + marža</span>
-                        <p className="text-[9px] text-indigo-400 pb-1">Pre sublimáciu/laser/transfer/sieťotlač/strihanie/šitie sa cena teraz počíta automaticky zo skutočnej výrobnej ceny (Kostra cien) + rovnaká množstevná maržová krivka ako pri Textilnej metráži — čím väčšia zákazka, tým nižšia marža na kus. Nižšie zadané ručné sadzby sa použijú len ako záloha pre položky, ktoré ešte nemajú vyplnené potrebné údaje v Katalógu produktov (napr. produkt bez zvolenej technológie tlače).</p>
-                        <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 text-[9px] text-slate-500 uppercase font-bold px-0.5">
-                          <span>Služba</span><span className="text-center">Cena / MJ</span><span className="text-center">MJ</span><span className="text-center">Marža %</span>
+                        <p className="text-[10px] text-indigo-400 pb-1">Ceny sa počítajú zo skutočnej výrobnej ceny (Kostra cien, metráže, spotreby, minúty šitia z Katalógu produktov) + marža nižšie — nič sa nezadáva ručne po kusoch. Plošná marža platí pre všetky služby, v stĺpci „Marža %" ju môžeš pre konkrétnu službu prepísať (prázdne = plošná). „Záložná cena" sa použije len pri produkte, ktorému chýbajú údaje v Katalógu.</p>
+                        <div className="flex flex-wrap items-center gap-4 bg-slate-950 border border-slate-800 rounded-lg p-3">
+                          <label className="text-xs text-slate-300 flex items-center gap-2">Plošná marža pre všetky služby
+                            <input type="number" step="1" min="0" value={intercompanyNastavenia.vychodziaMarza} onChange={(e) => handleUpdateIntercompanyNastavenia({ vychodzia_marza_percent: Number(e.target.value) || 0 })} className="w-16 bg-slate-950 border border-amber-800/40 rounded px-2 py-1 text-amber-300 text-right" /> %
+                          </label>
+                          <label className="text-[11px] text-slate-400 flex items-center gap-2">
+                            <input type="checkbox" checked={intercompanyNastavenia.krivka} onChange={(e) => handleUpdateIntercompanyNastavenia({ pouzit_marzovu_krivku: e.target.checked })} />
+                            Namiesto pevnej marže použiť množstvovú krivku z Cenotvorby (väčšia zákazka = nižšia marža)
+                          </label>
+                        </div>
+                        <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 text-[9px] text-slate-500 uppercase font-bold px-0.5">
+                          <span>Služba</span><span className="text-center">Marža %</span><span className="text-center">Záložná cena</span><span className="text-center">MJ</span><span className="text-center">Prirážka zál. %</span>
                         </div>
                         {intercompanyRates.map(r => (
-                          <div key={r.serviceKey} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center text-xs">
+                          <div key={r.serviceKey} className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 items-center text-xs">
                             <span className="text-slate-300">{r.label}</span>
+                            <input type="number" step="1" min="0" value={r.marzaPercent ?? ''} placeholder={String(intercompanyNastavenia.vychodziaMarza)} disabled={r.serviceKey === 'rezia'} onChange={(e) => handleUpdateIntercompanyRate(r.serviceKey, 'marzaPercent', e.target.value)} className="w-16 bg-slate-950 border border-amber-800/40 rounded px-2 py-1 text-amber-300 text-right disabled:opacity-30" />
                             <input type="number" step="0.1" min="0" value={r.price} onChange={(e) => handleUpdateIntercompanyRate(r.serviceKey, 'price', e.target.value)} className="w-20 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-white text-right" />
                             <span className="w-10 text-center text-slate-500">{r.unit}</span>
-                            <input type="number" step="1" min="0" value={r.markupPercent} onChange={(e) => handleUpdateIntercompanyRate(r.serviceKey, 'markupPercent', e.target.value)} className="w-16 bg-slate-950 border border-amber-800/40 rounded px-2 py-1 text-amber-300 text-right" />
+                            <input type="number" step="1" min="0" value={r.markupPercent} onChange={(e) => handleUpdateIntercompanyRate(r.serviceKey, 'markupPercent', e.target.value)} className="w-16 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-300 text-right" />
                           </div>
                         ))}
                         <p className="text-[9px] text-slate-600 italic pt-1">Materiál sa pripočíta automaticky, ak bol pri danej položke použitý zo skladu, ktorý má nastavenú firmu {invoicer} (nastavíš pri skladoch v Materiáloch).</p>
+                        <div className="border-t border-slate-800 pt-3 mt-2 space-y-2">
+                          <span className="text-xs font-bold text-slate-300 uppercase block">Mesačné poplatky — {invoicer} fakturuje {payer}</span>
+                          <p className="text-[10px] text-slate-500">Pevné mesačné položky (napr. prenájom stroja, ktorý vlastní {invoicer} a {payer} na ňom šije zákazky). Pridajú sa ako samostatný riadok do dodacieho listu za každý mesiac.</p>
+                          {intercompanyPoplatky.filter(p => p.smer === intercompanyDirection).map(p => (
+                            <div key={p.id} className="flex flex-wrap items-center gap-2 text-xs">
+                              <input type="text" value={p.nazov} onChange={(e) => handleUpdateIntercompanyPoplatok(p.id, { nazov: e.target.value })} className="flex-1 min-w-[160px] bg-slate-950 border border-slate-800 rounded px-2 py-1 text-white" />
+                              <input type="number" step="1" min="0" value={p.suma} onChange={(e) => handleUpdateIntercompanyPoplatok(p.id, { suma: Number(e.target.value) || 0 })} className="w-24 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-white text-right" /> <span className="text-slate-500">€ / mesiac</span>
+                              <label className="flex items-center gap-1 text-slate-400"><input type="checkbox" checked={p.aktivny} onChange={(e) => handleUpdateIntercompanyPoplatok(p.id, { aktivny: e.target.checked })} /> aktívny</label>
+                              <button onClick={() => handleDeleteIntercompanyPoplatok(p.id)} className="text-slate-500 hover:text-rose-400 p-1"><Trash2 className="h-3.5 w-3.5" /></button>
+                            </div>
+                          ))}
+                          <button onClick={() => handleAddIntercompanyPoplatok(intercompanyDirection)} className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5"><Plus className="h-3.5 w-3.5" /> Pridať mesačný poplatok</button>
+                        </div>
                       </div>
                     )}
 

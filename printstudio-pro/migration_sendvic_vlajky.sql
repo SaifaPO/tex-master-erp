@@ -13,16 +13,19 @@ where je_mesh = false and (lower(nazov) like '%mesh%' or lower(nazov) like '%die
 update zastava_materialy set je_mesh = true
 where je_mesh = false and (lower(nazov) like '%mesh%' or lower(nazov) like '%dierk%' or lower(nazov) like '%perfor%' or lower(kod) like '%mesh%');
 
--- 2) Verejne pohlady sa rozsiruju o je_mesh (stlpec na KONCI; naklad_m2 stale NIKDY nejde klientovi)
-create or replace view vlajka_materialy_verejny as
+-- 2) Verejne pohlady sa rozsiruju o je_mesh (naklad_m2 stale NIKDY nejde klientovi). View sa maze a vytvara nanovo,
+--    lebo create or replace nedovoli zmenit poradie stlpcov.
+drop view if exists vlajka_materialy_verejny;
+create view vlajka_materialy_verejny as
 select kod, nazov, popis, pouzitie, poradie, obrazok_url, je_mesh
 from vlajka_materialy
 where aktivny = true
 order by poradie;
 grant select on vlajka_materialy_verejny to anon, authenticated;
 
-create or replace view zastava_materialy_verejny as
-select kod, nazov, popis, pouzitie, poradie, je_mesh
+drop view if exists zastava_materialy_verejny;
+create view zastava_materialy_verejny as
+select kod, nazov, popis, pouzitie, sirka_rolky_cm, poradie, je_mesh
 from zastava_materialy
 where aktivny = true
 order by poradie;
