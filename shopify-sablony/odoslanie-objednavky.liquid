@@ -1,0 +1,173 @@
+<!--
+  Shopify e-mail "Odoslanie objednávky" (Settings -> Notifications -> Customer notifications -> Shipping confirmation -> Edit code).
+  Rovnaký štýl ako Potvrdenie objednávky; prvé dve kolieska (Prijatá, Odoslaná) sú vyplnené, pribudlo sledovanie zásielky.
+  PREDMET (Email subject):
+    {% if customer.first_name != blank %}{{ customer.first_name }}, vaša objednávka {{ order_name }} je na ceste!{% else %}Vaša objednávka {{ order_name }} je na ceste!{% endif %}
+-->
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Objednávka {{ order_name }} bola odoslaná</title>
+  <style>body,table,td,p,h1,div,span,a{font-family:Arial,Helvetica,sans-serif !important;}</style>
+</head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;color:#111827;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;">
+    <tr>
+      <td align="center" style="padding:24px 12px;">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:#ffffff;">
+
+          <!-- Hlavička -->
+          <tr>
+            <td style="background:#232832;padding:22px 28px;">
+              <a href="{{ shop.url }}"><img src="https://cdn.shopify.com/s/files/1/0777/1016/4311/files/logo-pbt.png?v=1791199171" alt="{{ shop.name }}" height="48" style="display:block;border:0;height:48px;max-width:240px;"></a>
+            </td>
+          </tr>
+
+          <!-- Úvod -->
+          <tr>
+            <td style="padding:28px 28px 8px 28px;">
+              <h1 style="margin:0 0 6px 0;font-size:22px;line-height:28px;color:#111827;">Vaša objednávka je na ceste!</h1>
+              <p style="margin:0;font-size:14px;line-height:22px;color:#4b5563;">Objednávka č. <strong>{{ order_name }}</strong> bola odoslaná.</p>
+            </td>
+          </tr>
+
+          <!-- Stav objednávky -->
+          <tr>
+            <td style="padding:18px 28px 6px 28px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td width="33%" align="center" style="font-size:12px;font-weight:bold;color:#232832;">
+                    <div style="width:54px;height:54px;line-height:54px;border-radius:27px;background:#232832;color:#ffffff;font-size:28px;text-align:center;margin:0 auto 6px auto;">&#10003;</div>
+                    Prijatá
+                  </td>
+                  <td width="33%" align="center" style="font-size:12px;font-weight:bold;color:#232832;">
+                    <div style="width:54px;height:54px;line-height:54px;border-radius:27px;background:#232832;color:#ffffff;font-size:28px;text-align:center;margin:0 auto 6px auto;">&#10003;</div>
+                    Odoslaná
+                  </td>
+                  <td width="33%" align="center" style="font-size:12px;font-weight:bold;color:#9ca3af;">
+                    <div style="width:50px;height:50px;line-height:50px;border-radius:27px;border:2px solid #d1d5db;color:#9ca3af;font-size:26px;text-align:center;margin:0 auto 6px auto;">&#10003;</div>
+                    Doručená
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:14px 28px 4px 28px;font-size:14px;line-height:22px;color:#374151;">
+              {% if fulfillment.tracking_numbers.size > 0 %}
+                Zásielku môžete sledovať pomocou nižšie uvedeného čísla.
+              {% else %}
+                Zásielku sme odovzdali doručovateľovi. Ak ju niečo oneskorí, ozveme sa vám.
+              {% endif %}
+            </td>
+          </tr>
+
+          {% if fulfillment.tracking_numbers.size > 0 %}
+          <tr>
+            <td style="padding:10px 28px 0 28px;font-size:14px;line-height:24px;color:#111827;">
+              {% if fulfillment.tracking_company %}Doručovateľ: <strong>{{ fulfillment.tracking_company }}</strong><br>{% endif %}
+              Číslo zásielky:
+              {% for tracking_number in fulfillment.tracking_numbers %}
+                <strong>{{ tracking_number }}</strong>{% unless forloop.last %}, {% endunless %}
+              {% endfor %}
+            </td>
+          </tr>
+          {% endif %}
+
+          <tr>
+            <td align="center" style="padding:16px 28px 8px 28px;">
+              {% if fulfillment.tracking_url %}
+                <a href="{{ fulfillment.tracking_url }}" style="display:inline-block;background:#111111;color:#ffffff;font-size:14px;font-weight:bold;text-decoration:none;padding:12px 26px;">Sledovať zásielku</a>
+              {% else %}
+                <a href="{{ order_status_url }}" style="display:inline-block;background:#111111;color:#ffffff;font-size:14px;font-weight:bold;text-decoration:none;padding:12px 26px;">Zobraziť objednávku</a>
+              {% endif %}
+            </td>
+          </tr>
+
+          <!-- Čo sme odoslali -->
+          <tr>
+            <td style="padding:18px 0 0 0;">
+              <div style="background:#232832;color:#ffffff;font-size:14px;font-weight:bold;padding:10px 28px;">Odoslané položky:</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:6px 28px 0 28px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                {% for line in fulfillment.fulfillment_line_items %}
+                <tr>
+                  <td width="72" valign="top" style="padding:12px 12px 12px 0;border-bottom:1px solid #e5e7eb;">
+                    {% if line.line_item.image %}
+                      <img src="{{ line.line_item | img_url: 'compact_cropped' }}" alt="{{ line.line_item.title | escape }}" width="60" height="60" style="display:block;border:0;width:60px;height:60px;object-fit:cover;">
+                    {% endif %}
+                  </td>
+                  <td valign="top" style="padding:12px 0;border-bottom:1px solid #e5e7eb;font-size:14px;line-height:20px;color:#111827;">
+                    {{ line.quantity }}&times; {{ line.line_item.title }}
+                    {% if line.line_item.variant.title != 'Default Title' and line.line_item.variant.title != blank %}
+                      <br><span style="color:#6b7280;font-size:13px;">{{ line.line_item.variant.title }}</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </table>
+            </td>
+          </tr>
+
+          <!-- Adresa doručenia -->
+          {% if shipping_address %}
+          <tr>
+            <td style="padding:18px 28px 4px 28px;font-size:13px;line-height:20px;color:#374151;">
+              <strong style="color:#232832;font-size:14px;">Doručovacia adresa:</strong><br>
+              {{ shipping_address | format_address }}
+              {% if shipping_method %}<br><span style="color:#6b7280;">Spôsob doručenia: {{ shipping_method.title }}</span>{% endif %}
+            </td>
+          </tr>
+          {% endif %}
+
+          <tr>
+            <td align="center" style="padding:14px 28px 0 28px;">
+              <a href="{{ order_status_url }}" style="color:#232832;font-size:13px;font-weight:bold;">Zobraziť detaily objednávky</a>
+            </td>
+          </tr>
+
+          <!-- Pomoc -->
+          <tr>
+            <td style="padding:22px 0 0 0;">
+              <div style="background:#c4c7cc;padding:14px 28px;font-size:14px;color:#111827;">
+                <strong>Potrebujete pomôcť? Napíšte nám alebo zavolajte.</strong><br>Sme tu pre vás.
+              </div>
+              <div style="background:#f0f1f3;padding:16px 28px;font-size:13px;line-height:20px;color:#374151;">
+                Pri otázkach k objednávke uveďte jej číslo <strong>{{ order_name }}</strong>.
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px;">
+                  <tr>
+                    <td align="center" style="padding:0 6px 0 0;">
+                      <a href="mailto:{{ shop.email }}" style="display:block;background:#111111;color:#ffffff;font-size:14px;font-weight:bold;text-decoration:none;padding:12px 10px;">{{ shop.email }}</a>
+                    </td>
+                    {% if shop.phone != blank %}
+                    <td align="center" style="padding:0 0 0 6px;">
+                      <a href="tel:{{ shop.phone }}" style="display:block;background:#111111;color:#ffffff;font-size:14px;font-weight:bold;text-decoration:none;padding:12px 10px;">{{ shop.phone }}</a>
+                    </td>
+                    {% endif %}
+                  </tr>
+                </table>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Pätička -->
+          <tr>
+            <td style="padding:16px 28px 22px 28px;font-size:11px;line-height:16px;color:#9ca3af;">
+              {{ shop.name }}{% if shop.address.city %} | {{ shop.address.address1 }}, {{ shop.address.zip }} {{ shop.address.city }}{% endif %}
+              | <a href="{{ shop.url }}/policies/terms-of-service" style="color:#9ca3af;">Obchodné podmienky</a><br>
+              Toto je automatická správa o odoslaní vašej objednávky, nie marketingová správa.
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
