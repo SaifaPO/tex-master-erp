@@ -11,6 +11,7 @@
 //   - "Do kosika"/cart modal (fake Shopify) odstranene — objednavaciu logiku (cena, DPH, odoslanie)
 //     rieši React komponent Celenky.jsx, engine len kresli a hlasi hotovy navrh cez verejne API.
 import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { makeFlatlockTexture } from '../stitchTextures';
 
 // Rozmer celenky (cm) sa predava zvonka (velkost + material: napr. 51x9 hreben, 48x9 hladka, 48x7 deti ...).
@@ -47,9 +48,7 @@ export function initCelenkyEngine(root, opts = {}) {
   let editorCanvas, ctx2d;
   let textureCanvas, textureCtx;
   let threeScene, threeCamera, threeRenderer, headbandGroup, canvasTexture;
-  let targetRotationY = 0;
-  let currentRotationY = 0;
-  let isUserInteracting3D = false;
+  let controls3D = null;
   let previousMouseX = 0;
   let rafId = null;
   const cleanupFns = [];
@@ -405,7 +404,13 @@ export function initCelenkyEngine(root, opts = {}) {
     const dirLight2 = new THREE.DirectionalLight(0xffffff, 0.12 * Math.PI); dirLight2.position.set(-5, -3, -5); threeScene.add(dirLight2);
 
     buildHeadbandMesh();
-    setup3DInteraction(container);
+    // Orbitalne ovladanie (ako pri buffke): celenku mozno otacat aj nahor/nadol (os X), priblizovat a pozriet sa aj dovnutra.
+    controls3D = new OrbitControls(threeCamera, threeRenderer.domElement);
+    controls3D.enableDamping = true; controls3D.dampingFactor = 0.08;
+    controls3D.minDistance = 2.2; controls3D.maxDistance = 8;
+    controls3D.minPolarAngle = Math.PI * 0.08; controls3D.maxPolarAngle = Math.PI * 0.92;
+    controls3D.enablePan = false;
+    controls3D.autoRotate = STATE.autoRotate; controls3D.autoRotateSpeed = 2.0;
     rafId = requestAnimationFrame(animate3D);
 
     on(window, 'resize', handleThreeResize);
@@ -442,6 +447,19 @@ export function initCelenkyEngine(root, opts = {}) {
     const seamMat = new THREE.MeshStandardMaterial({ map: seamTex, transparent: true, roughness: 0.95, metalness: 0, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
     headbandGroup.add(new THREE.Mesh(seamGeo, seamMat));
 
+    // Stitok "ŠEV" pri zadnom svoji (rovnako ako pri buffkach) — aby zakaznik vedel, kde je sev (-z = vzadu).
+    const stitokCanvas = document.createElement('canvas');
+    stitokCanvas.width = 192; stitokCanvas.height = 56;
+    const sg = stitokCanvas.getContext('2d');
+    sg.fillStyle = '#f43f5e';
+    if (sg.roundRect) { sg.beginPath(); sg.roundRect(0, 0, 192, 56, 14); sg.fill(); } else sg.fillRect(0, 0, 192, 56);
+    sg.fillStyle = '#ffffff'; sg.font = 'bold 26px sans-serif'; sg.textAlign = 'center'; sg.textBaseline = 'middle';
+    sg.fillText('ŠEV (zadný)', 96, 29);
+    const stitok = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(stitokCanvas), depthTest: false }));
+    stitok.position.set(0, height3D / 2 + 0.2, -radius * 1.0);
+    stitok.scale.set(0.9, 0.26, 1);
+    headbandGroup.add(stitok);
+
     const innerGeo = new THREE.CylinderGeometry(radius - 0.012, radius - 0.012, height3D, 128, 1, true);
     innerGeo.rotateY(Math.PI);
     const innerMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.95, metalness: 0, side: THREE.BackSide }); // vnutro je biele
@@ -455,11 +473,7 @@ export function initCelenkyEngine(root, opts = {}) {
 
   function animate3D() {
     rafId = requestAnimationFrame(animate3D);
-    if (headbandGroup) {
-      if (STATE.autoRotate && !isUserInteracting3D) targetRotationY += 0.005;
-      currentRotationY += (targetRotationY - currentRotationY) * 0.1;
-      headbandGroup.rotation.y = currentRotationY;
-    }
+    if (controls3D) { controls3D.autoRotate = STATE.autoRotate; controls3D.update(); }
     threeRenderer.render(threeScene, threeCamera);
   }
 
@@ -470,19 +484,6 @@ export function initCelenkyEngine(root, opts = {}) {
     if (w === 0 || h === 0) return;
     threeCamera.aspect = w / h; threeCamera.updateProjectionMatrix();
     threeRenderer.setSize(w, h);
-  }
-
-  function setup3DInteraction(container) {
-    const onPointerDown = (clientX) => { isUserInteracting3D = true; previousMouseX = clientX; };
-    const onPointerMove = (clientX) => { if (!isUserInteracting3D) return; const dx = clientX - previousMouseX; previousMouseX = clientX; targetRotationY += dx * 0.012; };
-    const onPointerUp = () => { isUserInteracting3D = false; };
-
-    on(container, 'mousedown', (e) => onPointerDown(e.clientX));
-    on(window, 'mousemove', (e) => onPointerMove(e.clientX));
-    on(window, 'mouseup', onPointerUp);
-    on(container, 'touchstart', (e) => { if (e.touches.length === 1) onPointerDown(e.touches[0].clientX); }, { passive: true });
-    on(window, 'touchmove', (e) => { if (isUserInteracting3D && e.touches.length === 1) onPointerMove(e.touches[0].clientX); }, { passive: true });
-    on(window, 'touchend', onPointerUp);
   }
 
   /* ---------- 2D interaktivne transformacie (drag/rotate/scale) ---------- */
@@ -715,9 +716,15 @@ export function initCelenkyEngine(root, opts = {}) {
       [btnFront, btnAngle, btnBack].forEach(b => { if (!b) return; b.classList.remove('bg-white', 'text-indigo-950', 'font-bold', 'shadow-xs'); b.classList.add('text-white/80'); });
       if (activeBtn) { activeBtn.classList.add('bg-white', 'text-indigo-950', 'font-bold', 'shadow-xs'); activeBtn.classList.remove('text-white/80'); }
     }
-    on(btnFront, 'click', () => { STATE.autoRotate = false; targetRotationY = 0; setViewBtnActive(btnFront); });
-    on(btnAngle, 'click', () => { STATE.autoRotate = false; targetRotationY = 0.75; setViewBtnActive(btnAngle); });
-    on(btnBack, 'click', () => { STATE.autoRotate = false; targetRotationY = Math.PI; setViewBtnActive(btnBack); });
+    const nastavPohlad = (uhol, vyska) => {
+      STATE.autoRotate = false;
+      const d = 3.8;
+      threeCamera.position.set(Math.sin(uhol) * d, vyska, Math.cos(uhol) * d);
+      if (controls3D) { controls3D.target.set(0, 0, 0); controls3D.update(); }
+    };
+    on(btnFront, 'click', () => { nastavPohlad(0, 0.35); setViewBtnActive(btnFront); });
+    on(btnAngle, 'click', () => { nastavPohlad(0.75, 0.9); setViewBtnActive(btnAngle); });
+    on(btnBack, 'click', () => { nastavPohlad(Math.PI, 0.35); setViewBtnActive(btnBack); });
     on(q('#toggleAutoRotateBtn'), 'click', () => { STATE.autoRotate = !STATE.autoRotate; toast(STATE.autoRotate ? 'Rotácia spustená' : 'Rotácia pozastavená'); });
 
     on(q('#bleedGuideCheckbox'), 'change', (e) => { STATE.showBleed = e.target.checked; render2D(); });
@@ -890,6 +897,7 @@ export function initCelenkyEngine(root, opts = {}) {
     destroy() {
       if (rafId) cancelAnimationFrame(rafId);
       cleanupFns.forEach(fn => fn());
+      if (controls3D) controls3D.dispose();
       if (threeRenderer) { threeRenderer.dispose(); threeRenderer.domElement?.remove(); }
     },
     hasContent() { return STATE.elements.length > 0; },
