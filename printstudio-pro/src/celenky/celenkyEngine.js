@@ -16,6 +16,17 @@ import { makeFlatlockTexture } from '../stitchTextures';
 
 // Rozmer celenky (cm) sa predava zvonka (velkost + material: napr. 51x9 hreben, 48x9 hladka, 48x7 deti ...).
 // Kanonicky priestor kreslenia ma vzdy vysku 180 a sirku podla pomeru stran strihu (51:9 -> 1020).
+// Prefarbenie jednofarebného (čierneho) obrázka na zvolenú farbu — pre športové ikony z knižnice.
+function prefarbiObrazok(img, farba) {
+  const c = document.createElement('canvas');
+  c.width = img.naturalWidth || img.width; c.height = img.naturalHeight || img.height;
+  const g = c.getContext('2d');
+  g.drawImage(img, 0, 0);
+  g.globalCompositeOperation = 'source-in';
+  g.fillStyle = farba; g.fillRect(0, 0, c.width, c.height);
+  return c;
+}
+
 export function initCelenkyEngine(root, opts = {}) {
   const widthCm = Number(opts.widthCm) || 51;
   const heightCm = Number(opts.heightCm) || 9;
@@ -948,17 +959,19 @@ export function initCelenkyEngine(root, opts = {}) {
       img.onerror = () => toast('Vzor sa nepodarilo načítať');
       img.src = url;
     },
-    addImageFromUrl(url) {
-      const img = new Image(); img.crossOrigin = 'anonymous';
-      img.onload = () => {
+    addImageFromUrl(url, farba = null) {
+      const img0 = new Image(); img0.crossOrigin = 'anonymous';
+      const img = img0;
+      img0.onload = () => {
+        const zdroj = farba ? prefarbiObrazok(img0, farba) : img0;
         const maxH = CANON_H * 0.65;
         const scale = Math.min(maxH / img.height, 240 / img.width, 1);
-        const el = { id: 'elem_img_' + Date.now(), type: 'image', img, x: CENTER_X, y: CANON_H / 2, width: img.width * scale, height: img.height * scale, scale: 1, rotation: 0 };
+        const el = { id: 'elem_img_' + Date.now(), type: 'image', img: zdroj, x: CENTER_X, y: CANON_H / 2, width: img.width * scale, height: img.height * scale, scale: 1, rotation: 0 };
         STATE.elements.push(el); STATE.selectedId = el.id;
         render2D(); updateLayersUI(); syncTransformPanel(); toast('Grafika vložená na čelenku');
       };
-      img.onerror = () => toast('Grafiku sa nepodarilo načítať');
-      img.src = url;
+      img0.onerror = () => toast('Grafiku sa nepodarilo načítať');
+      img0.src = url;
     },
     getTlacovyFormat() { return { sirkaCm: TLAC_W_CM, vyskaCm: TLAC_H_CM, pxSirka: Math.round(TLAC_W_CM / 2.54 * 300), pxVyska: Math.round(TLAC_H_CM / 2.54 * 300) }; },
     getState() { return { bgColor: STATE.bgColor, bgPattern: STATE.bgPattern, bgImage: STATE.bgImage, bgImageUrl: STATE.bgImageUrl, elements: STATE.elements.map((e) => ({ ...e })), canonW: CANON_W }; },

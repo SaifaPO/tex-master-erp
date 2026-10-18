@@ -1,3 +1,4 @@
+import KniznicaGrafik from './KniznicaGrafik';
 import React, { useEffect, useRef, useState } from 'react';
 import { ShoppingCart, CreditCard, Gift, Mail } from 'lucide-react';
 import { vytvorB2bDopyt } from './b2bDopyt';
@@ -284,15 +285,8 @@ export default function Buffky({ supabase, onSpat }) {
               {grafiky.length > 0 && (
                 <>
                   <div className="h-10 w-px bg-slate-800 hidden sm:block"></div>
-                  <div className="max-w-full">
-                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Knižnica grafík a log</label>
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      {grafiky.map(g => (
-                        <button key={g.id} type="button" onClick={() => engineRef.current?.addImageFromUrl(g.url)} title={g.nazov} className="w-9 h-9 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-cyan-500 p-0.5 overflow-hidden">
-                          <img src={g.url} alt={g.nazov} className="w-full h-full object-contain" />
-                        </button>
-                      ))}
-                    </div>
+                  <div className="max-w-full w-full sm:w-[22rem]">
+                    <KniznicaGrafik tmava grafiky={grafiky} onVloz={(url, farba) => engineRef.current?.addImageFromUrl(url, farba)} />
                   </div>
                 </>
               )}

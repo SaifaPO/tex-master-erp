@@ -9,8 +9,8 @@ const TYPY = {
   celenka: { nazov: 'Čelenky',     farba: 'bg-pink-500/20 text-pink-300 border-pink-500/40',      bodka: 'bg-pink-400',   karta: 'celenky' },
   zastava: { nazov: 'Vlajky',      farba: 'bg-sky-500/20 text-sky-300 border-sky-500/40',         bodka: 'bg-sky-400',    karta: 'vlajky' },
   beach:   { nazov: 'Beachvlajky', farba: 'bg-teal-500/20 text-teal-300 border-teal-500/40',      bodka: 'bg-teal-400',   karta: 'beachvlajky' },
-  dtf:     { nazov: 'DTF metráž',  farba: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40', bodka: 'bg-emerald-400', karta: null },
-  textil:  { nazov: 'Textil metráž', farba: 'bg-violet-500/20 text-violet-300 border-violet-500/40', bodka: 'bg-violet-400', karta: null },
+  dtf:     { nazov: 'DTF metráž',  farba: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40', bodka: 'bg-emerald-400', karta: 'metraze' },
+  textil:  { nazov: 'Textil metráž', farba: 'bg-violet-500/20 text-violet-300 border-violet-500/40', bodka: 'bg-violet-400', karta: 'metraze' },
 };
 
 const STAV = {

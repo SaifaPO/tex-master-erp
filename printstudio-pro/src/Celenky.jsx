@@ -1,3 +1,4 @@
+import KniznicaGrafik from './KniznicaGrafik';
 import React, { useEffect, useRef, useState } from 'react';
 import { Truck, Eye, ShoppingCart, CreditCard, Gift, Mail } from 'lucide-react';
 import { vytvorB2bDopyt } from './b2bDopyt';
@@ -420,15 +421,8 @@ export default function Celenky({ supabase, onSpat }) {
                 </div>
               </div>
               {grafiky.length > 0 && (
-                <div className="pt-2 border-t border-slate-200 space-y-1.5">
-                  <span className="text-xs font-bold text-slate-700 block">Knižnica grafík a log:</span>
-                  <div className="grid grid-cols-4 gap-2">
-                    {grafiky.map(g => (
-                      <button key={g.id} type="button" onClick={() => engineRef.current?.addImageFromUrl(g.url)} title={g.nazov} className="aspect-square rounded-lg border border-slate-200 hover:border-indigo-500 bg-slate-100 p-1 overflow-hidden transition">
-                        <img src={g.url} alt={g.nazov} className="w-full h-full object-contain" loading="lazy" />
-                      </button>
-                    ))}
-                  </div>
+                <div className="pt-2 border-t border-slate-200">
+                  <KniznicaGrafik grafiky={grafiky} onVloz={(url, farba) => engineRef.current?.addImageFromUrl(url, farba)} />
                 </div>
               )}
               <div className="pt-2 border-t border-slate-200">

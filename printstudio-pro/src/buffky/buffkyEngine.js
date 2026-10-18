@@ -24,6 +24,17 @@ const ICON_UNICODE = {
   snowflake: '',
 };
 
+// Prefarbenie jednofarebného (čierneho) obrázka na zvolenú farbu — pre športové ikony z knižnice.
+function prefarbiObrazok(img, farba) {
+  const c = document.createElement('canvas');
+  c.width = img.naturalWidth || img.width; c.height = img.naturalHeight || img.height;
+  const g = c.getContext('2d');
+  g.drawImage(img, 0, 0);
+  g.globalCompositeOperation = 'source-in';
+  g.fillStyle = farba; g.fillRect(0, 0, c.width, c.height);
+  return c;
+}
+
 export function initBuffkyEngine(root, opts = {}) {
   const typ = opts.typ === 'premium' ? 'premium' : 'tubular_basic';
   const isPremium = typ === 'premium';
@@ -705,12 +716,13 @@ export function initBuffkyEngine(root, opts = {}) {
       img.onerror = () => toast('Vzor sa nepodarilo načítať');
       img.src = url;
     },
-    addImageFromUrl(url) {
+    addImageFromUrl(url, farba = null) {
       const img = new Image(); img.crossOrigin = 'anonymous';
       img.onload = () => {
+        const zdroj = farba ? prefarbiObrazok(img, farba) : img;
         let w = img.width, h = img.height; const maxDim = 260;
         if (w > maxDim || h > maxDim) { if (w > h) { h = (h / w) * maxDim; w = maxDim; } else { w = (w / h) * maxDim; h = maxDim; } }
-        state.items.push({ type: 'image', imgElement: img, width: w, height: h, x: isPremium ? 500 : 250, y: Math.max(500, 20 + hemMargin), scale: 1, rotation: 0 });
+        state.items.push({ type: 'image', imgElement: zdroj, width: w, height: h, x: isPremium ? 500 : 250, y: Math.max(500, 20 + hemMargin), scale: 1, rotation: 0 });
         state.selectedItemIndex = state.items.length - 1; updateSelectedLabel(); render2D(); toast('Grafika vložená do návrhu');
       };
       img.onerror = () => toast('Grafiku sa nepodarilo načítať');

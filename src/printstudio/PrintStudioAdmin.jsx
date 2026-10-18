@@ -40,6 +40,7 @@ const SUBTABS = [
   { id: 'celenky', label: 'Čelenky', icon: Circle, appUrl: `${PRINTSTUDIO_BASE_URL}/?typ=celenka` },
   { id: 'vlajky', label: 'Vlajky', icon: Flag, appUrl: `${PRINTSTUDIO_BASE_URL}/?typ=zastava` },
   { id: 'beachvlajky', label: 'Beachvlajky', icon: Waves, appUrl: `${PRINTSTUDIO_BASE_URL}/?typ=beachflag` },
+  { id: 'metraze', label: 'Metráže (DTF a textil)', icon: Ruler },
   { id: 'produkty', label: 'Produkty (Blanks)', icon: Box, appUrl: PRINTSTUDIO_BASE_URL },
   { id: 'kategorie', label: 'Kategórie', icon: Tag },
   { id: 'farby', label: 'Farby', icon: Palette },
@@ -48,7 +49,6 @@ const SUBTABS = [
   { id: 'mockupy', label: 'Fotky produktov', icon: Camera },
   { id: 'cenotvorba', label: 'Cenotvorba (marže)', icon: Calculator },
   { id: 'kostra-cien', label: 'Kostra cien', icon: Layers3 },
-  { id: 'metraze', label: 'Metráže', icon: Ruler },
   { id: 'potlace', label: 'Potlače', icon: Banknote },
   { id: 'kalkulacka-tlace', label: 'Kalkulačka tlače (Cen. ponuky)', icon: ShoppingCart },
   { id: 'predajny-cennik', label: 'Predajný cenník (tlač A4)', icon: Printer },
@@ -61,9 +61,9 @@ const SUBTABS = [
 
 const SKUPINY = [
   { id: 'objednavky', label: 'Objednávky', icon: Inbox, tabs: ['objednavky'] },
-  { id: 'aplikacie', label: 'Aplikácie', icon: LayoutGrid, tabs: ['dresy', 'buffky', 'celenky', 'vlajky', 'beachvlajky'] },
+  { id: 'aplikacie', label: 'Aplikácie', icon: LayoutGrid, tabs: ['dresy', 'buffky', 'celenky', 'vlajky', 'beachvlajky', 'metraze'] },
   { id: 'kniznica', label: 'Knižnica', icon: Library, tabs: ['produkty', 'kategorie', 'farby', 'fonty', 'grafiky', 'mockupy'] },
-  { id: 'ceny', label: 'Ceny a tlač', icon: Coins, tabs: ['cenotvorba', 'kostra-cien', 'metraze', 'potlace', 'kalkulacka-tlace', 'predajny-cennik'] },
+  { id: 'ceny', label: 'Ceny a tlač', icon: Coins, tabs: ['cenotvorba', 'kostra-cien', 'potlace', 'kalkulacka-tlace', 'predajny-cennik'] },
   { id: 'nastavenia', label: 'Nastavenia', icon: Settings2, tabs: ['shopify', 'b2b-kody', 'manualy', 'dtf-separator', 'ulozisko'] },
 ];
 
