@@ -166,6 +166,7 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState, onDragLog
     scene.add(floor);
     envRef.current = { group: null };
     nastavProstredie(scene, envRef.current, 'dark');
+    nacitajPanoramu(() => {}); // fotka štadióna sa stiahne vopred, aby bola pripravená po kliknutí na 🏟️
 
     const canvasTexture = vytvorDresGeometriu(scene, textureCanvasRef.current, jerseyMeshesRef, (root, box) => {
       jerseyRootRef.current = root;
@@ -560,20 +561,25 @@ function texturaReklamZvnutra() {
 // Skutočná 360° fotka štadióna (equirectangular, pomer 2:1): public/models/stadium-360.jpg. Ak súbor neexistuje, použije sa
 // vyrobený štadión (vektorový, nižšie). Mierka sveta: 1 jednotka ≈ 0,55 m (súprava dres+trenírky ≈ 1,1 m = 2 jednotky);
 // kamera je približne vo výške očí a dres visí v úrovni hrude nad trávnikom.
-const panorama = { stav: 'nenacitana', tex: null };
+const panorama = { stav: 'nenacitana', tex: null, cakaju: [] };
+const PANORAMA_VERZIA = 3; // zvýšiť pri výmene súboru stadium-360.jpg, aby si prehliadač nenechal starú fotku v pamäti
 function nacitajPanoramu(hotovo) {
-  if (panorama.stav !== 'nenacitana') { hotovo(); return; }
+  if (panorama.stav === 'ok' || panorama.stav === 'chyba') { hotovo(); return; }
+  panorama.cakaju.push(hotovo);
+  if (panorama.stav === 'nacitava') return;
   panorama.stav = 'nacitava';
-  // fotka má 8192×4096 — pre grafické karty a mobily sa zmenší na 4096×2048 (aj tak ostrý pri našom zábere)
-  new THREE.ImageLoader().load('/models/stadium-360.jpg', (img) => {
+  const dokoncenie = () => { const f = panorama.cakaju.splice(0); f.forEach((fn) => fn()); };
+  // fotka sa pre grafické karty a mobily zmenší na max. 4096×2048
+  new THREE.ImageLoader().load('/models/stadium-360.jpg?v=' + PANORAMA_VERZIA, (img) => {
+    const w = Math.min(4096, img.width), h = Math.round(w / 2);
     const c = document.createElement('canvas');
-    c.width = 4096; c.height = 2048;
-    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    c.width = w; c.height = h;
+    c.getContext('2d').drawImage(img, 0, 0, w, h);
     const t = new THREE.CanvasTexture(c);
     t.colorSpace = THREE.SRGBColorSpace;
     t.anisotropy = 8;
-    panorama.tex = t; panorama.stav = 'ok'; hotovo();
-  }, undefined, () => { panorama.stav = 'chyba'; hotovo(); });
+    panorama.tex = t; panorama.stav = 'ok'; dokoncenie();
+  }, undefined, () => { panorama.stav = 'chyba'; dokoncenie(); });
 }
 
 function nastavProstredie(scene, env, type) {
@@ -619,11 +625,21 @@ function nastavProstredie(scene, env, type) {
     return;
   }
 
+  if (type === 'stadium' && panorama.stav !== 'chyba') {
+    // fotka sa ešte načítava — ukáže sa len trávnik (bez bliknutia vyrobeného štadióna), potom sa prostredie postaví znova
+    const trava0 = new THREE.Mesh(new THREE.CircleGeometry(16, 48), new THREE.MeshStandardMaterial({ color: 0x1f4d27, roughness: 1 }));
+    trava0.rotation.x = -Math.PI / 2; trava0.position.y = PODLAHA_Y; trava0.receiveShadow = true;
+    g.add(trava0);
+    nacitajPanoramu(() => { if (env.typ === 'stadium') nastavProstredie(scene, env, 'stadium'); });
+    scene.add(g);
+    env.group = g;
+    return;
+  }
+
   if (type === 'stadium') {
     // vyrobený štadión (záloha, kým nie je k dispozícii 360° fotka) — väčší, aby pomer k dresu zodpovedal skutočnosti
     g.position.y = PODLAHA_Y;
     g.scale.setScalar(3);
-    nacitajPanoramu(() => { if (panorama.stav === 'ok' && env.typ === 'stadium') nastavProstredie(scene, env, 'stadium'); });
     // vonkajšia tráva + hracia plocha
     const trava = plocha(new THREE.CircleGeometry(14.5, 64), new THREE.MeshStandardMaterial({ color: 0x1f5c2a, roughness: 0.95 }), Y);
     trava.rotation.x = -Math.PI / 2; trava.receiveShadow = true; g.add(trava);
