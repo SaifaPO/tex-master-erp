@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Printer, X, Flag, Waves, HelpCircle } from 'lucide-react';
+import { Printer, X, Flag, Waves, HelpCircle, Type } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
 // Rovnaky vzor ako v PredajnyCennikTab.jsx — docasne premenuje kartu prehliadaca, aby "Ulozit ako
@@ -278,13 +278,89 @@ function ObchodniciManual() {
   );
 }
 
+// ---------- VZORKOVNIK FONTOV ----------
+// Kazdy font ma cislo (Fonty -> Cislo vo vzorkovniku), zakaznik si vyberie "font c. 7".
+// Viacfarebne fonty (farebnost 2-3) ukazuju vzorku vyplň + kontura (+ tien) a pri tlaci
+// sa dopise, ake farby treba. Fonty sa nacitavaju z Google Fonts rovnako ako v admin Fonty.
+const nacitaneFonty = new Set();
+function nacitajFont(nazov) {
+  if (!nazov || nacitaneFonty.has(nazov)) return;
+  nacitaneFonty.add(nazov);
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(nazov).replace(/%20/g, '+')}:wght@400;700&display=swap`;
+  document.head.appendChild(link);
+}
+
+function vzorkaStyl(font, farebnost) {
+  const base = { fontFamily: `'${font}', sans-serif`, lineHeight: 1.05, fontWeight: 700 };
+  if (farebnost === 2) return { ...base, color: '#facc15', WebkitTextStroke: '3px #1e293b', paintOrder: 'stroke fill' };
+  if (farebnost === 3) return { ...base, color: '#facc15', WebkitTextStroke: '3px #dc2626', paintOrder: 'stroke fill', textShadow: '3px 3px 0 #1e293b, -1px -1px 0 #1e293b' };
+  return { ...base, color: '#1e293b' };
+}
+
+function VzorkovnikFontov({ supabase }) {
+  const [fonty, setFonty] = useState(null);
+  useEffect(() => {
+    let zrusene = false;
+    (async () => {
+      const { data } = await supabase.from('fonty').select('*').order('kat_cislo', { nullsFirst: false }).order('id');
+      if (zrusene) return;
+      (data || []).forEach((f) => nacitajFont(f.nazov));
+      setFonty(data || []);
+    })();
+    return () => { zrusene = true; };
+  }, [supabase]);
+
+  if (!fonty) return <p className="text-sm text-slate-500">Načítavam fonty…</p>;
+  return (
+    <div>
+      <div className="bg-gradient-to-r from-indigo-600 to-slate-800 text-white rounded-t-2xl p-8 -m-8 mb-6">
+        <h1 className="text-3xl font-black mb-1.5">Vzorkovník fontov</h1>
+        <p className="text-sm opacity-90">Vyber si číslo písma pre meno, číslo alebo nápis. Pri písmach s označením <b>2 farby</b> / <b>3 farby</b> môže byť výplň, kontúra (a tieň) v inej farbe.</p>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        {fonty.map((f, i) => (
+          <div key={f.id} className="border border-slate-300 rounded-xl p-3 break-inside-avoid flex gap-3">
+            <div className="w-10 h-10 rounded-lg bg-indigo-600 text-white font-black text-lg flex items-center justify-center shrink-0">{f.kat_cislo ?? i + 1}</div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <span className="text-xs font-bold text-slate-800 truncate">{f.nazov}</span>
+                <span className={`text-[10px] font-bold rounded px-1.5 py-0.5 shrink-0 ${(f.farebnost || 1) > 1 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>{(f.farebnost || 1) === 1 ? '1 farba' : `až ${f.farebnost} farby`}</span>
+              </div>
+              <div className="bg-slate-50 rounded-lg px-2 py-1.5" style={vzorkaStyl(f.nazov, f.farebnost || 1)}>
+                <div className="text-2xl uppercase truncate">Novák</div>
+                <div className="text-4xl">10 <span className="text-2xl">2025</span></div>
+              </div>
+              <div className="text-[10px] text-slate-500 mt-1 truncate" style={{ fontFamily: `'${f.nazov}', sans-serif` }}>Čaruje Ôsmy žľab 0123456789</div>
+            </div>
+          </div>
+        ))}
+      </div>
+      {fonty.length === 0 && <p className="text-sm text-slate-500">Zatiaľ nie sú nastavené žiadne fonty (PrintStudio → Fonty).</p>}
+      <div className="border border-dashed border-slate-300 rounded-xl p-3 mt-5 break-inside-avoid">
+        <p className="text-[11px] font-bold text-slate-600 mb-1.5">Objednávkový lístok — písmo:</p>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px] text-slate-600">
+          <span>Meno — font č.: _____ &nbsp; farba výplne: ________</span>
+          <span>kontúra: ________ &nbsp; tieň: ________</span>
+          <span>Číslo — font č.: _____ &nbsp; farba výplne: ________</span>
+          <span>kontúra: ________ &nbsp; tieň: ________</span>
+          <span>Nápis — font č.: _____ &nbsp; farba výplne: ________</span>
+          <span>kontúra: ________ &nbsp; tieň: ________</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const DOCUMENTS = [
   { id: 'vlajky', label: 'Vlajky', icon: Flag, render: VlajkyPoster },
   { id: 'beachvlajky', label: 'Beachvlajky', icon: Waves, render: BeachvlajkyPoster },
   { id: 'obchodnici', label: 'Manuál pre obchodníkov', icon: HelpCircle, render: ObchodniciManual },
+  { id: 'fonty', label: 'Vzorkovník fontov', icon: Type, render: VzorkovnikFontov },
 ];
 
-export default function ManualyTab() {
+export default function ManualyTab({ supabase }) {
   const [activeDoc, setActiveDoc] = useState('vlajky');
   const [showPrint, setShowPrint] = useState(false);
   const doc = DOCUMENTS.find(d => d.id === activeDoc);
@@ -321,7 +397,7 @@ export default function ManualyTab() {
               <button onClick={() => printWithFilename(doc.label)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Printer className="h-4 w-4" /> Tlačiť / Uložiť ako PDF</button>
               <button onClick={() => setShowPrint(false)} className="p-1.5 rounded bg-slate-200 text-slate-600 hover:text-slate-900"><X className="h-5 w-5" /></button>
             </div>
-            <DocContent />
+            <DocContent supabase={supabase} />
           </div>
         </div>,
         document.body

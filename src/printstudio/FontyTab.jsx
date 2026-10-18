@@ -22,11 +22,13 @@ export default function FontyTab({ supabase }) {
   const [editing, setEditing] = useState(undefined);
   const [nazov, setNazov] = useState('');
   const [pouzitie, setPouzitie] = useState('vsetko');
+  const [farebnost, setFarebnost] = useState(1);
+  const [katCislo, setKatCislo] = useState('');
   const [error, setError] = useState('');
 
   const nacitaj = async () => {
     setIsLoading(true);
-    const { data } = await supabase.from('fonty').select('*').order('id');
+    const { data } = await supabase.from('fonty').select('*').order('kat_cislo', { nullsFirst: false }).order('id');
     setFonty(data || []);
     (data || []).forEach((f) => nacitajGoogleFont(f.nazov));
     setIsLoading(false);
@@ -34,17 +36,18 @@ export default function FontyTab({ supabase }) {
 
   useEffect(() => { nacitaj(); }, []);
 
-  const otvorNovu = () => { setEditing(null); setNazov(''); setPouzitie('vsetko'); setError(''); };
-  const otvorUpravu = (f) => { setEditing(f); setNazov(f.nazov); setPouzitie(f.pouzitie); setError(''); };
+  const otvorNovu = () => { setEditing(null); setNazov(''); setPouzitie('vsetko'); setFarebnost(1); setKatCislo(String(Math.max(0, ...fonty.map(x => Number(x.kat_cislo) || 0)) + 1)); setError(''); };
+  const otvorUpravu = (f) => { setEditing(f); setNazov(f.nazov); setPouzitie(f.pouzitie); setFarebnost(f.farebnost || 1); setKatCislo(f.kat_cislo == null ? '' : String(f.kat_cislo)); setError(''); };
   const zavri = () => setEditing(undefined);
 
   const uloz = async () => {
     if (!nazov.trim()) { setError('Vyplň názov fontu (presný CSS font-family).'); return; }
+    const extra = { farebnost: Number(farebnost) || 1, kat_cislo: katCislo === '' ? null : Number(katCislo) };
     if (editing) {
-      const { error: err } = await supabase.from('fonty').update({ nazov: nazov.trim(), pouzitie }).eq('id', editing.id);
+      const { error: err } = await supabase.from('fonty').update({ nazov: nazov.trim(), pouzitie, ...extra }).eq('id', editing.id);
       if (err) { setError(err.message); return; }
     } else {
-      const { error: err } = await supabase.from('fonty').insert({ nazov: nazov.trim(), pouzitie });
+      const { error: err } = await supabase.from('fonty').insert({ nazov: nazov.trim(), pouzitie, ...extra });
       if (err) { setError(err.message); return; }
     }
     zavri();
@@ -64,7 +67,7 @@ export default function FontyTab({ supabase }) {
         <div>
           <h2 className="text-xl font-bold text-white flex items-center gap-2"><Type className="text-indigo-400 h-5 w-5" /> Fonty</h2>
           <p className="text-xs text-slate-400 mt-1">
-            Fonty dostupné v textovom nástroji konfigurátora (Dizajner aj 3D Dres). Názov musí presne
+            Číslo vo vzorkovníku a počet farieb sa použijú v tlačiteľnom manuáli (Manuály → Vzorkovník fontov). Fonty dostupné v textovom nástroji konfigurátora (Dizajner aj 3D Dres). Názov musí presne
             zodpovedať Google Fonts rodine (napr. "Oswald", "Bebas Neue") — appka ju automaticky
             načíta. Náhľad nižšie obsahuje slovenskú diakritiku (čžšňľĺťáôä), takže hneď vidíš, ak by
             zvolený font diakritiku nezobrazil správne.
@@ -93,6 +96,20 @@ export default function FontyTab({ supabase }) {
               </select>
             </div>
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-slate-400 font-medium">Číslo vo vzorkovníku</label>
+              <input value={katCislo} onChange={(e) => setKatCislo(e.target.value)} type="number" min="1" className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" />
+            </div>
+            <div>
+              <label className="text-xs text-slate-400 font-medium">Počet farieb potlače</label>
+              <select value={farebnost} onChange={(e) => setFarebnost(e.target.value)} className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white">
+                <option value={1}>1 farba (jednofarebný)</option>
+                <option value={2}>Až 2 farby (výplň + kontúra)</option>
+                <option value={3}>Až 3 farby (výplň + kontúra + tieň)</option>
+              </select>
+            </div>
+          </div>
           {error && <p className="text-xs text-rose-400">{error}</p>}
           <div className="flex gap-2 pt-1">
             <button onClick={uloz} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-semibold">Uložiť</button>
@@ -104,18 +121,20 @@ export default function FontyTab({ supabase }) {
       <div className="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-slate-950/60 text-slate-500 text-xs uppercase tracking-wide">
-            <tr><th className="text-left px-4 py-3">Ukážka</th><th className="text-left px-4 py-3">Názov</th><th className="text-left px-4 py-3">Použitie</th><th className="text-right px-4 py-3">Akcie</th></tr>
+            <tr><th className="text-left px-4 py-3">Č.</th><th className="text-left px-4 py-3">Ukážka</th><th className="text-left px-4 py-3">Názov</th><th className="text-left px-4 py-3">Použitie</th><th className="text-left px-4 py-3">Farby</th><th className="text-right px-4 py-3">Akcie</th></tr>
           </thead>
           <tbody>
             {isLoading ? (
-              <tr><td colSpan={4} className="text-center text-slate-500 py-8 text-sm">Načítavam…</td></tr>
+              <tr><td colSpan={6} className="text-center text-slate-500 py-8 text-sm">Načítavam…</td></tr>
             ) : fonty.length === 0 ? (
-              <tr><td colSpan={4} className="text-center text-slate-500 py-8 text-sm">Zatiaľ žiadne fonty.</td></tr>
+              <tr><td colSpan={6} className="text-center text-slate-500 py-8 text-sm">Zatiaľ žiadne fonty.</td></tr>
             ) : fonty.map(f => (
               <tr key={f.id} className="border-t border-slate-800">
+                <td className="px-4 py-3 font-black text-indigo-300">{f.kat_cislo ?? '—'}</td>
                 <td className="px-4 py-3 text-xl text-white" style={{ fontFamily: `'${f.nazov}', sans-serif` }}>Čaruje Ôsmy 123</td>
                 <td className="px-4 py-3 font-medium text-white">{f.nazov}</td>
                 <td className="px-4 py-3 text-xs text-slate-400">{POUZITIE_LABEL[f.pouzitie] || f.pouzitie}</td>
+                <td className="px-4 py-3 text-xs text-slate-300">{(f.farebnost || 1) === 1 ? '1 farba' : `až ${f.farebnost} farby`}</td>
                 <td className="px-4 py-3 text-right">
                   <button onClick={() => otvorUpravu(f)} className="text-slate-400 hover:text-indigo-400 p-1.5"><Edit2 className="w-4 h-4" /></button>
                   <button onClick={() => zmaz(f)} className="text-slate-400 hover:text-rose-400 p-1.5"><Trash2 className="w-4 h-4" /></button>
