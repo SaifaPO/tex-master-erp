@@ -302,7 +302,7 @@ export function initBuffkyEngine(root, opts = {}) {
         const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
         const angle = Math.atan2(z, x);
         const fold = Math.sin(y * 1.2 + angle * 2) * 0.07 + Math.cos(angle * 4) * 0.05;
-        const nazbierane = Math.sin((y / height) * Math.PI * 2 * 5 + angle * 0.8) * 0.022; // vodorovne zhyby nazbieranej latky
+        const nazbierane = Math.sin((y / height) * Math.PI * 2 * 5 + angle) * 0.022; // angle (cele cislo) = spojite aj na zlome atan2, inak vznikne trhlina // vodorovne zhyby nazbieranej latky
         const radiusModifier = 1.0 - 0.02 * Math.cos((y / height) * Math.PI) + fold * 0.12 + nazbierane;
         pos.setX(i, x * radiusModifier); pos.setZ(i, z * radiusModifier);
       }
