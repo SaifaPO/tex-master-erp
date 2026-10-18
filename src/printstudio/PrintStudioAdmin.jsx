@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Tag, Box, Palette, Type, Image as ImageIcon, Banknote, Camera, ShoppingBag, Flag, Shirt, Calculator, Waves, ShoppingCart, ExternalLink, Layers3, Ruler, Printer, Circle, Wind, Grid3x3, HardDrive, BadgePercent, Link2 } from 'lucide-react';
+import { Tag, Box, Palette, Type, Image as ImageIcon, Banknote, Camera, ShoppingBag, Flag, Shirt, Calculator, Waves, ShoppingCart, ExternalLink, Layers3, Ruler, Printer, Circle, Wind, Grid3x3, HardDrive, BadgePercent, Inbox, LayoutGrid, Library, Coins, Settings2 } from 'lucide-react';
 import KategorieTab from './KategorieTab';
 import ProduktyTab from './ProduktyTab';
 import FarbyTab from './FarbyTab';
@@ -19,7 +19,7 @@ import PredajnyCennikTab from './PredajnyCennikTab';
 import ManualyTab from './ManualyTab';
 import CelenkyTab from './CelenkyTab';
 import BuffkyTab from './BuffkyTab';
-import ErpPrepojenieTab from './ErpPrepojenieTab';
+import ObjednavkyVsetkyTab from './ObjednavkyVsetkyTab';
 import DtfSeparatorTab from './DtfSeparatorTab';
 import B2bKodyTab from './B2bKodyTab';
 import UloziskoTab from '../UloziskoTab';
@@ -31,9 +31,17 @@ import UloziskoTab from '../UloziskoTab';
 // (vlastná doména namiesto *.vercel.app), staci upravit len tento jeden riadok.
 const PRINTSTUDIO_BASE_URL = 'https://printstudio-pro.vercel.app';
 
+// Všetko pod jednou kartou, v piatich skupinách: Objednávky (spoločné pre všetky aplikácie), Aplikácie (dresy, buffky, čelenky, vlajky,
+// beachvlajky), Knižnica (blanks ako sprostredkovateľ medzi Katalógom produktov v ERP a aplikáciami + farby/fonty/grafiky), Ceny a tlač, Nastavenia.
 const SUBTABS = [
-  { id: 'kategorie', label: 'Kategórie', icon: Tag },
+  { id: 'objednavky', label: 'Všetky objednávky', icon: Inbox },
+  { id: 'dresy', label: 'Dresy', icon: Shirt, appUrl: PRINTSTUDIO_BASE_URL },
+  { id: 'buffky', label: 'Buffky', icon: Wind, appUrl: `${PRINTSTUDIO_BASE_URL}/?typ=buffka` },
+  { id: 'celenky', label: 'Čelenky', icon: Circle, appUrl: `${PRINTSTUDIO_BASE_URL}/?typ=celenka` },
+  { id: 'vlajky', label: 'Vlajky', icon: Flag, appUrl: `${PRINTSTUDIO_BASE_URL}/?typ=zastava` },
+  { id: 'beachvlajky', label: 'Beachvlajky', icon: Waves, appUrl: `${PRINTSTUDIO_BASE_URL}/?typ=beachflag` },
   { id: 'produkty', label: 'Produkty (Blanks)', icon: Box, appUrl: PRINTSTUDIO_BASE_URL },
+  { id: 'kategorie', label: 'Kategórie', icon: Tag },
   { id: 'farby', label: 'Farby', icon: Palette },
   { id: 'fonty', label: 'Fonty', icon: Type },
   { id: 'grafiky', label: 'Grafiky (Design)', icon: ImageIcon },
@@ -44,21 +52,24 @@ const SUBTABS = [
   { id: 'potlace', label: 'Potlače', icon: Banknote },
   { id: 'kalkulacka-tlace', label: 'Kalkulačka tlače (Cen. ponuky)', icon: ShoppingCart },
   { id: 'predajny-cennik', label: 'Predajný cenník (tlač A4)', icon: Printer },
-  { id: 'manualy', label: 'Manuály (tlač A4)', icon: Flag },
   { id: 'shopify', label: 'Shopify prepojenie', icon: ShoppingBag },
-  { id: 'vlajky', label: 'Vlajky', icon: Flag, appUrl: `${PRINTSTUDIO_BASE_URL}/?typ=zastava` },
-  { id: 'beachvlajky', label: 'Beachvlajky', icon: Waves, appUrl: `${PRINTSTUDIO_BASE_URL}/?typ=beachflag` },
-  { id: 'dresy', label: 'Výroba dresov', icon: Shirt, appUrl: PRINTSTUDIO_BASE_URL },
-  { id: 'celenky', label: 'Čelenky', icon: Circle, appUrl: `${PRINTSTUDIO_BASE_URL}/?typ=celenka` },
-  { id: 'erp-prepojenie', label: 'Prepojenie na ERP', icon: Link2 },
-  { id: 'buffky', label: 'Buffky', icon: Wind, appUrl: `${PRINTSTUDIO_BASE_URL}/?typ=buffka` },
   { id: 'b2b-kody', label: 'B2B kódy (agentúry)', icon: BadgePercent },
+  { id: 'manualy', label: 'Manuály (tlač A4)', icon: Flag },
   { id: 'dtf-separator', label: 'DTF/DTG Separátor', icon: Grid3x3 },
   { id: 'ulozisko', label: 'Úložisko', icon: HardDrive },
 ];
 
+const SKUPINY = [
+  { id: 'objednavky', label: 'Objednávky', icon: Inbox, tabs: ['objednavky'] },
+  { id: 'aplikacie', label: 'Aplikácie', icon: LayoutGrid, tabs: ['dresy', 'buffky', 'celenky', 'vlajky', 'beachvlajky'] },
+  { id: 'kniznica', label: 'Knižnica', icon: Library, tabs: ['produkty', 'kategorie', 'farby', 'fonty', 'grafiky', 'mockupy'] },
+  { id: 'ceny', label: 'Ceny a tlač', icon: Coins, tabs: ['cenotvorba', 'kostra-cien', 'metraze', 'potlace', 'kalkulacka-tlace', 'predajny-cennik'] },
+  { id: 'nastavenia', label: 'Nastavenia', icon: Settings2, tabs: ['shopify', 'b2b-kody', 'manualy', 'dtf-separator', 'ulozisko'] },
+];
+
 export default function PrintStudioAdmin({ supabase, initialSubtab }) {
-  const [subtab, setSubtab] = useState('produkty');
+  const [subtab, setSubtab] = useState('objednavky');
+  const skupina = SKUPINY.find(g => g.tabs.includes(subtab)) || SKUPINY[0];
   const activeAppUrl = SUBTABS.find(t => t.id === subtab)?.appUrl;
 
   // initialSubtab prichadza z globalneho vyhladavania (Ctrl+K) — meni sa nonce v tabId
@@ -74,20 +85,32 @@ export default function PrintStudioAdmin({ supabase, initialSubtab }) {
   return (
     <div className="space-y-6 print:hidden animate-in fade-in duration-150">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-1.5 bg-slate-950 p-1.5 rounded-xl border border-slate-800 w-fit">
-          {SUBTABS.map(t => {
-            const Icon = t.icon;
-            const active = subtab === t.id;
-            return (
-              <button
-                key={t.id}
-                onClick={() => setSubtab(t.id)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${active ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}
-              >
-                <Icon className="h-3.5 w-3.5" /> {t.label}
-              </button>
-            );
-          })}
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-1.5 bg-slate-950 p-1.5 rounded-xl border border-slate-800 w-fit">
+            {SKUPINY.map(g => {
+              const Icon = g.icon;
+              const aktivna = skupina.id === g.id;
+              return (
+                <button key={g.id} onClick={() => { if (!aktivna) setSubtab(g.tabs[0]); }} className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${aktivna ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}>
+                  <Icon className="h-4 w-4" /> {g.label}
+                </button>
+              );
+            })}
+          </div>
+          {skupina.tabs.length > 1 && (
+            <div className="flex flex-wrap gap-1.5">
+              {skupina.tabs.map(id => {
+                const t = SUBTABS.find(x => x.id === id);
+                const Icon = t.icon;
+                const active = subtab === id;
+                return (
+                  <button key={id} onClick={() => setSubtab(id)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors border ${active ? 'bg-slate-800 text-white border-indigo-500' : 'text-slate-400 border-slate-800 hover:bg-slate-900'}`}>
+                    <Icon className="h-3.5 w-3.5" /> {t.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
         {activeAppUrl && (
           <a
@@ -102,6 +125,7 @@ export default function PrintStudioAdmin({ supabase, initialSubtab }) {
       </div>
 
       <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 shadow-xl">
+        {subtab === 'objednavky' && <ObjednavkyVsetkyTab supabase={supabase} onOtvor={setSubtab} />}
         {subtab === 'kategorie' && <KategorieTab supabase={supabase} />}
         {subtab === 'produkty' && <ProduktyTab supabase={supabase} />}
         {subtab === 'farby' && <FarbyTab supabase={supabase} />}
@@ -120,7 +144,6 @@ export default function PrintStudioAdmin({ supabase, initialSubtab }) {
         {subtab === 'beachvlajky' && <VlajkyAdmin supabase={supabase} />}
         {subtab === 'dresy' && <DresAdmin supabase={supabase} />}
         {subtab === 'celenky' && <CelenkyTab supabase={supabase} />}
-        {subtab === 'erp-prepojenie' && <ErpPrepojenieTab supabase={supabase} />}
         {subtab === 'buffky' && <BuffkyTab supabase={supabase} />}
         {subtab === 'b2b-kody' && <B2bKodyTab supabase={supabase} />}
         {subtab === 'dtf-separator' && <DtfSeparatorTab supabase={supabase} />}

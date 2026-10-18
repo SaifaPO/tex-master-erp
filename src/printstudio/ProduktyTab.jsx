@@ -37,6 +37,9 @@ export default function ProduktyTab({ supabase }) {
   const [zakladnaCena, setZakladnaCena] = useState('');
   const [erpProduktId, setErpProduktId] = useState(''); // prepojenie na Katalóg produktov (ERP): základná cena = výrobná cena z katalógu
   const [erpProdukty, setErpProdukty] = useState([]);
+  const [erpImportOpen, setErpImportOpen] = useState(false);
+  const [erpImportId, setErpImportId] = useState('');
+  const [erpImportKat, setErpImportKat] = useState('');
   const [technologie, setTechnologie] = useState(['sublimacia']);
   const [dodavatel, setDodavatel] = useState('');
   const [aktivny, setAktivny] = useState(true);
@@ -115,6 +118,21 @@ export default function ProduktyTab({ supabase }) {
     setFormVelkosti([]);
     setSkladMapovanie({});
     setError('');
+  };
+
+  // Vytvorí blank rovno z produktu v Katalógu produktov (ERP) — názov a cena sa prevezmú a ostanú prepojené (cena sa sama aktualizuje).
+  const importZErp = async () => {
+    const ep = erpProdukty.find(x => x.id === erpImportId);
+    if (!ep) return;
+    const kat = erpImportKat || kategorie[0]?.id;
+    if (!kat) { window.alert('Najprv vytvor aspoň jednu kategóriu.'); return; }
+    const { error: err } = await supabase.from('produkty').insert({
+      kategoria_id: kat, nazov: ep.name, pohlavie: 'unisex', zakladna_cena: Number(ep.production_cost) || 0,
+      technologia: 'sublimacia', aktivny: true, erp_produkt_id: ep.id,
+    });
+    if (err) { window.alert('Nepodarilo sa vytvoriť (bola spustená migrácia migration_produkty_z_erp_katalogu.sql?): ' + err.message); return; }
+    setErpImportId(''); setErpImportOpen(false);
+    nacitajZoznam();
   };
 
   const otvorNovy = () => { setEditId(null); resetForm(); setFormOpen(true); };
@@ -310,11 +328,35 @@ export default function ProduktyTab({ supabase }) {
           <button onClick={() => setKategorieOpen(o => !o)} className="flex items-center gap-1.5 border border-slate-700 text-slate-300 hover:bg-slate-800 px-3.5 py-2 rounded-xl text-sm font-semibold transition">
             <Tag className="w-4 h-4" /> Kategórie
           </button>
+          <button onClick={() => setErpImportOpen(o => !o)} className="flex items-center gap-1.5 border border-emerald-700 text-emerald-300 hover:bg-emerald-950/40 px-3.5 py-2 rounded-xl text-sm font-semibold transition">
+            <Plus className="w-4 h-4" /> Pridať z Katalógu produktov (ERP)
+          </button>
           <button onClick={otvorNovy} className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-xl text-sm font-semibold transition">
             <Plus className="w-4 h-4" /> Pridať produkt
           </button>
         </div>
       </div>
+
+      {erpImportOpen && (
+        <div className="bg-emerald-950/20 rounded-2xl border border-emerald-800/40 p-5 space-y-3">
+          <h3 className="font-bold text-sm text-slate-200">Nový blank z Katalógu produktov (ERP)</h3>
+          <p className="text-[11px] text-slate-400">Blanks sú sprostredkovateľ medzi Katalógom produktov a aplikáciami (dresy, buffky, čelenky, vlajky…). Vyberte produkt z katalógu — názov a výrobná cena sa prevezmú, cena sa potom sama aktualizuje pri každej zmene v katalógu a po zaplatení objednávky sa zákazka v ERP založí práve na tento produkt.</p>
+          <div className="grid sm:grid-cols-[2fr_1fr_auto] gap-2">
+            <select value={erpImportId} onChange={(e) => setErpImportId(e.target.value)} className="px-2 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white">
+              <option value="">— vyber produkt z katalógu —</option>
+              {erpProdukty.map(x => {
+                const uz = produkty.find(b => b.erp_produkt_id === x.id);
+                return <option key={x.id} value={x.id}>{x.custom_code ? `${x.custom_code} · ` : ''}{x.name} — {x.production_cost != null ? Number(x.production_cost).toFixed(2) + ' €' : 'bez ceny'}{uz ? ` (už prepojený: ${uz.nazov})` : ''}</option>;
+              })}
+            </select>
+            <select value={erpImportKat} onChange={(e) => setErpImportKat(e.target.value)} className="px-2 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white">
+              <option value="">kategória: {kategorie[0]?.nazov || '—'}</option>
+              {kategorie.map(k => <option key={k.id} value={k.id}>{k.nazov}</option>)}
+            </select>
+            <button onClick={importZErp} disabled={!erpImportId} className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-xs font-bold px-4 py-2 rounded-lg">Vytvoriť blank</button>
+          </div>
+        </div>
+      )}
 
       {kategorieOpen && (
         <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-5 space-y-3">

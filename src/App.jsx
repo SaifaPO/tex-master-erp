@@ -2172,7 +2172,7 @@ export default function App() {
     const psVisible = role === 'master';
     push(entries, 'PrintStudio Pro', null, psVisible, () => { setActiveTab('printstudio'); setPrintstudioJumpTarget('produkty'); });
     const psSub = [
-      ['kategorie', 'Kategórie'], ['produkty', 'Produkty (Blanks)'], ['farby', 'Farby'], ['fonty', 'Fonty'],
+      ['objednavky', 'Všetky objednávky (aplikácie)'], ['kategorie', 'Kategórie'], ['produkty', 'Produkty (Blanks)'], ['farby', 'Farby'], ['fonty', 'Fonty'],
       ['grafiky', 'Grafiky (Design)'], ['mockupy', 'Fotky produktov'], ['cenotvorba', 'Cenotvorba (marže)'],
       ['kostra-cien', 'Kostra cien'], ['metraze', 'Metráže'], ['potlace', 'Potlače'],
       ['kalkulacka-tlace', 'Kalkulačka tlače (Cen. ponuky)'], ['predajny-cennik', 'Predajný cenník (tlač A4)'],

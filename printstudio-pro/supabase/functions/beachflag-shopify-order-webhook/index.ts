@@ -52,11 +52,27 @@ async function vytvorErpZakazku(supabase: ReturnType<typeof createClient>, order
   if (!obj) return { preskocene: 'objednavka_nenajdena' };
   if (obj.erp_zakazka_id) return { preskocene: 'uz_zalozena', cislo: obj.erp_cislo };
 
-  const variantKod = druh === 'celenky' ? `${obj.velkost || ''}|${obj.material || ''}` : (obj.typ === 'premium' ? `premium|${obj.material_kod || ''}` : 'basic');
-  const { data: mapa } = await supabase.from('erp_mapovanie_produktov').select('erp_produkt_id').eq('konfigurator', druh).eq('variant_kod', variantKod).maybeSingle();
+  // Produkt v ERP sa nájde cez BLANKS (produkty), ktoré fungujú ako sprostredkovateľ: variant v appke -> blank -> ERP produkt (produkty.erp_produkt_id).
+  let blankId: number | null = null;
+  if (druh === 'celenky') {
+    const { data: v } = await supabase.from('celenky_varianty').select('produkt_id').eq('velkost_kod', obj.velkost || '').eq('material_kod', obj.material || '').maybeSingle();
+    blankId = v?.produkt_id ?? null;
+    if (!blankId) { const { data: n } = await supabase.from('celenky_naklady').select('produkt_id').eq('id', 1).maybeSingle(); blankId = n?.produkt_id ?? null; }
+  } else if (obj.typ === 'premium') {
+    const { data: m } = await supabase.from('buffky_premium_materialy').select('produkt_id').eq('kod', obj.material_kod || '').maybeSingle();
+    blankId = m?.produkt_id ?? null;
+  } else {
+    const { data: n } = await supabase.from('buffky_naklady').select('produkt_id').eq('id', 1).maybeSingle();
+    blankId = n?.produkt_id ?? null;
+  }
+  let erpProduktId: string | null = null;
+  if (blankId) {
+    const { data: b } = await supabase.from('produkty').select('erp_produkt_id').eq('id', blankId).maybeSingle();
+    erpProduktId = b?.erp_produkt_id ?? null;
+  }
   let produkt: any = null;
-  if (mapa?.erp_produkt_id) {
-    const { data } = await supabase.from('products').select('id, name, custom_code, tlac_sublimacia, minuty_sitia, striha_sa_reze_vyseka, laser_zariadenie_id').eq('id', mapa.erp_produkt_id).maybeSingle();
+  if (erpProduktId) {
+    const { data } = await supabase.from('products').select('id, name, custom_code, tlac_sublimacia, minuty_sitia, striha_sa_reze_vyseka, laser_zariadenie_id').eq('id', erpProduktId).maybeSingle();
     produkt = data;
   }
 
@@ -86,7 +102,7 @@ async function vytvorErpZakazku(supabase: ReturnType<typeof createClient>, order
     obj.osobny_odber ? 'OSOBNÝ ODBER' : '',
     kontakt ? `kontakt: ${kontakt}` : '',
     atributy,
-    !produkt ? '⚠️ Variant nemá v PrintStudio → Prepojenie na ERP priradený produkt — doplň produkt ručne.' : '',
+    !produkt ? '⚠️ Blank tohto variantu nie je prepojený na produkt v Katalógu produktov (PrintStudio → Produkty (Blanks)) — doplň produkt ručne.' : '',
   ].filter(Boolean).join(' | ');
   const rozpisUrl = obj.subor_cesta ? supabase.storage.from('print-designs').getPublicUrl(obj.subor_cesta).data?.publicUrl || '' : '';
 
