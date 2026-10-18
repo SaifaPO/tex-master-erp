@@ -349,6 +349,9 @@ export function initBuffkyEngine(root, opts = {}) {
     const seam = new THREE.Mesh(makeTube(radius * 1.004, height, 0, -seamLen / 2, seamLen, 6, 48), overlayMaterial(seamTex));
     buffMesh.add(seam);
     seamMesh = seam;
+    // sev je vidno aj z vnutra (biela strana) — tmavsie stehy na bielom podklade
+    const seamTexVnutro = makeFlatlockTexture({ vnutro: true, repeatY: Math.round(50 / 1.6), anisotropy: renderer.capabilities.getMaxAnisotropy() });
+    buffMesh.add(new THREE.Mesh(makeTube(radius * 0.993, height, 0, -seamLen / 2, seamLen, 6, 48), overlayMaterial(seamTexVnutro, { side: THREE.BackSide })));
 
     const hemH = height * (2 / 50);
     const topTex = makeCoverstitchTexture({ anisotropy: renderer.capabilities.getMaxAnisotropy() });
@@ -571,6 +574,15 @@ export function initBuffkyEngine(root, opts = {}) {
       btnToggle3DSeams.classList.toggle('text-slate-500', !state.show3DSeams);
       toast(state.show3DSeams ? '3D Spoj zobrazený' : '3D Spoj skrytý');
     });
+
+    // tlacidla + / − na priblizenie a oddialenie (okrem kolieska a stipnutia)
+    const zoomKamery = (faktor) => {
+      const smer = camera.position.clone().sub(controls.target);
+      smer.setLength(THREE.MathUtils.clamp(smer.length() * faktor, controls.minDistance, controls.maxDistance));
+      camera.position.copy(controls.target).add(smer); controls.update();
+    };
+    on(q('#btnZoomIn'), 'click', () => zoomKamery(0.8));
+    on(q('#btnZoomOut'), 'click', () => zoomKamery(1.25));
 
     on(q('#btnResetView'), 'click', () => { controls.reset(); camera.position.set(0, 6, CAM_DIST); });
 

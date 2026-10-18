@@ -25,7 +25,7 @@ export default function B2bKod({ b2b, className = '' }) {
         </button>
       ) : (
         <form onSubmit={async (e) => { e.preventDefault(); const ok = await b2b.over(vstup); if (ok) { setVstup(''); setOtvorene(false); } }} className="flex items-center gap-2 flex-wrap">
-          <input type="text" value={vstup} onChange={(e) => setVstup(e.target.value)} placeholder="Zadajte B2B kód" autoFocus className="px-3 py-2 border border-slate-300 rounded-lg text-xs uppercase w-48" />
+          <input type="text" value={vstup} onChange={(e) => setVstup(e.target.value)} placeholder="Zadajte B2B kód" autoFocus className="px-3 py-2 border border-slate-300 rounded-lg text-xs uppercase w-48 bg-white text-slate-900 placeholder-slate-400" />
           <button type="submit" disabled={b2b.overujem || !vstup.trim()} className="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold">{b2b.overujem ? 'Overujem…' : 'Uplatniť'}</button>
           <button type="button" onClick={() => { setOtvorene(false); setVstup(''); }} className="text-xs text-slate-500 hover:text-slate-800">Zrušiť</button>
           {b2b.chyba && <span className="text-xs text-rose-600 w-full">{b2b.chyba}</span>}

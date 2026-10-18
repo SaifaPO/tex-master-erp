@@ -471,6 +471,10 @@ export default function Celenky({ supabase, onSpat }) {
             </div>
             <div className="relative w-full h-72 sm:h-80 bg-gradient-to-b from-slate-950 via-slate-900 to-indigo-950 flex items-center justify-center overflow-hidden">
               <div id="threeContainer" className="w-full h-full cursor-grab active:cursor-grabbing"></div>
+              <div className="absolute top-3 right-3 z-10 flex flex-col gap-1.5">
+                <button id="btnZoomIn" type="button" title="Priblížiť" className="w-9 h-9 rounded-xl bg-white/15 hover:bg-white/30 border border-white/30 text-white text-xl font-bold leading-none">+</button>
+                <button id="btnZoomOut" type="button" title="Oddialiť" className="w-9 h-9 rounded-xl bg-white/15 hover:bg-white/30 border border-white/30 text-white text-xl font-bold leading-none">−</button>
+              </div>
               <div className="absolute bottom-2.5 left-3 text-[11px] text-white/60 bg-black/40 backdrop-blur-xs px-2.5 py-1 rounded-md pointer-events-none flex items-center gap-2"><span>👆 Ťahaním myšou otáčate model čelenky</span></div>
               <div className="absolute bottom-2.5 right-3 text-[11px] text-indigo-300 font-mono bg-black/40 backdrop-blur-xs px-2.5 py-1 rounded-md pointer-events-none">3D Elastický úplet</div>
             </div>

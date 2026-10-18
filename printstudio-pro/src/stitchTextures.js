@@ -15,6 +15,9 @@ function canvasTexture(canvas, { repeatX = 1, repeatY = 1, anisotropy = 8 } = {}
 // Plochý šev (flatlock): široký ~6 mm pás s drobnými priečnymi stehmi (rebríček) a dvomi okrajovými líniami.
 // Textúra je úzky pás (šírka = pás, výška = jedna perióda stehov), opakuje sa po výške valca.
 export function makeFlatlockTexture(opts = {}) {
+  // opts.vnutro: pohlad z vnutra (biely podklad) — stehy su tmavsie, aby boli vidno na bielej
+  const nit = opts.vnutro ? 'rgba(71,85,105,0.9)' : 'rgba(255,255,255,0.68)';
+  const nitOkraj = opts.vnutro ? 'rgba(71,85,105,0.75)' : 'rgba(255,255,255,0.6)';
   const w = 96, h = 64; // jedna perióda: 4 stehy po 16 px
   const c = document.createElement('canvas'); c.width = w; c.height = h;
   const g = c.getContext('2d');
@@ -30,13 +33,13 @@ export function makeFlatlockTexture(opts = {}) {
   g.fillStyle = band; g.fillRect(0, 0, w, h);
 
   // dve okrajové súbežné stehové línie
-  g.strokeStyle = 'rgba(255,255,255,0.6)'; g.lineWidth = 2.2; g.lineCap = 'round';
+  g.strokeStyle = nitOkraj; g.lineWidth = 2.2; g.lineCap = 'round';
   [w * 0.18, w * 0.82].forEach((x) => { g.beginPath(); g.moveTo(x, -2); g.lineTo(x, h + 2); g.stroke(); });
   g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = 1.2;
   [w * 0.18 + 2, w * 0.82 + 2].forEach((x) => { g.beginPath(); g.moveTo(x, -2); g.lineTo(x, h + 2); g.stroke(); });
 
   // priečne stehy rebríčka
-  g.lineWidth = 2.4; g.strokeStyle = 'rgba(255,255,255,0.68)';
+  g.lineWidth = 2.4; g.strokeStyle = nit;
   for (let y = 8; y < h; y += 16) {
     g.beginPath(); g.moveTo(w * 0.2, y + 5); g.lineTo(w * 0.8, y - 5); g.stroke();
   }

@@ -465,6 +465,12 @@ export function initCelenkyEngine(root, opts = {}) {
     const innerMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.95, metalness: 0, side: THREE.BackSide }); // vnutro je biele
     headbandGroup.add(new THREE.Mesh(innerGeo, innerMat));
 
+    // sev je vidno aj z vnutra — tmavsie stehy na bielom podklade
+    const seamInGeo = new THREE.CylinderGeometry(radius - 0.018, radius - 0.018, height3D, 6, 1, true, -seamLen / 2, seamLen);
+    seamInGeo.rotateY(Math.PI);
+    const seamInTex = makeFlatlockTexture({ vnutro: true, repeatY: Math.max(4, Math.round(heightCm / 1.6)), anisotropy: threeRenderer.capabilities.getMaxAnisotropy() });
+    headbandGroup.add(new THREE.Mesh(seamInGeo, new THREE.MeshStandardMaterial({ map: seamInTex, transparent: true, roughness: 0.95, metalness: 0, depthWrite: false, side: THREE.BackSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })));
+
     headbandGroup.scale.set(1.04, 1.0, 0.96);
     headbandGroup.rotation.x = 0.15;
     threeScene.add(headbandGroup);
@@ -722,6 +728,14 @@ export function initCelenkyEngine(root, opts = {}) {
       threeCamera.position.set(Math.sin(uhol) * d, vyska, Math.cos(uhol) * d);
       if (controls3D) { controls3D.target.set(0, 0, 0); controls3D.update(); }
     };
+    const zoomKamery = (faktor) => {
+      if (!controls3D) return;
+      const smer = threeCamera.position.clone().sub(controls3D.target);
+      smer.setLength(THREE.MathUtils.clamp(smer.length() * faktor, controls3D.minDistance, controls3D.maxDistance));
+      threeCamera.position.copy(controls3D.target).add(smer); controls3D.update();
+    };
+    on(q('#btnZoomIn'), 'click', () => zoomKamery(0.8));
+    on(q('#btnZoomOut'), 'click', () => zoomKamery(1.25));
     on(btnFront, 'click', () => { nastavPohlad(0, 0.35); setViewBtnActive(btnFront); });
     on(btnAngle, 'click', () => { nastavPohlad(0.75, 0.9); setViewBtnActive(btnAngle); });
     on(btnBack, 'click', () => { nastavPohlad(Math.PI, 0.35); setViewBtnActive(btnBack); });

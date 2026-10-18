@@ -173,9 +173,9 @@ export default function Buffky({ supabase, onSpat }) {
         )}
       </div>
 
-      <main ref={rootRef} className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-0 overflow-hidden relative">
+      <main ref={rootRef} className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-0 relative">
         {/* ĽAVÝ PANEL: 2D dizajn a nástroje */}
-        <section className="lg:col-span-7 flex flex-col border-b lg:border-b-0 lg:border-r border-slate-800 bg-slate-900/60 overflow-y-auto max-h-[calc(100vh-4rem)]">
+        <section className="lg:col-span-7 flex flex-col border-b lg:border-b-0 lg:border-r border-slate-800 bg-slate-900/60">
           <div className="sticky top-0 z-30 p-3 md:p-4 border-b border-slate-800 bg-slate-900/95 backdrop-blur-md flex flex-wrap items-center justify-between gap-3 shadow-md">
             <div className="flex items-center gap-1.5 p-1 bg-slate-800/90 rounded-xl border border-slate-700/60" id="toolTabs">
               <button data-tab="bg" className="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition bg-cyan-600 text-white flex items-center gap-1.5"><i className="fa-solid fa-fill-drip"></i> Pozadie</button>
@@ -399,6 +399,10 @@ export default function Buffky({ supabase, onSpat }) {
           </div>
 
           <div id="threeContainer" className="flex-1 min-h-[360px] w-full relative cursor-grab active:cursor-grabbing overflow-hidden">
+              <div className="absolute top-3 right-3 z-10 flex flex-col gap-1.5">
+                <button id="btnZoomIn" type="button" title="Priblížiť" className="w-9 h-9 rounded-xl bg-slate-900/85 hover:bg-slate-700 border border-slate-600 text-white text-xl font-bold leading-none shadow">+</button>
+                <button id="btnZoomOut" type="button" title="Oddialiť" className="w-9 h-9 rounded-xl bg-slate-900/85 hover:bg-slate-700 border border-slate-600 text-white text-xl font-bold leading-none shadow">−</button>
+              </div>
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 pointer-events-none bg-slate-900/80 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-slate-800 text-[11px] text-slate-400 flex items-center gap-2 shadow-lg">
               <i className="fa-solid fa-hand-pointer text-cyan-400"></i>
               <span>Otáčajte myšou • Kolieskom približujte</span>
