@@ -606,10 +606,14 @@ function vytvorTrenirky(scene, textureCanvas, onLoaded, onProgress) {
       const meshe = [];
       root.traverse((child) => { if (child.isMesh) meshe.push(child); });
       const zaradene = meshe.map((mesh) => ({ mesh, zona: zonaKusu(new THREE.Box3().setFromObject(mesh)) }));
-      zaradene.forEach(({ mesh }) => {
-        mesh.material = material;
+      // Pás (gumička) má farbu aj zvnútra — dvojstranný materiál s rovnakou textúrou namiesto bielej podšívky.
+      const materialPas = material.clone();
+      materialPas.side = THREE.DoubleSide;
+      zaradene.forEach(({ mesh, zona }) => {
         mesh.castShadow = true;
         mesh.receiveShadow = true;
+        if (zona === 'pas') { mesh.material = materialPas; return; }
+        mesh.material = material;
         const vnutro = new THREE.Mesh(mesh.geometry, interiorMaterial);
         vnutro.position.copy(mesh.position);
         vnutro.rotation.copy(mesh.rotation);
