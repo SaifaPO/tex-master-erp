@@ -297,21 +297,52 @@ function nacitajFont(nazov) {
 function VzorkaFontu({ font, mod }) {
   const rodina = `'${font}', sans-serif`;
   const farby = mod === 1 ? { vypln: '#1e293b' } : mod === 2 ? { vypln: '#facc15', k1: '#1e293b' } : { vypln: '#facc15', k1: '#dc2626', k2: '#1e293b' };
-  const riadok = (text, y, velkost, medzera) => {
+  const MENO = { text: 'NOVÁK', velkost: 30.6, medzera: 4 };
+  const CISLO = { text: '10', velkost: 61.6, medzera: 6 };
+  // Kontúra čísla je o polovicu tenšia než pri mene (násobok veľkosti písma)
+  const kontura = (r, jeCislo) => {
+    const k = jeCislo ? 0.5 : 1;
+    return { k2: farby.k2 ? r.velkost * 0.2 * k : 0, k1: farby.k1 ? r.velkost * (farby.k2 ? 0.1 : 0.14) * k : 0 };
+  };
+  const hrubkaMeno = kontura(MENO, false), hrubkaCislo = kontura(CISLO, true);
+  const vonkajsia = (h) => Math.max(h.k2, h.k1) / 2; // o koľko kontúra presahuje písmo
+
+  // Rozloženie: medzera medzi spodkom mena a vrchom čísla je pri každom fonte rovnaká — mení sa výška písma (ascent), preto
+  // sa skutočná výška písmen odmeria (na plátne) po načítaní fontu a číslo sa posunie tak, aby medzera ostala konštantná.
+  const [rozlozenie, setRozlozenie] = useState(null);
+  useEffect(() => {
+    let zrusene = false;
+    const odmer = () => {
+      const g = document.createElement('canvas').getContext('2d');
+      const mer = (r) => { g.font = `700 ${r.velkost}px ${rodina}`; const m = g.measureText(r.text); return { hore: m.actualBoundingBoxAscent || r.velkost * 0.75, dole: m.actualBoundingBoxDescent || 0 }; };
+      const m = mer(MENO), c = mer(CISLO);
+      const OKRAJ = 6, MEDZERA = 9; // jednotky obrázka (celá vzorka je široká 200)
+      const yMeno = OKRAJ + vonkajsia(hrubkaMeno) + m.hore;
+      const spodokMena = yMeno + m.dole + vonkajsia(hrubkaMeno);
+      const yCislo = spodokMena + MEDZERA + vonkajsia(hrubkaCislo) + c.hore;
+      const vyska = yCislo + c.dole + vonkajsia(hrubkaCislo) + OKRAJ;
+      if (!zrusene) setRozlozenie({ yMeno, yCislo, vyska });
+    };
+    Promise.resolve(document.fonts?.load?.(`700 40px ${rodina}`)).catch(() => {}).finally(odmer);
+    return () => { zrusene = true; };
+  }, [font]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const riadok = (r, y, h) => {
     // medzera medzi znakmi je väčšia, aby sa pri viacfarebných variantoch kontúry susedných znakov nelepili
-    const spolocne = { x: 100 + medzera / 2, y, textAnchor: 'middle', fontFamily: rodina, fontWeight: 700, fontSize: velkost, letterSpacing: medzera, strokeLinejoin: 'round', strokeLinecap: 'round' };
+    const spolocne = { x: 100 + r.medzera / 2, y, textAnchor: 'middle', fontFamily: rodina, fontWeight: 700, fontSize: r.velkost, letterSpacing: r.medzera, strokeLinejoin: 'round', strokeLinecap: 'round' };
     return (
       <g>
-        {farby.k2 && <text {...spolocne} fill={farby.k2} stroke={farby.k2} strokeWidth={velkost * 0.2}>{text}</text>}
-        {farby.k1 && <text {...spolocne} fill={farby.k1} stroke={farby.k1} strokeWidth={farby.k2 ? velkost * 0.1 : velkost * 0.14}>{text}</text>}
-        <text {...spolocne} fill={farby.vypln}>{text}</text>
+        {farby.k2 && <text {...spolocne} fill={farby.k2} stroke={farby.k2} strokeWidth={h.k2}>{r.text}</text>}
+        {farby.k1 && <text {...spolocne} fill={farby.k1} stroke={farby.k1} strokeWidth={h.k1}>{r.text}</text>}
+        <text {...spolocne} fill={farby.vypln}>{r.text}</text>
       </g>
     );
   };
+  const roz = rozlozenie || { yMeno: 36, yCislo: 85, vyska: 96 };
   return (
-    <svg viewBox="0 0 200 96" className="w-full bg-slate-50 rounded-lg">
-      {riadok('NOVÁK', 36, 30.6, 4)}
-      {riadok('10', 85, 61.6, 6)}
+    <svg viewBox={`0 0 200 ${roz.vyska}`} className="w-full bg-slate-50 rounded-lg">
+      {riadok(MENO, roz.yMeno, hrubkaMeno)}
+      {riadok(CISLO, roz.yCislo, hrubkaCislo)}
     </svg>
   );
 }
