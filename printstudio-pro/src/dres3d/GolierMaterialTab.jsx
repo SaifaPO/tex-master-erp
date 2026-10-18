@@ -1,7 +1,8 @@
 import React from 'react';
 import { VSETKY_GOLIERE } from './dresPresets';
 
-export default function GolierMaterialTab({ configState, dostupneGoliere, materialy, onGolier, onMaterial }) {
+export default function GolierMaterialTab({ configState, dostupneGoliere, materialy, onGolier, onMaterial, onSitie }) {
+  const sitie = configState.sitie || { mod: 'auto', farba: '#ffffff' };
   const goliere = VSETKY_GOLIERE.filter(g => !dostupneGoliere || dostupneGoliere.includes(g.id));
 
   return (
@@ -29,6 +30,22 @@ export default function GolierMaterialTab({ configState, dostupneGoliere, materi
         V-výstrih zatiaľ nie je k dispozícii — golier je súčasť 3D strihu modelu, nie len farba,
         takže potrebuje samostatný model s reálne vymodelovaným V-výstrihom.
       </p>
+
+      {onSitie && (
+        <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+          <span className="text-xs font-bold text-white uppercase tracking-wider block">Farba šitia</span>
+          <p className="text-[11px] text-slate-400">Jedna farba pre všetko a všade — lemovací prúžok na krku a pri spodku a dvojité prešitie na konci rukávov a na spodku dresu.</p>
+          <div className="flex items-center gap-4 flex-wrap">
+            <label className="flex items-center gap-2 text-xs text-white cursor-pointer">
+              <input type="radio" name="sitieMod" checked={sitie.mod !== 'vlastna'} onChange={() => onSitie({ mod: 'auto' })} className="text-indigo-500" /> Automaticky (podľa goliera a lemov)
+            </label>
+            <label className="flex items-center gap-2 text-xs text-white cursor-pointer">
+              <input type="radio" name="sitieMod" checked={sitie.mod === 'vlastna'} onChange={() => onSitie({ mod: 'vlastna' })} className="text-indigo-500" /> Vlastná farba
+            </label>
+            <input type="color" value={sitie.farba || '#ffffff'} disabled={sitie.mod !== 'vlastna'} onChange={(e) => onSitie({ mod: 'vlastna', farba: e.target.value })} className="w-9 h-9 rounded border border-slate-700 bg-slate-900 disabled:opacity-40 cursor-pointer" />
+          </div>
+        </div>
+      )}
 
       {materialy && materialy.length > 0 && (
         <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">

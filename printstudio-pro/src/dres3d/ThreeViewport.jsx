@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { RotateCcw, Camera } from 'lucide-react';
-import { updateJerseyTexture, logaVyrobcuReady, orezOffset } from './dresRenderer';
+import { updateJerseyTexture, logaVyrobcuReady, orezOffset, kresliVnutroDresu } from './dresRenderer';
 import { vykresliTrenirky, postavCestyZon, zonaKusu, vypocitajPanelyNoh } from './trenirkyRenderer';
 
 // Trenírky sa v komplete posunú o toľko cm nižšie, aby pás nohavíc sedel pod spodným lemom dresu (v pôvodnom
@@ -141,7 +141,6 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState, onDragLog
     controls.maxPolarAngle = Math.PI / 1.7;
     controls.target.set(0, -0.1, 0);
     controlsRef.current = controls;
-    if (import.meta.env.DEV) window.__dresDbg = { scene, camera, controls, THREE }; // len pre ladenie vo vývoji
 
     aplikujOsvetlenie(scene, lightsRef, renderer, 'dark');
 
@@ -520,6 +519,18 @@ function vytvorDresGeometriu(scene, textureCanvas, jerseyMeshesRef, onLoaded, on
     metalness: 0,
     side: THREE.BackSide,
   });
+  // Vnútro dresu je biele, na zadnom dielci pod krkom je veľkostný transfer (pozri kresliVnutroDresu).
+  const vnutroCanvas = document.createElement('canvas');
+  vnutroCanvas.width = 2048; vnutroCanvas.height = 2048;
+  kresliVnutroDresu(vnutroCanvas, 'XL');
+  const vnutroTextura = new THREE.CanvasTexture(vnutroCanvas);
+  vnutroTextura.flipY = false;
+  vnutroTextura.wrapS = THREE.RepeatWrapping; vnutroTextura.wrapT = THREE.RepeatWrapping;
+  vnutroTextura.colorSpace = THREE.SRGBColorSpace;
+  vnutroTextura.anisotropy = 8;
+  interiorMaterial.map = vnutroTextura;
+  // fonty (Inter) sa môžu dočítať až po vykreslení — plátno sa prekreslí, keď sú pripravené
+  document.fonts?.ready?.then(() => { kresliVnutroDresu(vnutroCanvas, 'XL'); vnutroTextura.needsUpdate = true; });
 
   const loader = new GLTFLoader();
   loader.load(
@@ -534,11 +545,13 @@ function vytvorDresGeometriu(scene, textureCanvas, jerseyMeshesRef, onLoaded, on
       // pridaným nižšie, tie by pri pohľade cez otvor (golier/manžeta) mohli skresliť zásah.
       if (jerseyMeshesRef) jerseyMeshesRef.current = povodneMeshe;
       povodneMeshe.forEach((child) => {
+        zuzPrazokNaKrku(child.geometry, 0.5);
         child.material = jerseyMaterial;
         child.castShadow = true;
         child.receiveShadow = true;
         // Biela podšívka sa posunie ~3 mm dovnútra, aby cez ňu zvnútra (napr. v rukáve) neprerážali farebné
         // plochy susedných dielcov, ktoré sa v simulácii látky navzájom čiastočne pretínajú.
+        if (jePrazokSitia(child.geometry)) return; // prúžok šitia (krk/spodok) je plný valec — nepotrebuje podšívku, bola by vidno ako druhý prúžok
         const vnutro = new THREE.Mesh(vytvorPodsivku(child.geometry, 0.28), interiorMaterial);
         vnutro.position.copy(child.position);
         vnutro.rotation.copy(child.rotation);
@@ -615,6 +628,37 @@ function vytvorTrenirky(scene, textureCanvas, onLoaded, onProgress) {
 
 // Kópia geometrie posunutá o `posunCm` (cm v súradniciach modelu) proti normále, t. j. dovnútra odevu. Normály sa pred posunom
 // spriemerujú podľa polohy vrcholu, inak by sa kópie vrcholov na hrane dielca posunuli rôznymi smermi a vznikli by zúbky.
+// Lemovací prúžok na krku (kus s UV v pásiku golierKus2) je v modeli hrubý ~9 mm — zúži sa na ~4,5 mm. Vrcholy sa v rámci rovnakej
+// pozície po dĺžke prúžku (rovnaké u) stiahnu k jeho stredu, takže prúžok sleduje výstrih a len sa zúži naprieč.
+// Prúžky šitia v modeli: na krku (UV pásik golierKus2) a na spodku dresu (golierKus3).
+function jePrazokSitia(geometry) {
+  const uv = geometry.attributes.uv;
+  if (!uv || uv.count < 1) return false;
+  const u = uv.getX(0), v = uv.getY(0);
+  return (u > 0.42 && u < 0.51 && v > -0.2 && v < -0.17) || (u > 0.38 && u < 0.47 && v > -0.12 && v < -0.09);
+}
+
+function zuzPrazokNaKrku(geometry, faktor) {
+  const uv = geometry.attributes.uv, p = geometry.attributes.position;
+  if (!uv || !p || uv.count < 1) return;
+  const u0 = uv.getX(0), v0 = uv.getY(0);
+  if (!(u0 > 0.42 && u0 < 0.51 && v0 > -0.2 && v0 < -0.17)) return;
+  const kluc = (i) => Math.round(uv.getX(i) * 800);
+  const sumy = new Map();
+  for (let i = 0; i < p.count; i++) {
+    const k = kluc(i);
+    const s = sumy.get(k) || [0, 0, 0, 0];
+    s[0] += p.getX(i); s[1] += p.getY(i); s[2] += p.getZ(i); s[3]++;
+    sumy.set(k, s);
+  }
+  for (let i = 0; i < p.count; i++) {
+    const s = sumy.get(kluc(i));
+    const cx = s[0] / s[3], cy = s[1] / s[3], cz = s[2] / s[3];
+    p.setXYZ(i, cx + (p.getX(i) - cx) * faktor, cy + (p.getY(i) - cy) * faktor, cz + (p.getZ(i) - cz) * faktor);
+  }
+  p.needsUpdate = true;
+}
+
 function vytvorPodsivku(geometry, posunCm) {
   const g = geometry.clone();
   const p = g.attributes.position, nr = g.attributes.normal;
@@ -680,7 +724,20 @@ function odstranDuplicitneVrstvy(root) {
 
   const outward = new THREE.Vector3();
   const normal = new THREE.Vector3();
+  // Kusy s rovnakou textúrou aj UV môžu byť rôzne diely na rôznych miestach (napr. predná a zadná polovica lemovacieho prúžku na krku
+  // alebo na spodku, ľavý a pravý rukáv) — duplicitnými vrstvami sú len tie, ktoré ležia na tom istom mieste (stred do 1,5 cm).
+  const stred = (m) => { if (!m.geometry.boundingBox) m.geometry.computeBoundingBox(); return m.geometry.boundingBox.getCenter(new THREE.Vector3()); };
+  const zhluky = [];
   groups.forEach((group) => {
+    const kopie = [];
+    group.forEach((m) => {
+      const c = stred(m);
+      const k = kopie.find((z) => z.c.distanceTo(c) < 1.5);
+      if (k) k.m.push(m); else kopie.push({ c, m: [m] });
+    });
+    kopie.forEach((k) => zhluky.push(k.m));
+  });
+  zhluky.forEach((group) => {
     if (group.length < 2) return;
     let best = null, bestScore = -Infinity;
     group.forEach((m) => {

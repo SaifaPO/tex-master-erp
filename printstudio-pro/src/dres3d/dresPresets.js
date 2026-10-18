@@ -72,6 +72,8 @@ export const DEFAULT_CONFIG_STATE = {
     rukava: '#1e3a8a',
     golier: '#ffffff',
   },
+  // Šitie: jedna farba pre všetko a všade (lemovací prúžok na krku/spodku, dvojité prešitie). 'auto' = farba goliera a lemov.
+  sitie: { mod: 'auto', farba: '#ffffff' },
   text: {
     menoHraca: 'RONALDO',
     zobrazitMeno: true,

@@ -167,7 +167,10 @@ const PANELY = {
   rukavPravy: R(0.4961, 0.7422, 0.8877, 0.9229),
   manzetaLava: R(0.0269, 0.9131, 0.3569, 0.9321),
   manzetaPrava: R(0.5088, 0.9321, 0.8745, 0.9531),
-  lemDole: R(0.1650, 0.9663, 0.5967, 0.9849),
+  lemDole: R(0.1650, 0.9663, 0.5967, 0.9849), // v skutočnosti rebrový golier okolo krku (nie spodný lem dresu)
+  // spodný lem tela — pás mimo predku/zadku, vyfarbený základnou farbou (UV z modelu: v ≈ -0.294…-0.275)
+  spodokPredok: R(0.0400, 0.7059, 0.5050, 0.7251),
+  spodokZadok: R(0.5380, 0.7059, 0.9850, 0.7251),
   golierKus1: R(0.3271, 0.7583, 0.4097, 0.7749),
   golierKus2: R(0.4233, 0.8066, 0.5088, 0.8237),
   golierKus3: R(0.3809, 0.8882, 0.4663, 0.9053),
@@ -187,6 +190,29 @@ function toPx(rect, W, H) {
 const MAX_OFFSET_FRAC = 0.4;
 export function orezOffset(v) {
   return Math.max(-MAX_OFFSET_FRAC, Math.min(MAX_OFFSET_FRAC, v || 0));
+}
+
+// Farba šitia — jedna pre všetko (lemovací prúžok na krku a spodku, dvojité prešitie manžiet a spodku). Auto = farba goliera/lemov.
+export function farbaSitia(configState) {
+  const s = configState.sitie;
+  return s && s.mod === 'vlastna' && /^#[0-9a-f]{6}$/i.test(s.farba || '') ? s.farba : configState.farby.golier;
+}
+
+// Dvojité prešitie (dva súbežné rady stehov) pozdĺž pásu — rovnaké ako na skutočnom drese na konci rukávov a na spodku.
+// Pás je v textúre rozvinutý vodorovne (dlhšia strana = dĺžka švu), rady idú po jeho dlhšej strane.
+function kresliDvojiteSitie(c, r, farba, dlzkaStehuPx) {
+  const lw = Math.max(1.3, r.h * 0.07);
+  [0.36, 0.64].forEach((pos) => {
+    const y = r.y + r.h * pos;
+    c.save();
+    c.lineWidth = lw; c.lineCap = 'butt';
+    c.setLineDash([dlzkaStehuPx, dlzkaStehuPx * 0.7]);
+    c.strokeStyle = 'rgba(0,0,0,0.38)';
+    c.beginPath(); c.moveTo(r.x, y + lw * 0.8); c.lineTo(r.x + r.w, y + lw * 0.8); c.stroke();
+    c.strokeStyle = farba;
+    c.beginPath(); c.moveTo(r.x, y); c.lineTo(r.x + r.w, y); c.stroke();
+    c.restore();
+  });
 }
 
 export function updateJerseyTexture(ctx, canvas, configState) {
@@ -386,6 +412,13 @@ function renderSleeves(c, W, H, configState, maVlastnyVzor, regions) {
   c.fillRect(manzetaL.x, manzetaL.y, manzetaL.w, manzetaL.h);
   c.fillRect(manzetaP.x, manzetaP.y, manzetaP.w, manzetaP.h);
   c.fillRect(lem.x, lem.y, lem.w, lem.h);
+  // dvojité prešitie na konci rukávov, na spodku dresu a na golieri (pokračuje aj vpredu)
+  const nit = farbaSitia(configState);
+  kresliDvojiteSitie(c, manzetaL, nit, 3);
+  kresliDvojiteSitie(c, manzetaP, nit, 3);
+  kresliDvojiteSitie(c, lem, nit, 5);
+  kresliDvojiteSitie(c, toPx(PANELY.spodokPredok, W, H), nit, 5);
+  kresliDvojiteSitie(c, toPx(PANELY.spodokZadok, W, H), nit, 5);
 
   // Ľubovoľný počet log na každom rukáve, poukladaných nad sebou v poradí `poradie`
   // (0 = najvyššie). `velkost` je násobok "normálnej" veľkosti (1 = normálna, zadané
@@ -587,9 +620,38 @@ export function renderClubCrest(c, cx, cy, size, configState) {
 
 // Tri malé samostatné strihové kúsky (goliera/väzby) — presné súradnice z UV dát modelu.
 function renderCollarDecorations(c, W, H, configState) {
+  const nit = farbaSitia(configState);
+  // golierKus1 = pás na konci rukávov (farba goliera + dvojité prešitie); golierKus2 = lemovací prúžok na krku a golierKus3 =
+  // prúžok na spodku dresu — tie sú v modeli samotné "šitie", preto majú farbu šitia.
   c.fillStyle = configState.farby.golier;
-  ['golierKus1', 'golierKus2', 'golierKus3'].forEach((key) => {
+  const manzeta = toPx(PANELY.golierKus1, W, H);
+  c.fillRect(manzeta.x, manzeta.y, manzeta.w, manzeta.h);
+  kresliDvojiteSitie(c, manzeta, nit, 2);
+  c.fillStyle = nit;
+  ['golierKus2', 'golierKus3'].forEach((key) => {
     const r = toPx(PANELY[key], W, H);
     c.fillRect(r.x, r.y, r.w, r.h);
   });
+}
+
+// Vnútro dresu (biela podšívka): veľkostný transfer pod lemovacím prúžkom na krku zadného dielca. Pohľad je zvnútra,
+// preto je nápis zrkadlený (zvonku by sa čítal obrátene). Zatiaľ fiktívny text — neskôr sa doplní skutočná veľkosť.
+export function kresliVnutroDresu(canvas, velkostText = 'XL') {
+  const W = canvas.width, H = canvas.height;
+  const c = canvas.getContext('2d');
+  c.fillStyle = '#ffffff';
+  c.fillRect(0, 0, W, H);
+  const zadok = toPx(PANELY.zadok, W, H);
+  const cx = zadok.x + zadok.w / 2, cy = zadok.y + zadok.h * 0.095;
+  c.save();
+  c.translate(cx, cy);
+  c.scale(-1, 1);
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+  c.fillStyle = '#9ca3af';
+  c.font = '700 22px Inter, Arial, sans-serif';
+  c.fillText('JERSEY SIZE', 0, -26);
+  c.font = '800 66px Inter, Arial, sans-serif';
+  c.fillText(velkostText, 0, 20);
+  c.restore();
 }

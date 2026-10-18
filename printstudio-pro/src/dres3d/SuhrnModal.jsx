@@ -49,6 +49,7 @@ export default function SuhrnModal({ supabase, produkt, configState, roster, mat
         vzorKod: configState.vzor,
         farby: configState.farby,
         golierTyp: configState.golierTyp,
+        sitie: configState.sitie || { mod: 'auto' },
         materialKod: configState.materialKod,
         font: configState.text.fontRodina,
         timText: configState.text.zobrazitTimText ? configState.text.timText : '',

@@ -278,6 +278,7 @@ export default function Dres3DApp({ supabase, produktId }) {
                 materialy={katalog.materialy}
                 onGolier={(id) => setConfigState(p => ({ ...p, golierTyp: id }))}
                 onMaterial={(kod) => setConfigState(p => ({ ...p, materialKod: kod }))}
+                onSitie={(zmena) => setConfigState(p => ({ ...p, sitie: { ...(p.sitie || { mod: 'auto', farba: '#ffffff' }), ...zmena } }))}
               />
             )}
           </div>
