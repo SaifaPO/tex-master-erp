@@ -292,11 +292,27 @@ function nacitajFont(nazov) {
   document.head.appendChild(link);
 }
 
-function vzorkaStyl(font, farebnost) {
-  const base = { fontFamily: `'${font}', sans-serif`, lineHeight: 1.05, fontWeight: 700 };
-  if (farebnost === 2) return { ...base, color: '#facc15', WebkitTextStroke: '3px #1e293b', paintOrder: 'stroke fill' };
-  if (farebnost === 3) return { ...base, color: '#facc15', WebkitTextStroke: '3px #dc2626', paintOrder: 'stroke fill', textShadow: '3px 3px 0 #1e293b, -1px -1px 0 #1e293b' };
-  return { ...base, color: '#1e293b' };
+// Vzorka písma ako SVG — kontúra má zaoblené spoje (stroke-linejoin round), takže pri ostrých fontoch nevznikajú špicaté rohy.
+// mod 1 = jednofarebné; 2 = výplň + kontúra; 3 = výplň + kontúra + vonkajšia kontúra (tieň). Meno je vycentrované nad číslom.
+function VzorkaFontu({ font, mod }) {
+  const rodina = `'${font}', sans-serif`;
+  const farby = mod === 1 ? { vypln: '#1e293b' } : mod === 2 ? { vypln: '#facc15', k1: '#1e293b' } : { vypln: '#facc15', k1: '#dc2626', k2: '#1e293b' };
+  const riadok = (text, y, velkost) => {
+    const spolocne = { x: 100, y, textAnchor: 'middle', fontFamily: rodina, fontWeight: 700, fontSize: velkost, strokeLinejoin: 'round', strokeLinecap: 'round' };
+    return (
+      <g>
+        {farby.k2 && <text {...spolocne} fill={farby.k2} stroke={farby.k2} strokeWidth={velkost * 0.2}>{text}</text>}
+        {farby.k1 && <text {...spolocne} fill={farby.k1} stroke={farby.k1} strokeWidth={farby.k2 ? velkost * 0.1 : velkost * 0.14}>{text}</text>}
+        <text {...spolocne} fill={farby.vypln}>{text}</text>
+      </g>
+    );
+  };
+  return (
+    <svg viewBox="0 0 200 96" className="w-full bg-slate-50 rounded-lg">
+      {riadok('NOVÁK', 36, 34)}
+      {riadok('10', 84, 56)}
+    </svg>
+  );
 }
 
 function VzorkovnikFontov({ supabase }) {
@@ -328,9 +344,15 @@ function VzorkovnikFontov({ supabase }) {
                 <span className="text-xs font-bold text-slate-800 truncate">{f.nazov}</span>
                 <span className={`text-[10px] font-bold rounded px-1.5 py-0.5 shrink-0 ${(f.farebnost || 1) > 1 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>{(f.farebnost || 1) === 1 ? '1 farba' : `až ${f.farebnost} farby`}</span>
               </div>
-              <div className="bg-slate-50 rounded-lg px-2 py-1.5" style={vzorkaStyl(f.nazov, f.farebnost || 1)}>
-                <div className="text-2xl uppercase truncate">Novák</div>
-                <div className="text-4xl">10 <span className="text-2xl">2025</span></div>
+              <div className="grid grid-cols-2 gap-1.5">
+                <div>
+                  <VzorkaFontu font={f.nazov} mod={1} />
+                  <span className="text-[9px] text-slate-500 block text-center mt-0.5">jednofarebný</span>
+                </div>
+                <div>
+                  <VzorkaFontu font={f.nazov} mod={(f.farebnost || 1) >= 3 ? 3 : 2} />
+                  <span className="text-[9px] text-slate-500 block text-center mt-0.5">viacfarebný ({(f.farebnost || 1) >= 3 ? '3 farby' : '2 farby'})</span>
+                </div>
               </div>
               <div className="text-[10px] text-slate-500 mt-1 truncate" style={{ fontFamily: `'${f.nazov}', sans-serif` }}>Čaruje Ôsmy žľab 0123456789</div>
             </div>
