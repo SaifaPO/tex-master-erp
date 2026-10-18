@@ -16,6 +16,22 @@ const TRENIRKY_POSUN_Y_CM = -22;
 // cez konfigState prop namiesto globálneho mutovateľného stavu.
 const ThreeViewport = forwardRef(function ThreeViewport({ configState, onDragLogo, zostava = 'dres' }, ref) {
   const containerRef = useRef(null);
+  // Nacitavanie 3D modelov (dres ~19 MB, trenirky ~1 MB): percento do kruhoveho indikatora. Ak server neposle celkovu
+  // velkost (komprimovany prenos), pouzije sa odhad z velkosti suborov; po stiahnuti ostava 97 % kym sa model spracuje.
+  const [nacitanie, setNacitanie] = useState({ pct: 0, hotovo: false });
+  const postupRef = useRef({ dres: { loaded: 0, total: 19405704, done: false }, trenirky: { loaded: 0, total: 1075576, done: false } });
+  const hlasPostup = (kluc, e, done) => {
+    const p = postupRef.current[kluc];
+    if (e?.chyba) p.done = true; // pri chybe nacitania sa indikator nema zasekavat
+    if (e && !e.chyba) { if (e.lengthComputable && e.total > 0) p.total = e.total; p.loaded = e.loaded; }
+    if (done) p.done = true;
+    const v = Object.values(postupRef.current);
+    const hotovo = v.every((x) => x.done);
+    const stiahnute = v.reduce((sum, x) => sum + (x.done ? x.total : Math.min(x.loaded, x.total)), 0);
+    const spolu = v.reduce((sum, x) => sum + x.total, 0);
+    const pct = hotovo ? 100 : Math.min(97, Math.floor((stiahnute / spolu) * 97));
+    setNacitanie((prev) => (prev.pct === pct && prev.hotovo === hotovo ? prev : { pct, hotovo }));
+  };
   const textureCanvasRef = useRef(null);
   const sceneRef = useRef(null);
   const cameraRef = useRef(null);
@@ -125,6 +141,7 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState, onDragLog
     controls.maxPolarAngle = Math.PI / 1.7;
     controls.target.set(0, -0.1, 0);
     controlsRef.current = controls;
+    if (import.meta.env.DEV) window.__dresDbg = { scene, camera, controls, THREE }; // len pre ladenie vo vývoji
 
     aplikujOsvetlenie(scene, lightsRef, renderer, 'dark');
 
@@ -140,7 +157,8 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState, onDragLog
       jerseyRootRef.current = root;
       jerseyBoxRef.current = box;
       nastavRozlozenie();
-    });
+      hlasPostup('dres', null, true);
+    }, (e) => hlasPostup('dres', e));
     canvasTextureRef.current = canvasTexture;
 
     // Trenírky — načítajú sa vždy (1 MB), zobrazia sa podľa zostavy. Textúra sa vykreslí z UV zón.
@@ -156,7 +174,8 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState, onDragLog
       shortsTextureRef.current = textura;
       prekresliTrenirky();
       nastavRozlozenie();
-    });
+      hlasPostup('trenirky', null, true);
+    }, (e) => hlasPostup('trenirky', e));
 
     let animId;
     const animate = () => {
@@ -361,6 +380,20 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState, onDragLog
       <canvas ref={textureCanvasRef} width={2048} height={2048} className="hidden" />
       <div ref={containerRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
 
+      {!nacitanie.hotovo && (
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-slate-950/90 backdrop-blur-sm">
+          <div className="relative w-28 h-28">
+            <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+              <circle cx="50" cy="50" r="44" fill="none" stroke="rgba(148,163,184,0.2)" strokeWidth="7" />
+              <circle cx="50" cy="50" r="44" fill="none" stroke="#6366f1" strokeWidth="7" strokeLinecap="round" strokeDasharray={2 * Math.PI * 44} strokeDashoffset={2 * Math.PI * 44 * (1 - nacitanie.pct / 100)} style={{ transition: 'stroke-dashoffset 0.3s ease' }} />
+            </svg>
+            <span className="absolute inset-0 flex items-center justify-center text-2xl font-black text-white">{nacitanie.pct}%</span>
+          </div>
+          <p className="text-sm font-bold text-slate-200">Načítavam 3D model…</p>
+          <p className="text-[11px] text-slate-500 text-center px-6">Pri prvom otvorení to trvá o niečo dlhšie, nabudúce už bude rýchlejšie.</p>
+        </div>
+      )}
+
       <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none z-10">
         <div className="bg-slate-900/80 backdrop-blur-sm px-2.5 py-1 rounded-lg border border-slate-800 text-[11px] text-slate-300 flex items-center gap-1.5 shadow-md">
           <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse shrink-0" />
@@ -440,7 +473,7 @@ function aplikujOsvetlenie(scene, lightsRef, renderer, type) {
 // necháva tak, ako je, a naša plátnová textúra sa nakreslí do rovnakého rozloženia, aké malo
 // pôvodné (referenčné) textúrové pozadie modelu (predok/zadok v ľavej/pravej polovici, rukávy
 // dole, lemy v úzkom pruhu úplne dole) — pozri dresRenderer.js.
-function vytvorDresGeometriu(scene, textureCanvas, jerseyMeshesRef, onLoaded) {
+function vytvorDresGeometriu(scene, textureCanvas, jerseyMeshesRef, onLoaded, onProgress) {
   const canvasTexture = new THREE.CanvasTexture(textureCanvas);
   canvasTexture.anisotropy = 16;
   canvasTexture.generateMipmaps = true;
@@ -504,7 +537,9 @@ function vytvorDresGeometriu(scene, textureCanvas, jerseyMeshesRef, onLoaded) {
         child.material = jerseyMaterial;
         child.castShadow = true;
         child.receiveShadow = true;
-        const vnutro = new THREE.Mesh(child.geometry, interiorMaterial);
+        // Biela podšívka sa posunie ~3 mm dovnútra, aby cez ňu zvnútra (napr. v rukáve) neprerážali farebné
+        // plochy susedných dielcov, ktoré sa v simulácii látky navzájom čiastočne pretínajú.
+        const vnutro = new THREE.Mesh(vytvorPodsivku(child.geometry, 0.28), interiorMaterial);
         vnutro.position.copy(child.position);
         vnutro.rotation.copy(child.rotation);
         vnutro.scale.copy(child.scale);
@@ -517,8 +552,8 @@ function vytvorDresGeometriu(scene, textureCanvas, jerseyMeshesRef, onLoaded) {
       scene.add(root);
       onLoaded?.(root, box);
     },
-    undefined,
-    (err) => console.error('Nepodarilo sa načítať 3D model dresu:', err),
+    (e) => onProgress?.(e),
+    (err) => { console.error('Nepodarilo sa načítať 3D model dresu:', err); onProgress?.({ chyba: true }); },
   );
 
   return canvasTexture;
@@ -527,7 +562,7 @@ function vytvorDresGeometriu(scene, textureCanvas, jerseyMeshesRef, onLoaded) {
 // Trenírky: skutočný CLO3D strih (public/models/shorts-base.glb, 1 MB) — už zbavený prešívania a vnútorných vrstiev (pozri
 // tools/optimize-shorts-glb.mjs). Každý strihový kus sa zaradí do farebnej zóny (trenirkyRenderer.zonaKusu) a textúra sa
 // maľuje z UV trojuholníkov zón. Textúra aj normálová mapa majú flipY=false ako pri dresi (konvencia glTF UV).
-function vytvorTrenirky(scene, textureCanvas, onLoaded) {
+function vytvorTrenirky(scene, textureCanvas, onLoaded, onProgress) {
   const textura = new THREE.CanvasTexture(textureCanvas);
   textura.anisotropy = 16;
   textura.wrapS = THREE.RepeatWrapping;
@@ -573,9 +608,32 @@ function vytvorTrenirky(scene, textureCanvas, onLoaded) {
       scene.add(root);
       onLoaded?.(root, box, cesty, textura, vypocitajPanelyNoh(zaradene));
     },
-    undefined,
-    (err) => console.error('Nepodarilo sa načítať 3D model trenírok:', err),
+    (e) => onProgress?.(e),
+    (err) => { console.error('Nepodarilo sa načítať 3D model trenírok:', err); onProgress?.({ chyba: true }); },
   );
+}
+
+// Kópia geometrie posunutá o `posunCm` (cm v súradniciach modelu) proti normále, t. j. dovnútra odevu. Normály sa pred posunom
+// spriemerujú podľa polohy vrcholu, inak by sa kópie vrcholov na hrane dielca posunuli rôznymi smermi a vznikli by zúbky.
+function vytvorPodsivku(geometry, posunCm) {
+  const g = geometry.clone();
+  const p = g.attributes.position, nr = g.attributes.normal;
+  if (!nr) return g;
+  const kluc = (i) => `${Math.round(p.getX(i) * 500)}_${Math.round(p.getY(i) * 500)}_${Math.round(p.getZ(i) * 500)}`;
+  const sumy = new Map();
+  for (let i = 0; i < p.count; i++) {
+    const k = kluc(i);
+    const s = sumy.get(k) || [0, 0, 0];
+    s[0] += nr.getX(i); s[1] += nr.getY(i); s[2] += nr.getZ(i);
+    sumy.set(k, s);
+  }
+  for (let i = 0; i < p.count; i++) {
+    const s = sumy.get(kluc(i));
+    const d = Math.hypot(s[0], s[1], s[2]) || 1;
+    p.setXYZ(i, p.getX(i) - (s[0] / d) * posunCm, p.getY(i) - (s[1] / d) * posunCm, p.getZ(i) - (s[2] / d) * posunCm);
+  }
+  p.needsUpdate = true;
+  return g;
 }
 
 // CLO3D exportuje látku ako "škrupinu" s hrúbkou — každý strihový kus (predok, zadok, rukáv...)

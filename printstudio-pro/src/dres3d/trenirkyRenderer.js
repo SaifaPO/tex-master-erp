@@ -160,7 +160,7 @@ function nakresliCisloNaNohu(ctx, text, cx, cy, vyskaPx, pxPerCm, configState, f
 
 // Logá + číslo na prednej strane nohavíc — o 8 cm nižšie než pôvodne a posunuté k vonkajšiemu okraju nohavice
 // (k bočnému pásu) o 3 cm, no tak, aby medzi logom a bočným pásom ostali aspoň 2 cm (Martin 2026-10-18).
-const TRENIRKY_POSUN_DOLE_CM = 8;
+const TRENIRKY_POSUN_DOLE_CM = 7; // pôvodne 8, o 1 cm vyššie (Martin 2026-10-18)
 const TRENIRKY_POSUN_DO_STRANY_CM = 3;
 const TRENIRKY_ODSTUP_OD_PASU_CM = 2;
 const POLSIRKA_CM = { vyrobca: LOGO_VYROBCU_CM.w / 2, erb: ERB_CM / 2, cislo: 3.3 };

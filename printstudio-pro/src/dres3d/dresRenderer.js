@@ -424,8 +424,8 @@ function renderSleeves(c, W, H, configState, maVlastnyVzor, regions) {
 
 // Logo klubu, logo výrobcu a číslo na hrudi sú o 1 cm vyššie (Martin 2026-10-18).
 const HRUD_POSUN_HORE_PX = 10 * PX_PER_MM;
-// Chrbát: menovka o 3 cm vyššie, číslo o 1,5 cm vyššie (medzera meno–číslo o 1,5 cm väčšia).
-const MENO_POSUN_HORE_PX = 30 * PX_PER_MM;
+// Chrbát: menovka o 13 cm vyššie, číslo o 11,5 cm vyššie (medzera meno–číslo o 1,5 cm väčšia).
+const MENO_POSUN_HORE_PX = 130 * PX_PER_MM; // 3 cm + ďalších 10 cm (Martin 2026-10-18)
 const MEDZERA_MENO_CISLO_PX = 31 * PX_PER_MM;
 
 function renderFrontDetails(c, x, y, w, h, configState, regions) {
