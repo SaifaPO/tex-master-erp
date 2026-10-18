@@ -1538,6 +1538,7 @@ export default function App() {
   const [newMatManufacturer, setNewMatManufacturer] = useState('');
 
   const [editingProduct, setEditingProduct] = useState(null);
+  const [editFlash, setEditFlash] = useState(false); // krátke zvýraznenie formulára po kliknutí na Upraviť v katalógu
   const [newModelCode, setNewModelCode] = useState('');
   const [newModelName, setNewModelName] = useState('');
   const [newModelSports, setNewModelSports] = useState([]);
@@ -4471,6 +4472,15 @@ export default function App() {
     const dbField = field === 'costPrice' ? 'cost_price' : field;
     const payload = isNumericField ? { [dbField]: Number(value) || 0 } : { [dbField]: value };
     await supabase.from('dotlacovka_price_list').update(payload).eq('id', id);
+  };
+
+  // Upraviť model z registra: nastaví model na úpravu, krátko zvýrazní formulár, ukáže hlášku a hneď vyskočí hore na formulár.
+  const startEditProduct = (p) => {
+    setEditingProduct(p);
+    setEditFlash(true);
+    setTimeout(() => setEditFlash(false), 1400);
+    triggerNotification('success', `Upravuješ model: ${p.name}`);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleUpdateIntercompanyRate = async (serviceKey, field, value) => {
@@ -7623,7 +7633,7 @@ export default function App() {
               <p className="text-xs text-slate-400 mb-6">Katalóg môže obsahovať akékoľvek modely - dresy, tréningovky, mikiny, tepláky, ale aj napr. tričká na dotlač bez priradenej látky. Import vždy pridá nové modely (nepreťaží existujúce) — látky sa priraďujú podľa presného názvu zo skladu.</p>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 bg-slate-900/60 p-4 rounded-xl border border-slate-800 space-y-4">
+                <div className={`lg:col-span-2 bg-slate-900/60 p-4 rounded-xl border border-slate-800 space-y-4 transition-shadow duration-300 ${editFlash ? 'ring-2 ring-indigo-500 shadow-lg shadow-indigo-500/20' : ''}`}>
                   <h3 className="font-bold text-sm text-slate-200 border-b border-slate-800 pb-2">{editingProduct ? `Upraviť model: ${editingProduct.name}` : 'Vytvoriť nový model'}</h3>
                   <form onSubmit={handleSaveModel} className="space-y-4 text-xs">
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -8281,7 +8291,7 @@ export default function App() {
                             <td className="p-2.5 text-slate-300 whitespace-nowrap">{p.productionCost != null ? `${Number(p.productionCost).toFixed(2)} €` : <span className="italic text-slate-600">—</span>}</td>
                             <td className="p-2.5 text-right whitespace-nowrap">
                               <div className="flex gap-1 justify-end">
-                                <button onClick={() => setEditingProduct(p)} title="Upraviť" className="bg-slate-800 hover:bg-slate-750 text-indigo-400 p-1.5 rounded transition-all"><FileEdit className="h-3.5 w-3.5" /></button>
+                                <button onClick={() => startEditProduct(p)} title="Upraviť" className="bg-slate-800 hover:bg-slate-750 text-indigo-400 p-1.5 rounded transition-all active:scale-90 active:bg-indigo-600 active:text-white"><FileEdit className="h-3.5 w-3.5" /></button>
                                 {hasPermission('manage_catalog') && <button onClick={() => handleDuplicateModel(p)} title="Duplikovať model" className="bg-slate-800 hover:bg-slate-700 text-emerald-400 p-1.5 rounded transition-all"><Copy className="h-3.5 w-3.5" /></button>}
                                 <button onClick={() => handleDeleteModel(p.id)} className="bg-slate-800 hover:bg-rose-900 text-rose-400 p-1.5 rounded transition-all"><Trash2 className="h-3.5 w-3.5" /></button>
                               </div>
@@ -8301,7 +8311,7 @@ export default function App() {
                       <div className="flex justify-between items-start border-b border-slate-800 pb-2">
                         <div><span className="font-mono text-indigo-400 text-[10px] font-bold block">{p.id}</span><span className="font-mono text-slate-300 font-bold text-xs">{p.customCode}</span></div>
                         <div className="flex gap-1">
-                          <button onClick={() => setEditingProduct(p)} className="bg-slate-800 hover:bg-slate-750 text-indigo-400 p-1.5 rounded transition-all flex items-center gap-1 font-bold text-[10px]"><FileEdit className="h-3.5 w-3.5" /> Upraviť</button>
+                          <button onClick={() => startEditProduct(p)} className="bg-slate-800 hover:bg-slate-750 text-indigo-400 p-1.5 rounded transition-all active:scale-90 active:bg-indigo-600 active:text-white flex items-center gap-1 font-bold text-[10px]"><FileEdit className="h-3.5 w-3.5" /> Upraviť</button>
                           {hasPermission('manage_catalog') && <button onClick={() => handleDuplicateModel(p)} title="Duplikovať model" className="bg-slate-800 hover:bg-slate-700 text-emerald-400 p-1.5 rounded transition-all flex items-center gap-1 font-bold text-[10px]"><Copy className="h-3.5 w-3.5" /> Duplikovať</button>}
                           <button onClick={() => handleDeleteModel(p.id)} className="bg-slate-800 hover:bg-rose-900 text-rose-400 p-1.5 rounded transition-all"><Trash2 className="h-3.5 w-3.5" /></button>
                         </div>
