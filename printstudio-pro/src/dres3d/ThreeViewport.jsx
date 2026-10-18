@@ -62,6 +62,7 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState, onDragLog
   const onDragLogoRef = useRef(onDragLogo);
   onDragLogoRef.current = onDragLogo;
   const [svetlo, setSvetlo] = useState('dark');
+  const envRef = useRef({ group: null }); // aktuálne prostredie (miestnosť / štadión)
   const [autoRotate, setAutoRotate] = useState(false);
   const [aktivnyPohlad, setAktivnyPohlad] = useState('front');
 
@@ -150,7 +151,10 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState, onDragLog
     floor.rotation.x = -Math.PI / 2;
     floor.position.y = -2.0;
     floor.receiveShadow = true;
+    floor.visible = false; // podlahu si stavia prostredie (pozri nastavProstredie)
     scene.add(floor);
+    envRef.current = { group: null };
+    nastavProstredie(scene, envRef.current, 'dark');
 
     const canvasTexture = vytvorDresGeometriu(scene, textureCanvasRef.current, jerseyMeshesRef, (root, box) => {
       jerseyRootRef.current = root;
@@ -321,7 +325,10 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState, onDragLog
   useEffect(() => { logaVyrobcuReady.then(() => prekresliTrenirky()); if (document.fonts?.ready) document.fonts.ready.then(() => prekresliTrenirky()); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
   useEffect(() => {
-    if (sceneRef.current && rendererRef.current) aplikujOsvetlenie(sceneRef.current, lightsRef, rendererRef.current, svetlo);
+    if (sceneRef.current && rendererRef.current) {
+      aplikujOsvetlenie(sceneRef.current, lightsRef, rendererRef.current, svetlo);
+      nastavProstredie(sceneRef.current, envRef.current, svetlo);
+    }
   }, [svetlo]);
 
   useEffect(() => {
@@ -399,8 +406,8 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState, onDragLog
           <span>360° 3D Náhľad</span>
         </div>
         <div className="pointer-events-auto flex gap-1 bg-slate-900/85 backdrop-blur-md p-1 rounded-xl border border-slate-800 shadow-md">
-          {[{ id: 'dark', icon: '🌙' }, { id: 'light', icon: '☀️' }, { id: 'stadium', icon: '🏟️' }].map(o => (
-            <button key={o.id} onClick={() => setSvetlo(o.id)} className={`p-1.5 rounded-lg text-xs ${svetlo === o.id ? 'bg-slate-800 text-indigo-400 font-medium' : 'text-slate-400 hover:text-white'}`}>{o.icon}</button>
+          {[{ id: 'light', icon: '☀️', nazov: 'Svetlé', popis: 'Svetlé béžové prostredie (miestnosť)' }, { id: 'dark', icon: '🌙', nazov: 'Tmavé', popis: 'Tmavomodré až čierne prostredie (miestnosť)' }, { id: 'stadium', icon: '🏟️', nazov: 'Štadión', popis: 'Futbalový štadión dookola — trávnik, tribúny, reflektory' }].map(o => (
+            <button key={o.id} onClick={() => setSvetlo(o.id)} title={o.popis} className={`px-1.5 py-1.5 rounded-lg text-xs flex items-center gap-1 ${svetlo === o.id ? 'bg-slate-800 text-indigo-400 font-medium' : 'text-slate-400 hover:text-white'}`}>{o.icon}{svetlo === o.id && <span className="text-[11px]">{o.nazov}</span>}</button>
           ))}
         </div>
       </div>
@@ -425,6 +432,130 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState, onDragLog
 
 export default ThreeViewport;
 
+// ---------- PROSTREDIE ----------
+// ☀️ svetlé: béžová kocka (miestnosť) • 🌙 tmavé: tmavomodro-čierna kocka • 🏟️ štadión: trávnik s čiarami, tribúny s divákmi,
+// reklamné pásy, reflektory — celé dookola. Postavená skupina sa pri zmene režimu zahodí a postaví nová.
+function plochaTextura(w, h, kresli, opakX = 1, opakY = 1) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  kresli(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = THREE.RepeatWrapping; t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(opakX, opakY);
+  t.anisotropy = 8;
+  return t;
+}
+
+function texturaHriska() {
+  return plochaTextura(2048, 1344, (g, w, h) => {
+    const pruhov = 14;
+    for (let i = 0; i < pruhov; i++) { g.fillStyle = i % 2 ? '#2f8f3a' : '#3aa346'; g.fillRect((w / pruhov) * i, 0, w / pruhov + 1, h); }
+    g.strokeStyle = 'rgba(255,255,255,0.92)'; g.lineWidth = 7;
+    const m = 40; g.strokeRect(m, m, w - 2 * m, h - 2 * m);
+    g.beginPath(); g.moveTo(w / 2, m); g.lineTo(w / 2, h - m); g.stroke();
+    g.beginPath(); g.arc(w / 2, h / 2, h * 0.135, 0, Math.PI * 2); g.stroke();
+    g.fillStyle = '#fff'; g.beginPath(); g.arc(w / 2, h / 2, 9, 0, Math.PI * 2); g.fill();
+    // pokutové územia
+    const pw = w * 0.16, ph = h * 0.6;
+    g.strokeRect(m, (h - ph) / 2, pw, ph); g.strokeRect(w - m - pw, (h - ph) / 2, pw, ph);
+    const bw = w * 0.055, bh = h * 0.27;
+    g.strokeRect(m, (h - bh) / 2, bw, bh); g.strokeRect(w - m - bw, (h - bh) / 2, bw, bh);
+  });
+}
+
+function texturaDivakov() {
+  return plochaTextura(1024, 256, (g, w, h) => {
+    g.fillStyle = '#111a2e'; g.fillRect(0, 0, w, h);
+    const farby = ['#dc2626', '#1d4ed8', '#f8fafc', '#facc15', '#16a34a', '#94a3b8', '#f97316'];
+    let sem = 12345; const rnd = () => { sem = (sem * 16807) % 2147483647; return sem / 2147483647; };
+    for (let rad = 0; rad < 18; rad++) {
+      const y = 10 + rad * (h - 16) / 18;
+      for (let x = (rad % 2) * 6; x < w; x += 12) {
+        const farba = farby[Math.floor(rnd() * farby.length)];
+        g.fillStyle = farba; g.fillRect(x, y + 5, 10, 8);                      // telo / dres
+        g.fillStyle = rnd() > 0.5 ? '#f1c9a5' : '#b98563'; g.beginPath(); g.arc(x + 5, y + 3, 3.2, 0, Math.PI * 2); g.fill(); // hlava
+      }
+    }
+  }, 7, 1);
+}
+
+function texturaReklam() {
+  return plochaTextura(2048, 128, (g, w, h) => {
+    const panely = [['#dc2626', 'ATAK'], ['#1d4ed8', 'PBT'], ['#f8fafc', 'FC TÍM'], ['#facc15', 'DRES'], ['#16a34a', 'ŠPORT']];
+    const sirka = w / (panely.length * 2);
+    for (let i = 0; i < panely.length * 2; i++) {
+      const [farba, text] = panely[i % panely.length];
+      g.fillStyle = farba; g.fillRect(i * sirka, 0, sirka, h);
+      g.fillStyle = farba === '#f8fafc' || farba === '#facc15' ? '#0f172a' : '#ffffff';
+      g.font = '800 64px Inter, Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(text, i * sirka + sirka / 2, h / 2);
+    }
+  });
+}
+
+// Pohľad na valec zvnútra zrkadlí texty — reklamy sa preto zrkadlia späť.
+function texturaReklamZvnutra() {
+  const t = texturaReklam();
+  t.repeat.x = -1;
+  return t;
+}
+
+function nastavProstredie(scene, env, type) {
+  if (env.group) {
+    scene.remove(env.group);
+    env.group.traverse((o) => { o.geometry?.dispose?.(); if (o.material) { o.material.map?.dispose?.(); o.material.dispose?.(); } });
+    env.group = null;
+  }
+  const g = new THREE.Group();
+  const Y = -2.0; // úroveň podlahy
+  const plocha = (geo, mat, y) => { const m = new THREE.Mesh(geo, mat); m.position.y = y; return m; };
+
+  if (type === 'stadium') {
+    // vonkajšia tráva + hracia plocha
+    const trava = plocha(new THREE.CircleGeometry(14.5, 64), new THREE.MeshStandardMaterial({ color: 0x1f5c2a, roughness: 0.95 }), Y);
+    trava.rotation.x = -Math.PI / 2; trava.receiveShadow = true; g.add(trava);
+    const hriste = plocha(new THREE.PlaneGeometry(21, 13.6), new THREE.MeshStandardMaterial({ map: texturaHriska(), roughness: 0.9 }), Y + 0.004);
+    hriste.rotation.x = -Math.PI / 2; hriste.receiveShadow = true; g.add(hriste);
+    // reklamné pásy
+    const reklamy = plocha(new THREE.CylinderGeometry(13.7, 13.7, 0.9, 96, 1, true), new THREE.MeshBasicMaterial({ map: texturaReklamZvnutra(), side: THREE.DoubleSide, color: 0xdddddd }), Y + 0.45);
+    g.add(reklamy);
+    // tribúny — dva sklony s divákmi
+    const divaci = (rDole, rHore, vyska, y) => {
+      const m = plocha(new THREE.CylinderGeometry(rHore, rDole, vyska, 96, 1, true), new THREE.MeshBasicMaterial({ map: texturaDivakov(), side: THREE.DoubleSide, color: 0xa8a8a8 }), y + vyska / 2);
+      g.add(m);
+    };
+    divaci(14.1, 19, 5.2, Y + 0.9);
+    // chodba medzi poschodiami
+    const chodba = plocha(new THREE.CylinderGeometry(19.6, 19.1, 1.0, 96, 1, true), new THREE.MeshStandardMaterial({ color: 0x1b2438, side: THREE.DoubleSide, roughness: 0.9 }), Y + 6.6);
+    g.add(chodba);
+    divaci(19.6, 26, 6, Y + 7.1);
+    // vonkajší múr a obloha
+    const mur = plocha(new THREE.CylinderGeometry(26.3, 26.3, 16, 96, 1, true), new THREE.MeshStandardMaterial({ color: 0x0b1224, side: THREE.BackSide, roughness: 1 }), Y + 8);
+    g.add(mur);
+    // reflektory vo štyroch rohoch
+    [Math.PI * 0.25, Math.PI * 0.75, Math.PI * 1.25, Math.PI * 1.75].forEach((uhol) => {
+      const x = Math.cos(uhol) * 22, z = Math.sin(uhol) * 22;
+      const stlp = plocha(new THREE.CylinderGeometry(0.18, 0.25, 16, 12), new THREE.MeshStandardMaterial({ color: 0x8a94a8 }), Y + 8);
+      stlp.position.x = x; stlp.position.z = z; g.add(stlp);
+      const panel = new THREE.Mesh(new THREE.BoxGeometry(3.4, 2.2, 0.25), new THREE.MeshBasicMaterial({ color: 0xfffbe8 }));
+      panel.position.set(x, Y + 16.4, z); panel.lookAt(0, Y + 6, 0); g.add(panel);
+      const luc = new THREE.Mesh(new THREE.CircleGeometry(2.8, 24), new THREE.MeshBasicMaterial({ color: 0xfff1b8, transparent: true, opacity: 0.18, depthWrite: false }));
+      luc.position.set(x, Y + 16.4, z); luc.lookAt(0, Y + 6, 0); luc.translateZ(0.2); g.add(luc);
+    });
+  } else {
+    // miestnosť (kocka): svetlá béžová alebo tmavomodro-čierna
+    const svetla = type === 'light';
+    const steny = new THREE.MeshStandardMaterial({ color: svetla ? 0xeadfca : 0x0b1228, roughness: 0.95, metalness: 0, side: THREE.BackSide });
+    const kocka = new THREE.Mesh(new THREE.BoxGeometry(16, 10, 16), steny);
+    kocka.position.y = Y + 5; kocka.receiveShadow = true; g.add(kocka);
+    const podlaha = plocha(new THREE.PlaneGeometry(16, 16), new THREE.MeshStandardMaterial({ color: svetla ? 0xd9cab0 : 0x060a18, roughness: svetla ? 0.9 : 0.6, metalness: svetla ? 0 : 0.25 }), Y + 0.01);
+    podlaha.rotation.x = -Math.PI / 2; podlaha.receiveShadow = true; g.add(podlaha);
+  }
+  scene.add(g);
+  env.group = g;
+}
+
 function aplikujOsvetlenie(scene, lightsRef, renderer, type) {
   const l = lightsRef.current;
   if (l.ambient) scene.remove(l.ambient);
@@ -434,23 +565,26 @@ function aplikujOsvetlenie(scene, lightsRef, renderer, type) {
 
   let ambient, main, fill, rim;
   if (type === 'light') {
-    ambient = new THREE.AmbientLight(0xffffff, 0.9);
-    main = new THREE.DirectionalLight(0xffffff, 1.2);
-    fill = new THREE.DirectionalLight(0xe2e8f0, 0.8);
-    rim = new THREE.DirectionalLight(0x38bdf8, 0.6);
-    renderer.setClearColor(0x1e293b, 1);
+    // svetlá béžová miestnosť — teplé, mäkké svetlo
+    ambient = new THREE.AmbientLight(0xfff3e0, 1.15);
+    main = new THREE.DirectionalLight(0xfff6e8, 1.3);
+    fill = new THREE.DirectionalLight(0xffe9cc, 0.7);
+    rim = new THREE.DirectionalLight(0xffffff, 0.5);
+    renderer.setClearColor(0xe6dac4, 1);
   } else if (type === 'stadium') {
-    ambient = new THREE.AmbientLight(0x38bdf8, 0.6);
-    main = new THREE.DirectionalLight(0xffffff, 1.8);
-    fill = new THREE.DirectionalLight(0x22c55e, 0.7);
-    rim = new THREE.DirectionalLight(0xec4899, 1.0);
-    renderer.setClearColor(0x020617, 1);
+    // večerný štadión pod reflektormi
+    ambient = new THREE.AmbientLight(0xdfe9ff, 0.8);
+    main = new THREE.DirectionalLight(0xffffff, 2.1);
+    fill = new THREE.DirectionalLight(0xfff1c8, 0.7);
+    rim = new THREE.DirectionalLight(0xbcd4ff, 0.8);
+    renderer.setClearColor(0x0a1530, 1);
   } else {
-    ambient = new THREE.AmbientLight(0xffffff, 0.75);
-    main = new THREE.DirectionalLight(0xffffff, 1.3);
-    fill = new THREE.DirectionalLight(0x94a3b8, 0.6);
-    rim = new THREE.DirectionalLight(0x22c55e, 0.5);
-    renderer.setClearColor(0x070d18, 1);
+    // tmavomodrá až čierna miestnosť
+    ambient = new THREE.AmbientLight(0x9fb0d8, 0.6);
+    main = new THREE.DirectionalLight(0xffffff, 1.15);
+    fill = new THREE.DirectionalLight(0x3b6fd8, 0.55);
+    rim = new THREE.DirectionalLight(0x6d8be0, 0.6);
+    renderer.setClearColor(0x04060e, 1);
   }
 
   main.position.set(3, 4, 4);
