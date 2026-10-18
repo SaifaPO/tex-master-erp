@@ -35,6 +35,8 @@ export default function ProduktyTab({ supabase }) {
   const [shopifyHandle, setShopifyHandle] = useState('');
   const [pohlavie, setPohlavie] = useState('unisex');
   const [zakladnaCena, setZakladnaCena] = useState('');
+  const [erpProduktId, setErpProduktId] = useState(''); // prepojenie na Katalóg produktov (ERP): základná cena = výrobná cena z katalógu
+  const [erpProdukty, setErpProdukty] = useState([]);
   const [technologie, setTechnologie] = useState(['sublimacia']);
   const [dodavatel, setDodavatel] = useState('');
   const [aktivny, setAktivny] = useState(true);
@@ -47,7 +49,7 @@ export default function ProduktyTab({ supabase }) {
 
   const nacitajZoznam = async () => {
     setIsLoading(true);
-    const [{ data: prod }, { data: kats }, { data: fb }, { data: pf }, { data: zony }, { data: tech }, { data: mats }, { data: whs }] = await Promise.all([
+    const [{ data: prod }, { data: kats }, { data: fb }, { data: pf }, { data: zony }, { data: tech }, { data: mats }, { data: whs }, { data: erp }] = await Promise.all([
       supabase.from('produkty').select('*').order('id'),
       supabase.from('kategorie').select('*').order('poradie').order('id'),
       supabase.from('farby').select('*').order('id'),
@@ -56,7 +58,9 @@ export default function ProduktyTab({ supabase }) {
       supabase.from('produkt_technologie').select('produkt_id, technologia'),
       supabase.from('materials').select('id, name, qty, unit, warehouse_id').order('name'),
       supabase.from('warehouses').select('id, name'),
+      supabase.from('products').select('id, name, custom_code, production_cost').order('name'),
     ]);
+    setErpProdukty(erp || []);
     setKategorie(kats || []);
     setFarby(fb || []);
     setMaterials(mats || []);
@@ -105,7 +109,7 @@ export default function ProduktyTab({ supabase }) {
 
   const resetForm = () => {
     setKategoriaId(kategorie[0]?.id || '');
-    setNazov(''); setShopifyHandle(''); setPohlavie('unisex'); setZakladnaCena('');
+    setNazov(''); setShopifyHandle(''); setPohlavie('unisex'); setZakladnaCena(''); setErpProduktId('');
     setTechnologie(['sublimacia']); setDodavatel(''); setAktivny(true); setFarbyIds([]);
     setFormZony({ predok: true, chrbat: true, lavy_rukav: false, pravy_rukav: false });
     setFormVelkosti([]);
@@ -123,6 +127,7 @@ export default function ProduktyTab({ supabase }) {
     setShopifyHandle(p.shopify_handle || '');
     setPohlavie(p.pohlavie);
     setZakladnaCena(p.zakladna_cena);
+    setErpProduktId(p.erp_produkt_id || '');
     setTechnologie(technologiePerProdukt[p.id]?.length ? technologiePerProdukt[p.id] : [p.technologia]);
     setDodavatel(p.dodavatel || '');
     setAktivny(p.aktivny);
@@ -204,6 +209,8 @@ export default function ProduktyTab({ supabase }) {
       shopify_handle: shopifyHandle.trim() || null,
       pohlavie,
       zakladna_cena: parseFloat(zakladnaCena) || 0,
+      // stĺpec erp_produkt_id existuje až po migrácii — posiela sa len keď je prepojenie zapnuté (alebo sa ruší)
+      ...(erpProduktId ? { erp_produkt_id: erpProduktId } : (editId && produkty.find(x => x.id === editId)?.erp_produkt_id ? { erp_produkt_id: null } : {})),
       technologia: predvolenaTechnologia,
       dodavatel: dodavatel.trim() || null,
       aktivny,
@@ -376,8 +383,19 @@ export default function ProduktyTab({ supabase }) {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-slate-400 font-medium">Základná cena (€)</label>
-              <input value={zakladnaCena} onChange={(e) => setZakladnaCena(e.target.value)} type="number" step="0.01" className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" />
+              <label className="text-xs text-slate-400 font-medium">Základná cena (€){erpProduktId ? ' — z Katalógu produktov' : ''}</label>
+              <input value={zakladnaCena} onChange={(e) => setZakladnaCena(e.target.value)} readOnly={!!erpProduktId} type="number" step="0.01" className={`w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white ${erpProduktId ? 'opacity-60 cursor-not-allowed' : ''}`} />
+              <label className="text-[11px] text-slate-400 font-medium block mt-2">Prevziať cenu z Katalógu produktov (ERP)</label>
+              <select value={erpProduktId} onChange={(e) => {
+                const id = e.target.value;
+                setErpProduktId(id);
+                const ep = erpProdukty.find(x => x.id === id);
+                if (ep) setZakladnaCena(Number(ep.production_cost) || 0);
+              }} className="w-full mt-1 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white">
+                <option value="">— nie, cenu zadám ručne —</option>
+                {erpProdukty.map(x => <option key={x.id} value={x.id}>{x.custom_code ? `${x.custom_code} · ` : ''}{x.name} — {x.production_cost != null ? Number(x.production_cost).toFixed(2) + ' €' : 'bez ceny'}</option>)}
+              </select>
+              {erpProduktId && <p className="text-[10px] text-emerald-400 mt-1">Cena sa sama aktualizuje pri každej zmene výrobnej ceny v Katalógu produktov — upravujete ju len tam.</p>}
             </div>
             <div>
               <label className="text-xs text-slate-400 font-medium">Dodávateľ blanku</label>
