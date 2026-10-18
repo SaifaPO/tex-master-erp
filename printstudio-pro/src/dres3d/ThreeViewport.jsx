@@ -603,20 +603,7 @@ function nastavProstredie(scene, env, type) {
     obloha.rotation.y = Math.PI; // stred ihriska a hlavná tribúna za dresom pri pohľade spredu
     obloha.renderOrder = -10;
     g.add(obloha);
-    // trávnik pod dresom: tmavozelený kruh s plynulým prechodom do fotky + tieň dresu
-    const grad = plochaTextura(512, 512, (c, w, h) => {
-      const gr = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
-      gr.addColorStop(0, 'rgba(47,115,52,1)'); gr.addColorStop(0.55, 'rgba(47,115,52,0.9)'); gr.addColorStop(1, 'rgba(47,115,52,0)');
-      c.fillStyle = gr; c.fillRect(0, 0, w, h);
-      for (let i = 0; i < 1800; i++) { // jemná štruktúra trávy
-        const x = Math.random() * w, y = Math.random() * h;
-        c.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.06)';
-        c.fillRect(x, y, 2, 6);
-      }
-    });
-    const trava = new THREE.Mesh(new THREE.CircleGeometry(16, 64), new THREE.MeshStandardMaterial({ map: grad, transparent: true, roughness: 1, depthWrite: false }));
-    trava.rotation.x = -Math.PI / 2; trava.position.y = PODLAHA_Y; trava.receiveShadow = true; trava.renderOrder = -5;
-    g.add(trava);
+    // Žiadna vlastná podlaha — dres stojí priamo na tráve z fotky; len priehľadná rovina, na ktorú dopadá tieň dresu.
     const tien = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.ShadowMaterial({ opacity: 0.4 }));
     tien.rotation.x = -Math.PI / 2; tien.position.y = PODLAHA_Y + 0.01; tien.receiveShadow = true;
     g.add(tien);
@@ -627,9 +614,6 @@ function nastavProstredie(scene, env, type) {
 
   if (type === 'stadium' && panorama.stav !== 'chyba') {
     // fotka sa ešte načítava — ukáže sa len trávnik (bez bliknutia vyrobeného štadióna), potom sa prostredie postaví znova
-    const trava0 = new THREE.Mesh(new THREE.CircleGeometry(16, 48), new THREE.MeshStandardMaterial({ color: 0x1f4d27, roughness: 1 }));
-    trava0.rotation.x = -Math.PI / 2; trava0.position.y = PODLAHA_Y; trava0.receiveShadow = true;
-    g.add(trava0);
     nacitajPanoramu(() => { if (env.typ === 'stadium') nastavProstredie(scene, env, 'stadium'); });
     scene.add(g);
     env.group = g;
