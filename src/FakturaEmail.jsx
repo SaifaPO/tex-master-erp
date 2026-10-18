@@ -11,15 +11,28 @@ const skDatumCas = (iso) => { const d = new Date(iso); return `${String(d.getDat
 
 function zostavSpravu(f, firma, jazyk) {
   const nazovFirmy = firma.companyName || '';
+  const typ = f.docType || 'faktura';
+  const dlzne = Math.max(0, Math.round(((Number(f.total) || 0) - (Number(f.advancePaid) || 0)) * 100) / 100);
+  const vs = f.variableSymbol || f.invoiceNumber;
+  const udajeSk = ['Údaje na úhradu:', `• Suma: ${eur(dlzne, 'sk')}`, `• Variabilný symbol: ${vs}`, firma.iban ? `• IBAN: ${firma.iban}` : '', firma.bankName ? `• Banka: ${firma.bankName}` : ''].filter(Boolean).join('\n');
+  const udajeEn = ['Payment details:', `• Amount: ${eur(dlzne, 'en')}`, `• Variable symbol: ${vs}`, firma.iban ? `• IBAN: ${firma.iban}` : '', firma.bankName ? `• Bank: ${firma.bankName}` : ''].filter(Boolean).join('\n');
   if (jazyk === 'en') {
+    const nazov = typ === 'dobropis' ? 'Credit note' : typ === 'zalohova' ? 'Proforma invoice' : 'Invoice';
+    const hlava = typ === 'dobropis' ? `please find attached credit note no. ${f.invoiceNumber}${f.relatedInvoiceNumber ? ` for invoice no. ${f.relatedInvoiceNumber}` : ''} in the amount of ${eur(Math.abs(f.total), 'en')}.`
+      : typ === 'zalohova' ? `please find attached proforma invoice no. ${f.invoiceNumber} for ${eur(f.total, 'en')}, due on ${skDatum(f.dueDate)}. A final invoice will be issued after payment.`
+      : `please find attached invoice no. ${f.invoiceNumber} for ${eur(f.total, 'en')}, due on ${skDatum(f.dueDate)}.`;
     return {
-      predmet: `Invoice no. ${f.invoiceNumber}${nazovFirmy ? ` – ${nazovFirmy}` : ''}`,
-      text: `Hello,\n\nplease find attached invoice no. ${f.invoiceNumber} for ${eur(f.total, 'en')}, due on ${skDatum(f.dueDate)}.\n\nPayment details:\n• Amount: ${eur(f.total, 'en')}\n• Variable symbol: ${f.variableSymbol || f.invoiceNumber}\n${firma.iban ? `• IBAN: ${firma.iban}\n` : ''}${firma.bankName ? `• Bank: ${firma.bankName}\n` : ''}\nThank you for your order. If you have any questions, just reply to this e-mail.\n\nBest regards\n${nazovFirmy}`,
+      predmet: `${nazov} no. ${f.invoiceNumber}${nazovFirmy ? ` – ${nazovFirmy}` : ''}`,
+      text: ['Hello,', '', hlava, '', ...(typ === 'dobropis' ? [] : [udajeEn, '']), 'Thank you. If you have any questions, just reply to this e-mail.', '', 'Best regards', nazovFirmy].join('\n'),
     };
   }
+  const nazov = typ === 'dobropis' ? 'Dobropis' : typ === 'zalohova' ? 'Zálohová faktúra' : 'Faktúra';
+  const hlava = typ === 'dobropis' ? `v prílohe Vám zasielame dobropis č. ${f.invoiceNumber}${f.relatedInvoiceNumber ? ` k faktúre č. ${f.relatedInvoiceNumber}` : ''} na sumu ${eur(Math.abs(f.total), 'sk')}.`
+    : typ === 'zalohova' ? `v prílohe Vám zasielame zálohovú faktúru č. ${f.invoiceNumber} na sumu ${eur(f.total, 'sk')} so splatnosťou ${skDatum(f.dueDate)}. Po úhrade Vám vystavíme faktúru.`
+    : `v prílohe Vám zasielame faktúru č. ${f.invoiceNumber} na sumu ${eur(f.total, 'sk')} so splatnosťou ${skDatum(f.dueDate)}.`;
   return {
-    predmet: `Faktúra č. ${f.invoiceNumber}${nazovFirmy ? ` – ${nazovFirmy}` : ''}`,
-    text: `Dobrý deň,\n\nv prílohe Vám zasielame faktúru č. ${f.invoiceNumber} na sumu ${eur(f.total, 'sk')} so splatnosťou ${skDatum(f.dueDate)}.\n\nÚdaje na úhradu:\n• Suma: ${eur(f.total, 'sk')}\n• Variabilný symbol: ${f.variableSymbol || f.invoiceNumber}\n${firma.iban ? `• IBAN: ${firma.iban}\n` : ''}${firma.bankName ? `• Banka: ${firma.bankName}\n` : ''}\nĎakujeme za Vašu objednávku. V prípade otázok nám stačí odpovedať na tento e-mail.\n\nS pozdravom\n${nazovFirmy}`,
+    predmet: `${nazov} č. ${f.invoiceNumber}${nazovFirmy ? ` – ${nazovFirmy}` : ''}`,
+    text: ['Dobrý deň,', '', hlava, '', ...(typ === 'dobropis' ? [] : [udajeSk, '']), 'Ďakujeme. V prípade otázok nám stačí odpovedať na tento e-mail.', '', 'S pozdravom', nazovFirmy].join('\n'),
   };
 }
 
@@ -60,8 +73,9 @@ export default function FakturaEmail({ supabase, faktura, zakaznici = [], firma,
   const otvor = () => {
     const z = zakaznici.find((c) => String(c.name || '').trim().toLowerCase() === String(faktura.customerName || '').trim().toLowerCase());
     setKomu(z?.email || '');
-    const sprava = zostavSpravu(faktura, firma, 'sk');
-    setJazyk('sk'); setPredmet(sprava.predmet); setText(sprava.text);
+    const j = faktura.language === 'en' ? 'en' : 'sk';
+    const sprava = zostavSpravu(faktura, firma, j);
+    setJazyk(j); setPredmet(sprava.predmet); setText(sprava.text);
     setOtvorene(true);
     nacitajLog();
   };
@@ -81,7 +95,7 @@ export default function FakturaEmail({ supabase, faktura, zakaznici = [], firma,
     try {
       const pdfBase64 = await vytvorPdf(prvok);
       const { data, error } = await supabase.functions.invoke('send-invoice-email', {
-        body: { invoiceId: faktura.id, to: komu, subject: predmet, text, jazyk, pdfBase64, filename: `faktura-${String(faktura.invoiceNumber).replace(/[\\/:*?"<>|]/g, '-')}.pdf` },
+        body: { invoiceId: faktura.id, to: komu, subject: predmet, text, jazyk, pdfBase64, filename: `${faktura.docType === 'dobropis' ? 'dobropis' : faktura.docType === 'zalohova' ? 'zalohova-faktura' : 'faktura'}-${String(faktura.invoiceNumber).replace(/[\\/:*?"<>|]/g, '-')}.pdf` },
       });
       let chyba = data?.error || '';
       if (!chyba && error) {
@@ -105,8 +119,8 @@ export default function FakturaEmail({ supabase, faktura, zakaznici = [], firma,
           <div className="bg-white text-slate-900 rounded-2xl w-full max-w-lg p-5 shadow-2xl max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-start mb-3">
               <div>
-                <h3 className="text-base font-extrabold">Poslať faktúru e-mailom</h3>
-                <p className="text-xs text-slate-500">Faktúra č. {faktura.invoiceNumber} sa pošle ako PDF príloha.</p>
+                <h3 className="text-base font-extrabold">Poslať e-mailom</h3>
+                <p className="text-xs text-slate-500">{faktura.docType === 'dobropis' ? 'Dobropis' : faktura.docType === 'zalohova' ? 'Zálohová faktúra' : 'Faktúra'} č. {faktura.invoiceNumber} sa pošle ako PDF príloha.</p>
               </div>
               <button onClick={() => setOtvorene(false)} disabled={posiela} className="p-1 rounded bg-slate-200 text-slate-600 hover:text-slate-900"><X className="h-4 w-4" /></button>
             </div>
@@ -121,7 +135,7 @@ export default function FakturaEmail({ supabase, faktura, zakaznici = [], firma,
                 <button key={k} type="button" onClick={() => zmenJazyk(k)} className={`px-3 py-1 rounded-lg text-xs font-bold border ${jazyk === k ? 'bg-sky-600 text-white border-sky-600' : 'bg-white text-slate-600 border-slate-300'}`}>{n}</button>
               ))}
             </div>
-            {jazyk === 'en' && <p className="text-[10px] text-slate-500 mb-2">Text e-mailu bude po anglicky, samotná faktúra (PDF) zostáva v slovenčine.</p>}
+            {jazyk === 'en' && <p className="text-[10px] text-slate-500 mb-2">Text e-mailu bude po anglicky. Jazyk samotného PDF dokladu sa nastavuje pri vystavení dokladu.</p>}
 
             <label className="block text-[11px] font-bold text-slate-600 mb-1">Predmet</label>
             <input type="text" value={predmet} onChange={(e) => setPredmet(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm mb-2" />

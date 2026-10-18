@@ -15,6 +15,10 @@ import OdovzdanieZakazky from './OdovzdanieZakazky';
 import PrintStudioAdmin from './printstudio/PrintStudioAdmin';
 import GlobalSearchPalette from './GlobalSearchPalette';
 import FakturaEmail from './FakturaEmail';
+import FakturaDokument from './FakturaDokument';
+import VykazyDphTab from './VykazyDphTab';
+import { stiahniEFakturu } from './eFaktura';
+import { zostavaUhradit, TYPY_DOKLADOV } from './fakturaTexty';
 import { nacitajKostru, vcSublimaciaGarment, vcSublimaciaGarmentRozpis, vcRezanyTransfer, vcSietotlacCelkom, vcSietotlacRozpad } from './printstudio/vyrobneNaklady';
 import { priceAt } from './printstudio/pricingEngine';
 import {
@@ -494,9 +498,12 @@ const mapCheckinFromDb = (r) => ({ id: r.id, employeeId: r.employee_id, date: r.
 const mapAttendanceFromDb = (r) => ({ id: r.id, employeeId: r.employee_id, employeeNameRaw: r.employee_name_raw, date: r.record_date, timeIn: r.time_in, timeOut: r.time_out, status: r.status || '', syncedAt: r.synced_at });
 const mapProblemFromDb = (r) => ({ id: r.id, orderId: r.order_id, itemId: r.item_id, stationId: r.station_id, employeeId: r.employee_id, employeeName: r.employee_name, category: r.category, description: r.description, status: r.status, createdAt: r.created_at, resolvedAt: r.resolved_at, resolvedBy: r.resolved_by, resolutionNote: r.resolution_note, imageUrl: r.image_url || '', faultEmployeeId: r.fault_employee_id || '', faultEmployeeName: r.fault_employee_name || '', costAmount: r.cost_amount ?? null });
 
-const mapCompanySettingsFromDb = (r) => ({ companyName: r.company_name || '', address: r.address || '', ico: r.ico || '', dic: r.dic || '', icDph: r.ic_dph || '', iban: r.iban || '', bankName: r.bank_name || '', defaultVatRate: r.default_vat_rate ?? 23, nextInvoiceNumber: r.next_invoice_number ?? 1, invoiceNumberPrefix: r.invoice_number_prefix || '', nextPpdNumber: r.next_ppd_number ?? 1, nextVpdNumber: r.next_vpd_number ?? 1 });
-const mapInvoiceFromDb = (r) => ({ id: r.id, invoiceNumber: r.invoice_number, orderId: r.order_id, customerName: r.customer_name || '', customerAddress: r.customer_address || '', customerIco: r.customer_ico || '', customerDic: r.customer_dic || '', customerIcDph: r.customer_ic_dph || '', issueDate: r.issue_date, deliveryDate: r.delivery_date, dueDate: r.due_date, variableSymbol: r.variable_symbol || '', items: r.items || [], subtotal: r.subtotal || 0, vatTotal: r.vat_total || 0, total: r.total || 0, status: r.status, paidAt: r.paid_at, notes: r.notes || '', createdBy: r.created_by || '', createdAt: r.created_at, corrections: r.corrections || [], customerType: r.customer_type || 'sk_platca' });
-const mapInvoiceToDb = (inv) => ({ id: inv.id, invoice_number: inv.invoiceNumber, order_id: inv.orderId || null, customer_name: inv.customerName, customer_address: inv.customerAddress, customer_ico: inv.customerIco, customer_dic: inv.customerDic, customer_ic_dph: inv.customerIcDph, issue_date: inv.issueDate, delivery_date: inv.deliveryDate, due_date: inv.dueDate, variable_symbol: inv.variableSymbol, items: inv.items, subtotal: inv.subtotal, vat_total: inv.vatTotal, total: inv.total, status: inv.status, notes: inv.notes, created_by: inv.createdBy, corrections: inv.corrections || [], customer_type: inv.customerType || 'sk_platca' });
+const mapCompanySettingsFromDb = (r) => ({ companyName: r.company_name || '', address: r.address || '', ico: r.ico || '', dic: r.dic || '', icDph: r.ic_dph || '', iban: r.iban || '', bankName: r.bank_name || '', defaultVatRate: r.default_vat_rate ?? 23, nextInvoiceNumber: r.next_invoice_number ?? 1, invoiceNumberPrefix: r.invoice_number_prefix || '', nextPpdNumber: r.next_ppd_number ?? 1, nextVpdNumber: r.next_vpd_number ?? 1, nextCreditNoteNumber: r.next_credit_note_number ?? 1, nextProformaNumber: r.next_proforma_number ?? 1, email: r.email || '', phone: r.phone || '' });
+const mapInvoiceFromDb = (r) => ({ id: r.id, invoiceNumber: r.invoice_number, orderId: r.order_id, customerName: r.customer_name || '', customerAddress: r.customer_address || '', customerIco: r.customer_ico || '', customerDic: r.customer_dic || '', customerIcDph: r.customer_ic_dph || '', issueDate: r.issue_date, deliveryDate: r.delivery_date, dueDate: r.due_date, variableSymbol: r.variable_symbol || '', items: r.items || [], subtotal: r.subtotal || 0, vatTotal: r.vat_total || 0, total: r.total || 0, status: r.status, paidAt: r.paid_at, notes: r.notes || '', createdBy: r.created_by || '', createdAt: r.created_at, corrections: r.corrections || [], customerType: r.customer_type || 'sk_platca', docType: r.doc_type || 'faktura', relatedInvoiceId: r.related_invoice_id || null, relatedInvoiceNumber: r.related_invoice_number || '', creditReason: r.credit_reason || '', advancePaid: Number(r.advance_paid) || 0, language: r.language || 'sk' });
+const mapInvoiceToDb = (inv) => ({ id: inv.id, invoice_number: inv.invoiceNumber, order_id: inv.orderId || null, customer_name: inv.customerName, customer_address: inv.customerAddress, customer_ico: inv.customerIco, customer_dic: inv.customerDic, customer_ic_dph: inv.customerIcDph, issue_date: inv.issueDate, delivery_date: inv.deliveryDate, due_date: inv.dueDate, variable_symbol: inv.variableSymbol, items: inv.items, subtotal: inv.subtotal, vat_total: inv.vatTotal, total: inv.total, status: inv.status, notes: inv.notes, created_by: inv.createdBy, corrections: inv.corrections || [], customer_type: inv.customerType || 'sk_platca',
+  // nové stĺpce (migration_faktury_typy_dokladov.sql) sa posielajú len keď majú nestandardnú hodnotu — bežná faktúra funguje aj pred spustením migrácie
+  ...(inv.docType && inv.docType !== 'faktura' ? { doc_type: inv.docType } : {}), ...(inv.relatedInvoiceId ? { related_invoice_id: inv.relatedInvoiceId, related_invoice_number: inv.relatedInvoiceNumber || null } : {}),
+  ...(inv.creditReason ? { credit_reason: inv.creditReason } : {}), ...(Number(inv.advancePaid) > 0 ? { advance_paid: Number(inv.advancePaid) } : {}), ...(inv.language && inv.language !== 'sk' ? { language: inv.language } : {}) });
 
 const PROBLEM_CATEGORIES = ['Chýba materiál', 'Chyba vo výrobe/tlači', 'Poškodený materiál', 'Nesúhlasí rozmer/farba', 'Porucha stroja', 'Iné'];
 
@@ -1188,6 +1195,11 @@ export default function App() {
   const [krajcirky, setKrajcirky] = useState([]);
   const [vyrobnaKapacitaNastavenia, setVyrobnaKapacitaNastavenia] = useState({ dlzka_smeny_min: 480 });
   const [invoices, setInvoices] = useState([]);
+  // Zálohové faktúry nie sú daňové doklady — do tržieb, DPH, cash flow ani reportov sa nezapočítavajú
+  const invoicesTax = invoices.filter(i => i.docType !== 'zalohova');
+  const [newInvoiceDocType, setNewInvoiceDocType] = useState('faktura');
+  const [newInvoiceLanguage, setNewInvoiceLanguage] = useState('sk');
+  const [creditNoteDraft, setCreditNoteDraft] = useState(null);
   const [selectedInvoiceForDetail, setSelectedInvoiceForDetail] = useState(null);
   const [showNewInvoiceForm, setShowNewInvoiceForm] = useState(false);
   const [newInvoiceOrderId, setNewInvoiceOrderId] = useState('');
@@ -2160,7 +2172,7 @@ export default function App() {
     const financeVisible = hasPermission('view_finance') && canSeeTab(role, 'invoices');
     push(entries, 'Financie', null, financeVisible, () => { setActiveTab('invoices'); setFinanceSubTab('overview'); });
     const financeSub = [
-      ['overview', 'Prehľad'], ['queue', 'Fronta pre účtovníka'], ['invoices', 'Faktúry'], ['received', 'Prijaté faktúry'], ['balik', 'Balík pre účtovníčku'], ['cashflow', 'Cash flow a upomienky'], ['report', 'Mesačný report'], ['cash', 'Pokladňa'],
+      ['overview', 'Prehľad'], ['queue', 'Fronta pre účtovníka'], ['invoices', 'Faktúry'], ['received', 'Prijaté faktúry'], ['balik', 'Balík pre účtovníčku'], ['cashflow', 'Cash flow a upomienky'], ['report', 'Mesačný report'], ['vykazy_dph', 'Výkazy DPH'], ['cash', 'Pokladňa'],
       ['bank', 'Banka'], ['journal', 'Účtovný denník'], ['assets', 'Majetok'], ['customers', 'Zákazníci'],
       ['ai', 'AI Asistent'],
     ];
@@ -2814,7 +2826,8 @@ export default function App() {
     const { error } = await supabase.from('company_settings').update({
       company_name: companySettingsDraft.companyName, address: companySettingsDraft.address, ico: companySettingsDraft.ico,
       dic: companySettingsDraft.dic, ic_dph: companySettingsDraft.icDph, iban: companySettingsDraft.iban, bank_name: companySettingsDraft.bankName,
-      default_vat_rate: parseFloat(companySettingsDraft.defaultVatRate) || 0, invoice_number_prefix: companySettingsDraft.invoiceNumberPrefix
+      default_vat_rate: parseFloat(companySettingsDraft.defaultVatRate) || 0, invoice_number_prefix: companySettingsDraft.invoiceNumberPrefix,
+      ...((companySettingsDraft.email || '') !== (companySettings.email || '') || (companySettingsDraft.phone || '') !== (companySettings.phone || '') ? { email: companySettingsDraft.email || null, phone: companySettingsDraft.phone || null } : {})
     }).eq('id', 1);
     if (error) { triggerNotification('error', error.message); return; }
     setCompanySettings(companySettingsDraft);
@@ -2822,8 +2835,9 @@ export default function App() {
     triggerNotification('success', 'Nastavenia firmy boli uložené.');
   };
 
-  const handleStartNewInvoice = (order) => {
+  const handleStartNewInvoice = (order, docType = 'faktura') => {
     setShowNewInvoiceForm(true);
+    setNewInvoiceDocType(docType); setNewInvoiceLanguage('sk');
     if (order) {
       setNewInvoiceOrderId(order.id);
       setNewInvoiceCustomerName(order.customer);
@@ -2861,8 +2875,9 @@ export default function App() {
     if (validItems.length === 0) { alert('Pridajte aspoň jednu položku s popisom a množstvom.'); return; }
 
     const year = new Date().getFullYear();
-    const seq = companySettings.nextInvoiceNumber;
-    const invoiceNumber = `${companySettings.invoiceNumberPrefix || year}${String(seq).padStart(4, '0')}`;
+    const docType = newInvoiceDocType;
+    const seq = docType === 'zalohova' ? companySettings.nextProformaNumber : companySettings.nextInvoiceNumber;
+    const invoiceNumber = docType === 'zalohova' ? `ZF${year}${String(seq).padStart(4, '0')}` : `${companySettings.invoiceNumberPrefix || year}${String(seq).padStart(4, '0')}`;
     const totals = calcInvoiceTotals(validItems);
     const now = new Date();
     // Ak zákazka už má pridelený VS (nastaví sa hneď pri vytvorení zákazky), faktúra ho prevezme —
@@ -2873,24 +2888,93 @@ export default function App() {
       customerName: newInvoiceCustomerName.trim(), customerAddress: newInvoiceCustomerAddress.trim(), customerIco: newInvoiceCustomerIco.trim(),
       customerDic: newInvoiceCustomerDic.trim(), customerIcDph: newInvoiceCustomerIcDph.trim(), customerType: newInvoiceCustomerType,
       issueDate: now.toISOString().slice(0, 10), deliveryDate: now.toISOString().slice(0, 10), dueDate: newInvoiceDueDate,
-      variableSymbol: linkedOrderForVs?.variableSymbol || invoiceNumber.replace(/\D/g, '').slice(-10),
+      variableSymbol: docType === 'zalohova' ? `9${String(year).slice(2)}${String(seq).padStart(4, '0')}` : (linkedOrderForVs?.variableSymbol || invoiceNumber.replace(/\D/g, '').slice(-10)),
+      docType, language: newInvoiceLanguage, advancePaid: 0,
       items: validItems.map(it => ({ description: it.description, qty: parseFloat(it.qty), unitPrice: parseFloat(it.unitPrice) || 0, vatRate: parseFloat(it.vatRate) || 0 })),
       ...totals, status: 'issued', notes: newInvoiceNotes.trim(), createdBy: `${currentUser.firstName} ${currentUser.lastName}`, corrections: []
     };
     const { error } = await supabase.from('invoices').insert(mapInvoiceToDb(created));
-    if (error) { triggerNotification('error', error.message); return; }
-    await supabase.from('company_settings').update({ next_invoice_number: seq + 1 }).eq('id', 1);
-    await supabase.from('journal_entries').insert({
-      id: `j-${Date.now()}`, entry_date: created.issueDate, description: `Vystavená faktúra ${invoiceNumber} — ${created.customerName}`,
-      md_account: '311 - Odberatelia', dal_account: '601 - Tržby z predaja', amount: created.total, invoice_id: created.id
-    });
-    if (newInvoiceOrderId) {
+    if (error) { triggerNotification('error', error.message.includes('column') ? error.message + ' — spusti v Supabase migration_faktury_typy_dokladov.sql' : error.message); return; }
+    await supabase.from('company_settings').update(docType === 'zalohova' ? { next_proforma_number: seq + 1 } : { next_invoice_number: seq + 1 }).eq('id', 1);
+    if (docType !== 'zalohova') {
+      await supabase.from('journal_entries').insert({
+        id: `j-${Date.now()}`, entry_date: created.issueDate, description: `Vystavená faktúra ${invoiceNumber} — ${created.customerName}`,
+        md_account: '311 - Odberatelia', dal_account: '601 - Tržby z predaja', amount: created.total, invoice_id: created.id
+      });
+    }
+    if (newInvoiceOrderId && docType !== 'zalohova') {
       await supabase.from('orders').update({ accounting_status: 'invoiced' }).eq('id', newInvoiceOrderId);
     }
     setShowNewInvoiceForm(false);
     setSelectedInvoiceForDetail(created);
-    triggerNotification('success', `Faktúra č. ${invoiceNumber} bola vystavená.`);
+    triggerNotification('success', `${TYPY_DOKLADOV[docType].kratky} č. ${invoiceNumber} bola vystavená.`);
   };
+
+  // --- DOBROPIS k faktúre (čiastočný alebo úplný): položky so zápornými množstvami, vlastný číselný rad DB… ---
+  const handleStartCreditNote = (invoice) => {
+    setCreditNoteDraft({ invoice, reason: '', items: invoice.items.map((it, i) => ({ ...it, tempId: 'cn-' + i, vratit: it.qty })) });
+  };
+  const handleConfirmCreditNote = async () => {
+    if (!hasPermission('create_order')) { triggerNotification('error', 'Nemáte oprávnenie vystavovať doklady.'); return; }
+    const d = creditNoteDraft; if (!d) return;
+    if (!d.reason.trim()) { alert('Napíšte dôvod dobropisu.'); return; }
+    const polozky = d.items.filter(it => parseFloat(it.vratit) > 0).map(it => ({ description: it.description, qty: -Math.abs(parseFloat(it.vratit)), unitPrice: it.unitPrice, vatRate: it.vatRate }));
+    if (polozky.length === 0) { alert('Zadajte aspoň jednu položku, ktorú chcete vrátiť.'); return; }
+    const inv = d.invoice; const year = new Date().getFullYear(); const seq = companySettings.nextCreditNoteNumber;
+    const invoiceNumber = `DB${year}${String(seq).padStart(4, '0')}`;
+    const totals = calcInvoiceTotals(polozky); const today = new Date().toISOString().slice(0, 10);
+    const created = {
+      id: `inv-${Date.now()}`, invoiceNumber, orderId: inv.orderId || null, customerName: inv.customerName, customerAddress: inv.customerAddress, customerIco: inv.customerIco,
+      customerDic: inv.customerDic, customerIcDph: inv.customerIcDph, customerType: inv.customerType, issueDate: today, deliveryDate: today, dueDate: today,
+      variableSymbol: inv.variableSymbol, items: polozky, ...totals, status: 'issued', notes: '', createdBy: `${currentUser.firstName} ${currentUser.lastName}`, corrections: [],
+      docType: 'dobropis', relatedInvoiceId: inv.id, relatedInvoiceNumber: inv.invoiceNumber, creditReason: d.reason.trim(), language: inv.language || 'sk', advancePaid: 0,
+    };
+    const { error } = await supabase.from('invoices').insert(mapInvoiceToDb(created));
+    if (error) { triggerNotification('error', error.message.includes('column') ? error.message + ' — spusti v Supabase migration_faktury_typy_dokladov.sql' : error.message); return; }
+    await supabase.from('company_settings').update({ next_credit_note_number: seq + 1 }).eq('id', 1);
+    await supabase.from('journal_entries').insert({
+      id: `j-${Date.now()}`, entry_date: today, description: `Dobropis ${invoiceNumber} k faktúre ${inv.invoiceNumber} — ${inv.customerName}`,
+      md_account: '601 - Tržby z predaja', dal_account: '311 - Odberatelia', amount: Math.abs(created.total), invoice_id: created.id
+    });
+    setCreditNoteDraft(null);
+    setSelectedInvoiceForDetail(created);
+    triggerNotification('success', `Dobropis č. ${invoiceNumber} bol vystavený.`);
+  };
+
+  // --- KONEČNÁ FAKTÚRA zo zálohovej faktúry: skopíruje položky, uhradená záloha sa odpočíta ---
+  const handleCreateFinalFromProforma = async (zf) => {
+    if (!hasPermission('create_order')) { triggerNotification('error', 'Nemáte oprávnenie vystavovať doklady.'); return; }
+    if (zf.status !== 'paid' && !window.confirm('Zálohová faktúra ešte nie je označená ako uhradená. Vystaviť konečnú faktúru bez odpočítania zálohy?')) return;
+    const year = new Date().getFullYear(); const seq = companySettings.nextInvoiceNumber;
+    const invoiceNumber = `${companySettings.invoiceNumberPrefix || year}${String(seq).padStart(4, '0')}`;
+    const today = new Date().toISOString().slice(0, 10); const zaloha = zf.status === 'paid' ? zf.total : 0;
+    const created = {
+      id: `inv-${Date.now()}`, invoiceNumber, orderId: zf.orderId || null, customerName: zf.customerName, customerAddress: zf.customerAddress, customerIco: zf.customerIco,
+      customerDic: zf.customerDic, customerIcDph: zf.customerIcDph, customerType: zf.customerType, issueDate: today, deliveryDate: today, dueDate: zf.dueDate && zf.dueDate > today ? zf.dueDate : today,
+      variableSymbol: invoiceNumber.replace(/\D/g, '').slice(-10), items: zf.items, subtotal: zf.subtotal, vatTotal: zf.vatTotal, total: zf.total,
+      status: zaloha >= zf.total ? 'paid' : 'issued', notes: zf.notes || '', createdBy: `${currentUser.firstName} ${currentUser.lastName}`, corrections: [],
+      docType: 'faktura', relatedInvoiceId: zf.id, relatedInvoiceNumber: zf.invoiceNumber, language: zf.language || 'sk', advancePaid: zaloha,
+    };
+    const { error } = await supabase.from('invoices').insert({ ...mapInvoiceToDb(created), ...(created.status === 'paid' ? { paid_at: new Date().toISOString() } : {}) });
+    if (error) { triggerNotification('error', error.message); return; }
+    await supabase.from('company_settings').update({ next_invoice_number: seq + 1 }).eq('id', 1);
+    await supabase.from('journal_entries').insert({
+      id: `j-${Date.now()}`, entry_date: today, description: `Vystavená faktúra ${invoiceNumber} k zálohe ${zf.invoiceNumber} — ${zf.customerName}`,
+      md_account: '311 - Odberatelia', dal_account: '601 - Tržby z predaja', amount: created.total, invoice_id: created.id
+    });
+    if (zaloha > 0) {
+      await supabase.from('journal_entries').insert({
+        id: `j-${Date.now()}-z`, entry_date: today, description: `Zúčtovanie zálohy ${zf.invoiceNumber} na faktúru ${invoiceNumber}`,
+        md_account: '324 - Prijaté preddavky', dal_account: '311 - Odberatelia', amount: zaloha, invoice_id: created.id
+      });
+    }
+    if (zf.orderId) await supabase.from('orders').update({ accounting_status: 'invoiced' }).eq('id', zf.orderId);
+    setSelectedInvoiceForDetail({ ...created, paidAt: created.status === 'paid' ? new Date().toISOString() : null });
+    triggerNotification('success', `Konečná faktúra č. ${invoiceNumber} bola vystavená.`);
+  };
+
+  // Účtovanie úhrady podľa typu dokladu: faktúra 221/311, zálohová faktúra 221/324 (prijatý preddavok), dobropis 311/221 (vrátenie peňazí)
+  const uhradaUcty = (inv) => inv.docType === 'zalohova' ? { md: '221 - Bankové účty', dal: '324 - Prijaté preddavky' } : inv.docType === 'dobropis' ? { md: '311 - Odberatelia', dal: '221 - Bankové účty' } : { md: '221 - Bankové účty', dal: '311 - Odberatelia' };
 
   const handleMarkInvoicePaid = async (invoice) => {
     if (!hasPermission('create_order')) { triggerNotification('error', 'Nemáte oprávnenie na túto úpravu.'); return; }
@@ -2898,19 +2982,19 @@ export default function App() {
     if (error) { triggerNotification('error', error.message); return; }
     await supabase.from('journal_entries').insert({
       id: `j-${Date.now()}`, entry_date: new Date().toISOString().slice(0, 10), description: `Úhrada faktúry ${invoice.invoiceNumber} — ${invoice.customerName}`,
-      md_account: '221 - Bankové účty', dal_account: '311 - Odberatelia', amount: invoice.total, invoice_id: invoice.id
+      md_account: uhradaUcty(invoice).md, dal_account: uhradaUcty(invoice).dal, amount: Math.abs(zostavaUhradit({ ...invoice, status: 'issued' }) || invoice.total), invoice_id: invoice.id
     });
     setSelectedInvoiceForDetail(prev => prev && prev.id === invoice.id ? { ...prev, status: 'paid', paidAt: new Date().toISOString() } : prev);
     triggerNotification('success', 'Faktúra označená ako uhradená.');
   };
 
   const generateBySquareQr = (invoice) => {
-    if (!companySettings.iban) return null;
+    if (!companySettings.iban || invoice.docType === 'dobropis' || zostavaUhradit(invoice) <= 0) return null;
     try {
       return encodeBySquare({
         payments: [{
           type: PaymentOptions.PaymentOrder,
-          amount: invoice.total,
+          amount: zostavaUhradit(invoice) || invoice.total,
           variableSymbol: invoice.variableSymbol,
           currencyCode: CurrencyCode.EUR,
           beneficiary: { name: companySettings.companyName || 'Odberateľ' },
@@ -3021,20 +3105,20 @@ export default function App() {
     let matchedCount = 0;
     let matchedToOrderCount = 0;
     for (const tx of bankTransactions.filter(t => !t.matched && t.amount > 0)) {
-      const found = invoices.find(inv => inv.status !== 'paid' && inv.variableSymbol === tx.variableSymbol && Math.abs(inv.total - tx.amount) < 0.01);
+      const found = invoices.find(inv => inv.status !== 'paid' && inv.docType !== 'dobropis' && inv.variableSymbol === tx.variableSymbol && Math.abs(zostavaUhradit({ ...inv, status: 'issued' }) - tx.amount) < 0.01);
       if (found) {
         await supabase.from('invoices').update({ status: 'paid', paid_at: new Date().toISOString() }).eq('id', found.id);
         await supabase.from('bank_transactions').update({ matched: true, invoice_id: found.id }).eq('id', tx.id);
         await supabase.from('journal_entries').insert({
           id: `j-${Date.now()}-${matchedCount}`, entry_date: tx.date || new Date().toISOString().slice(0, 10), description: `Úhrada faktúry ${found.invoiceNumber} — spárované z bankového výpisu`,
-          md_account: '221 - Bankové účty', dal_account: '311 - Odberatelia', amount: found.total, invoice_id: found.id
+          md_account: uhradaUcty(found).md, dal_account: uhradaUcty(found).dal, amount: tx.amount, invoice_id: found.id
         });
         matchedCount++;
         continue;
       }
       // Platba mohla prísť ešte pred vystavením faktúry (VS priradený rovno zákazke) — spáruj priamo na zákazku,
       // účtovník dostane avízo vo Fronte a faktúru dovystaví dodatočne s tým istým VS.
-      const matchedOrder = orders.find(o => o.variableSymbol && o.variableSymbolConfirmed && o.variableSymbol === tx.variableSymbol && !invoices.some(inv => inv.orderId === o.id) && (!o.expectedAmount || Math.abs(o.expectedAmount - tx.amount) < 0.01));
+      const matchedOrder = orders.find(o => o.variableSymbol && o.variableSymbolConfirmed && o.variableSymbol === tx.variableSymbol && !invoicesTax.some(inv => inv.orderId === o.id) && (!o.expectedAmount || Math.abs(o.expectedAmount - tx.amount) < 0.01));
       if (matchedOrder) {
         await supabase.from('bank_transactions').update({ matched: true, order_id: matchedOrder.id }).eq('id', tx.id);
         matchedToOrderCount++;
@@ -3280,8 +3364,8 @@ export default function App() {
     setAiPrompt('');
     setIsAiLoading(true);
 
-    const unpaidTotal = invoices.filter(i => i.status !== 'paid').reduce((s, i) => s + i.total, 0);
-    const vatTotal = invoices.reduce((s, i) => s + i.vatTotal, 0);
+    const unpaidTotal = invoicesTax.filter(i => i.status !== 'paid').reduce((s, i) => s + i.total, 0);
+    const vatTotal = invoicesTax.reduce((s, i) => s + i.vatTotal, 0);
     const context = `Firma: ${companySettings.companyName || 'neuvedené'}. Celkový počet faktúr: ${invoices.length}. Neuhradené faktúry v hodnote: ${unpaidTotal.toFixed(2)} €. Súčet DPH za všetky faktúry: ${vatTotal.toFixed(2)} €. Zoznam posledných faktúr: ${JSON.stringify(invoices.slice(0, 15).map(i => ({ cislo: i.invoiceNumber, odberateľ: i.customerName, suma: i.total, stav: i.status, splatnosť: i.dueDate })))}`;
 
     try {
@@ -3372,7 +3456,7 @@ export default function App() {
     await supabase.from('bank_transactions').update({ matched: true, invoice_id: invoiceId }).eq('id', tx.id);
     await supabase.from('journal_entries').insert({
       id: `j-${Date.now()}`, entry_date: tx.date || new Date().toISOString().slice(0, 10), description: `Úhrada faktúry ${invoice.invoiceNumber} — ručne spárované`,
-      md_account: '221 - Bankové účty', dal_account: '311 - Odberatelia', amount: invoice.total, invoice_id: invoice.id
+      md_account: uhradaUcty(invoice).md, dal_account: uhradaUcty(invoice).dal, amount: Math.abs(invoice.total), invoice_id: invoice.id
     });
     setManualMatchingTx(null);
     triggerNotification('success', `Platba spárovaná s faktúrou ${invoice.invoiceNumber}.`);
@@ -6117,7 +6201,7 @@ export default function App() {
       if (!stats[name]) stats[name] = { name, orderCount: 0, volume: 0 };
       stats[name].orderCount += 1;
     });
-    invoices.forEach(inv => {
+    invoicesTax.forEach(inv => {
       const name = (inv.customerName || '').trim();
       if (!name) return;
       if (!stats[name]) stats[name] = { name, orderCount: 0, volume: 0 };
@@ -6169,7 +6253,7 @@ export default function App() {
         }
       });
       const totalCost = parseFloat((materialCost + stationCost).toFixed(2));
-      const relatedInvoices = invoices.filter(inv => inv.orderId === order.id);
+      const relatedInvoices = invoicesTax.filter(inv => inv.orderId === order.id);
       const revenue = relatedInvoices.length > 0 ? parseFloat(relatedInvoices.reduce((s, inv) => s + inv.total, 0).toFixed(2)) : null;
       const profit = revenue !== null ? parseFloat((revenue - totalCost).toFixed(2)) : null;
       const marginPercent = revenue ? parseFloat(((profit / revenue) * 100).toFixed(1)) : null;
@@ -10678,6 +10762,7 @@ export default function App() {
                     <button onClick={handleOpenBackupsPanel} className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs px-3 py-2 rounded-lg flex items-center gap-1.5"><Download className="h-3.5 w-3.5" /> Zálohy</button>
                   )}
                   <button onClick={() => handleStartNewInvoice(null)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Plus className="h-4 w-4" /> Vystaviť novú faktúru</button>
+                  <button onClick={() => handleStartNewInvoice(null, 'zalohova')} className="bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Plus className="h-4 w-4" /> Zálohová faktúra</button>
                 </div>
               </div>
 
@@ -10698,6 +10783,7 @@ export default function App() {
                 )}
                 <button onClick={() => setFinanceSubTab('cashflow')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'cashflow' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Cash flow a upomienky</button>
                 <button onClick={() => setFinanceSubTab('report')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'report' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Mesačný report</button>
+                <button onClick={() => setFinanceSubTab('vykazy_dph')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'vykazy_dph' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Výkazy DPH</button>
                 <button onClick={() => setFinanceSubTab('cash')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'cash' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Pokladňa</button>
                 <button onClick={() => setFinanceSubTab('bank')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'bank' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Banka</button>
                 <button onClick={() => setFinanceSubTab('journal')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${financeSubTab === 'journal' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Účtovný denník</button>
@@ -10717,13 +10803,13 @@ export default function App() {
                 const thisMonthKey = `${now.getFullYear()}-${now.getMonth()}`;
                 const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
                 const lastMonthKey = `${lastMonthDate.getFullYear()}-${lastMonthDate.getMonth()}`;
-                const sumForMonth = (key) => invoices.filter(i => { const d = new Date(i.issueDate); return `${d.getFullYear()}-${d.getMonth()}` === key; }).reduce((s, i) => s + i.total, 0);
+                const sumForMonth = (key) => invoicesTax.filter(i => { const d = new Date(i.issueDate); return `${d.getFullYear()}-${d.getMonth()}` === key; }).reduce((s, i) => s + i.total, 0);
                 const thisMonthTotal = sumForMonth(thisMonthKey);
                 const lastMonthTotal = sumForMonth(lastMonthKey);
                 const monthChange = lastMonthTotal > 0 ? (((thisMonthTotal - lastMonthTotal) / lastMonthTotal) * 100) : null;
 
                 const byYear = {};
-                invoices.forEach(inv => {
+                invoicesTax.forEach(inv => {
                   const y = new Date(inv.issueDate).getFullYear();
                   if (!byYear[y]) byYear[y] = { income: 0, vat: 0, count: 0 };
                   byYear[y].income += inv.total;
@@ -10745,7 +10831,7 @@ export default function App() {
                 const avg10 = avgGrowth(10);
 
                 const byCustomerType = {};
-                invoices.forEach(inv => {
+                invoicesTax.forEach(inv => {
                   const t = inv.customerType || 'sk_platca';
                   if (!byCustomerType[t]) byCustomerType[t] = { total: 0, vat: 0, count: 0 };
                   byCustomerType[t].total += inv.total;
@@ -10759,7 +10845,7 @@ export default function App() {
                 // DPH sa priznáva mesačne alebo štvrťročne, nie ročne — tento rozpad je priamo použiteľný ako podklad na konkrétne priznanie/KV DPH.
                 const MONTH_NAMES = ['Január', 'Február', 'Marec', 'Apríl', 'Máj', 'Jún', 'Júl', 'August', 'September', 'Október', 'November', 'December'];
                 const byMonth = Array.from({ length: 12 }, () => ({ subtotal: 0, vat: 0, total: 0, count: 0 }));
-                invoices.forEach(inv => {
+                invoicesTax.forEach(inv => {
                   if (!inv.issueDate) return;
                   const d = new Date(inv.issueDate);
                   if (isNaN(d.getTime()) || d.getFullYear() !== vatSummaryYear) return;
@@ -10767,7 +10853,7 @@ export default function App() {
                   m.subtotal += inv.subtotal; m.vat += inv.vatTotal; m.total += inv.total; m.count += 1;
                 });
                 const byQuarter = [1, 2, 3, 4].map(q => byMonth.slice((q - 1) * 3, q * 3).reduce((acc, m) => ({ subtotal: acc.subtotal + m.subtotal, vat: acc.vat + m.vat, total: acc.total + m.total, count: acc.count + m.count }), { subtotal: 0, vat: 0, total: 0, count: 0 }));
-                const availableVatYears = Array.from(new Set(invoices.map(inv => inv.issueDate ? new Date(inv.issueDate).getFullYear() : null).filter(Boolean))).sort((a, b) => b - a);
+                const availableVatYears = Array.from(new Set(invoicesTax.map(inv => inv.issueDate ? new Date(inv.issueDate).getFullYear() : null).filter(Boolean))).sort((a, b) => b - a);
                 if (!availableVatYears.includes(vatSummaryYear)) availableVatYears.unshift(vatSummaryYear);
 
                 return (
@@ -10917,7 +11003,7 @@ export default function App() {
               })()}
 
               {financeSubTab === 'queue' && (() => {
-                const paymentsAwaitingInvoice = bankTransactions.filter(tx => tx.matched && tx.orderId && !invoices.some(inv => inv.orderId === tx.orderId));
+                const paymentsAwaitingInvoice = bankTransactions.filter(tx => tx.matched && tx.orderId && !invoicesTax.some(inv => inv.orderId === tx.orderId));
                 return (
                 <div className="space-y-3">
                   {paymentsAwaitingInvoice.length > 0 && (
@@ -10995,7 +11081,7 @@ export default function App() {
                         {filteredInvoices.length === 0 && (<tr><td colSpan={7} className="px-4 py-8 text-center text-slate-500 italic">Žiadne faktúry.</td></tr>)}
                         {filteredInvoices.map(inv => (
                           <tr key={inv.id} className="hover:bg-slate-800/40">
-                            <td className="px-3 py-3 font-mono font-bold text-indigo-400">{inv.invoiceNumber}</td>
+                            <td className="px-3 py-3 font-mono font-bold text-indigo-400">{inv.invoiceNumber}{inv.docType === 'dobropis' && <span className="ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-950/50 text-rose-300">DOBROPIS</span>}{inv.docType === 'zalohova' && <span className="ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded bg-teal-950/50 text-teal-300">ZÁLOHOVÁ</span>}</td>
                             <td className="px-3 py-3 font-bold text-white">{inv.customerName}</td>
                             <td className="px-3 py-3 text-center">{formatDeliveryDate(inv.issueDate)}</td>
                             <td className="px-3 py-3 text-center">{formatDeliveryDate(inv.dueDate)}</td>
@@ -11015,7 +11101,7 @@ export default function App() {
               )}
 
               {financeSubTab === 'balik' && (
-                <MesacnyBalikTab supabase={supabase} invoices={invoices} cashDocuments={cashDocuments} bankTransactions={bankTransactions} pendingReviewCount={pendingReviewOrders.length} triggerNotification={triggerNotification} />
+                <MesacnyBalikTab supabase={supabase} invoices={invoicesTax} cashDocuments={cashDocuments} bankTransactions={bankTransactions} pendingReviewCount={pendingReviewOrders.length} triggerNotification={triggerNotification} />
               )}
 
               {financeSubTab === 'mzdy' && (currentUser.role === 'master' || currentUser.role === 'uctovnik') && (
@@ -11023,11 +11109,15 @@ export default function App() {
               )}
 
               {financeSubTab === 'cashflow' && (
-                <CashFlowTab supabase={supabase} invoices={invoices} customers={customers} companySettings={companySettings} employees={employees} triggerNotification={triggerNotification} />
+                <CashFlowTab supabase={supabase} invoices={invoicesTax} customers={customers} companySettings={companySettings} employees={employees} triggerNotification={triggerNotification} />
+              )}
+
+              {financeSubTab === 'vykazy_dph' && (
+                <VykazyDphTab supabase={supabase} invoices={invoicesTax} companySettings={companySettings} triggerNotification={triggerNotification} />
               )}
 
               {financeSubTab === 'report' && (
-                <MesacnyReportTab supabase={supabase} invoices={invoices} triggerNotification={triggerNotification} />
+                <MesacnyReportTab supabase={supabase} invoices={invoicesTax} triggerNotification={triggerNotification} />
               )}
 
               {financeSubTab === 'bank' && (
@@ -12070,6 +12160,10 @@ export default function App() {
                   <div><label className="text-slate-400 block mb-0.5">Predvolená sadzba DPH (%)</label><input type="number" value={companySettingsDraft.defaultVatRate} onChange={(e) => setCompanySettingsDraft({ ...companySettingsDraft, defaultVatRate: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" /></div>
                   <div><label className="text-slate-400 block mb-0.5">Predpona čísla faktúry</label><input type="text" value={companySettingsDraft.invoiceNumberPrefix} onChange={(e) => setCompanySettingsDraft({ ...companySettingsDraft, invoiceNumberPrefix: e.target.value })} placeholder={`napr. ${new Date().getFullYear()}`} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" /></div>
                 </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div><label className="text-slate-400 block mb-0.5">E-mail firmy (na faktúre a v e-faktúre)</label><input type="text" value={companySettingsDraft.email || ''} onChange={(e) => setCompanySettingsDraft({ ...companySettingsDraft, email: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" /></div>
+                  <div><label className="text-slate-400 block mb-0.5">Telefón firmy</label><input type="text" value={companySettingsDraft.phone || ''} onChange={(e) => setCompanySettingsDraft({ ...companySettingsDraft, phone: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" /></div>
+                </div>
                 <p className="text-[10px] text-slate-500">Ďalšie číslo faktúry, ktoré sa použije: <strong className="text-slate-300">{companySettingsDraft.invoiceNumberPrefix || new Date().getFullYear()}{String(companySettingsDraft.nextInvoiceNumber).padStart(4, '0')}</strong></p>
               </div>
               <div className="flex gap-2">
@@ -12138,7 +12232,7 @@ export default function App() {
             <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
               <div className="bg-slate-900 border border-emerald-800/40 p-6 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl space-y-4">
                 <div className="flex justify-between items-start">
-                  <h3 className="text-lg font-bold text-white">Nová faktúra{newInvoiceOrderId ? ` — zákazka ${newInvoiceOrderId}` : ''}</h3>
+                  <h3 className="text-lg font-bold text-white">{newInvoiceDocType === 'zalohova' ? 'Nová zálohová faktúra' : 'Nová faktúra'}{newInvoiceOrderId ? ` — zákazka ${newInvoiceOrderId}` : ''}</h3>
                   <button onClick={() => setShowNewInvoiceForm(false)} className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white"><X className="h-5 w-5" /></button>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
@@ -12149,12 +12243,19 @@ export default function App() {
                   <div><label className="text-slate-400 block mb-0.5">IČ DPH (ak je)</label><input type="text" value={newInvoiceCustomerIcDph} onChange={(e) => setNewInvoiceCustomerIcDph(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" /></div>
                   <div>
                     <label className="text-slate-400 block mb-0.5">Typ odberateľa (pre KV DPH)</label>
-                    <select value={newInvoiceCustomerType} onChange={(e) => setNewInvoiceCustomerType(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
+                    <select value={newInvoiceCustomerType} onChange={(e) => { const typ = e.target.value; setNewInvoiceCustomerType(typ); if (typ === 'eu_platca' || typ === 'tretia_krajina') { setNewInvoiceItems(prev => prev.map(it => ({ ...it, vatRate: 0 }))); if (typ === 'eu_platca') setNewInvoiceLanguage('en'); if (typ === 'tretia_krajina') setNewInvoiceLanguage('en'); } else { setNewInvoiceItems(prev => prev.map(it => ({ ...it, vatRate: companySettings.defaultVatRate }))); } }} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
                       <option value="sk_platca">SK — platca DPH</option>
                       <option value="sk_neplatca">SK — neplatca DPH</option>
                       <option value="eu_platca">EÚ — platca DPH (IČ DPH)</option>
                       <option value="eu_neplatca">EÚ — neplatca DPH</option>
                       <option value="tretia_krajina">Tretia krajina (mimo EÚ)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-slate-400 block mb-0.5">Jazyk dokladu</label>
+                    <select value={newInvoiceLanguage} onChange={(e) => setNewInvoiceLanguage(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
+                      <option value="sk">Slovensky</option>
+                      <option value="en">English</option>
                     </select>
                   </div>
                   <div><label className="text-slate-400 block mb-0.5">Dátum splatnosti</label><input type="date" value={newInvoiceDueDate} onChange={(e) => setNewInvoiceDueDate(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" /></div>
@@ -12171,9 +12272,7 @@ export default function App() {
                       <input type="number" placeholder="Ks" value={it.qty} onChange={(e) => handleUpdateInvoiceLineItem(it.tempId, 'qty', e.target.value)} className="col-span-2 bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" />
                       <input type="number" step="0.01" placeholder="Cena/ks bez DPH" value={it.unitPrice} onChange={(e) => handleUpdateInvoiceLineItem(it.tempId, 'unitPrice', e.target.value)} className="col-span-2 bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" />
                       <select value={it.vatRate} onChange={(e) => handleUpdateInvoiceLineItem(it.tempId, 'vatRate', e.target.value)} className="col-span-2 bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white">
-                        <option value={20}>20% DPH</option>
-                        <option value={10}>10% DPH</option>
-                        <option value={0}>0% DPH</option>
+                        {[...new Set([Number(companySettings.defaultVatRate) || 23, 23, 19, 10, 5, 0])].map(v => <option key={v} value={v}>{v}% DPH</option>)}
                       </select>
                       <button onClick={() => handleRemoveInvoiceLineItem(it.tempId)} className="col-span-1 text-rose-400 hover:text-rose-300"><X className="h-4 w-4 mx-auto" /></button>
                     </div>
@@ -12188,11 +12287,42 @@ export default function App() {
 
                 <div><label className="text-slate-400 block mb-0.5 text-xs">Poznámka (voliteľné)</label><textarea rows={2} value={newInvoiceNotes} onChange={(e) => setNewInvoiceNotes(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" /></div>
 
-                <button onClick={handleConfirmNewInvoice} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg uppercase text-xs">Vystaviť faktúru</button>
+                {(newInvoiceCustomerType === 'eu_platca' || newInvoiceCustomerType === 'tretia_krajina') && <p className="text-[11px] text-amber-400">DPH je pri tomto type odberateľa nastavená na 0 % a na doklade sa uvedie text o oslobodení (dodanie tovaru do EÚ / vývoz). Pri službách a iných prípadoch sa poraďte s účtovníčkou.</p>}
+                <button onClick={handleConfirmNewInvoice} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg uppercase text-xs">{newInvoiceDocType === 'zalohova' ? 'Vystaviť zálohovú faktúru' : 'Vystaviť faktúru'}</button>
               </div>
             </div>
           );
         })()}
+
+        {creditNoteDraft && (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
+            <div className="bg-slate-900 border border-rose-700/50 p-6 rounded-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto shadow-2xl space-y-4">
+              <div className="flex justify-between items-start">
+                <h3 className="text-lg font-bold text-white">Dobropis k faktúre {creditNoteDraft.invoice.invoiceNumber}</h3>
+                <button onClick={() => setCreditNoteDraft(null)} className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white"><X className="h-5 w-5" /></button>
+              </div>
+              <p className="text-xs text-slate-400">Pri každej položke zadaj, koľko kusov sa vracia (0 = položka sa do dobropisu nezahrnie). Pôvodná faktúra zostane nezmenená.</p>
+              <div className="space-y-2">
+                {creditNoteDraft.items.map((it, i) => (
+                  <div key={it.tempId} className="grid grid-cols-12 gap-2 items-center bg-slate-950 border border-slate-800 rounded p-2 text-xs">
+                    <span className="col-span-7 text-slate-200">{it.description}<span className="text-slate-500"> ({it.unitPrice.toFixed(2)} € / {it.vatRate}% DPH)</span></span>
+                    <span className="col-span-2 text-slate-500 text-right">z {it.qty} ks</span>
+                    <input type="number" min="0" max={it.qty} value={it.vratit} onChange={(e) => { const items = [...creditNoteDraft.items]; items[i] = { ...it, vratit: e.target.value }; setCreditNoteDraft({ ...creditNoteDraft, items }); }} className="col-span-3 bg-slate-900 border border-slate-700 rounded p-1.5 text-white" />
+                  </div>
+                ))}
+              </div>
+              <div>
+                <label className="text-xs font-bold text-rose-400 block mb-0.5">Dôvod dobropisu (povinné)</label>
+                <input type="text" value={creditNoteDraft.reason} onChange={(e) => setCreditNoteDraft({ ...creditNoteDraft, reason: e.target.value })} placeholder="napr. Reklamácia, vrátený tovar, chybná cena" className="w-full bg-slate-950 border border-rose-800/50 rounded p-2 text-xs text-white" />
+              </div>
+              <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs flex justify-between"><span className="text-slate-400">Suma dobropisu s DPH:</span><strong className="text-rose-300">{calcInvoiceTotals(creditNoteDraft.items.map(it => ({ qty: -(parseFloat(it.vratit) || 0), unitPrice: it.unitPrice, vatRate: it.vatRate }))).total.toFixed(2)} €</strong></div>
+              <div className="flex gap-2">
+                <button onClick={handleConfirmCreditNote} className="flex-1 bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 rounded-lg uppercase text-xs">Vystaviť dobropis</button>
+                <button onClick={() => setCreditNoteDraft(null)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-6 rounded-lg text-xs font-bold">Zrušiť</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {selectedInvoiceForDetail && (
           <div className="fixed inset-0 bg-slate-950/95 z-50 overflow-y-auto print:relative print:inset-auto print:bg-white">
@@ -12203,73 +12333,22 @@ export default function App() {
                     <button onClick={() => handleMarkInvoicePaid(selectedInvoiceForDetail)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Check className="h-4 w-4" /> Označiť ako uhradenú</button>
                   )}
                   <button onClick={() => handleStartCorrectInvoice(selectedInvoiceForDetail)} className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Edit2 className="h-4 w-4" /> Opraviť</button>
+                  {selectedInvoiceForDetail.docType === 'zalohova' && (
+                    <button onClick={() => handleCreateFinalFromProforma(selectedInvoiceForDetail)} className="bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><FileText className="h-4 w-4" /> Vystaviť konečnú faktúru</button>
+                  )}
+                  {(selectedInvoiceForDetail.docType || 'faktura') === 'faktura' && (
+                    <button onClick={() => handleStartCreditNote(selectedInvoiceForDetail)} className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><FileEdit className="h-4 w-4" /> Vystaviť dobropis</button>
+                  )}
+                  {selectedInvoiceForDetail.docType !== 'zalohova' && (
+                    <button onClick={() => stiahniEFakturu(selectedInvoiceForDetail, companySettings, (m) => triggerNotification('error', m))} className="bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Download className="h-4 w-4" /> e-faktúra (XML)</button>
+                  )}
                   <button onClick={() => printWithFilename(selectedInvoiceForDetail.invoiceNumber)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Printer className="h-4 w-4" /> Tlačiť / PDF</button>
                   <FakturaEmail supabase={supabase} faktura={selectedInvoiceForDetail} zakaznici={customers} firma={companySettings} idDokumentu="faktura-dokument" triggerNotification={triggerNotification} />
                 </div>
                 <button onClick={() => setSelectedInvoiceForDetail(null)} className="p-1 rounded bg-slate-200 text-slate-600 hover:text-slate-900"><X className="h-5 w-5" /></button>
               </div>
 
-              <div className="flex justify-between items-start border-b-2 border-slate-800 pb-4 mb-4">
-                <div>
-                  <h1 className="text-2xl font-extrabold">FAKTÚRA</h1>
-                  <p className="text-sm text-slate-600">č. {selectedInvoiceForDetail.invoiceNumber}</p>
-                  {selectedInvoiceForDetail.status === 'paid' && <span className="inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">UHRADENÁ</span>}
-                </div>
-                <img src="/logo-atak-pbt.png" alt="Logo" className="h-10" />
-              </div>
-
-              <div className="grid grid-cols-2 gap-6 mb-6 text-xs">
-                <div>
-                  <span className="font-bold text-slate-500 uppercase text-[10px] block mb-1">Dodávateľ</span>
-                  <p className="font-bold">{companySettings.companyName || '—'}</p>
-                  <p>{companySettings.address}</p>
-                  <p>IČO: {companySettings.ico} {companySettings.dic && `• DIČ: ${companySettings.dic}`}</p>
-                  {companySettings.icDph && <p>IČ DPH: {companySettings.icDph}</p>}
-                </div>
-                <div>
-                  <span className="font-bold text-slate-500 uppercase text-[10px] block mb-1">Odberateľ</span>
-                  <p className="font-bold">{selectedInvoiceForDetail.customerName}</p>
-                  <p>{selectedInvoiceForDetail.customerAddress}</p>
-                  {selectedInvoiceForDetail.customerIco && <p>IČO: {selectedInvoiceForDetail.customerIco} {selectedInvoiceForDetail.customerDic && `• DIČ: ${selectedInvoiceForDetail.customerDic}`}</p>}
-                  {selectedInvoiceForDetail.customerIcDph && <p>IČ DPH: {selectedInvoiceForDetail.customerIcDph}</p>}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-4 gap-2 mb-6 text-xs bg-slate-50 p-3 rounded">
-                <div><span className="text-slate-500 block">Dátum vystavenia</span><strong>{formatDeliveryDate(selectedInvoiceForDetail.issueDate)}</strong></div>
-                <div><span className="text-slate-500 block">Dátum dodania</span><strong>{formatDeliveryDate(selectedInvoiceForDetail.deliveryDate)}</strong></div>
-                <div><span className="text-slate-500 block">Splatnosť</span><strong>{formatDeliveryDate(selectedInvoiceForDetail.dueDate)}</strong></div>
-                <div><span className="text-slate-500 block">Variabilný symbol</span><strong>{selectedInvoiceForDetail.variableSymbol}</strong></div>
-              </div>
-
-              <table className="w-full text-xs mb-6">
-                <thead><tr className="border-b border-slate-300 text-slate-500"><th className="text-left py-1.5">Popis</th><th className="text-center py-1.5">Ks</th><th className="text-right py-1.5">Cena/ks</th><th className="text-right py-1.5">DPH</th><th className="text-right py-1.5">Spolu s DPH</th></tr></thead>
-                <tbody>
-                  {selectedInvoiceForDetail.items.map((it, i) => (
-                    <tr key={i} className="border-b border-slate-100"><td className="py-1.5">{it.description}</td><td className="text-center py-1.5">{it.qty}</td><td className="text-right py-1.5">{it.unitPrice.toFixed(2)} €</td><td className="text-right py-1.5">{it.vatRate}%</td><td className="text-right py-1.5 font-bold">{(it.qty * it.unitPrice * (1 + it.vatRate / 100)).toFixed(2)} €</td></tr>
-                  ))}
-                </tbody>
-              </table>
-
-              <div className="flex justify-between items-start gap-6">
-                <div className="text-xs space-y-1">
-                  <p><span className="text-slate-500">Banka:</span> {companySettings.bankName}</p>
-                  <p><span className="text-slate-500">IBAN:</span> <strong className="font-mono">{companySettings.iban}</strong></p>
-                  <p><span className="text-slate-500">Variabilný symbol:</span> <strong>{selectedInvoiceForDetail.variableSymbol}</strong></p>
-                  {selectedInvoiceForDetail.notes && <p className="italic text-slate-600 mt-2">{selectedInvoiceForDetail.notes}</p>}
-                </div>
-                <div className="text-right space-y-1 text-xs shrink-0">
-                  <p>Základ: <strong>{selectedInvoiceForDetail.subtotal.toFixed(2)} €</strong></p>
-                  <p>DPH: <strong>{selectedInvoiceForDetail.vatTotal.toFixed(2)} €</strong></p>
-                  <p className="text-lg font-extrabold border-t border-slate-800 pt-1 mt-1">{selectedInvoiceForDetail.total.toFixed(2)} €</p>
-                </div>
-                {companySettings.iban && generateBySquareQr(selectedInvoiceForDetail) && (
-                  <div className="text-center shrink-0">
-                    <QRCodeSVG value={generateBySquareQr(selectedInvoiceForDetail)} size={100} level="M" />
-                    <p className="text-[9px] text-slate-500 mt-1">PAY by square</p>
-                  </div>
-                )}
-              </div>
+              <FakturaDokument faktura={selectedInvoiceForDetail} firma={companySettings} qrHodnota={generateBySquareQr(selectedInvoiceForDetail)} />
 
               {(selectedInvoiceForDetail.corrections || []).length > 0 && (
                 <div data-nepdf="1" className="print:hidden mt-6 pt-4 border-t border-slate-200 space-y-2">

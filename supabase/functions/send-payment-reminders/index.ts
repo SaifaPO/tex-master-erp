@@ -77,6 +77,10 @@ Deno.serve(async (req) => {
     const chyby: { faktura: string; chyba: string }[] = [];
 
     for (const inv of invRes.data || []) {
+      // dobropisy a zálohové faktúry sa neupomínajú; z konečnej faktúry sa odpočíta uhradená záloha
+      if (inv.doc_type === 'dobropis' || inv.doc_type === 'zalohova' || Number(inv.total) <= 0) continue;
+      inv.total = Math.max(0, Number(inv.total) - (Number(inv.advance_paid) || 0));
+      if (inv.total <= 0) continue;
       const dni = dniMedzi(inv.due_date, dnes);
       const stupen = dni >= s.dni_3 ? 3 : dni >= s.dni_2 ? 2 : dni >= s.dni_1 ? 1 : 0;
       if (stupen === 0) continue;

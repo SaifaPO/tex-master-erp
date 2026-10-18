@@ -72,7 +72,7 @@ export default function MesacnyReportTab({ supabase, invoices = [], triggerNotif
     const zakaznici = sumuj(teraz.vyd, (i) => i.customerName, (i) => i.subtotal || 0).slice(0, 5);
     const dodavatelia = sumuj(teraz.prij, (f) => f.dodavatel_nazov, (f) => Number(f.zaklad_dane ?? f.suma_celkom) || 0).slice(0, 5);
     const kategorie = sumuj(teraz.prij, (f) => f.kategoria, (f) => Number(f.zaklad_dane ?? f.suma_celkom) || 0).slice(0, 8);
-    const pohladavkyPoSplatnosti = invoices.filter((i) => i.status !== 'paid' && i.status !== 'cancelled' && i.dueDate && i.dueDate < dnes);
+    const pohladavkyPoSplatnosti = invoices.filter((i) => i.status !== 'paid' && i.status !== 'cancelled' && i.total > 0 && i.dueDate && i.dueDate < dnes);
     const pohladavkyVsetky = invoices.filter((i) => i.status !== 'paid' && i.status !== 'cancelled');
     const zavazky = prijate.filter((f) => f.stav === 'schvalena' || f.stav === 'na_schvalenie');
     const zavazkyPoSplatnosti = zavazky.filter((f) => f.datum_splatnosti && f.datum_splatnosti < dnes);
