@@ -19,10 +19,14 @@ import { makeFlatlockTexture } from '../stitchTextures';
 export function initCelenkyEngine(root, opts = {}) {
   const widthCm = Number(opts.widthCm) || 51;
   const heightCm = Number(opts.heightCm) || 9;
+  // Hotovy vysek (widthCm x heightCm) sa tlaci VACSI: 5 mm spadavka dookola, teda (sirka+1) x (vyska+1) cm.
+  // Kanonicky priestor kreslenia = cely tlacovy format vratane spadavky; 3D nahlad zobrazuje len hotovy vysek (bez spadavky).
+  const SPADAVKA_CM = 0.5;
+  const TLAC_W_CM = widthCm + 2 * SPADAVKA_CM, TLAC_H_CM = heightCm + 2 * SPADAVKA_CM;
   const CANON_H = 180;
-  const CANON_W = Math.round(CANON_H * widthCm / heightCm);
+  const CANON_W = Math.round(CANON_H * TLAC_W_CM / TLAC_H_CM);
   const CENTER_X = CANON_W / 2;
-  const BLEED_UNITS = 12 * 9 / heightCm; // 5 mm lem v kanonickych jednotkach (pri 9 cm vyske = 12)
+  const BLEED_UNITS = SPADAVKA_CM * CANON_H / TLAC_H_CM; // 5 mm v kanonickych jednotkach (rovnake v oboch osiach)
   const STATE = {
     bgColor: '#0f172a',
     bgPattern: 'solid',
@@ -40,7 +44,7 @@ export function initCelenkyEngine(root, opts = {}) {
     const old = opts.initialState;
     const fx = old.canonW ? CANON_W / old.canonW : 1;
     STATE.bgColor = old.bgColor ?? STATE.bgColor; STATE.bgPattern = old.bgPattern ?? STATE.bgPattern;
-    if (old.bgPattern === 'image' && old.bgImageUrl) { STATE.bgImageUrl = old.bgImageUrl; if (old.bgImage) STATE.bgImage = old.bgImage; }
+    if (old.bgPattern === 'image' && (old.bgImage || old.bgImageUrl)) { STATE.bgImageUrl = old.bgImageUrl || ''; if (old.bgImage) STATE.bgImage = old.bgImage; }
     STATE.elements = (old.elements || []).map((e) => ({ ...e, x: e.x * fx, ...(e.type === 'stripes' ? {} : {}) }));
     STATE.selectedId = STATE.elements[0]?.id || null;
   }
@@ -153,13 +157,12 @@ export function initCelenkyEngine(root, opts = {}) {
 
     if (STATE.showBleed) {
       ctx2d.save();
-      const bleedH = h * (BLEED_UNITS / CANON_H);
-      ctx2d.fillStyle = 'rgba(239, 68, 68, 0.15)';
-      ctx2d.fillRect(0, 0, w, bleedH);
-      ctx2d.strokeStyle = 'rgba(239, 68, 68, 0.6)'; ctx2d.lineWidth = 1; ctx2d.setLineDash([6, 5]);
-      ctx2d.beginPath(); ctx2d.moveTo(0, bleedH); ctx2d.lineTo(w, bleedH); ctx2d.stroke();
-      ctx2d.fillRect(0, h - bleedH, w, bleedH);
-      ctx2d.beginPath(); ctx2d.moveTo(0, h - bleedH); ctx2d.lineTo(w, h - bleedH); ctx2d.stroke();
+      const bx = w * (BLEED_UNITS / CANON_W), by = h * (BLEED_UNITS / CANON_H);
+      ctx2d.fillStyle = 'rgba(239, 68, 68, 0.22)';
+      ctx2d.fillRect(0, 0, w, by); ctx2d.fillRect(0, h - by, w, by);
+      ctx2d.fillRect(0, by, bx, h - 2 * by); ctx2d.fillRect(w - bx, by, bx, h - 2 * by);
+      ctx2d.strokeStyle = 'rgba(239, 68, 68, 0.85)'; ctx2d.lineWidth = 1; ctx2d.setLineDash([6, 5]);
+      ctx2d.strokeRect(bx, by, w - 2 * bx, h - 2 * by); // hranica hotoveho vyseku
       ctx2d.strokeStyle = 'rgba(99, 102, 241, 0.5)';
       ctx2d.beginPath(); ctx2d.moveTo(w / 2, 0); ctx2d.lineTo(w / 2, h); ctx2d.stroke();
       ctx2d.restore();
@@ -427,6 +430,8 @@ export function initCelenkyEngine(root, opts = {}) {
     canvasTexture.generateMipmaps = false;
     canvasTexture.wrapS = THREE.ClampToEdgeWrapping;
     canvasTexture.wrapT = THREE.ClampToEdgeWrapping;
+    canvasTexture.repeat.set((CANON_W - 2 * BLEED_UNITS) / CANON_W, (CANON_H - 2 * BLEED_UNITS) / CANON_H);
+    canvasTexture.offset.set(BLEED_UNITS / CANON_W, BLEED_UNITS / CANON_H);
     canvasTexture.colorSpace = THREE.SRGBColorSpace; // KLUCOVE: bez toho su farby na 3D modeli vyblednute oproti strihu
     canvasTexture.anisotropy = threeRenderer.capabilities.getMaxAnisotropy();
 
@@ -641,6 +646,25 @@ export function initCelenkyEngine(root, opts = {}) {
     on(q('#boldToggleBtn'), 'click', () => { const a = STATE.elements.find(i => i.id === STATE.selectedId); if (a && a.type === 'text') { a.bold = !a.bold; render2D(); } });
     on(q('#italicToggleBtn'), 'click', () => { const a = STATE.elements.find(i => i.id === STATE.selectedId); if (a && a.type === 'text') { a.italic = !a.italic; render2D(); } });
     on(q('#centerTextBtn'), 'click', centerActiveElement);
+
+    on(q('#fullGraphicInput'), 'change', (e) => {
+      const file = e.target.files[0];
+      e.target.value = '';
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const img = new Image();
+        img.onload = () => {
+          const pomerSuboru = img.width / img.height, pomerStrihu = CANON_W / CANON_H;
+          STATE.bgImage = img; STATE.bgImageUrl = ''; STATE.bgPattern = 'image';
+          render2D();
+          if (Math.abs(pomerSuboru / pomerStrihu - 1) > 0.03) toast('Pomer strán súboru nesedí s tlačovým formátom ' + TLAC_W_CM + ' × ' + TLAC_H_CM + ' cm — grafika sa orezá/roztiahne');
+          else toast('Grafika vložená na celú čelenku');
+        };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
 
     on(q('#logoUploadInput'), 'change', (e) => {
       const file = e.target.files[0];
@@ -935,12 +959,15 @@ export function initCelenkyEngine(root, opts = {}) {
       img.onerror = () => toast('Grafiku sa nepodarilo načítať');
       img.src = url;
     },
+    getTlacovyFormat() { return { sirkaCm: TLAC_W_CM, vyskaCm: TLAC_H_CM, pxSirka: Math.round(TLAC_W_CM / 2.54 * 300), pxVyska: Math.round(TLAC_H_CM / 2.54 * 300) }; },
     getState() { return { bgColor: STATE.bgColor, bgPattern: STATE.bgPattern, bgImage: STATE.bgImage, bgImageUrl: STATE.bgImageUrl, elements: STATE.elements.map((e) => ({ ...e })), canonW: CANON_W }; },
     getLowResPreviewDataUrl() { return editorCanvas.toDataURL('image/png'); },
     getDesignJson() {
       return JSON.stringify({
         bgColor: STATE.bgColor,
         bgPattern: STATE.bgPattern,
+        spadavkaMm: 5,
+        tlacovyFormatCm: [TLAC_W_CM, TLAC_H_CM],
         bgImageUrl: STATE.bgImageUrl || undefined,
         elements: STATE.elements.map(({ img, ...rest }) => rest), // obrazky (logo) nie su JSON-serializovatelne, len metadata
       });
@@ -949,7 +976,7 @@ export function initCelenkyEngine(root, opts = {}) {
     // zakaznikovi (ziadne <a download>/verejna URL) — vraca sa len ako Blob priamo volajucemu
     // (React komponent ho hned nahra do privatneho Storage a zahodi referenciu).
     async getProductionBlob() {
-      const PROD_W = Math.round(widthCm / 2.54 * 300), PROD_H = Math.round(heightCm / 2.54 * 300); // 300 DPI
+      const PROD_W = Math.round(TLAC_W_CM / 2.54 * 300), PROD_H = Math.round(TLAC_H_CM / 2.54 * 300); // 300 DPI, vratane 5 mm spadavky dookola
       const prod = document.createElement('canvas');
       prod.width = PROD_W; prod.height = PROD_H;
       const pctx = prod.getContext('2d');

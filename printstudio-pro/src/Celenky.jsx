@@ -193,12 +193,12 @@ export default function Celenky({ supabase, onSpat }) {
             {aktMaterial?.popis && <p className="text-[10px] text-slate-500">{aktMaterial.popis}</p>}
           </div>
 
-          <div className="flex border-b border-slate-200 bg-slate-50 p-1 gap-1 overflow-x-auto">
-            <button data-tab="tab-templates" className="tab-btn whitespace-nowrap px-2.5 py-1.5 text-xs font-bold rounded-lg transition bg-white text-indigo-600 shadow-xs">🏆 Vzory (10)</button>
-            <button data-tab="tab-color" className="tab-btn whitespace-nowrap px-2.5 py-1.5 text-xs font-bold rounded-lg transition text-slate-600 hover:text-indigo-600">🎨 Farba</button>
-            <button data-tab="tab-text" className="tab-btn whitespace-nowrap px-2.5 py-1.5 text-xs font-bold rounded-lg transition text-slate-600 hover:text-indigo-600">🔤 Text</button>
-            <button data-tab="tab-graphics" className="tab-btn whitespace-nowrap px-2.5 py-1.5 text-xs font-bold rounded-lg transition text-slate-600 hover:text-indigo-600">⭐ Motívy</button>
-            <button data-tab="tab-layers" className="tab-btn whitespace-nowrap px-2.5 py-1.5 text-xs font-bold rounded-lg transition text-slate-600 hover:text-indigo-600">📑 Vrstvy (<span id="layersCountBadge">1</span>)</button>
+          <div className="flex border-b border-slate-200 bg-slate-50 p-1 gap-0.5">
+            <button data-tab="tab-templates" className="tab-btn flex-1 min-w-0 px-1 py-1.5 text-[11px] leading-tight font-bold rounded-lg transition bg-white text-indigo-600 shadow-xs">🏆 Vzory (10)</button>
+            <button data-tab="tab-color" className="tab-btn flex-1 min-w-0 px-1 py-1.5 text-[11px] leading-tight font-bold rounded-lg transition text-slate-600 hover:text-indigo-600">🎨 Farba</button>
+            <button data-tab="tab-text" className="tab-btn flex-1 min-w-0 px-1 py-1.5 text-[11px] leading-tight font-bold rounded-lg transition text-slate-600 hover:text-indigo-600">🔤 Text</button>
+            <button data-tab="tab-graphics" className="tab-btn flex-1 min-w-0 px-1 py-1.5 text-[11px] leading-tight font-bold rounded-lg transition text-slate-600 hover:text-indigo-600">⭐ Motívy</button>
+            <button data-tab="tab-layers" className="tab-btn flex-1 min-w-0 px-1 py-1.5 text-[11px] leading-tight font-bold rounded-lg transition text-slate-600 hover:text-indigo-600">📑 Vrstvy (<span id="layersCountBadge">1</span>)</button>
           </div>
 
           <div id="transformInspector" className="mx-3 mt-3 p-3 bg-gradient-to-br from-indigo-50/90 via-slate-50 to-white border border-indigo-200/80 rounded-xl space-y-2.5 transition-all shadow-2xs">
@@ -377,6 +377,14 @@ export default function Celenky({ supabase, onSpat }) {
 
             {/* TAB 3: GRAFIKY */}
             <div id="tab-graphics" className="tab-content hidden space-y-3.5">
+              <div className="p-2.5 rounded-xl border border-emerald-200 bg-emerald-50/60 space-y-1.5">
+                <label className="text-xs font-bold text-emerald-900 block">Hotová grafika na celú čelenku (pripravená na tlač):</label>
+                <p className="text-[10px] text-emerald-800 leading-snug">Hotový výsek je {Number(aktVariant.sirka_cm)} × {Number(aktVariant.vyska_cm)} cm, tlačí sa s 5 mm spadávkou dookola, teda súbor má mať <b>{Number(aktVariant.sirka_cm) + 1} × {Number(aktVariant.vyska_cm) + 1} cm</b> (pri 300 DPI {Math.round((Number(aktVariant.sirka_cm) + 1) / 2.54 * 300)} × {Math.round((Number(aktVariant.vyska_cm) + 1) / 2.54 * 300)} px). Dôležité prvky daj aspoň 5 mm od hotového okraja.</p>
+                <label className="border-2 border-dashed border-emerald-300 hover:border-emerald-500 bg-white rounded-lg p-2 flex items-center justify-center gap-2 cursor-pointer transition text-center">
+                  <span className="text-lg">🖼️</span><span className="text-xs font-bold text-emerald-700">Nahrať celý strih (PNG / JPG)</span>
+                  <input type="file" id="fullGraphicInput" accept="image/*" className="hidden" />
+                </label>
+              </div>
               <div>
                 <label className="text-xs font-bold text-slate-700 block mb-1">Vlastné logo / obrázok (PNG, SVG, JPG):</label>
                 <label className="border-2 border-dashed border-indigo-200 hover:border-indigo-400 bg-indigo-50/40 hover:bg-indigo-50 rounded-xl p-3 flex flex-col items-center justify-center cursor-pointer transition text-center">
@@ -500,7 +508,7 @@ export default function Celenky({ supabase, onSpat }) {
                 </div>
                 <canvas id="editorCanvas" width="960" height="169" className="w-full h-auto max-h-[190px] rounded-lg bg-slate-900 transition-shadow"></canvas>
                 <div className="w-full flex justify-between text-[10px] text-slate-400 mt-1.5 px-1">
-                  <span>Červená prerušovaná čiara = 5 mm lem na zapošitie (spadávka)</span>
+                  <span>Červené pásy = 5 mm spadávka (vytlačí sa, po vysekaní odpadne) • prerušovaná čiara = hotový výsek</span>
                   <span>Fialová os = stred prednej časti</span>
                 </div>
                 <p className="text-[10px] text-amber-600 mt-2">ℹ️ Toto je len orientačný náhľad v nižšej kvalite — tlačový súbor sa pri odoslaní objednávky vygeneruje v plnej kvalite (300 DPI) a nie je možné ho stiahnuť.</p>
