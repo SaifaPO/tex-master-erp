@@ -158,6 +158,13 @@ function nakresliCisloNaNohu(ctx, text, cx, cy, vyskaPx, pxPerCm, configState, f
   ctx.restore();
 }
 
+// Logá + číslo na prednej strane nohavíc — o 8 cm nižšie než pôvodne a posunuté k vonkajšiemu okraju nohavice
+// (k bočnému pásu) o 3 cm, no tak, aby medzi logom a bočným pásom ostali aspoň 2 cm (Martin 2026-10-18).
+const TRENIRKY_POSUN_DOLE_CM = 8;
+const TRENIRKY_POSUN_DO_STRANY_CM = 3;
+const TRENIRKY_ODSTUP_OD_PASU_CM = 2;
+const POLSIRKA_CM = { vyrobca: LOGO_VYROBCU_CM.w / 2, erb: ERB_CM / 2, cislo: 3.3 };
+
 // Logá + číslo na prednej strane nohavíc.
 function nakresliLogaTrenirok(ctx, canvas, panely, configState, farbaNohy) {
   if (!panely) return;
@@ -168,8 +175,13 @@ function nakresliLogaTrenirok(ctx, canvas, panely, configState, farbaNohy) {
     if (!pan) return;
     const pxPerCmX = Math.abs(pan.ax) * W, pxPerCmY = Math.abs(pan.ay) * H;
     const pxPerCm = (pxPerCmX + pxPerCmY) / 2;
-    const yZaklad = pan.ymin + 0.27 * (pan.ymax - pan.ymin); // spodná základná čiara loga výrobcu (cm)
-    const xs = pan.cx;
+    const yZaklad = pan.ymin + 0.27 * (pan.ymax - pan.ymin) - TRENIRKY_POSUN_DOLE_CM; // spodná základná čiara loga výrobcu (cm)
+    // von = smer k bočnému pásu (ľavá noha nositeľa má +x, pravá -x)
+    const von = p.noha === 'lava' ? 1 : -1;
+    const hranicaPasu = von > 0 ? pan.xmax : pan.xmin;
+    const najdalej = hranicaPasu - von * (TRENIRKY_ODSTUP_OD_PASU_CM + (POLSIRKA_CM[p.typ] || 3));
+    const xChcene = pan.cx + von * TRENIRKY_POSUN_DO_STRANY_CM;
+    const xs = von > 0 ? Math.min(xChcene, najdalej) : Math.max(xChcene, najdalej);
     const ys = yZaklad + p.yOffset;
     const px = (pan.ax * xs + pan.bx) * W;
     const py = (pan.ay * ys + pan.by) * H;

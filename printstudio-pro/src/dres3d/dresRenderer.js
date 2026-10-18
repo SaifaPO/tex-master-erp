@@ -422,11 +422,17 @@ function renderSleeves(c, W, H, configState, maVlastnyVzor, regions) {
   });
 }
 
+// Logo klubu, logo výrobcu a číslo na hrudi sú o 1 cm vyššie (Martin 2026-10-18).
+const HRUD_POSUN_HORE_PX = 10 * PX_PER_MM;
+// Chrbát: menovka o 3 cm vyššie, číslo o 1,5 cm vyššie (medzera meno–číslo o 1,5 cm väčšia).
+const MENO_POSUN_HORE_PX = 30 * PX_PER_MM;
+const MEDZERA_MENO_CISLO_PX = 31 * PX_PER_MM;
+
 function renderFrontDetails(c, x, y, w, h, configState, regions) {
   const centerX = x + w / 2;
   const erbOffset = configState.loga.erbOffset || { x: 0, y: 0 };
   const erbX = x + w * 0.68 + orezOffset(erbOffset.x) * w;
-  const erbY = y + h * 0.32 + orezOffset(erbOffset.y) * h;
+  const erbY = y + h * 0.32 - HRUD_POSUN_HORE_PX + orezOffset(erbOffset.y) * h;
   const erbSize = 116; // 80 * 1.2 o niečo štedrejšie, aby zväčšenie bolo naozaj vidieť aj pri vlastnom nahratom logu s okrajmi
   const cislo = configState.cislo || {};
   const medzeraPismen = configState.text.pismenaMedzeraPx || 0;
@@ -441,7 +447,7 @@ function renderFrontDetails(c, x, y, w, h, configState, regions) {
   const logoPredPoz = configState.loga.logoPredPozicia || 'zaklad';
   const logoPredOffset = configState.loga.logoPredOffset || { x: 0, y: 0 };
   const logoPredX = (logoPredPoz.startsWith('stred') ? centerX : x + w * 0.32) + orezOffset(logoPredOffset.x) * w;
-  const logoPredY = (logoPredPoz.endsWith('vyssie') ? y + h * 0.32 * 0.8 : y + h * 0.32) + orezOffset(logoPredOffset.y) * h;
+  const logoPredY = (logoPredPoz.endsWith('vyssie') ? y + h * 0.32 * 0.8 : y + h * 0.32) - HRUD_POSUN_HORE_PX + orezOffset(logoPredOffset.y) * h;
   const logoPredFarba = kontrastnaFarba(configState.farby.zakladna);
   // o 65% menšie ako pôvodne, potom ešte o 15% väčšie (w*0.098*1.15, h*0.0315*1.15)
   const logoPredRozmery = drawTintedImageFit(c, logoPredVyrobcu, logoPredX, logoPredY, w * 0.1127, h * 0.0362, logoPredFarba);
@@ -449,7 +455,7 @@ function renderFrontDetails(c, x, y, w, h, configState, regions) {
 
   if (configState.text.zobrazitCislo && configState.text.cisloVpredu && configState.text.cisloHraca) {
     const poz = configState.text.cisloVpreduPozicia || 'stred';
-    let cx = centerX, cy = y + h * 0.33;
+    let cx = centerX, cy = y + h * 0.33 - HRUD_POSUN_HORE_PX;
     if (poz === 'pod_erb') { cx = erbX; cy = erbY + erbSize * 0.75; }
     else if (poz === 'pod_logo') { cx = logoPredX; cy = logoPredY + logoPredRozmery.h / 2 + 40; }
     c.save();
@@ -491,8 +497,8 @@ function renderBackDetails(c, x, y, w, h, configState) {
   // medzera medzi nimi je vždy rovnaká (fixný GAP), nech je meno akokoľvek dlhé/krátke alebo
   // na jeden/dva riadky. Predtým mali obe polia nezávislé stredové pozície, takže sa medzera
   // medzi nimi menila podľa dĺžky mena.
-  const menoSpodokY = y + h * 0.34;
-  const GAP_PX = 16 * PX_PER_MM;
+  const menoSpodokY = y + h * 0.34 - MENO_POSUN_HORE_PX;
+  const GAP_PX = MEDZERA_MENO_CISLO_PX;
   const cisloVrchY = menoSpodokY + GAP_PX;
 
   // Logo výrobcu na krku vzadu — úplne fixné, zákazník doň nijako nezasahuje. O 45% menšie,
