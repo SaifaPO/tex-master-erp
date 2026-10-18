@@ -193,6 +193,35 @@ export function orezOffset(v) {
   return Math.max(-MAX_OFFSET_FRAC, Math.min(MAX_OFFSET_FRAC, v || 0));
 }
 
+// Šablóna na stiahnutie: rozloženie dielov dresu na plátne 2048×2048 px (rovnaké ako v 3D). Zákazník do rámov nakreslí vlastnú grafiku,
+// uloží ju ako PNG/JPG o rovnakej veľkosti a nahrá. Rámy a popisy v exporte nesmú ostať (šablóna slúži len ako vodidlo).
+export function vytvorSablonuDresu() {
+  const W = 2048, H = 2048;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const c = canvas.getContext('2d');
+  c.fillStyle = '#ffffff'; c.fillRect(0, 0, W, H);
+  const diely = [
+    ['PREDOK', PANELY.predok, '#dbeafe', '#2563eb'],
+    ['ZADOK', PANELY.zadok, '#fee2e2', '#dc2626'],
+    ['ĽAVÝ RUKÁV', PANELY.rukavLavy, '#dcfce7', '#16a34a'],
+    ['PRAVÝ RUKÁV', PANELY.rukavPravy, '#fef9c3', '#ca8a04'],
+  ];
+  diely.forEach(([nazov, rect, vypln, ciara]) => {
+    const r = toPx(rect, W, H);
+    c.fillStyle = vypln; c.fillRect(r.x, r.y, r.w, r.h);
+    c.save();
+    c.strokeStyle = ciara; c.lineWidth = 5; c.setLineDash([22, 14]); c.strokeRect(r.x, r.y, r.w, r.h);
+    c.restore();
+    c.fillStyle = ciara; c.font = '800 54px Inter, Arial, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText(nazov, r.x + r.w / 2, r.y + r.h / 2);
+  });
+  c.fillStyle = '#475569'; c.font = '700 34px Inter, Arial, sans-serif'; c.textAlign = 'left'; c.textBaseline = 'top';
+  c.fillText('ŠABLÓNA DRESU 2048 × 2048 px — kresli len do farebných rámov, na konci ich skry/odstráň a ulož ako PNG alebo JPG.', 40, 28);
+  c.fillText('Predok a zadok majú medzi sebou voľný pás (spadávka). Logo výrobcu, meno, číslo a golier pridá generátor.', 40, 74);
+  return canvas;
+}
+
 // Farba šitia — jedna pre všetko (lemovací prúžok na krku a spodku, dvojité prešitie manžiet a spodku). Auto = farba goliera/lemov.
 export function farbaSitia(configState) {
   const s = configState.sitie;
@@ -217,8 +246,12 @@ export function updateJerseyTexture(ctx, canvas, configState) {
   const predok = toPx(PANELY.predok, W, H);
   const zadok = toPx(PANELY.zadok, W, H);
 
-  const maVlastnyVzor = configState.vzor === 'vlastny' && configState.vlastnyVzorObrazky;
-  if (maVlastnyVzor) {
+  const maVlastnaGrafika = !!(configState.vlastnaGrafika && configState.vlastnaGrafika.img);
+  const maVlastnyVzor = maVlastnaGrafika || (configState.vzor === 'vlastny' && configState.vlastnyVzorObrazky);
+  if (maVlastnaGrafika) {
+    // hotová grafika zákazníka na celé plátno (podľa šablóny) — kreslí sa tak, ako je, bez prefarbovania
+    ctx.drawImage(configState.vlastnaGrafika.img, 0, 0, W, H);
+  } else if (maVlastnyVzor) {
     renderVlastnyVzor(ctx, W, H, configState);
   } else {
     renderPattern(ctx, predok.x, predok.y, predok.w, predok.h, false, configState);

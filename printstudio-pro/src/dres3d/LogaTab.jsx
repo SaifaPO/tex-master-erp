@@ -2,9 +2,27 @@ import React from 'react';
 import { Plus, Trash2, ArrowUp, ArrowDown, Move } from 'lucide-react';
 import { POZICIE_LOGA_PRED } from './dresPresets';
 import ErbEditor from './ErbEditor';
+import { vytvorSablonuDresu } from './dresRenderer';
 import { nacitajZoSuboru } from './obrazokUtil';
 
-export default function LogaTab({ configState, grafiky, fonty, onZmenLoga }) {
+export default function LogaTab({ configState, grafiky, fonty, onZmenLoga, onVlastnaGrafika }) {
+  const stiahniSablonu = () => {
+    const canvas = vytvorSablonuDresu();
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'sablona-dres-2048x2048.png'; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    }, 'image/png');
+  };
+  const naUploadGrafiky = async (e) => {
+    const file = e.target.files[0]; e.target.value = '';
+    if (!file || !onVlastnaGrafika) return;
+    const img = await nacitajZoSuboru(file);
+    if (img) onVlastnaGrafika(img);
+  };
+
   const rukavLoga = configState.loga.rukavLoga || [];
 
   const pridajRukavLogo = async (strana, e) => {
@@ -120,6 +138,25 @@ export default function LogaTab({ configState, grafiky, fonty, onZmenLoga }) {
           </div>
         ))}
       </div>
+
+      {onVlastnaGrafika && (
+        <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/80 space-y-3">
+          <div>
+            <span className="text-xs font-bold text-white block">4. Vlastná grafika na celý dres</span>
+            <span className="text-[10px] text-slate-400">Stiahnite šablónu, nakreslite do nej vlastný dizajn (napr. v Canve alebo Photoshope) a nahrajte hotový obrázok. Nahradí vzor dresu.</span>
+          </div>
+          <button type="button" onClick={stiahniSablonu} className="w-full bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold px-3 py-2 rounded-lg">⬇ Stiahnuť šablónu (PNG, 2048 × 2048 px)</button>
+          <label className="block text-[11px] text-slate-400">Nahrať hotovú grafiku (PNG alebo JPG, 2048 × 2048 px):</label>
+          <input type="file" accept="image/*" onChange={naUploadGrafiky} className="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-semibold file:bg-slate-800 file:text-slate-200" />
+          {configState.vlastnaGrafika?.img && (
+            <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-lg p-2">
+              <img src={configState.vlastnaGrafika.img.src} alt="" className="w-12 h-12 object-contain bg-slate-800 rounded" />
+              <span className="text-[11px] text-slate-300 flex-1">Vaša grafika je na drese.</span>
+              <button type="button" onClick={() => onVlastnaGrafika(null)} className="text-[11px] text-rose-400 hover:text-rose-300 font-semibold">Odstrániť</button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -43,7 +43,25 @@ export default function SuhrnModal({ supabase, produkt, configState, roster, mat
         nahladUrl = publicUrlData?.publicUrl || null;
       }
 
+      // Vlastná grafika a obrázky v znaku sa nahrajú do úložiska, aby ich výroba dostala ako súbor.
+      const nahrajObr = async (img, nazov) => {
+        if (!img || !img.src) return null;
+        try {
+          const blob = await fetch(img.src).then(r => r.blob());
+          const cesta = `${designId}/${nazov}.png`;
+          const { error } = await supabase.storage.from(BUCKET).upload(cesta, blob, { contentType: blob.type || 'image/png' });
+          if (error) return null;
+          return supabase.storage.from(BUCKET).getPublicUrl(cesta).data?.publicUrl || null;
+        } catch { return null; }
+      };
+      const vlastnaGrafikaUrl = await nahrajObr(configState.vlastnaGrafika?.img, 'vlastna-grafika');
+      const L = configState.loga || {};
+      const erbHotoveUrl = L.typErbu === 'custom' ? await nahrajObr(L.vlastnyErbImg, 'erb-hotovy') : null;
+      const erbObrazokUrl = await nahrajObr(L.erbObrazok, 'erb-obrazok');
+      const erbNastavenia = { tvar: L.erbTvar || L.typErbu, text: L.erbText, font: L.erbFont, farbaVnutro: L.erbFarbaVnutro, farbaVnutro2: L.erbVnutroDruha, vzorVnutra: L.erbVnutroVzor, farbaLemovky: L.erbFarbaLemovka, hrubkaLemovkyMm: L.erbLemovkaHrubka, lemovka2: [L.erbLemovka2Farba, L.erbLemovka2Hrubka], farbaTextu: L.erbFarbaText, objekt: L.erbObjekt, objektPoz: L.erbObjektPoz };
+
       const payload = {
+        vlastnaGrafikaUrl, erbHotoveUrl, erbObrazokUrl, erbNastavenia,
         designId,
         produktId: produkt?.id,
         vzorKod: configState.vzor,
