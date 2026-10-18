@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import NumberInput from '../NumberInput';
 import { Waves, Download, Settings, Trash2, AlertTriangle } from 'lucide-react';
 import FotoSlot from './FotoSlot';
+import ErpProduktVyber from './ErpProduktVyber';
 import KonfigGrafikaSprava from './KonfigGrafikaSprava';
 import { priceAt, marginAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 
@@ -20,6 +21,7 @@ export default function CelenkyTab({ supabase }) {
   const [pricingConfig, setPricingConfig] = useState(DEFAULT_PRICING_CONFIG);
   const [objednavky, setObjednavky] = useState([]);
   const [produkty, setProdukty] = useState([]);
+  const [erpProdukty, setErpProdukty] = useState([]);
   const [materialy, setMaterialy] = useState([]);
   const [varianty, setVarianty] = useState([]);
   const [variantyChyba, setVariantyChyba] = useState('');
@@ -27,15 +29,17 @@ export default function CelenkyTab({ supabase }) {
 
   const nacitaj = async () => {
     setIsLoading(true);
-    const [{ data: n }, { data: s }, { data: cfg }, { data: o }, { data: p }, { data: mat, error: matErr }, { data: vr }] = await Promise.all([
+    const [{ data: n }, { data: s }, { data: cfg }, { data: o }, { data: p }, { data: mat, error: matErr }, { data: vr }, { data: erp }] = await Promise.all([
       supabase.from('celenky_naklady').select('*').eq('id', 1).maybeSingle(),
       supabase.from('celenky_nastavenia').select('*').eq('id', 1).maybeSingle(),
       supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
       supabase.from('celenky_objednavky').select('*').order('created_at', { ascending: false }).limit(50),
-      supabase.from('produkty').select('id, nazov, zakladna_cena, aktivny').eq('aktivny', true).order('nazov'),
+      supabase.from('produkty').select('id, nazov, zakladna_cena, aktivny, erp_produkt_id').eq('aktivny', true).order('nazov'),
       supabase.from('celenky_materialy').select('*').order('poradie'),
       supabase.from('celenky_varianty').select('*').order('poradie').order('material_kod'),
+      supabase.from('products').select('id, name, custom_code, production_cost').order('name'),
     ]);
+    setErpProdukty(erp || []);
     setVariantyChyba(matErr ? 'Varianty a fotky materiálov ešte nie sú k dispozícii — spusti v Supabase SQL migráciu migration_celenky_varianty_a_fotky.sql (priečinok printstudio-pro).' : '');
     setMaterialy(mat || []);
     setVarianty(vr || []);
@@ -160,11 +164,7 @@ export default function CelenkyTab({ supabase }) {
                       <td className="py-2 pr-3"><NumberInput step="0.5" value={v.sirka_cm} onChange={(val) => ulozVariant(v.velkost_kod, v.material_kod, { sirka_cm: val })} fallback={0} className="w-20 px-2 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono" /></td>
                       <td className="py-2 pr-3"><NumberInput step="0.5" value={v.vyska_cm} onChange={(val) => ulozVariant(v.velkost_kod, v.material_kod, { vyska_cm: val })} fallback={0} className="w-20 px-2 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono" /></td>
                       <td className="py-2">
-                        <select value={v.produkt_id || ''} onChange={(e) => ulozVariant(v.velkost_kod, v.material_kod, { produkt_id: e.target.value ? Number(e.target.value) : null })} className="w-full min-w-[14rem] px-2 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs">
-                          <option value="">-- jednotný náklad (nižšie) --</option>
-                          {produkty.map(pr => <option key={pr.id} value={pr.id}>{pr.nazov} — {Number(pr.zakladna_cena).toFixed(2)} €/ks</option>)}
-                        </select>
-                        {!p && <span className="text-[10px] text-amber-500">použije sa jednotný náklad</span>}
+                        <ErpProduktVyber supabase={supabase} blankId={v.produkt_id} blanky={produkty} erpProdukty={erpProdukty} trieda="min-w-[16rem]" onZmena={(id) => ulozVariant(v.velkost_kod, v.material_kod, { produkt_id: id })} onBlankVytvoreny={(b) => setProdukty(prev => [...prev, b])} />
                       </td>
                     </tr>
                   );
@@ -179,15 +179,9 @@ export default function CelenkyTab({ supabase }) {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-6 bg-slate-900/60 rounded-2xl border border-slate-800 p-5">
           <h3 className="font-bold text-sm text-white mb-3">Vstupný výrobný náklad (na 1 ks)</h3>
-          <p className="text-xs text-slate-400 mb-3">Náklad na kus sa berie priamo zo záložky <strong className="text-slate-200">Produkty</strong> — vyber tam nadefinovaný produkt čelenky (jeho "Základná cena" = nákupná cena za kus). Marža a DPH sa pripočítajú rovnakým jednotným vzorcom ako všade.</p>
-          <label className="block text-slate-400 mb-1 text-xs">Produkt (čelenka)</label>
-          <select value={naklady.produkt_id || ''} onChange={(e) => ulozNaklady({ produkt_id: e.target.value ? Number(e.target.value) : null })} className="w-full px-2 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs">
-            <option value="">-- vyber produkt --</option>
-            {produkty.map(p => <option key={p.id} value={p.id}>{p.nazov} — {Number(p.zakladna_cena).toFixed(2)} €/ks</option>)}
-          </select>
-          {!vybranyProdukt && (
-            <p className="text-[10px] text-amber-500 flex items-center gap-1 mt-2"><AlertTriangle className="w-3 h-3 shrink-0" /> Nie je vybraný žiadny produkt — náklad je 0€, appka by predávala čelenky len za maržu. Vytvor produkt v záložke Produkty a vyber ho tu.</p>
-          )}
+          <p className="text-xs text-slate-400 mb-3">Cena čelenky sa berie z <strong className="text-slate-200">výrobnej ceny produktu v Katalógu produktov</strong> (zahŕňa materiál, potlač aj šitie). Produkt vyberiete tu pri každom variante; cenu upravujete len v katalógu. Pridáva sa len marža a DPH.</p>
+          <label className="block text-slate-400 mb-1 text-xs">Produkt z Katalógu produktov (záložný pre varianty bez vlastného produktu)</label>
+          <ErpProduktVyber supabase={supabase} blankId={naklady.produkt_id} blanky={produkty} erpProdukty={erpProdukty} onZmena={(id) => ulozNaklady({ produkt_id: id })} onBlankVytvoreny={(b) => setProdukty(prev => [...prev, b])} />
         </div>
 
         <div className="lg:col-span-6 bg-slate-900/60 rounded-2xl border border-slate-800 p-5">

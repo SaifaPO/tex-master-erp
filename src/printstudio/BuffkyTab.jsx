@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import NumberInput from '../NumberInput';
 import { Wind, Download, Settings, Trash2, AlertTriangle } from 'lucide-react';
 import FotoSlot from './FotoSlot';
+import ErpProduktVyber from './ErpProduktVyber';
 import KonfigGrafikaSprava from './KonfigGrafikaSprava';
 import { priceAt, marginAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 
@@ -24,19 +25,22 @@ export default function BuffkyTab({ supabase }) {
   const [nakladBmSublimacia, setNakladBmSublimacia] = useState(0);
   const [premiumMaterialy, setPremiumMaterialy] = useState([]);
   const [produkty, setProdukty] = useState([]);
+  const [erpProdukty, setErpProdukty] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const nacitaj = async () => {
     setIsLoading(true);
-    const [{ data: n }, { data: s }, { data: cfg }, { data: o }, { data: tn }, { data: pm }, { data: p }] = await Promise.all([
+    const [{ data: n }, { data: s }, { data: cfg }, { data: o }, { data: tn }, { data: pm }, { data: p }, { data: erp }] = await Promise.all([
       supabase.from('buffky_naklady').select('*').eq('id', 1).maybeSingle(),
       supabase.from('buffky_nastavenia').select('*').eq('id', 1).maybeSingle(),
       supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
       supabase.from('buffky_objednavky').select('*').order('created_at', { ascending: false }).limit(50),
       supabase.from('textil_naklady_verejny').select('naklad_bm').eq('technologia', 'sublimacia').maybeSingle(),
       supabase.from('buffky_premium_materialy').select('*').order('poradie').order('kod'),
-      supabase.from('produkty').select('id, nazov, zakladna_cena, aktivny').eq('aktivny', true).order('nazov'),
+      supabase.from('produkty').select('id, nazov, zakladna_cena, aktivny, erp_produkt_id').eq('aktivny', true).order('nazov'),
+      supabase.from('products').select('id, name, custom_code, production_cost').order('name'),
     ]);
+    setErpProdukty(erp || []);
     if (n) setNaklady(n);
     if (s) setNastavenia(s);
     if (cfg) setPricingConfig(mapConfigFromDb(cfg));
@@ -134,14 +138,9 @@ export default function BuffkyTab({ supabase }) {
           <p className="text-[11px] text-slate-500 mb-3">Bez švov, bez obšívania — potlač priamo na bezšvovú tubulárnu pletenú látku.</p>
           <div className="space-y-2.5 text-xs">
             <div>
-              <label className="block text-slate-400 mb-1">Blank bezšvovej buffky (cena sa berie z Katalógu produktov)</label>
-              <select value={naklady.produkt_id || ''} onChange={(e) => ulozNaklady({ produkt_id: e.target.value ? Number(e.target.value) : null })} className="w-full px-2 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs">
-                <option value="">-- bez produktu: použije sa ručná cena nižšie --</option>
-                {produkty.map(p => <option key={p.id} value={p.id}>{p.nazov} — {Number(p.zakladna_cena).toFixed(2)} €/ks</option>)}
-              </select>
-              {produktBasic ? <p className="text-[10px] text-emerald-400 mt-1">Výrobná cena z katalógu (celá — vrátane potlače a šitia): {Number(produktBasic.zakladna_cena).toFixed(2)} €/ks.</p> : <p className="text-[10px] text-amber-500 mt-1 flex items-center gap-1"><AlertTriangle className="w-3 h-3 shrink-0" /> Nie je vybraný blank — použije sa záložná ručná cena + potlač.</p>}
+              <label className="block text-slate-400 mb-1">Produkt z Katalógu produktov (bezšvová buffka)</label>
+              <ErpProduktVyber supabase={supabase} blankId={naklady.produkt_id} blanky={produkty} erpProdukty={erpProdukty} onZmena={(id) => ulozNaklady({ produkt_id: id })} onBlankVytvoreny={(b) => setProdukty(prev => [...prev, b])} />
             </div>
-            {!produktBasic && <Field label="Záložná ručná cena čistej buffky (€/ks, bez DPH)" value={naklady.cena_buffka_ks} step="0.05" onChange={(v) => ulozNaklady({ cena_buffka_ks: v })} />}
             <div className="flex items-center gap-3 p-2.5 bg-slate-950 rounded-xl border border-slate-800">
               <FotoSlot supabase={supabase} url={nastavenia.foto_basic_url} priecinok="buffky-materialy" onZmena={(url) => ulozNastavenia({ foto_basic_url: url })} />
               <span className="text-slate-400">Fotka materiálu Tubular Basic — zobrazí sa zákazníkovi v konfigurátore.</span>
@@ -187,13 +186,7 @@ export default function BuffkyTab({ supabase }) {
                     {produkt && <span className="text-emerald-400 font-mono">{Number(produkt.zakladna_cena).toFixed(2)} €/ks</span>}
                   </div>
                   <FotoSlot supabase={supabase} url={m.foto_url} priecinok="buffky-materialy" onZmena={(url) => ulozFotoPremium(m.kod, url)} />
-                  <select value={m.produkt_id || ''} onChange={(e) => pripojProduktPremium(m.kod, e.target.value ? Number(e.target.value) : null)} className="w-full px-2 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs">
-                    <option value="">-- vyber produkt --</option>
-                    {produkty.map(p => <option key={p.id} value={p.id}>{p.nazov} — {Number(p.zakladna_cena).toFixed(2)} €/ks</option>)}
-                  </select>
-                  {!produkt && (
-                    <p className="text-[10px] text-amber-500 flex items-center gap-1"><AlertTriangle className="w-3 h-3 shrink-0" /> Nie je vybraný produkt — náklad materiálu je 0€.</p>
-                  )}
+                  <ErpProduktVyber supabase={supabase} blankId={m.produkt_id} blanky={produkty} erpProdukty={erpProdukty} onZmena={(id) => pripojProduktPremium(m.kod, id)} onBlankVytvoreny={(b) => setProdukty(prev => [...prev, b])} />
                 </div>
               );
             })}
