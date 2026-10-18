@@ -88,14 +88,24 @@ function priceAt(cost: number, qty: number, cfg: PricingConfig) {
 }
 
 // Cely vypocet ceny jednej konfiguracie. Pouziva ho aj rezim "matica" (cena pri kazdej velkosti a kazdom materiali).
+// Obojstranna (sendvicova) vlajka: 2 potlacene vonkajsie latky + vnutorna blackout vrstva.
+// Nakladove sadzby su v sukromnej tabulke sendvic_nastavenia (len servisny kluc). Mesh (dierkovany)
+// material sa na sendvic nepouziva.
+async function nacitajSendvic(supabase: ReturnType<typeof createClient>, material: { je_mesh?: boolean | null }) {
+  if (material.je_mesh) throw new Error('Dierkovaný (mesh) materiál sa na obojstrannú vlajku nepoužíva — zvoľ iný materiál.');
+  const { data } = await supabase.from('sendvic_nastavenia').select('*').eq('id', 1).maybeSingle();
+  if (!data) throw new Error('Nastavenia sendviča (sendvic_nastavenia) nie sú k dispozícii — treba spustiť migration_sendvic_vlajky.sql.');
+  return { vlozkaM2: Number(data.vlozka_naklad_m2) || 0, pracaM2: Number(data.praca_naklad_m2) || 0, sitieKoef: Number(data.sitie_koef) || 1 };
+}
+
 async function spocitaj(supabase: ReturnType<typeof createClient>, v: Record<string, any>) {
-  const { tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnky = [], pocetKs = 1, expresne = false, osobnyOdber = false, stoziare = null, podstavce = null, b2bKod = null } = v;
+  const { tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnky = [], pocetKs = 1, expresne = false, osobnyOdber = false, stoziare = null, podstavce = null, b2bKod = null, obojstranna = false } = v;
   if (!tvarKod || !velkostKod) throw new Error('Chýba tvar alebo veľkosť vlajky.');
   if (!materialKod) throw new Error('Chýba materiál.');
 
   const [{ data: tvar }, { data: material }, { data: dokoncenie }, cenaStoziara, cenaPodstavca, { data: doplnkyDb }, { data: nastavenia }, { data: cfg }, nakladM2Sublimacia, { data: velkostRiadok }] = await Promise.all([
     supabase.from('vlajka_tvary').select('id').eq('kod', tvarKod).maybeSingle(),
-    supabase.from('vlajka_materialy').select('naklad_m2, sklad_material_id, naklad_m2_rucne').eq('kod', materialKod).eq('aktivny', true).maybeSingle(),
+    supabase.from('vlajka_materialy').select('*').eq('kod', materialKod).eq('aktivny', true).maybeSingle(),
     dokoncenieKod ? supabase.from('vlajka_dokoncenie').select('cena').eq('kod', dokoncenieKod).maybeSingle() : Promise.resolve({ data: null }),
     resolveStoziarCena(supabase, stoziarKod, velkostKod),
     resolvePodstavecCena(supabase, podstavecKod, velkostKod),
@@ -128,8 +138,15 @@ async function spocitaj(supabase: ReturnType<typeof createClient>, v: Record<str
   const nakladSitia = minutySitia * cenaMinutySitia;
   // Rezerva na odpad a kazy (ERP: Beachvlajky -> Veľkosti -> Rezerva) sa pripocita k spotrebe latky aj sublimacie, nie k sitiu.
   const rezervaKoef = 1 + (Number(nastavenia?.rezerva_odpad_percent ?? 3) || 0) / 100;
-  const nakladMaterial = Number(rozmer.spotreba_m2) * rezervaKoef * (nakladM2Latka + nakladM2Sublimacia) + nakladSitia;
+  const nakladZakladny = Number(rozmer.spotreba_m2) * rezervaKoef * (nakladM2Latka + nakladM2Sublimacia) + nakladSitia;
+  // Obojstranna sendvicova vlajka: druha potlacena latka + vnutorna vrstva + spojenie, sitie trva dlhsie.
+  let nakladMaterial = nakladZakladny;
+  if (obojstranna) {
+    const sv = await nacitajSendvic(supabase, material);
+    nakladMaterial = Number(rozmer.spotreba_m2) * rezervaKoef * (2 * (nakladM2Latka + nakladM2Sublimacia) + sv.vlozkaM2 + sv.pracaM2) + nakladSitia * sv.sitieKoef;
+  }
   const cenaMaterialKus = priceAt(nakladMaterial, ks, pricingConfig);
+  const priplatokSendvicKus = obojstranna ? Math.round((cenaMaterialKus - priceAt(nakladZakladny, ks, pricingConfig)) * 100) / 100 : 0;
   const marzaPercent = Math.round(marginAt(nakladMaterial, ks, pricingConfig));
 
   // Opracovanie, prut, podstavec aj doplnky su v DB ulozene ako NAKUPNE ceny — predajna cena sa
@@ -214,6 +231,7 @@ async function spocitaj(supabase: ReturnType<typeof createClient>, v: Record<str
       cenaSpolu: Math.round(cenaSpolu * 100) / 100,
       cenaMaterialKus,
       marzaPercent,
+      obojstranna: obojstranna ? { priplatokKus: priplatokSendvicKus, odporucane: ['S', 'M'].includes(String(velkostKod)) } : null,
   };
 }
 
@@ -229,7 +247,7 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const {
       tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod,
-      doplnky = [], pocetKs = 1, expresne = false, osobnyOdber = false, cenovnik = false,
+      doplnky = [], pocetKs = 1, expresne = false, osobnyOdber = false, cenovnik = false, obojstranna = false,
       stoziare = null, podstavce = null, b2bKod = null, // volitelne: [{ kod, mnozstvo }] — zakaznik si zvoli pocet kusov kazdeho pruta/podstavca zvlast
     } = body;
 
@@ -310,7 +328,7 @@ Deno.serve(async (req) => {
       return odpoved({ b2bCennik: { hladiny, dphPercent: Number(cfgB?.dph_percent ?? 23), velkosti } });
     }
 
-    const vstup = { tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnky, pocetKs, expresne, osobnyOdber, stoziare, podstavce, b2bKod };
+    const vstup = { tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnky, pocetKs, expresne, osobnyOdber, stoziare, podstavce, b2bKod, obojstranna: !!obojstranna };
 
     // Rezim "matica": cena samotnej vlajky (material + opracovanie, bez DPH, 1 ks) pri KAZDEJ velkosti a KAZDOM materiali (so zvyskom konfiguracie nezmeneným) —
     // zakaznik vidi cenu priamo pri vybere velkosti a materialu.

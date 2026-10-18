@@ -28,6 +28,7 @@ export default function ZastavaApp({ supabase }) {
 
   const [krok, setKrok] = useState('rozmery'); // rozmery | grafika | doplnky
   const [materialKod, setMaterialKod] = useState('');
+  const [obojstranna, setObojstranna] = useState(false); // sendvicova zastava (3 vrstvy, motiv z oboch stran)
   const [sirkaCm, setSirkaCm] = useState(150);
   const [vyskaCm, setVyskaCm] = useState(100);
   const [vyhotovenie, setVyhotovenie] = useState('obsite');
@@ -322,7 +323,7 @@ export default function ZastavaApp({ supabase }) {
     setCenaChyba('');
     const t = setTimeout(async () => {
       const { data, error } = await supabase.functions.invoke('zastava-price-preview', {
-        body: { materialKod, sirkaCm, vyskaCm, vyhotovenie, tunely, ocka, karabinky, popruhy, strapce, pocetKs, expresne, osobnyOdber, b2bKod: b2b.kod },
+        body: { materialKod, sirkaCm, vyskaCm, vyhotovenie, tunely, ocka, karabinky, popruhy, strapce, pocetKs, expresne, osobnyOdber, obojstranna, b2bKod: b2b.kod },
       });
       setCenaNacitava(false);
       if (error) { setCenaChyba(error.message); return; }
@@ -330,7 +331,7 @@ export default function ZastavaApp({ supabase }) {
       setCena(data.cena);
     }, 400);
     return () => clearTimeout(t);
-  }, [supabase, materialKod, sirkaCm, vyskaCm, vyhotovenie, tunely, ocka, karabinky, popruhy, strapce, pocetKs, expresne, osobnyOdber, b2b.kod]);
+  }, [supabase, materialKod, sirkaCm, vyskaCm, vyhotovenie, tunely, ocka, karabinky, popruhy, strapce, pocetKs, expresne, osobnyOdber, obojstranna, b2b.kod]);
 
   if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500 text-sm">Načítavam…</div>;
   if (loadError) return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-rose-600 text-sm px-4 text-center">{loadError}</div>;
@@ -354,7 +355,7 @@ export default function ZastavaApp({ supabase }) {
         tunely, ocka, karabinky, popruhy, strapce, strapceFarba: strapce.length > 0 ? strapceFarba : null,
         statnaVlajka: statnaVlajka?.nazov || null,
         farbaHex: bgColor, farbaPoznamka: pantoneNote, textNaVlajke: customText,
-        expresne, pocetKs, osobnyOdber, b2bKod: b2b.kod,
+        expresne, pocetKs, osobnyOdber, obojstranna, b2bKod: b2b.kod,
         nahladUrl: publicUrlData?.publicUrl || null,
       };
 
@@ -391,6 +392,7 @@ export default function ZastavaApp({ supabase }) {
         {krok === 'rozmery' && (
           <RozmeryTab
             materialy={katalog.materialy} materialKod={materialKod} onMaterial={setMaterialKod}
+            obojstranna={obojstranna} onObojstranna={setObojstranna} sendvicInfo={cena?.obojstranna}
             sirkaCm={sirkaCm} vyskaCm={vyskaCm} onRozmery={(w, h) => { setSirkaCm(w); setVyskaCm(h); }}
             vyhotovenie={vyhotovenie} onVyhotovenie={setVyhotovenie}
             onSablona={aplikujSablonu}

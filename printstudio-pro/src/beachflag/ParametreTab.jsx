@@ -8,7 +8,7 @@ const eur = (c) => (c == null ? null : Number(c).toFixed(2) + ' €');
 // undefined = cenovnik sa este nacitava (alebo zlyhal) — radsej nic nez zavadzajuce 'V cene'.
 const cenaText = (c) => (c == null ? '…' : c > 0 ? `+${Number(c).toFixed(2)} €` : 'V cene');
 
-export default function ParametreTab({ katalog, cenyVolieb, cenyMatica, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, onTvar, onVelkost, onMaterial, onDokoncenie, onStoziar, onPodstavec, onDalej }) {
+export default function ParametreTab({ katalog, cenyVolieb, cenyMatica, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, onTvar, onVelkost, onMaterial, onDokoncenie, onStoziar, onPodstavec, onDalej, obojstranna, onObojstranna, sendvicInfo }) {
   // Pri materiáloch sa ukazuje len rozdiel oproti práve zvolenému materiálu (cena vlajky bez DPH).
   const rozdielMaterialu = (kod) => {
     const m = cenyMatica?.materialy;
@@ -77,10 +77,10 @@ export default function ParametreTab({ katalog, cenyVolieb, cenyMatica, tvarKod,
           {katalog.materialy.map(m => {
             const active = m.kod === materialKod;
             return (
-              <div key={m.kod} onClick={() => onMaterial(m.kod)} className={`p-3 rounded-xl border cursor-pointer transition-all flex gap-3 ${active ? 'border-indigo-600 bg-indigo-50/80 ring-2 ring-indigo-500 text-indigo-900 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'}`}>
+              <div key={m.kod} onClick={() => { if (obojstranna && m.je_mesh) return; onMaterial(m.kod); }} className={`p-3 rounded-xl border transition-all flex gap-3 ${obojstranna && m.je_mesh ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'} ${active ? 'border-indigo-600 bg-indigo-50/80 ring-2 ring-indigo-500 text-indigo-900 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'}`}>
                 {m.obrazok_url && <img src={m.obrazok_url} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />}
                 <div className="min-w-0">
-                  <span className="font-bold text-xs block">{m.nazov}</span>
+                  <span className="font-bold text-xs block">{m.nazov}{obojstranna && m.je_mesh && <span className="ml-1.5 text-[10px] font-semibold text-rose-600">(na sendvič sa nepoužíva)</span>}</span>
                   {rozdielMaterialu(m.kod) != null && <span className={`text-xs font-black block ${rozdielMaterialu(m.kod) === 0 ? 'text-slate-400' : rozdielMaterialu(m.kod) > 0 ? 'text-indigo-600' : 'text-emerald-600'}`}>{rozdielMaterialu(m.kod) === 0 ? 'V cene' : `${rozdielMaterialu(m.kod) > 0 ? '+' : '−'}${Math.abs(rozdielMaterialu(m.kod)).toFixed(2)} € bez DPH`}</span>}
                   {m.popis && <p className="text-[11px] text-slate-500 mt-0.5">{m.popis}</p>}
                   {m.pouzitie && <p className="text-[10px] text-slate-400 mt-0.5">{m.pouzitie}</p>}
@@ -91,6 +91,34 @@ export default function ParametreTab({ katalog, cenyVolieb, cenyMatica, tvarKod,
           {katalog.materialy.length === 0 && <p className="text-xs text-rose-500 sm:col-span-2">Zatiaľ nie je nastavený žiadny materiál — doplň ho v admin paneli (PrintStudio Pro → Beachvlajky → Materiály).</p>}
         </div>
       </div>
+
+      {(() => {
+        const nemesh = katalog.materialy.filter(m => !m.je_mesh);
+        if (!onObojstranna || nemesh.length === 0) return null;
+        const odporucana = ['S', 'M'].includes(velkostKod);
+        const prepni = () => {
+          const zapnut = !obojstranna;
+          onObojstranna(zapnut);
+          // dierkovany material sa na sendvic nepouziva -> prepni na prvy plny material
+          const vybrany = katalog.materialy.find(m => m.kod === materialKod);
+          if (zapnut && vybrany?.je_mesh) onMaterial(nemesh[0].kod);
+        };
+        return (
+          <div className={`rounded-xl border p-3.5 transition-all ${obojstranna ? 'border-indigo-600 bg-indigo-50/80 ring-2 ring-indigo-500' : 'border-slate-200 bg-white'}`}>
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input type="checkbox" checked={!!obojstranna} onChange={prepni} className="mt-1 w-4 h-4 accent-indigo-600" />
+              <div>
+                <span className="font-bold text-sm text-slate-900 block">Obojstranná sendvičová vlajka (3 vrstvy)</span>
+                <p className="text-[11px] text-slate-500 mt-0.5">Motív je čitateľný z oboch strán — dve potlačené látky a vnútorná zatmavovacia vrstva, ktorá bráni presvitaniu. Vlajka je ťažšia a drahšia.</p>
+                {obojstranna && sendvicInfo?.priplatokKus != null && <p className="text-xs font-black text-indigo-600 mt-1">+{Number(sendvicInfo.priplatokKus).toFixed(2)} € bez DPH za kus</p>}
+              </div>
+            </label>
+            {obojstranna && !odporucana && (
+              <p className="mt-2 flex gap-1.5 text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2"><TriangleAlert className="w-3.5 h-3.5 shrink-0 mt-0.5" /> Sendvič odporúčame len pre veľkosti S a M — väčšie vlajky sú príliš ťažké a namáhajú tyč.</p>
+            )}
+          </div>
+        );
+      })()}
 
       <div>
         <label className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-3"><Scissors className="w-4 h-4 text-indigo-600" /> 4. Opracovanie okrajov</label>

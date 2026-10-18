@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Layers, Plus, Trash2, RefreshCw, AlertTriangle, ImagePlus } from 'lucide-react';
 import { nahrajObrazokDoplnku } from './nahrajObrazok';
 import NumberInput from '../NumberInput';
+import SendvicNastaveniaKarta from './SendvicNastaveniaKarta';
 
 function FotoUpload({ url, onNahraj }) {
   const inputRef = useRef(null);
@@ -95,6 +96,8 @@ export default function VlajkaMaterialyTab({ supabase }) {
         </p>
       </div>
 
+      <SendvicNastaveniaKarta supabase={supabase} />
+
       <div className="space-y-2">
         {materialy.map(m => {
           const sklad = skladMaterialy.find(s => s.id === m.sklad_material_id);
@@ -128,6 +131,9 @@ export default function VlajkaMaterialyTab({ supabase }) {
                     </div>
                   </div>
                 )}
+                <label className="flex items-center gap-1.5 text-xs text-slate-400 shrink-0" title="Dierkovaný materiál — na obojstrannú sendvičovú vlajku sa nepoužíva">
+                  <input type="checkbox" checked={!!m.je_mesh} onChange={(e) => uprav(m.id, { je_mesh: e.target.checked })} /> dierkovaný (mesh)
+                </label>
                 <label className="flex items-center gap-1.5 text-xs text-slate-400 shrink-0">
                   <input type="checkbox" checked={m.aktivny} onChange={(e) => uprav(m.id, { aktivny: e.target.checked })} /> aktívny
                 </label>

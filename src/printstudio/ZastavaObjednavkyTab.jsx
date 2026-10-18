@@ -70,7 +70,7 @@ export default function ZastavaObjednavkyTab({ supabase }) {
                     <span className="text-xs text-slate-500">{o.created_at ? new Date(o.created_at).toLocaleString('sk-SK') : ''}</span>
                   </div>
                   <div className="text-sm text-white font-semibold">
-                    {o.sirka_cm}×{o.vyska_cm} cm · {o.material_kod} · {o.pocet_ks} ks {o.expresne && <span className="text-amber-400">· expres</span>}
+                    {o.sirka_cm}×{o.vyska_cm} cm · {o.material_kod} · {o.pocet_ks} ks {o.expresne && <span className="text-amber-400">· expres</span>}{o.obojstranna && <span className="text-indigo-300 font-bold"> · OBOJSTRANNÁ (sendvič 3 vrstvy)</span>}
                   </div>
                   <div className="text-xs text-slate-400 mt-0.5">
                     Okraje: {o.vyhotovenie === 'laser' ? 'Laser orez' : 'Obšité'}{hardware.length > 0 && <> · {hardware.join(' · ')}</>}

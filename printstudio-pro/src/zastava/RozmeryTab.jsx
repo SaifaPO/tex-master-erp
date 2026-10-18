@@ -27,6 +27,7 @@ const SABLONY = [
 
 export default function RozmeryTab({
   materialy, materialKod, onMaterial,
+  obojstranna, onObojstranna, sendvicInfo,
   sirkaCm, vyskaCm, onRozmery,
   vyhotovenie, onVyhotovenie,
   onSablona,
@@ -78,10 +79,10 @@ export default function RozmeryTab({
         <label className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-2"><Layers className="w-4 h-4 text-indigo-600" /> Materiál vlajkoviny</label>
         <div className="space-y-2">
           {materialy.map(m => (
-            <label key={m.kod} className={`flex items-start gap-3 p-2.5 border rounded-lg cursor-pointer transition ${materialKod === m.kod ? 'border-indigo-500 bg-indigo-50/40' : 'border-slate-200 hover:bg-slate-50'}`}>
-              <input type="radio" name="material" checked={materialKod === m.kod} onChange={() => onMaterial(m.kod)} className="mt-1 text-indigo-600" />
+            <label key={m.kod} className={`flex items-start gap-3 p-2.5 border rounded-lg transition ${obojstranna && m.je_mesh ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'} ${materialKod === m.kod ? 'border-indigo-500 bg-indigo-50/40' : 'border-slate-200 hover:bg-slate-50'}`}>
+              <input type="radio" name="material" checked={materialKod === m.kod} disabled={!!(obojstranna && m.je_mesh)} onChange={() => onMaterial(m.kod)} className="mt-1 text-indigo-600" />
               <div className="flex-1 text-xs">
-                <span className="font-bold text-slate-800 block">{m.nazov}</span>
+                <span className="font-bold text-slate-800 block">{m.nazov}{obojstranna && m.je_mesh && <span className="ml-1.5 text-[10px] font-semibold text-rose-600">(na sendvič sa nepoužíva)</span>}</span>
                 {m.popis && <p className="text-slate-500 text-[11px]">{m.popis}</p>}
                 {m.pouzitie && <p className="text-slate-400 text-[10px] mt-0.5">Použitie: {m.pouzitie}</p>}
               </div>
@@ -89,6 +90,21 @@ export default function RozmeryTab({
           ))}
           {materialy.length === 0 && <p className="text-xs text-slate-500">Katalóg materiálov je zatiaľ prázdny.</p>}
         </div>
+        {onObojstranna && materialy.some(m => !m.je_mesh) && (
+          <label className={`mt-3 flex items-start gap-3 p-3 border rounded-lg cursor-pointer transition ${obojstranna ? 'border-indigo-600 bg-indigo-50/60 ring-2 ring-indigo-500' : 'border-slate-200 hover:bg-slate-50'}`}>
+            <input type="checkbox" checked={!!obojstranna} className="mt-1 w-4 h-4 accent-indigo-600" onChange={() => {
+              const zapnut = !obojstranna;
+              onObojstranna(zapnut);
+              const vybrany = materialy.find(m => m.kod === materialKod);
+              if (zapnut && vybrany?.je_mesh) onMaterial(materialy.find(m => !m.je_mesh).kod); // mesh sa na sendvic nepouziva
+            }} />
+            <div className="text-xs">
+              <span className="font-bold text-slate-800 block">Obojstranná sendvičová zástava (3 vrstvy)</span>
+              <p className="text-[11px] text-slate-500">Motív je čitateľný z oboch strán — dve potlačené látky a vnútorná zatmavovacia vrstva proti presvitaniu. Zástava je ťažšia a drahšia.</p>
+              {obojstranna && sendvicInfo?.priplatokKus != null && <p className="text-xs font-black text-indigo-600 mt-1">+{Number(sendvicInfo.priplatokKus).toFixed(2)} € bez DPH za kus</p>}
+            </div>
+          </label>
+        )}
       </div>
 
       <div>

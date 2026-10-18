@@ -48,6 +48,16 @@ function priceAt(cost: number, qty: number, cfg: PricingConfig) {
   return Math.round(cost * (1 + marginAt(cost, qty, cfg) / 100) * 100) / 100;
 }
 
+// Obojstranna (sendvicova) vlajka: 2 potlacene vonkajsie latky + vnutorna blackout vrstva.
+// Nakladove sadzby su v sukromnej tabulke sendvic_nastavenia (len servisny kluc). Mesh (dierkovany)
+// material sa na sendvic nepouziva.
+async function nacitajSendvic(supabase: ReturnType<typeof createClient>, material: { je_mesh?: boolean | null }) {
+  if (material.je_mesh) throw new Error('Dierkovaný (mesh) materiál sa na obojstrannú vlajku nepoužíva — zvoľ iný materiál.');
+  const { data } = await supabase.from('sendvic_nastavenia').select('*').eq('id', 1).maybeSingle();
+  if (!data) throw new Error('Nastavenia sendviča (sendvic_nastavenia) nie sú k dispozícii — treba spustiť migration_sendvic_vlajky.sql.');
+  return { vlozkaM2: Number(data.vlozka_naklad_m2) || 0, pracaM2: Number(data.praca_naklad_m2) || 0, sitieKoef: Number(data.sitie_koef) || 1 };
+}
+
 // B2B zlava (reklamne agentury): kod sa overuje na serveri v tabulke b2b_kody (servisny kluc). Neplatny / vypnuty kod = 0 %.
 async function b2bZlava(supabase: ReturnType<typeof createClient>, kod: unknown) {
   const k = String(kod || '').trim().toUpperCase();
@@ -87,7 +97,7 @@ Deno.serve(async (req) => {
     const {
       materialKod, sirkaCm, vyskaCm, vyhotovenie,
       tunely = [], ocka = [], karabinky = [], popruhy = {}, strapce = [],
-      pocetKs = 1, expresne = false, osobnyOdber = false, b2bKod = null,
+      pocetKs = 1, expresne = false, osobnyOdber = false, b2bKod = null, obojstranna = false,
     } = body;
 
     if (!materialKod) throw new Error('Chýba materiál.');
@@ -95,7 +105,7 @@ Deno.serve(async (req) => {
     if (vyhotovenie !== 'obsite' && vyhotovenie !== 'laser') throw new Error('Neplatné vyhotovenie okrajov.');
 
     const [{ data: material }, { data: naklady }, { data: cfg }] = await Promise.all([
-      supabase.from('zastava_materialy').select('naklad_m2, sklad_material_id, naklad_m2_rucne').eq('kod', materialKod).eq('aktivny', true).maybeSingle(),
+      supabase.from('zastava_materialy').select('*').eq('kod', materialKod).eq('aktivny', true).maybeSingle(),
       supabase.from('zastava_nastavenia').select('*').eq('id', 1).maybeSingle(),
       supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
     ]);
@@ -112,10 +122,13 @@ Deno.serve(async (req) => {
     const { tunelyBm, ockaPocet, karabinkyPocet, popruhBm, strapceBm } = vypocitajHardwareRozmery(Number(sirkaCm), Number(vyskaCm), tunely, ocka, karabinky, popruhy, strapce);
 
     const m2 = (Number(sirkaCm) * Number(vyskaCm)) / 10000;
-    const nakladMaterial = m2 * nakladM2Material;
-    const nakladVyhotovenie = vyhotovenie === 'laser'
+    const sv = obojstranna ? await nacitajSendvic(supabase, material) : null;
+    // Obojstranna sendvicova zastava: 2 potlacene latky + vnutorna vrstva + spojenie; obsitie trva dlhsie.
+    const nakladMaterial = sv ? m2 * (2 * nakladM2Material + sv.vlozkaM2 + sv.pracaM2) : m2 * nakladM2Material;
+    const nakladVyhotovenieZakl = vyhotovenie === 'laser'
       ? m2 * Number(naklady.naklad_laser_m2)
       : m2 * Number(naklady.min_sitia_na_m2) * Number(naklady.naklad_sitia_min);
+    const nakladVyhotovenie = sv && vyhotovenie === 'obsite' ? nakladVyhotovenieZakl * sv.sitieKoef : nakladVyhotovenieZakl;
     const nakladHardware =
       tunelyBm * Number(naklady.naklad_tunel_bm) +
       ockaPocet * Number(naklady.naklad_ocko_ks) +
@@ -126,6 +139,7 @@ Deno.serve(async (req) => {
 
     const ks = Math.max(1, Math.round(Number(pocetKs)) || 1);
     const cenaKus = priceAt(nakladKus, ks, pricingConfig);
+    const priplatokSendvicKus = sv ? Math.round((cenaKus - priceAt(nakladKus - nakladMaterial - nakladVyhotovenie + m2 * nakladM2Material + nakladVyhotovenieZakl, ks, pricingConfig)) * 100) / 100 : 0;
     const marzaPercent = Math.round(marginAt(nakladKus, ks, pricingConfig));
 
     const subtotal = cenaKus * ks;
@@ -144,6 +158,7 @@ Deno.serve(async (req) => {
         m2: Math.round(m2 * 100) / 100,
         cenaKus,
         marzaPercent,
+        obojstranna: sv ? { priplatokKus: priplatokSendvicKus } : null,
         subtotal: Math.round(subtotal * 100) / 100,
         b2bZlavaPercent,
         b2bZlavaEur: Math.round(b2bZlavaEur * 100) / 100,

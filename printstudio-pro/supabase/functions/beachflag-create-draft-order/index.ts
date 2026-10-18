@@ -100,6 +100,16 @@ function odpoved(body: Record<string, unknown>) {
 // Ak je material prepojeny na skutocny sklad (materials.id), naklad/m2 sa VZDY pocita naживo
 // z aktualnej ceny za bezny meter + sirky rolky v Sklade — nie zo starej ulozenej snimky.
 // Bez prepojenia (alebo ak sklad. polozka nema vyplnenu sirku) sa pouzije rucne zadany naklad_m2.
+// Obojstranna (sendvicova) vlajka: 2 potlacene vonkajsie latky + vnutorna blackout vrstva.
+// Nakladove sadzby su v sukromnej tabulke sendvic_nastavenia (len servisny kluc). Mesh (dierkovany)
+// material sa na sendvic nepouziva.
+async function nacitajSendvic(supabase: ReturnType<typeof createClient>, material: { je_mesh?: boolean | null }) {
+  if (material.je_mesh) throw new Error('Dierkovaný (mesh) materiál sa na obojstrannú vlajku nepoužíva — zvoľ iný materiál.');
+  const { data } = await supabase.from('sendvic_nastavenia').select('*').eq('id', 1).maybeSingle();
+  if (!data) throw new Error('Nastavenia sendviča (sendvic_nastavenia) nie sú k dispozícii — treba spustiť migration_sendvic_vlajky.sql.');
+  return { vlozkaM2: Number(data.vlozka_naklad_m2) || 0, pracaM2: Number(data.praca_naklad_m2) || 0, sitieKoef: Number(data.sitie_koef) || 1 };
+}
+
 async function resolveNakladM2(supabase: ReturnType<typeof createClient>, material: { naklad_m2: number; sklad_material_id: string | null; naklad_m2_rucne?: number | null }) {
   // Rucne zadana cena €/m2 (ERP: Materialy -> "rucne") ma prednost pred cenou zo skladu.
   if (Number(material.naklad_m2_rucne) > 0) return Number(material.naklad_m2_rucne);
@@ -149,7 +159,7 @@ Deno.serve(async (req) => {
     const {
       designId, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod,
       doplnky = [], farbaHex, farbaPoznamka, textNaVlajke,
-      expresne = false, pocetKs = 1, osobnyOdber = false, nahladUrl,
+      expresne = false, pocetKs = 1, osobnyOdber = false, nahladUrl, obojstranna = false,
       stoziare = null, podstavce = null, b2bKod = null, // volitelne: [{ kod, mnozstvo }] — pocet kusov kazdeho pruta/podstavca zvlast
     } = body;
 
@@ -208,7 +218,11 @@ Deno.serve(async (req) => {
     const nakladSitia = minutySitia * cenaMinutySitia;
     // Rezerva na odpad a kazy (ERP: Beachvlajky -> Veľkosti -> Rezerva) sa pripocita k spotrebe latky aj sublimacie, nie k sitiu.
     const rezervaKoef = 1 + (Number(nastavenia?.rezerva_odpad_percent ?? 3) || 0) / 100;
-    const nakladMaterial = Number(rozmer.spotreba_m2) * rezervaKoef * (nakladM2Latka + nakladM2Sublimacia) + nakladSitia;
+    let nakladMaterial = Number(rozmer.spotreba_m2) * rezervaKoef * (nakladM2Latka + nakladM2Sublimacia) + nakladSitia;
+    if (obojstranna) {
+      const sv = await nacitajSendvic(supabase, material);
+      nakladMaterial = Number(rozmer.spotreba_m2) * rezervaKoef * (2 * (nakladM2Latka + nakladM2Sublimacia) + sv.vlozkaM2 + sv.pracaM2) + nakladSitia * sv.sitieKoef;
+    }
 
     const b2bZlavaPercent = await b2bZlava(supabase, b2bKod);
     const cena = vypocitajCenuVlajky({
@@ -228,13 +242,14 @@ Deno.serve(async (req) => {
     const token = Deno.env.get('SHOPIFY_ADMIN_TOKEN');
     if (!domain || !token) throw new Error('SHOPIFY_STORE_DOMAIN alebo SHOPIFY_ADMIN_TOKEN nie je nastavený v Supabase secrets.');
 
-    const nazovPolozky = `Beachvlajka — ${tvar.nazov} (${velkost.kod})`;
+    const nazovPolozky = `Beachvlajka — ${tvar.nazov} (${velkost.kod})${obojstranna ? ' — obojstranná sendvičová' : ''}`;
     const properties: Record<string, string> = {
       _beachflag_order: 'true',
       _design_id: designId || '',
       _tvar: tvar.nazov,
       _velkost: velkost.kod,
       _material: material.nazov,
+      _obojstranna: obojstranna ? 'áno (sendvič 3 vrstvy)' : '',
       _opracovanie: dokoncenie?.nazov || '',
       _pocet_vlajok: String(ksVlajok),
       _b2b_kod: b2bZlavaPercent > 0 ? String(b2bKod).trim().toUpperCase() : '',
