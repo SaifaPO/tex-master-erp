@@ -16,7 +16,7 @@ create table if not exists transfer3d_nastavenia (
     medzera_cm numeric(5,2) not null default 0.5,            -- medzera medzi motívmi pri rezaní
     max_sirka_cm numeric(6,1) not null default 28,           -- max. rozmer jedného motívu
     max_vyska_cm numeric(6,1) not null default 38,
-    pokrytie_percent numeric(5,1) not null default 70,       -- priemerné pokrytie plochy motívu farbou (logo nie je plný obdĺžnik)
+    pokrytie_percent numeric(5,1) not null default 100,      -- pokrytie plochy: spotreby z RIP štatistiky už zahŕňajú reálne pokrytie, preto 100 %
     cena_folie_bm numeric(10,2) not null default 4.50,       -- €/bm fólie (pri šírke fólie vyššie)
     -- farby (€ za liter)
     cena_cmyk_l numeric(10,2) not null default 120,
@@ -62,9 +62,9 @@ create table if not exists transfer3d_urovne (
     poradie int not null default 0
 );
 insert into transfer3d_urovne (kod, nazov, popis, spotreba_cmyk_ml_m2, spotreba_biela_ml_m2, spotreba_lak_ml_m2, cas_tlace_min_m2, poradie) values
-    ('low', 'Nízky 3D', 'Jemné vystúpenie nad povrch', 8, 12, 10, 25, 1),
-    ('medium', 'Stredný 3D', 'Zlatá stredná cesta', 8, 24, 20, 45, 2),
-    ('high', 'Vysoký 3D', 'Maximálny a výrazný efekt', 8, 40, 34, 75, 3)
+    ('low', 'Nízky 3D', 'Jemné vystúpenie nad povrch', 6.6, 8.5, 6, 250, 1),
+    ('medium', 'Stredný 3D', 'Zlatá stredná cesta', 6.6, 17, 12, 450, 2),
+    ('high', 'Vysoký 3D', 'Maximálny a výrazný efekt', 6.6, 28, 20, 750, 3)
 on conflict (kod) do nothing;
 
 -- ---------- LAK (varnish): bez / čiastočne / na plno ----------
@@ -78,9 +78,9 @@ create table if not exists transfer3d_laky (
     poradie int not null default 0
 );
 insert into transfer3d_laky (kod, nazov, popis, pokrytie_percent, cas_nasobok, poradie) values
-    ('none', 'Bez laku (matný)', 'Matný povrch bez laku', 0, 1.00, 1),
-    ('partial', 'Čiastočný lak (pololesk)', 'Lak len na vybraných detailoch motívu', 40, 1.15, 2),
-    ('full', 'Lak na plno (vysoký lesk)', 'Lak na celom motíve', 100, 1.30, 3)
+    ('none', 'Bez laku (matný)', 'Matný povrch bez laku', 0, 0.85, 1),
+    ('partial', 'Čiastočný lak (pololesk)', 'Lak len na vybraných detailoch motívu', 40, 0.95, 2),
+    ('full', 'Lak na plno (vysoký lesk)', 'Lak na celom motíve', 100, 1.00, 3)
 on conflict (kod) do nothing;
 
 -- ---------- OBJEDNÁVKY ----------
