@@ -57,6 +57,7 @@ export function zonaKusu(box) {
 export function postavCestyZon(meshe, W, H) {
   const cesty = {};
   ZONY_TRENIROK.forEach((z) => { cesty[z.key] = new Path2D(); });
+  cesty.__kusy = []; // obrys (bounding box v px) každého strihového kusu — na popisy v šablóne na stiahnutie
   meshe.forEach(({ mesh, zona }) => {
     const geo = mesh.geometry;
     const uv = geo.attributes.uv;
@@ -64,6 +65,12 @@ export function postavCestyZon(meshe, W, H) {
     if (!uv) return;
     const path = cesty[zona] || cesty.noha;
     const trojuholnikov = idx ? idx.count / 3 : uv.count / 3;
+    const kus = { zona, x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+    for (let k = 0; k < uv.count; k++) {
+      const x = uv.getX(k) * W, y = uv.getY(k) * H;
+      if (x < kus.x0) kus.x0 = x; if (x > kus.x1) kus.x1 = x; if (y < kus.y0) kus.y0 = y; if (y > kus.y1) kus.y1 = y;
+    }
+    cesty.__kusy.push(kus);
     for (let t = 0; t < trojuholnikov; t++) {
       const a = idx ? idx.getX(t * 3) : t * 3;
       const b = idx ? idx.getX(t * 3 + 1) : t * 3 + 1;
@@ -75,6 +82,50 @@ export function postavCestyZon(meshe, W, H) {
     }
   });
   return cesty;
+}
+
+// Posledné postavené zóny z UV modelu — z nich sa pri stiahnutí vyrobí šablóna trenírok pre zákazníka.
+let POSLEDNE_CESTY = null;
+export function nastavCestyZon(c) { POSLEDNE_CESTY = c; }
+
+// Šablóna trenírok na stiahnutie: každá farebná časť strihu vyplnená svetlou farbou s tmavým obrysom a popisom (2048×2048 px — rovnaké
+// rozloženie, aké sa používa na 3D modeli). Zákazník do časti nakreslí vlastnú grafiku, rámy a popisy skryje a hotový PNG/JPG nahrá.
+export function vytvorSablonuTrenirok(cesty = POSLEDNE_CESTY, W = 2048, H = 2048) {
+  if (!cesty) return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const c = canvas.getContext('2d');
+  c.fillStyle = '#ffffff'; c.fillRect(0, 0, W, H);
+  const FARBY = { noha: ['#dbeafe', '#2563eb'], bok: ['#fee2e2', '#dc2626'], pasik: ['#fef9c3', '#ca8a04'], pas: ['#dcfce7', '#16a34a'], lem: ['#f3e8ff', '#9333ea'] };
+  c.lineJoin = 'round';
+  ZONY_TRENIROK.forEach((z) => {
+    const path = cesty[z.key];
+    if (!path) return;
+    const [vypln, ciara] = FARBY[z.key];
+    c.strokeStyle = ciara; c.lineWidth = 9; c.stroke(path);   // tmavý obrys (vnútorné hrany prekryje výplň nižšie)
+    c.fillStyle = vypln; c.strokeStyle = vypln; c.lineWidth = 4; c.fill(path); c.stroke(path);
+  });
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  (cesty.__kusy || []).forEach((k) => {
+    const sirka = k.x1 - k.x0, vyska = k.y1 - k.y0;
+    if (Math.max(sirka, vyska) < 110) return;
+    const z = ZONY_TRENIROK.find((q) => q.key === k.zona);
+    const [, ciara] = FARBY[k.zona] || FARBY.noha;
+    const otocit = vyska > sirka * 1.6;
+    const dlzka = (otocit ? vyska : sirka) * 0.88, hrubka = otocit ? sirka : vyska;
+    const text = `${z?.cislo || ''}. ${(z?.nazov || '').toUpperCase()}`;
+    c.save();
+    c.translate((k.x0 + k.x1) / 2, (k.y0 + k.y1) / 2);
+    if (otocit) c.rotate(-Math.PI / 2);
+    c.fillStyle = ciara;
+    let px = Math.min(46, hrubka * 0.4);
+    c.font = `800 ${px}px Inter, Arial, sans-serif`;
+    const sirkaTextu = c.measureText(text).width;
+    if (sirkaTextu > dlzka) { px = Math.floor(px * dlzka / sirkaTextu); c.font = `800 ${px}px Inter, Arial, sans-serif`; }
+    c.fillText(px >= 16 ? text : String(z?.cislo || ''), 0, 0);
+    c.restore();
+  });
+  return canvas;
 }
 
 // Predné panely nohavíc: pre každú nohu (z pohľadu nositeľa; model je otočený čelom k +z, ľavá noha nositeľa má +x) sa z vrcholov
@@ -215,5 +266,8 @@ export function vykresliTrenirky(ctx, canvas, cesty, configState, panely = null)
     ctx.fill(path);
     ctx.stroke(path);
   });
+  // hotová grafika zákazníka na celé plátno (podľa šablóny trenírok) — kreslí sa tak, ako je; logá a číslo sa pridajú navrch
+  const vlastna = configState.trenirky?.vlastnaGrafika?.img;
+  if (vlastna) ctx.drawImage(vlastna, 0, 0, canvas.width, canvas.height);
   nakresliLogaTrenirok(ctx, canvas, panely, configState, farby.noha);
 }

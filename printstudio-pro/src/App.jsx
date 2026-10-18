@@ -12,6 +12,7 @@ import ZastavaApp from './zastava/ZastavaApp';
 import Dres3DApp from './dres3d/Dres3DApp';
 import Celenky from './Celenky';
 import Buffky from './Buffky';
+import Transfer3D from './Transfer3D';
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -25,10 +26,11 @@ export default function App() {
   const jeZastava = new URLSearchParams(window.location.search).get('typ') === 'zastava';
   const jeCelenka = new URLSearchParams(window.location.search).get('typ') === 'celenka';
   const jeBuffka = new URLSearchParams(window.location.search).get('typ') === 'buffka';
+  const jeTransfer3d = new URLSearchParams(window.location.search).get('typ') === 'transfer3d';
 
   useEffect(() => {
     if (!supabase) { setLoadError('Supabase klient nie je nakonfigurovaný (chýbajú VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).'); setIsLoading(false); return; }
-    if (jeVlajka || jeZastava || jeCelenka || jeBuffka) { setIsLoading(false); return; }
+    if (jeVlajka || jeZastava || jeCelenka || jeBuffka || jeTransfer3d) { setIsLoading(false); return; }
     (async () => {
       const { kategorie: kats, produkty: prods } = await nacitajKategorieAProdukty(supabase);
       setKategorie(kats);
@@ -58,6 +60,9 @@ export default function App() {
   }
   if (jeBuffka) {
     return <Buffky supabase={supabase} />;
+  }
+  if (jeTransfer3d) {
+    return <Transfer3D supabase={supabase} />;
   }
 
   const vybranyProdukt = aktualnyProduktId != null ? produkty.find(p => p.id === aktualnyProduktId) : null;

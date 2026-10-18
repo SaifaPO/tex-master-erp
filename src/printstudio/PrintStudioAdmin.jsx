@@ -19,6 +19,7 @@ import PredajnyCennikTab from './PredajnyCennikTab';
 import ManualyTab from './ManualyTab';
 import CelenkyTab from './CelenkyTab';
 import BuffkyTab from './BuffkyTab';
+import Transfer3dTab from './Transfer3dTab';
 import ObjednavkyVsetkyTab from './ObjednavkyVsetkyTab';
 import DtfSeparatorTab from './DtfSeparatorTab';
 import B2bKodyTab from './B2bKodyTab';
@@ -37,6 +38,7 @@ const SUBTABS = [
   { id: 'objednavky', label: 'Všetky objednávky', icon: Inbox },
   { id: 'dresy', label: 'Dresy', icon: Shirt, appUrl: PRINTSTUDIO_BASE_URL },
   { id: 'buffky', label: 'Buffky', icon: Wind, appUrl: `${PRINTSTUDIO_BASE_URL}/?typ=buffka` },
+  { id: 'transfer3d', label: '3D transfery', icon: Layers3, appUrl: `${PRINTSTUDIO_BASE_URL}/?typ=transfer3d` },
   { id: 'celenky', label: 'Čelenky', icon: Circle, appUrl: `${PRINTSTUDIO_BASE_URL}/?typ=celenka` },
   { id: 'vlajky', label: 'Vlajky', icon: Flag, appUrl: `${PRINTSTUDIO_BASE_URL}/?typ=zastava` },
   { id: 'beachvlajky', label: 'Beachvlajky', icon: Waves, appUrl: `${PRINTSTUDIO_BASE_URL}/?typ=beachflag` },
@@ -61,7 +63,7 @@ const SUBTABS = [
 
 const SKUPINY = [
   { id: 'objednavky', label: 'Objednávky', icon: Inbox, tabs: ['objednavky'] },
-  { id: 'aplikacie', label: 'Aplikácie', icon: LayoutGrid, tabs: ['dresy', 'buffky', 'celenky', 'vlajky', 'beachvlajky', 'metraze'] },
+  { id: 'aplikacie', label: 'Aplikácie', icon: LayoutGrid, tabs: ['dresy', 'buffky', 'celenky', 'transfer3d', 'vlajky', 'beachvlajky', 'metraze'] },
   { id: 'kniznica', label: 'Knižnica', icon: Library, tabs: ['produkty', 'kategorie', 'farby', 'fonty', 'grafiky', 'mockupy'] },
   { id: 'ceny', label: 'Ceny a tlač', icon: Coins, tabs: ['cenotvorba', 'kostra-cien', 'potlace', 'kalkulacka-tlace', 'predajny-cennik'] },
   { id: 'nastavenia', label: 'Nastavenia', icon: Settings2, tabs: ['shopify', 'b2b-kody', 'manualy', 'dtf-separator', 'ulozisko'] },
@@ -145,6 +147,7 @@ export default function PrintStudioAdmin({ supabase, initialSubtab }) {
         {subtab === 'dresy' && <DresAdmin supabase={supabase} />}
         {subtab === 'celenky' && <CelenkyTab supabase={supabase} />}
         {subtab === 'buffky' && <BuffkyTab supabase={supabase} />}
+        {subtab === 'transfer3d' && <Transfer3dTab supabase={supabase} />}
         {subtab === 'b2b-kody' && <B2bKodyTab supabase={supabase} />}
         {subtab === 'dtf-separator' && <DtfSeparatorTab supabase={supabase} />}
         {subtab === 'ulozisko' && <UloziskoTab supabase={supabase} />}

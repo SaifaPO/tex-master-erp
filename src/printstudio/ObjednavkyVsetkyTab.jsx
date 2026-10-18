@@ -7,6 +7,7 @@ const TYPY = {
   dres:    { nazov: 'Dresy',       farba: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40', bodka: 'bg-indigo-400', karta: 'dresy' },
   buffka:  { nazov: 'Buffky',      farba: 'bg-amber-500/20 text-amber-300 border-amber-500/40',   bodka: 'bg-amber-400',  karta: 'buffky' },
   celenka: { nazov: 'Čelenky',     farba: 'bg-pink-500/20 text-pink-300 border-pink-500/40',      bodka: 'bg-pink-400',   karta: 'celenky' },
+  transfer3d: { nazov: '3D transfery', farba: 'bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/40', bodka: 'bg-fuchsia-400', karta: 'transfer3d' },
   zastava: { nazov: 'Vlajky',      farba: 'bg-sky-500/20 text-sky-300 border-sky-500/40',         bodka: 'bg-sky-400',    karta: 'vlajky' },
   beach:   { nazov: 'Beachvlajky', farba: 'bg-teal-500/20 text-teal-300 border-teal-500/40',      bodka: 'bg-teal-400',   karta: 'beachvlajky' },
   dtf:     { nazov: 'DTF metráž',  farba: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40', bodka: 'bg-emerald-400', karta: 'metraze' },
@@ -31,9 +32,9 @@ export default function ObjednavkyVsetkyTab({ supabase, onOtvor }) {
   const nacitaj = async () => {
     setNacitava(true);
     const vyber = (tabulka) => supabase.from(tabulka).select('*').order('created_at', { ascending: false }).limit(60);
-    const [dres, buffka, celenka, zastava, beach, dtf, textil] = await Promise.all([
+    const [dres, buffka, celenka, zastava, beach, dtf, textil, t3d] = await Promise.all([
       vyber('dres_objednavky'), vyber('buffky_objednavky'), vyber('celenky_objednavky'), vyber('zastava_objednavky'),
-      vyber('vlajka_objednavky'), vyber('dtf_objednavky'), vyber('textil_objednavky'),
+      vyber('vlajka_objednavky'), vyber('dtf_objednavky'), vyber('textil_objednavky'), vyber('transfer3d_objednavky'),
     ]);
     const r = [];
     (dres.data || []).forEach(o => r.push({ typ: 'dres', id: o.id, cas: o.created_at, cislo: o.shopify_order_number || '', zakaznik: o.zakaznik_meno || '', popis: `${o.produkt_nazov || 'Dres'}${o.tim_text ? ` · ${o.tim_text}` : ''}`, ks: o.pocet_ks, cena: o.cena_spolu, stav: o.status }));
@@ -43,6 +44,7 @@ export default function ObjednavkyVsetkyTab({ supabase, onOtvor }) {
     (beach.data || []).forEach(o => r.push({ typ: 'beach', id: o.id, cas: o.created_at, cislo: o.shopify_order_number || '', zakaznik: o.zakaznik_meno || '', popis: `${o.tvar_kod || ''} · ${o.velkost_kod || ''}`, ks: o.pocet_ks, cena: o.cena_spolu, stav: o.status }));
     (dtf.data || []).forEach(o => r.push({ typ: 'dtf', id: o.id, cas: o.created_at, cislo: o.cislo_objednavky || '', zakaznik: '', popis: `${o.dlzka_bm} bm${o.rezim === 'auto' ? '' : ' (vlastný súbor)'}`, ks: o.pocet_ks, cena: o.cena_spolu, stav: o.stav }));
     (textil.data || []).forEach(o => r.push({ typ: 'textil', id: o.id, cas: o.created_at, cislo: o.cislo_objednavky || '', zakaznik: '', popis: `${o.technologia === 'bavlna' ? 'Bavlna' : 'Sublimácia'} · ${o.dlzka_bm} bm`, ks: null, cena: o.cena_spolu, stav: o.stav }));
+    (t3d.data || []).forEach(o => r.push({ typ: 'transfer3d', id: o.id, cas: o.created_at, cislo: o.cislo_objednavky || '', zakaznik: '', popis: `${o.sirka_cm}×${o.vyska_cm} cm · ${o.uroven || ''} · lak ${o.lak || ''}`, ks: o.pocet_ks, cena: o.cena_spolu, stav: o.stav, erp: o.erp_cislo || '' }));
     r.sort((a, b) => new Date(b.cas || 0) - new Date(a.cas || 0));
     setRiadky(r);
     setNacitava(false);

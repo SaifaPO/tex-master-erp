@@ -55,13 +55,14 @@ export default function SuhrnModal({ supabase, produkt, configState, roster, mat
         } catch { return null; }
       };
       const vlastnaGrafikaUrl = await nahrajObr(configState.vlastnaGrafika?.img, 'vlastna-grafika');
+      const vlastnaGrafikaTrenirkyUrl = zostava !== 'dres' ? await nahrajObr(configState.trenirky?.vlastnaGrafika?.img, 'trenirky-vlastna-grafika') : null;
       const L = configState.loga || {};
       const erbHotoveUrl = L.typErbu === 'custom' ? await nahrajObr(L.vlastnyErbImg, 'erb-hotovy') : null;
       const erbObrazokUrl = await nahrajObr(L.erbObrazok, 'erb-obrazok');
       const erbNastavenia = { tvar: L.erbTvar || L.typErbu, text: L.erbText, font: L.erbFont, farbaVnutro: L.erbFarbaVnutro, farbaVnutro2: L.erbVnutroDruha, vzorVnutra: L.erbVnutroVzor, farbaLemovky: L.erbFarbaLemovka, hrubkaLemovkyMm: L.erbLemovkaHrubka, lemovka2: [L.erbLemovka2Farba, L.erbLemovka2Hrubka], farbaTextu: L.erbFarbaText, objekt: L.erbObjekt, objektPoz: L.erbObjektPoz };
 
       const payload = {
-        vlastnaGrafikaUrl, erbHotoveUrl, erbObrazokUrl, erbNastavenia,
+        vlastnaGrafikaUrl, vlastnaGrafikaTrenirkyUrl, erbHotoveUrl, erbObrazokUrl, erbNastavenia,
         designId,
         produktId: produkt?.id,
         vzorKod: configState.vzor,

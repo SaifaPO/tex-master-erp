@@ -134,7 +134,7 @@ Deno.serve(async (req) => {
       designId, produktId, vzorKod, farby = {}, golierTyp, materialKod, font, timText,
       roster = [], osobnyOdber = false, nahladUrl, b2bKod = null,
       zostava = 'dres', trenirkyFarby = null,
-      vlastnaGrafikaUrl = null, erbHotoveUrl = null, erbObrazokUrl = null, erbNastavenia = null,
+      vlastnaGrafikaUrl = null, vlastnaGrafikaTrenirkyUrl = null, erbHotoveUrl = null, erbObrazokUrl = null, erbNastavenia = null,
     } = body;
 
     if (!produktId) throw new Error('Chýba produktId.');
@@ -213,6 +213,7 @@ Deno.serve(async (req) => {
       _farba_rukava: farby.rukava || '',
       _farba_golier: farby.golier || '',
       _vlastna_grafika_url: vlastnaGrafikaUrl || '',
+      _trenirky_vlastna_grafika_url: pocetTrenirok > 0 ? (vlastnaGrafikaTrenirkyUrl || '') : '',
       _erb_hotovy_url: erbHotoveUrl || '',
       _erb_obrazok_url: erbObrazokUrl || '',
       _erb_nastavenia: erbNastavenia ? JSON.stringify(erbNastavenia).slice(0, 480) : '',

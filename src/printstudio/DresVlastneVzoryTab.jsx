@@ -127,6 +127,17 @@ export default function DresVlastneVzoryTab({ supabase }) {
         </button>
       </div>
 
+      <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4 flex flex-wrap items-center gap-4">
+        <img src="/sablony/sablona-trenirky-2048x2048.png" alt="Šablóna trenírok" className="w-28 h-28 rounded-lg border border-slate-700 bg-white object-contain shrink-0" />
+        <div className="flex-1 min-w-[220px]">
+          <h3 className="font-bold text-sm text-white mb-1">Šablóna trenírok (pre grafika)</h3>
+          <p className="text-xs text-slate-400">Rozloženie strihových dielov trenírok (nohavice, bočné panely a pásiky, pás, lemy) na ploche 2048×2048 px — rovnaké ako v 3D generátore. Do farebných častí nakreslíte vlastný motív, rámy a popisy skryjete a hotový PNG/JPG sa dá nahrať v generátore dresov v záložke Trenírky (Vlastná grafika na trenírky). Zákazník si túto šablónu stiahne priamo v generátore.</p>
+        </div>
+        <a href="/sablony/sablona-trenirky-2048x2048.png" download="sablona-trenirky-2048x2048.png" className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-white px-3.5 py-2 rounded-xl text-sm font-semibold transition shrink-0">
+          <Download className="w-4 h-4" /> Stiahnuť šablónu trenírok (PNG)
+        </a>
+      </div>
+
       {formOpen && (
         <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-5 space-y-4 max-w-lg">
           <h3 className="font-bold text-sm text-slate-200">Nový vlastný vzor</h3>

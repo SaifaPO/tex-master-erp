@@ -4,7 +4,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { RotateCcw, Camera } from 'lucide-react';
 import { updateJerseyTexture, logaVyrobcuReady, orezOffset, kresliVnutroDresu } from './dresRenderer';
-import { vykresliTrenirky, postavCestyZon, zonaKusu, vypocitajPanelyNoh } from './trenirkyRenderer';
+import { vykresliTrenirky, postavCestyZon, zonaKusu, vypocitajPanelyNoh, nastavCestyZon } from './trenirkyRenderer';
 
 // Trenírky sa v komplete posunú o toľko cm nižšie, aby pás nohavíc sedel pod spodným lemom dresu (v pôvodnom
 // súradnicovom systéme avatara sa oba kusy čiastočne prekrývajú — dres je prehodený cez pás).
@@ -867,6 +867,7 @@ function vytvorTrenirky(scene, textureCanvas, onLoaded, onProgress) {
         mesh.parent.add(vnutro);
       });
       const cesty = postavCestyZon(zaradene, textureCanvas.width, textureCanvas.height);
+      nastavCestyZon(cesty);
       const box = new THREE.Box3().setFromObject(root);
       scene.add(root);
       onLoaded?.(root, box, cesty, textura, vypocitajPanelyNoh(zaradene));

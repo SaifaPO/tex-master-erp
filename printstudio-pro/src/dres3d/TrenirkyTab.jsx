@@ -1,6 +1,7 @@
 import React from 'react';
 import { RYCHLE_FARBY } from './dresPresets';
-import { ZONY_TRENIROK, farbyTrenirok } from './trenirkyRenderer';
+import { ZONY_TRENIROK, farbyTrenirok, vytvorSablonuTrenirok } from './trenirkyRenderer';
+import { nacitajZoSuboru } from './obrazokUtil';
 import { TRENIRKY_PRESETY } from './trenirkyPresety';
 
 // Záložka "Trenírky": hotové dizajny (jedným klikom), ručné farby po zónach a logá + malé číslo na prednej strane nohavíc.
@@ -11,6 +12,24 @@ export default function TrenirkyTab({ configState, onZmenTrenirky }) {
   const cisloNoha = t.cisloNoha === 'prava' ? 'prava' : 'lava';
   const erbNoha = cisloNoha === 'lava' ? 'prava' : 'lava';
   const [aktivnaZona, setAktivnaZona] = React.useState('noha');
+
+  const stiahniSablonu = () => {
+    const canvas = vytvorSablonuTrenirok();
+    if (!canvas) { window.alert('Model trenírok sa ešte načítava — skúste to o chvíľu znova.'); return; }
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'sablona-trenirky-2048x2048.png'; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    }, 'image/png');
+  };
+  const nahrajGrafiku = async (e) => {
+    const file = e.target.files[0]; e.target.value = '';
+    if (!file) return;
+    const img = await nacitajZoSuboru(file);
+    if (img) onZmenTrenirky({ vlastnaGrafika: { img } });
+  };
 
   const jePresetAktivny = (p) => (p.prepojit ? prepojene : (!prepojene && ZONY_TRENIROK.every(z => (farby[z.key] || '').toLowerCase() === p.farby[z.key].toLowerCase())));
 
@@ -40,6 +59,23 @@ export default function TrenirkyTab({ configState, onZmenTrenirky }) {
             </button>
           );
         })}
+      </div>
+
+      <div className="pt-4 border-t border-slate-800 space-y-2">
+        <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Vlastná grafika na trenírky</h4>
+        <p className="text-[11px] text-slate-400">Stiahnite šablónu strihu trenírok, nakreslite do nej vlastný dizajn (napr. v Canve alebo Photoshope) a nahrajte hotový obrázok (PNG/JPG, 2048 × 2048 px). Logo výrobcu, erb a číslo na nohaviciach pridá generátor.</p>
+        <button type="button" onClick={stiahniSablonu} className="w-full bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold px-3 py-2 rounded-lg">⬇ Stiahnuť šablónu trenírok (PNG, 2048 × 2048 px)</button>
+        <label className="block w-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-3 py-2 rounded-lg text-center cursor-pointer">
+          ⬆ Nahrať hotovú grafiku
+          <input type="file" accept="image/*" className="hidden" onChange={nahrajGrafiku} />
+        </label>
+        {t.vlastnaGrafika?.img && (
+          <div className="flex items-center gap-2 text-[11px] text-slate-300">
+            <img src={t.vlastnaGrafika.img.src} alt="" className="w-12 h-12 object-contain bg-slate-800 rounded" />
+            <span className="flex-1">Vlastná grafika je nahraná.</span>
+            <button type="button" onClick={() => onZmenTrenirky({ vlastnaGrafika: null })} className="text-rose-400 hover:text-rose-300 font-semibold">Odstrániť</button>
+          </div>
+        )}
       </div>
 
       <div className="pt-4 border-t border-slate-800 space-y-3">
