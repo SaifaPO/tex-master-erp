@@ -250,6 +250,30 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState, onDragLog
       }
       return { x: 0, y: 0 };
     };
+    // Plynulé ťahanie: raycast (drahý — modely majú státisíce trojuholníkov) sa robí len 3× pri stlačení a z neho sa odvodí prepočet
+    // pohybu myši na pixely textúry. Počas ťahania sa textúra prekresľuje najviac raz za snímok (requestAnimationFrame) priamo,
+    // bez prekresľovania celej aplikácie — stav (React) sa uloží až po pustení myši.
+    const prekresliPocasTahania = () => {
+      const drag = draggingRef.current;
+      if (!drag) return;
+      drag.cakaFrame = false;
+      const canvas = textureCanvasRef.current;
+      const ctx = canvas?.getContext('2d');
+      const tex = canvasTextureRef.current;
+      if (!ctx || !tex || !drag.posledne) return;
+      const cfg = configStateRef.current;
+      const loga = cfg.loga || {};
+      const { x, y } = drag.posledne;
+      let novaLoga = loga;
+      if (drag.dragId === 'erb') novaLoga = { ...loga, erbOffset: { x, y } };
+      else if (drag.dragId === 'logoPred') novaLoga = { ...loga, logoPredOffset: { x, y } };
+      else if (drag.dragId.startsWith('rukav:')) {
+        const id = Number(drag.dragId.slice(6));
+        novaLoga = { ...loga, rukavLoga: (loga.rukavLoga || []).map((l) => (l.id === id ? { ...l, offsetX: x, offsetY: y } : l)) };
+      }
+      dragRegionsRef.current = updateJerseyTexture(ctx, canvas, { ...cfg, loga: novaLoga }) || dragRegionsRef.current;
+      tex.needsUpdate = true;
+    };
     const onPointerDown = (e) => {
       if (e.button !== undefined && e.button !== 0) return;
       if (zostavaRef.current === 'trenky') return; // dres je skrytý — nie je čo ťahať
@@ -257,30 +281,49 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState, onDragLog
       if (!bod) return;
       const region = najdiRegion(bod.px, bod.py);
       if (!region) return;
+      // lineárny prepočet pohybu myši (px na obrazovke) -> pohyb v textúre (px), odvodený z dvoch pomocných lúčov
+      const KROK = 14;
+      const bx = bodNaTexture(e.clientX + KROK, e.clientY);
+      const by = bodNaTexture(e.clientX, e.clientY + KROK);
+      const jakobian = bx && by ? { xx: (bx.px - bod.px) / KROK, xy: (by.px - bod.px) / KROK, yx: (bx.py - bod.py) / KROK, yy: (by.py - bod.py) / KROK } : null;
       draggingRef.current = {
         dragId: region.dragId,
         panelW: region.panelW,
         panelH: region.panelH,
         startPx: bod,
+        startMys: { x: e.clientX, y: e.clientY },
+        jakobian,
         startOffset: ziskajAktualnyOffset(region.dragId),
+        posledne: null,
+        cakaFrame: false,
       };
       controls.enabled = false;
     };
     const onPointerMove = (e) => {
       const drag = draggingRef.current;
       if (!drag) return;
-      const bod = bodNaTexture(e.clientX, e.clientY);
-      if (!bod) return;
-      const deltaFracX = (bod.px - drag.startPx.px) / drag.panelW;
-      const deltaFracY = (bod.py - drag.startPx.py) / drag.panelH;
-      const novyX = orezOffset(drag.startOffset.x + deltaFracX);
-      const novyY = orezOffset(drag.startOffset.y + deltaFracY);
-      onDragLogoRef.current?.(drag.dragId, novyX, novyY);
+      let dPx, dPy;
+      if (drag.jakobian) {
+        const dx = e.clientX - drag.startMys.x, dy = e.clientY - drag.startMys.y;
+        dPx = drag.jakobian.xx * dx + drag.jakobian.xy * dy;
+        dPy = drag.jakobian.yx * dx + drag.jakobian.yy * dy;
+      } else {
+        const bod = bodNaTexture(e.clientX, e.clientY);
+        if (!bod) return;
+        dPx = bod.px - drag.startPx.px; dPy = bod.py - drag.startPx.py;
+      }
+      drag.posledne = {
+        x: orezOffset(drag.startOffset.x + dPx / drag.panelW),
+        y: orezOffset(drag.startOffset.y + dPy / drag.panelH),
+      };
+      if (!drag.cakaFrame) { drag.cakaFrame = true; requestAnimationFrame(prekresliPocasTahania); }
     };
     const onPointerUp = () => {
-      if (!draggingRef.current) return;
+      const drag = draggingRef.current;
+      if (!drag) return;
       draggingRef.current = null;
       controls.enabled = true;
+      if (drag.posledne) onDragLogoRef.current?.(drag.dragId, drag.posledne.x, drag.posledne.y); // až teraz sa uloží do stavu aplikácie
     };
     renderer.domElement.addEventListener('pointerdown', onPointerDown);
     window.addEventListener('pointermove', onPointerMove);
@@ -931,7 +974,20 @@ function odstranDuplicitneVrstvy(root) {
 
   const outward = new THREE.Vector3();
   const normal = new THREE.Vector3();
+  // Kusy s rovnakou textúrou aj UV môžu byť rôzne diely na rôznych miestach (napr. predná a zadná polovica prúžku šitia na spodku alebo na
+  // krku, ľavý a pravý rukáv) — duplicitnými vrstvami sú len tie, ktoré ležia na tom istom mieste (stred do 1,5 cm).
+  const stred = (m) => { if (!m.geometry.boundingBox) m.geometry.computeBoundingBox(); return m.geometry.boundingBox.getCenter(new THREE.Vector3()); };
+  const zhluky = [];
   groups.forEach((group) => {
+    const kopie = [];
+    group.forEach((m) => {
+      const c = stred(m);
+      const k = kopie.find((z) => z.c.distanceTo(c) < 1.5);
+      if (k) k.m.push(m); else kopie.push({ c, m: [m] });
+    });
+    kopie.forEach((k) => zhluky.push(k.m));
+  });
+  zhluky.forEach((group) => {
     if (group.length < 2) return;
     let best = null, bestScore = -Infinity;
     group.forEach((m) => {
