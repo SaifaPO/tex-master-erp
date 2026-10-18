@@ -5,6 +5,7 @@ import NumberInput from './NumberInput';
 import AskQuestion from './AskQuestion';
 import { useB2bKod } from './b2b';
 import B2bKod from './B2bKod';
+import ZakaznikUdaje, { useZakaznikUdaje } from './ZakaznikUdaje';
 
 // Bonusove percentualne body navyse k zakladnej marzi z Cenotvorby — pouzite pre urovne sluzby,
 // kde nepredavame latku ani nazehlenie (tenky obrat musi mat vyssiu maržu, inak sa neoplati).
@@ -74,6 +75,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
   const [patternImage, setPatternImage] = useState(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const zak = useZakaznikUdaje(); // kontakt (e-mail + telefón povinné) a firemné údaje
   const [confirmation, setConfirmation] = useState('');
   const [submitError, setSubmitError] = useState('');
 
@@ -306,6 +308,8 @@ export default function TextilMetraz({ supabase, onSpat }) {
   const odoslatObjednavku = async () => {
     if (!nastavenia) return;
     if (typ === 'vzorka' && !rawFile) { setSubmitError('Nahrajte súbor s grafikou pre vzorku.'); return; }
+    const zChyba = zak.chyba();
+    if (zChyba) { setSubmitError(zChyba); return; }
     setIsSubmitting(true);
     setSubmitError('');
     setConfirmation('');
@@ -323,7 +327,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
       // Shopify Draft Order s 1 riadkom / 1 kusom / presnou cenou (namiesto triku s velkym
       // poctom kusov cez /cart/add.js), zakaznika presmerujeme rovno na platbu tejto objednavky.
       const { data, error } = await supabase.functions.invoke('textil-metraz-create-draft-order', {
-        body: {
+        body: { zakaznik: zak.payload(),
           technologia, mode: typ === 'metraz' ? mode : typ, lengthBm, directLengthBm, widthCm, heightCm, patternRepeat,
           deliverySpeed, harmonogram: aktualnyHarmonogram,
           suborNazov: rawFile?.name || null, suborCesta,
@@ -397,6 +401,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
             <span className="text-xs text-slate-500">Cena farebnice s DPH</span>
             <span className="text-2xl font-extrabold font-mono text-slate-900">{FAREBNICA_CENA_S_DPH.toFixed(2).replace('.', ',')} €</span>
           </div>
+          <ZakaznikUdaje zak={zak} />
           <button onClick={odoslatObjednavku} disabled={isSubmitting} className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white font-bold text-sm flex items-center justify-center gap-2 transition">
             <ShoppingCart className="w-4 h-4" /> {isSubmitting ? 'Vytváram objednávku…' : 'Objednať farebnicu a zaplatiť'}
           </button>
@@ -420,6 +425,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
             <span className="text-xs text-slate-500">Cena vzorky s DPH</span>
             <span className="text-2xl font-extrabold font-mono text-slate-900">{VZORKA_CENA_S_DPH.toFixed(2).replace('.', ',')} €</span>
           </div>
+          <ZakaznikUdaje zak={zak} />
           <button onClick={odoslatObjednavku} disabled={isSubmitting} className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white font-bold text-sm flex items-center justify-center gap-2 transition">
             <ShoppingCart className="w-4 h-4" /> {isSubmitting ? 'Vytváram objednávku…' : 'Objednať vzorku a zaplatiť'}
           </button>
@@ -650,6 +656,7 @@ export default function TextilMetraz({ supabase, onSpat }) {
               <CreditCard className="w-4 h-4" /> Platba vopred kartou (Shopify Pay)
             </div>
             {zrazanieNedostupne && <p className="text-xs text-amber-300">Zrážanie materiálu momentálne nie je dostupné, skús prosím neskôr alebo nám napíš.</p>}
+            <ZakaznikUdaje zak={zak} tmava />
             <button onClick={odoslatObjednavku} disabled={isSubmitting || zrazanieNedostupne} className="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white font-bold text-sm flex items-center justify-center gap-2 transition">
               <ShoppingCart className="w-4 h-4" /> {isSubmitting ? 'Vytváram objednávku…' : 'Objednať a zaplatiť'}
             </button>

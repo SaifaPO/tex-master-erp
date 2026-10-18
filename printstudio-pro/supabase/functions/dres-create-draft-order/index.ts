@@ -86,6 +86,40 @@ function odpoved(body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 }
 
+// Kontaktné a fakturačné údaje zákazníka z konfigurátora -> polia Shopify draft objednávky. E-mail a telefón sú povinné (kuriér
+// vyžaduje obe). Firma: IČO/DIČ/IČ DPH idú do poznámkových atribútov, fakturačná adresa do billing_address a (ak je iná) dodacia
+// adresa do shipping_address. Ak konfigurátor údaje nepošle (starší klient), draft sa vytvorí ako doteraz.
+function zakaznikDoDraftOrder(z: any): Record<string, unknown> {
+  if (!z || typeof z !== 'object') return {};
+  const email = String(z.email || '').trim();
+  const telefon = String(z.telefon || '').trim();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error('Zadaj platný e-mail.');
+  if (telefon.replace(/\D/g, '').length < 8) throw new Error('Zadaj telefónne číslo — kuriér ho vyžaduje spolu s e-mailom.');
+  const out: Record<string, unknown> = { email, phone: telefon };
+  if (z.firma) {
+    const firma = String(z.nazovFirmy || '').trim();
+    const ico = String(z.ico || '').trim();
+    if (!firma || !ico) throw new Error('Pri objednávke na firmu je potrebný názov firmy a IČO.');
+    const [meno, ...zvysok] = String(z.meno || firma).trim().split(/\s+/);
+    const adresa = (a: any) => ({
+      first_name: meno || firma, last_name: zvysok.join(' ') || '-', company: firma,
+      address1: String(a?.ulica || '').trim(), zip: String(a?.psc || '').trim(), city: String(a?.mesto || '').trim(),
+      country_code: String(a?.krajina || 'SK').trim() || 'SK', phone: telefon,
+    });
+    out.billing_address = adresa(z.fakturacna);
+    if (z.inaDodacia) out.shipping_address = adresa(z.dodacia);
+    out.note_attributes = [
+      { name: 'Objednávka na firmu', value: 'áno' },
+      { name: 'Firma', value: firma },
+      { name: 'IČO', value: ico },
+      { name: 'DIČ', value: String(z.dic || '').trim() },
+      { name: 'IČ DPH', value: String(z.icDph || '').trim() },
+      { name: 'Iná dodacia adresa', value: z.inaDodacia ? 'áno' : 'nie' },
+    ];
+  }
+  return out;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -197,6 +231,7 @@ Deno.serve(async (req) => {
 
     const draftPayload = {
       draft_order: {
+        ...zakaznikDoDraftOrder(body.zakaznik),
         line_items: [
           {
             title: nazovPolozky + (osobnyOdber ? ' (osobný odber)' : ''),

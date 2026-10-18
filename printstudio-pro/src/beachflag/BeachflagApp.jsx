@@ -11,6 +11,7 @@ import { useB2bKod } from '../b2b';
 import B2bKod from '../B2bKod';
 import DoplnkyTab from './DoplnkyTab';
 import VelkostnePorovnanie from './VelkostnePorovnanie';
+import ZakaznikUdaje, { useZakaznikUdaje } from '../ZakaznikUdaje';
 
 const BUCKET = 'print-designs';
 const DEFAULT_VIEWBOX = { w: 200, h: 420 };
@@ -63,6 +64,7 @@ export default function BeachflagApp({ supabase }) {
   const [cenaChyba, setCenaChyba] = useState('');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const zak = useZakaznikUdaje(); // kontakt (e-mail + telefón povinné) a firemné údaje
   const [submitError, setSubmitError] = useState('');
   const [techPanel, setTechPanel] = useState('');
 
@@ -350,6 +352,8 @@ export default function BeachflagApp({ supabase }) {
     const canvas = fabricRef.current;
     if (!canvas || !cena) return;
     setSubmitError('');
+    const zChyba = zak.chyba();
+    if (zChyba) { setSubmitError(zChyba); return; }
     setIsSubmitting(true);
     try {
       const designId = 'vlajka_' + Date.now();
@@ -360,6 +364,7 @@ export default function BeachflagApp({ supabase }) {
       const { data: publicUrlData } = supabase.storage.from(BUCKET).getPublicUrl(cesta);
 
       const payload = {
+        zakaznik: zak.payload(),
         designId,
         tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod,
         doplnky: doplnkyVybrane,
@@ -416,7 +421,7 @@ export default function BeachflagApp({ supabase }) {
             onSpat={() => setKrok('parametre')} onDalej={() => setKrok('doplnky')} />
         )}
         {krok === 'doplnky' && (
-          <DoplnkyTab katalog={katalog} cenyVolieb={cenyVolieb} doplnkyMnozstva={doplnkyMnozstva} onZmenMnozstvo={zmenMnozstvoDoplnku}
+          <DoplnkyTab zakaznikSlot={<ZakaznikUdaje zak={zak} />} katalog={katalog} cenyVolieb={cenyVolieb} doplnkyMnozstva={doplnkyMnozstva} onZmenMnozstvo={zmenMnozstvoDoplnku}
             tvarKod={tvarKod} velkostKod={velkostKod}
             stoziareMn={stoziareMn} onStoziarMn={nastavStoziarMn} podstavceMn={podstavceMn} onPodstavecMn={nastavPodstavecMn}
             expresne={expresne} onExpresne={setExpresne} pocetKs={pocetKs} onPocetKs={setPocetKs}

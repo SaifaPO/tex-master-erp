@@ -7,6 +7,7 @@ import NumberInput from './NumberInput';
 import { useB2bKod } from './b2b';
 import B2bKod from './B2bKod';
 import { initCelenkyEngine } from './celenky/celenkyEngine';
+import ZakaznikUdaje, { useZakaznikUdaje } from './ZakaznikUdaje';
 
 const BUCKET = 'print-designs';
 
@@ -32,6 +33,7 @@ export default function Celenky({ supabase, onSpat }) {
   const [osobnyOdber, setOsobnyOdber] = useState(false);
   const b2b = useB2bKod(supabase);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const zak = useZakaznikUdaje(); // kontakt (e-mail + telefón povinné) a firemné údaje
   const [dopytBezi, setDopytBezi] = useState(false);
   const [confirmation, setConfirmation] = useState('');
   const [submitError, setSubmitError] = useState('');
@@ -99,6 +101,8 @@ export default function Celenky({ supabase, onSpat }) {
 
   const odoslatObjednavku = async () => {
     if (!engineRef.current) return;
+    const zChyba = zak.chyba();
+    if (zChyba) { setSubmitError(zChyba); return; }
     setIsSubmitting(true);
     setSubmitError('');
     setConfirmation('');
@@ -111,7 +115,7 @@ export default function Celenky({ supabase, onSpat }) {
       const dizajnJson = engineRef.current.getDesignJson();
 
       const { data, error } = await supabase.functions.invoke('celenky-create-draft-order', {
-        body: { pocetKs, velkost: aktVariant.velkost_kod, material: aktVariant.material_kod, deliverySpeed, osobnyOdber, b2bKod: b2b.kod, suborNazov: 'celenka.png', suborCesta: cesta, dizajnJson },
+        body: { zakaznik: zak.payload(), pocetKs, velkost: aktVariant.velkost_kod, material: aktVariant.material_kod, deliverySpeed, osobnyOdber, b2bKod: b2b.kod, suborNazov: 'celenka.png', suborCesta: cesta, dizajnJson },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -562,6 +566,7 @@ export default function Celenky({ supabase, onSpat }) {
               <CreditCard className="w-4 h-4" /> Platba vopred kartou (Shopify Pay)
             </div>
 
+            <ZakaznikUdaje zak={zak} tmava />
             <button onClick={odoslatObjednavku} disabled={isSubmitting} className="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white font-bold text-sm flex items-center justify-center gap-2 transition">
               <ShoppingCart className="w-4 h-4" /> {isSubmitting ? 'Vytváram objednávku…' : 'Objednať a zaplatiť'}
             </button>

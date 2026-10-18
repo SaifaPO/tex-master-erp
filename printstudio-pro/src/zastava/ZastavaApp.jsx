@@ -10,6 +10,7 @@ import StatnaVlajkaPicker from './StatnaVlajkaPicker';
 import DoplnkyTab from './DoplnkyTab';
 import { useB2bKod } from '../b2b';
 import B2bKod from '../B2bKod';
+import ZakaznikUdaje, { useZakaznikUdaje } from '../ZakaznikUdaje';
 
 const BUCKET = 'print-designs';
 const PREVIEW_MAX_PX_DEFAULT = 480;
@@ -50,6 +51,7 @@ export default function ZastavaApp({ supabase }) {
   const [osobnyOdber, setOsobnyOdber] = useState(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const zak = useZakaznikUdaje(); // kontakt (e-mail + telefón povinné) a firemné údaje
   const [submitError, setSubmitError] = useState('');
 
   const [cena, setCena] = useState(null);
@@ -341,6 +343,8 @@ export default function ZastavaApp({ supabase }) {
     const canvas = fabricRef.current;
     if (!canvas || !cena) return;
     setSubmitError('');
+    const zChyba = zak.chyba();
+    if (zChyba) { setSubmitError(zChyba); return; }
     setIsSubmitting(true);
     try {
       const designId = 'zastava_' + Date.now();
@@ -351,6 +355,7 @@ export default function ZastavaApp({ supabase }) {
       const { data: publicUrlData } = supabase.storage.from(BUCKET).getPublicUrl(cesta);
 
       const payload = {
+        zakaznik: zak.payload(),
         designId, materialKod, sirkaCm, vyskaCm, vyhotovenie,
         tunely, ocka, karabinky, popruhy, strapce, strapceFarba: strapce.length > 0 ? strapceFarba : null,
         statnaVlajka: statnaVlajka?.nazov || null,
@@ -414,6 +419,7 @@ export default function ZastavaApp({ supabase }) {
         )}
         {krok === 'doplnky' && (
           <DoplnkyTab
+            zakaznikSlot={<ZakaznikUdaje zak={zak} />}
             tunely={tunely} onTunely={setTunely} ocka={ocka} onOcka={setOcka}
             karabinky={karabinky} onKarabinky={setKarabinky} popruhy={popruhy} onPopruhy={setPopruhy}
             strapce={strapce} onStrapce={setStrapce} strapceFarba={strapceFarba} onStrapceFarba={setStrapceFarba}

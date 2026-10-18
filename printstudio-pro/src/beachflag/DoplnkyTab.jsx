@@ -19,7 +19,7 @@ export default function DoplnkyTab({
   tvarKod, velkostKod, stoziareMn, onStoziarMn, podstavceMn, onPodstavecMn,
   expresne, onExpresne, pocetKs, onPocetKs,
   osobnyOdber, onOsobnyOdber,
-  cena, cenaNacitava, cenaChyba, isSubmitting, submitError, onObjednat, onSpat,
+  cena, cenaNacitava, cenaChyba, isSubmitting, submitError, onObjednat, onSpat, zakaznikSlot,
 }) {
   const tvar = katalog.tvary.find(t => t.kod === tvarKod);
   const dostupnePruty = katalog.stoziare.filter(st => st.kod !== 'none' && (!st.tvarIds?.length || st.tvarIds.includes(tvar?.id)));
@@ -113,6 +113,8 @@ export default function DoplnkyTab({
           <input type="checkbox" checked={osobnyOdber} onChange={(e) => onOsobnyOdber(e.target.checked)} />
           <span className="text-xs text-slate-600">Osobný odber v Prešove alebo Košiciach (neplatím poštovné)</span>
         </label>
+
+        {zakaznikSlot}
 
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2">
           <button onClick={onObjednat} disabled={isSubmitting || cenaNacitava || !cena} className="w-full sm:w-auto flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-extrabold text-sm py-3.5 px-6 rounded-xl shadow-lg flex items-center justify-center gap-2">
