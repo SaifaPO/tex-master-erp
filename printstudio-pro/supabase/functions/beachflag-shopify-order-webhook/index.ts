@@ -45,9 +45,11 @@ function pracovneDniDopredu(dni: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-async function vytvorErpZakazku(supabase: ReturnType<typeof createClient>, order: any, li: any, druh: 'celenky' | 'buffky' | 'transfer3d') {
-  const tabulka = druh === 'celenky' ? 'celenky_objednavky' : druh === 'transfer3d' ? 'transfer3d_objednavky' : 'buffky_objednavky';
-  const druhNazov = druh === 'celenky' ? 'čelenka' : druh === 'transfer3d' ? '3D transfer' : 'buffka';
+async function vytvorErpZakazku(supabase: ReturnType<typeof createClient>, order: any, li: any, druh: 'celenky' | 'buffky' | 'transfer3d' | 'stolova' | 'snurka' | 'folie') {
+  const TABULKY: Record<string, string> = { celenky: 'celenky_objednavky', buffky: 'buffky_objednavky', transfer3d: 'transfer3d_objednavky', stolova: 'stolova_objednavky', snurka: 'snurka_objednavky', folie: 'folie_objednavky' };
+  const NAZVY: Record<string, string> = { celenky: 'čelenka', buffky: 'buffka', transfer3d: '3D transfer', stolova: 'stolová vlajka', snurka: 'šnúrka na krk', folie: 'rezaná fólia' };
+  const tabulka = TABULKY[druh];
+  const druhNazov = NAZVY[druh];
   const objId = najdiVlastnost(li.properties, '_objednavka_id');
   const { data: obj } = await supabase.from(tabulka).select('*').eq('id', objId).maybeSingle();
   if (!obj) return { preskocene: 'objednavka_nenajdena' };
@@ -59,9 +61,15 @@ async function vytvorErpZakazku(supabase: ReturnType<typeof createClient>, order
     const { data: v } = await supabase.from('celenky_varianty').select('produkt_id').eq('velkost_kod', obj.velkost || '').eq('material_kod', obj.material || '').maybeSingle();
     blankId = v?.produkt_id ?? null;
     if (!blankId) { const { data: n } = await supabase.from('celenky_naklady').select('produkt_id').eq('id', 1).maybeSingle(); blankId = n?.produkt_id ?? null; }
-  } else if (druh === 'transfer3d') {
-    const { data: n } = await supabase.from('transfer3d_nastavenia').select('produkt_id').eq('id', 1).maybeSingle();
+  } else if (druh === 'transfer3d' || druh === 'folie') {
+    const { data: n } = await supabase.from(druh === 'folie' ? 'folie_nastavenia' : 'transfer3d_nastavenia').select('produkt_id').eq('id', 1).maybeSingle();
     blankId = n?.produkt_id ?? null;
+  } else if (druh === 'stolova' || druh === 'snurka') {
+    const { data: v } = druh === 'stolova'
+      ? await supabase.from('stolova_velkosti').select('produkt_id').eq('kod', obj.velkost || '').maybeSingle()
+      : await supabase.from('snurka_modely').select('produkt_id').eq('kod', obj.model || '').maybeSingle();
+    blankId = v?.produkt_id ?? null;
+    if (!blankId) { const { data: n } = await supabase.from(druh === 'stolova' ? 'stolova_nastavenia' : 'snurka_nastavenia').select('produkt_id').eq('id', 1).maybeSingle(); blankId = n?.produkt_id ?? null; }
   } else if (obj.typ === 'premium') {
     const { data: m } = await supabase.from('buffky_premium_materialy').select('produkt_id').eq('kod', obj.material_kod || '').maybeSingle();
     blankId = m?.produkt_id ?? null;
@@ -82,8 +90,11 @@ async function vytvorErpZakazku(supabase: ReturnType<typeof createClient>, order
 
   // výrobné stanice: grafik + (sublimácia) + (strihanie/laser) + (šitie) + balenie
   const aktivne = new Set<string>(['grafik', 'balenie']);
-  if (druh === 'transfer3d') {
-    aktivne.add('transfer'); // 3D transfer: tlač + rezanie fólie na stanici transfer
+  if (druh === 'transfer3d' || druh === 'folie') {
+    aktivne.add('transfer'); // 3D transfer / rezaná fólia: tlač/rezanie na stanici transfer
+  } else if (druh === 'stolova' || druh === 'snurka') {
+    aktivne.add('sublimacia');
+    if (druh === 'stolova') aktivne.add('sitie');
   } else {
     if (!produkt || produkt.tlac_sublimacia !== false) aktivne.add('sublimacia');
     if (produkt?.striha_sa_reze_vyseka) aktivne.add(produkt.laser_zariadenie_id ? 'laser' : 'strihanie');
@@ -101,7 +112,7 @@ async function vytvorErpZakazku(supabase: ReturnType<typeof createClient>, order
   const termin = pracovneDniDopredu(express ? 5 : 10);
   const dnes = new Date().toISOString().slice(0, 10);
   const orderId = `ZAK-${Date.now()}`;
-  const nazovVarianty = druh === 'transfer3d' ? `${obj.sirka_cm}×${obj.vyska_cm} cm, 3D ${obj.uroven || ''}, lak ${obj.lak || ''}` : druh === 'celenky' ? `${obj.velkost || ''} ${obj.material || ''}`.trim() : (obj.typ === 'premium' ? `Premium ${obj.material_kod || ''}`.trim() : 'Tubular Basic');
+  const nazovVarianty = druh === 'stolova' ? `${obj.velkost || ''}, ${obj.tvar || ''}, ${obj.okraj || ''}, ${obj.podstavec || ''}` : druh === 'snurka' ? `${obj.model || ''}` : druh === 'folie' ? `${obj.druh || ''} ${obj.farba || ''}, ${obj.sirka_mm}×${obj.vyska_mm} mm${obj.separacia ? ', separácia' : ''}` : druh === 'transfer3d' ? `${obj.sirka_cm}×${obj.vyska_cm} cm, 3D ${obj.uroven || ''}, lak ${obj.lak || ''}` : druh === 'celenky' ? `${obj.velkost || ''} ${obj.material || ''}`.trim() : (obj.typ === 'premium' ? `Premium ${obj.material_kod || ''}`.trim() : 'Tubular Basic');
   const atributy = (order.note_attributes || []).map((a: any) => `${a.name}: ${a.value}`).join(', ');
   const kontakt = [order.email, order.phone || order.shipping_address?.phone].filter(Boolean).join(', ');
   const poznamka = [
@@ -127,7 +138,7 @@ async function vytvorErpZakazku(supabase: ReturnType<typeof createClient>, order
   const { error: errOrder } = await supabase.from('orders').insert({
     id: orderId, customer: meno, created_at: casNow, scheduled_day: termin, drive_link: '', notes: poznamka, payment_type: 'faktura',
     items: [{
-      itemId: `${orderId}-1`, productId: produkt?.id || null, productName: produkt?.name || li.title || (druh === 'celenky' ? 'Čelenka' : druh === 'transfer3d' ? '3D transfer' : 'Buffka'),
+      itemId: `${orderId}-1`, productId: produkt?.id || null, productName: produkt?.name || li.title || (druh === 'celenky' ? 'Čelenka' : druh === 'transfer3d' ? '3D transfer' : druh === 'stolova' ? 'Stolová vlajka' : druh === 'snurka' ? 'Šnúrka na krk' : druh === 'folie' ? 'Rezaná fólia' : 'Buffka'),
       customCode: produkt?.custom_code || '', qualityTier: '', gender: 'neutral', qty: obj.pocet_ks, notes: poznamka, imageUrl: '', assignedDesignerId: '', addons: [],
       rozpisUrl, rozpisFileName: obj.subor_nazov || '', rozpisMimeType: /.pdf$/i.test(obj.subor_nazov || '') ? 'application/pdf' : (/.jpe?g$/i.test(obj.subor_nazov || '') ? 'image/jpeg' : 'image/png'),
       materialsNeeded: [], threadQtyM: 0, priority: (count || 0) + 1, productionDate: termin, stationDates: stanicDatumy, stationStatuses: stanicStatusy, materialDeducted: false,
@@ -178,7 +189,8 @@ Deno.serve(async (req) => {
       const jeCelenka = stitky.includes('celenky') || (li.properties || []).some((p: any) => p.name === '_rozmer_cm');
       const jeBuffka = stitky.includes('buffky') || (li.properties || []).some((p: any) => p.name === '_typ');
       const jeTransfer3d = stitky.includes('transfer3d') || (li.properties || []).some((p: any) => p.name === '_uroven');
-      const druh = jeTransfer3d ? 'transfer3d' : jeCelenka ? 'celenky' : jeBuffka ? 'buffky' : null;
+      const props = (li.properties || []).map((p: any) => p.name);
+      const druh = jeTransfer3d ? 'transfer3d' : props.includes('_stolova') ? 'stolova' : props.includes('_snurka') ? 'snurka' : props.includes('_folie') ? 'folie' : jeCelenka ? 'celenky' : jeBuffka ? 'buffky' : null;
       if (!druh) continue;
       const vysledok = await vytvorErpZakazku(supabase, order, li, druh);
       return odpoved(200, { ok: true, druh, ...vysledok });

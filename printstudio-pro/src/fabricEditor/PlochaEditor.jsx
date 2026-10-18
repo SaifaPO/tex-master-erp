@@ -59,7 +59,7 @@ const PlochaEditor = forwardRef(function PlochaEditor({
   }, [sirkaMm, vyskaMm, tvar]);
 
   useEffect(() => { engineRef.current?.setStrana(strana); }, [strana]);
-  useEffect(() => { nacitajGoogleFonty(fonty.map((f) => f.nazov || f)); }, [fonty]);
+  useEffect(() => { nacitajGoogleFonty([...FONTY_PREDVOLENE, ...fonty.map((f) => f.nazov || f)]); }, [fonty]);
   useEffect(() => { engineRef.current?.calcOffset(); }, [zoom]);
 
   // "fit" zoom podľa šírky kontajnera

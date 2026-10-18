@@ -106,7 +106,7 @@ export default function Transfer3dTab({ supabase }) {
   };
 
   // ---- Kalkulačka (volá rovnakú Edge Function ako appka; ako prihlásený admin dostane aj rozpis nákladov a maržu) ----
-  const [kalk, setKalk] = useState({ sirka: 10, vyska: 10, ks: 10, uroven: 'medium', lak: 'partial' });
+  const [kalk, setKalk] = useState({ sirka: 8, vyska: 8, ks: 10, uroven: 'medium', lak: 'partial' });
   const [kalkVysledok, setKalkVysledok] = useState(null);
   const [kalkChyba, setKalkChyba] = useState('');
   const [kalkBezi, setKalkBezi] = useState(false);
@@ -118,6 +118,26 @@ export default function Transfer3dTab({ supabase }) {
     if (error || !data?.ok) { setKalkVysledok(null); setKalkChyba(data?.error || (error?.message + ' — je funkcia transfer3d-create-draft-order nasadená v Supabase?')); return; }
     setKalkVysledok(data);
   };
+
+  // ---- Výrobné ceny a marže podľa počtu kusov (referenčný motív; štandard 8×8 cm, stredná hrubka, pololak) ----
+  const KS_UROVNE = [1, 5, 10, 25, 50, 100, 250];
+  const [ref, setRef] = useState({ sirka: 8, vyska: 8, uroven: 'medium', lak: 'partial' });
+  const [refRiadky, setRefRiadky] = useState([]);
+  const [refBezi, setRefBezi] = useState(false);
+  const [refChyba, setRefChyba] = useState('');
+  useEffect(() => {
+    if (!nast || !ulozene || urovne.length === 0 || laky.length === 0) return undefined;
+    const t = setTimeout(async () => {
+      setRefBezi(true); setRefChyba('');
+      const odpovede = await Promise.all(KS_UROVNE.map((ks) => supabase.functions.invoke('transfer3d-create-draft-order', { body: { preview: true, sirkaCm: ref.sirka, vyskaCm: ref.vyska, pocetKs: ks, uroven: ref.uroven, lak: ref.lak } })));
+      setRefBezi(false);
+      const chybna = odpovede.find((o) => o.error || !o.data?.ok);
+      if (chybna) { setRefRiadky([]); setRefChyba(chybna.data?.error || `${chybna.error?.message || 'Chyba'} — je funkcia transfer3d-create-draft-order nasadená v Supabase?`); return; }
+      setRefRiadky(odpovede.map((o, i) => ({ ks: KS_UROVNE[i], ...o.data })));
+    }, 1000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supabase, nast, ulozene, ref.sirka, ref.vyska, ref.uroven, ref.lak, urovne.length, laky.length]);
 
   if (nacitava) return <p className="text-sm text-slate-500">Načítavam…</p>;
   if (chyba) return <p className="text-sm text-amber-400 flex items-start gap-2"><AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> {chyba}</p>;
@@ -246,6 +266,46 @@ export default function Transfer3dTab({ supabase }) {
         <h3 className="font-bold text-sm text-white mb-1">Produkt v Katalógu produktov (pre zákazky v ERP)</h3>
         <p className="text-xs text-slate-400 mb-3">Pod týmto produktom sa bude evidovať 3D transfer. Cena sa z produktu neberie — počíta sa z výrobných hodnôt vyššie.</p>
         <ErpProduktVyber supabase={supabase} blankId={nast.produkt_id} blanky={produkty} erpProdukty={erpProdukty} onZmena={(id) => zmenNast({ produkt_id: id })} onBlankVytvoreny={(b) => setProdukty((prev) => [...prev, b])} />
+      </div>
+
+      {/* VÝROBNÉ CENY A MARŽE PODĽA POČTU KUSOV */}
+      <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-5">
+        <h3 className="font-bold text-sm text-white mb-1">Výrobné ceny a marže podľa počtu kusov</h3>
+        <p className="text-xs text-slate-400 mb-3">Náklad na 1 ks, predajná cena a marža pre referenčný motív pri rôznom počte kusov (rovnaký prepočet ako v ostatných aplikáciách; marža sa nastavuje v Cenotvorbe). Zmeň rozmer, hrúbku alebo lak a tabuľka sa sama prepočíta. Ceny bez DPH.</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+          <Pole label="Šírka motívu" jednotka="cm" step="0.1" value={ref.sirka} onChange={(v) => setRef({ ...ref, sirka: v })} />
+          <Pole label="Výška motívu" jednotka="cm" step="0.1" value={ref.vyska} onChange={(v) => setRef({ ...ref, vyska: v })} />
+          <div><label className="block text-slate-400 mb-1 text-xs">3D efekt (hrúbka)</label><select value={ref.uroven} onChange={(e) => setRef({ ...ref, uroven: e.target.value })} className="w-full px-2 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs">{urovne.map((u) => <option key={u.kod} value={u.kod}>{u.nazov}</option>)}</select></div>
+          <div><label className="block text-slate-400 mb-1 text-xs">Lak</label><select value={ref.lak} onChange={(e) => setRef({ ...ref, lak: e.target.value })} className="w-full px-2 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs">{laky.map((l) => <option key={l.kod} value={l.kod}>{l.nazov}</option>)}</select></div>
+        </div>
+        {refChyba && <p className="text-xs text-rose-400 mb-2">{refChyba}</p>}
+        <div className="overflow-x-auto rounded-xl border border-slate-800">
+          <table className="w-full text-xs text-left">
+            <thead className="bg-slate-950 text-slate-500 uppercase text-[10px]">
+              <tr><th className="px-3 py-2">Počet ks</th><th className="px-3 py-2 text-right">Fólia</th><th className="px-3 py-2 text-right">Náklad / ks</th><th className="px-3 py-2 text-right">Predaj / ks</th><th className="px-3 py-2 text-right">Marža / ks</th><th className="px-3 py-2 text-right">Marža %</th><th className="px-3 py-2 text-right">Náklad spolu</th><th className="px-3 py-2 text-right">Predaj spolu</th></tr>
+            </thead>
+            <tbody>
+              {refBezi && refRiadky.length === 0 && <tr><td colSpan={8} className="px-3 py-4 text-center text-slate-500">Počítam…</td></tr>}
+              {refRiadky.map((x) => {
+                const a = x.admin;
+                const margaKs = a ? x.cenaKsBezDph - a.nakladKs : null;
+                return (
+                  <tr key={x.ks} className="border-t border-slate-800 text-slate-200">
+                    <td className="px-3 py-2 font-bold text-white">{x.ks} ks</td>
+                    <td className="px-3 py-2 text-right font-mono text-slate-400">{x.dlzkaBm} bm</td>
+                    <td className="px-3 py-2 text-right font-mono">{a ? eur(a.nakladKs) : '—'}</td>
+                    <td className="px-3 py-2 text-right font-mono font-bold text-white">{eur(x.cenaKsBezDph)}</td>
+                    <td className="px-3 py-2 text-right font-mono text-emerald-400">{margaKs != null ? eur(margaKs) : '—'}</td>
+                    <td className="px-3 py-2 text-right font-mono text-emerald-400">{a && a.nakladKs > 0 ? `${Math.round((x.cenaKsBezDph / a.nakladKs - 1) * 100)} %` : '—'}</td>
+                    <td className="px-3 py-2 text-right font-mono text-slate-400">{a ? eur(a.nakladSpolu) : '—'}</td>
+                    <td className="px-3 py-2 text-right font-mono">{eur(x.logaSpoluBezDph)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-[10px] text-slate-500 mt-2">Predaj zahŕňa minimálnu cenu objednávky; manipulačný poplatok a poštovné sa pripočítavajú zvlášť (v tabuľke nie sú).</p>
       </div>
 
       {/* KALKULAČKA */}
