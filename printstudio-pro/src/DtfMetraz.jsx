@@ -5,7 +5,6 @@ import NumberInput from './NumberInput';
 import AskQuestion from './AskQuestion';
 import { useB2bKod } from './b2b';
 import B2bKod from './B2bKod';
-import ZakaznikUdaje, { useZakaznikUdaje } from './ZakaznikUdaje';
 
 const BUCKET = 'print-designs';
 const ROLL_WIDTH_CM = 56;
@@ -66,7 +65,6 @@ export default function DtfMetraz({ supabase, onSpat }) {
   const [logoImage, setLogoImage] = useState(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const zak = useZakaznikUdaje(); // kontakt (e-mail + telefón povinné) a firemné údaje
   const [confirmation, setConfirmation] = useState('');
   const [submitError, setSubmitError] = useState('');
 
@@ -232,8 +230,6 @@ export default function DtfMetraz({ supabase, onSpat }) {
   const odoslatObjednavku = async () => {
     if (!nastavenia) return;
     if (mode === 'vzorky' && !rawFile) { setSubmitError('Nahrajte súbor s grafikou pre A4 vzorku.'); return; }
-    const zChyba = zak.chyba();
-    if (zChyba) { setSubmitError(zChyba); return; }
     setIsSubmitting(true);
     setSubmitError('');
     setConfirmation('');
@@ -252,7 +248,7 @@ export default function DtfMetraz({ supabase, onSpat }) {
       // (namiesto triku s velkym poctom kusov cez /cart/add.js), zakaznika presmerujeme rovno na
       // platbu tejto objednavky.
       const { data, error } = await supabase.functions.invoke('dtf-metraz-create-draft-order', {
-        body: { zakaznik: zak.payload(),
+        body: {
           mode, widthCm, heightCm, qty, directLengthBm,
           deliverySpeed, harmonogram: aktualnyHarmonogram,
           suborNazov: rawFile?.name || null, suborCesta,
@@ -323,7 +319,6 @@ export default function DtfMetraz({ supabase, onSpat }) {
             <span className="text-xs text-slate-500">Cena palety s DPH</span>
             <span className="text-2xl font-extrabold font-mono text-slate-900">5,00 €</span>
           </div>
-          <ZakaznikUdaje zak={zak} />
           <button onClick={odoslatObjednavku} disabled={isSubmitting} className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white font-bold text-sm flex items-center justify-center gap-2 transition">
             <ShoppingCart className="w-4 h-4" /> {isSubmitting ? 'Vytváram objednávku…' : 'Objednať paletu a zaplatiť'}
           </button>
@@ -348,7 +343,6 @@ export default function DtfMetraz({ supabase, onSpat }) {
             <span className="text-xs text-slate-500">Cena vzorky s DPH</span>
             <span className="text-2xl font-extrabold font-mono text-slate-900">5,00 €</span>
           </div>
-          <ZakaznikUdaje zak={zak} />
           <button onClick={odoslatObjednavku} disabled={isSubmitting} className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white font-bold text-sm flex items-center justify-center gap-2 transition">
             <ShoppingCart className="w-4 h-4" /> {isSubmitting ? 'Vytváram objednávku…' : 'Objednať vzorku a zaplatiť'}
           </button>
@@ -498,7 +492,6 @@ export default function DtfMetraz({ supabase, onSpat }) {
             <div className="p-2.5 rounded-lg bg-indigo-950/40 border border-indigo-500/20 flex items-center gap-2 text-[11px] text-indigo-300">
               <CreditCard className="w-4 h-4" /> Platba vopred kartou (Shopify Pay)
             </div>
-            <ZakaznikUdaje zak={zak} tmava />
             <button onClick={odoslatObjednavku} disabled={isSubmitting} className="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white font-bold text-sm flex items-center justify-center gap-2 transition">
               <ShoppingCart className="w-4 h-4" /> {isSubmitting ? 'Vytváram objednávku…' : 'Objednať a zaplatiť'}
             </button>

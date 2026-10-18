@@ -1,12 +1,10 @@
 import React, { useState } from 'react';
 import { X, Download } from 'lucide-react';
-import ZakaznikUdaje, { useZakaznikUdaje } from '../ZakaznikUdaje';
 
 const BUCKET = 'print-designs';
 
 export default function SuhrnModal({ supabase, produkt, configState, roster, materialy, cena, b2bKod, zostava = 'dres', trenirkyFarby = null, osobnyOdber, onOsobnyOdber, snapshotUrl, onClose, onBackToEdit }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const zak = useZakaznikUdaje();
   const [submitError, setSubmitError] = useState('');
   const [techPanel, setTechPanel] = useState('');
 
@@ -33,8 +31,6 @@ export default function SuhrnModal({ supabase, produkt, configState, roster, mat
   const objednat = async () => {
     if (!supabase) { setSubmitError('Supabase klient nie je nakonfigurovaný.'); return; }
     setSubmitError('');
-    const zChyba = zak.chyba();
-    if (zChyba) { setSubmitError(zChyba); return; }
     setIsSubmitting(true);
     try {
       const designId = 'dres_' + Date.now();
@@ -65,7 +61,6 @@ export default function SuhrnModal({ supabase, produkt, configState, roster, mat
       const erbNastavenia = { tvar: L.erbTvar || L.typErbu, text: L.erbText, font: L.erbFont, farbaVnutro: L.erbFarbaVnutro, farbaVnutro2: L.erbVnutroDruha, vzorVnutra: L.erbVnutroVzor, farbaLemovky: L.erbFarbaLemovka, hrubkaLemovkyMm: L.erbLemovkaHrubka, lemovka2: [L.erbLemovka2Farba, L.erbLemovka2Hrubka], farbaTextu: L.erbFarbaText, objekt: L.erbObjekt, objektPoz: L.erbObjektPoz };
 
       const payload = {
-        zakaznik: zak.payload(),
         vlastnaGrafikaUrl, erbHotoveUrl, erbObrazokUrl, erbNastavenia,
         designId,
         produktId: produkt?.id,
@@ -156,8 +151,6 @@ export default function SuhrnModal({ supabase, produkt, configState, roster, mat
             <input type="checkbox" checked={osobnyOdber} onChange={(e) => onOsobnyOdber(e.target.checked)} />
             <span className="text-xs text-slate-300">Osobný odber v Prešove alebo Košiciach (neplatím poštovné)</span>
           </label>
-
-          <ZakaznikUdaje zak={zak} tmava />
 
           <div className="bg-slate-900/80 p-3 sm:p-4 rounded-xl border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-2.5">
             <div>

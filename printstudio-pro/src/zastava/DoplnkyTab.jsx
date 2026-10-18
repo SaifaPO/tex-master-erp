@@ -20,7 +20,7 @@ export default function DoplnkyTab({
   pocetKs, onPocetKs,
   osobnyOdber, onOsobnyOdber,
   cena, cenaChyba, cenaNacitava,
-  isSubmitting, submitError, onObjednat, onSpat, zakaznikSlot,
+  isSubmitting, submitError, onObjednat, onSpat,
 }) {
   const pridajTunel = () => onTunely([...tunely, { side: 'bottom' }]);
   const zmazTunel = (i) => onTunely(tunely.filter((_, idx) => idx !== i));
@@ -157,8 +157,6 @@ export default function DoplnkyTab({
           <input type="checkbox" checked={osobnyOdber} onChange={(e) => onOsobnyOdber(e.target.checked)} />
           <span className="text-xs text-slate-600">Osobný odber v Prešove alebo Košiciach (neplatím poštovné)</span>
         </label>
-
-        {zakaznikSlot}
 
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2">
           <div className="flex items-center gap-2 w-full sm:w-auto">
