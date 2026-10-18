@@ -8,7 +8,9 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { makeFlatlockTexture, makeCoverstitchTexture, overlayMaterial } from '../stitchTextures';
 
-const CAM_DIST = 40; // vzdialenost kamery — valec je vysoky ako je obvod (1:1 ako strih 50x50 cm)
+const CAM_DIST = 30; // vzdialenost kamery
+// Hotova buffka je 50 cm dlha, ale v 3D sa ukazuje nazbierana (kratsia) ako ked sa nosi — strih ostava 50x50 cm.
+const POMER_VYSKY_3D = 0.56;
 const CANON = 1000; // kanonicky priestor kreslenia — stvorec, zhodny s 50x50cm formatom
 // Premium ma horny a spodny okraj obsity/zahnuty dovnutra (2cm lem) — tam sa grafika neda
 // vidiet po zositi. 2cm z 50cm formatu = 40 kanonickych jednotiek (1000/50*2).
@@ -292,7 +294,7 @@ export function initBuffkyEngine(root, opts = {}) {
 
     // Buffka: obvod 50 cm, vyska 50 cm (strih 50x50 cm) -> valec s rovnakym pomerom stran ako plocha strihu.
     // Potlac sa tak nenatiahne do sirky. Basic: potlac na tubularnu latku, panely A/B; Premium: jeden sev vzadu.
-    const radius = 3.6, height = 2 * Math.PI * radius;
+    const radius = 3.6, height = 2 * Math.PI * radius * POMER_VYSKY_3D;
     const rotY = isPremium ? Math.PI : -Math.PI / 2; // premium: sev (okraj plochy strihu, u=0) vzadu; basic: A spredu, B zozadu
     const deform = (geo) => {
       const pos = geo.attributes.position;
@@ -300,7 +302,8 @@ export function initBuffkyEngine(root, opts = {}) {
         const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
         const angle = Math.atan2(z, x);
         const fold = Math.sin(y * 1.2 + angle * 2) * 0.07 + Math.cos(angle * 4) * 0.05;
-        const radiusModifier = 1.0 - 0.02 * Math.cos((y / height) * Math.PI) + fold * 0.12;
+        const nazbierane = Math.sin((y / height) * Math.PI * 2 * 5 + angle * 0.8) * 0.022; // vodorovne zhyby nazbieranej latky
+        const radiusModifier = 1.0 - 0.02 * Math.cos((y / height) * Math.PI) + fold * 0.12 + nazbierane;
         pos.setX(i, x * radiusModifier); pos.setZ(i, z * radiusModifier);
       }
       geo.computeVertexNormals();

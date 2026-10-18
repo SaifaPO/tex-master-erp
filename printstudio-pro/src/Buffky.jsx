@@ -416,7 +416,7 @@ export default function Buffky({ supabase, onSpat }) {
             </div>
             <div className="bg-slate-800/60 rounded-xl p-2 border border-slate-700/50">
               <div className="text-slate-400 text-[10px] uppercase font-bold">Rozmery</div>
-              <div className="font-bold text-cyan-400 mt-0.5">obvod 50 × dĺžka 50 cm</div>
+              <div className="font-bold text-cyan-400 mt-0.5">obvod 50 × dĺžka 50 cm (v 3D nazbieraná)</div>
             </div>
           </div>
 
