@@ -159,7 +159,8 @@ export default function Celenky({ supabase, onSpat }) {
 
       <main ref={rootRef} className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-4 grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
         {/* ĽAVÝ PANEL: nástroje, farby, text, grafiky, vrstvy */}
-        <aside className="lg:col-span-4 bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden flex flex-col">
+        <div className="lg:col-span-4 lg:relative lg:self-stretch">
+        <aside className="lg:absolute lg:inset-0 bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden flex flex-col">
           <div className="p-3 bg-gradient-to-r from-slate-50 to-indigo-50/40 border-b border-slate-200 space-y-2.5">
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-bold text-slate-700">✂️ Strih:</span>
@@ -194,11 +195,11 @@ export default function Celenky({ supabase, onSpat }) {
           </div>
 
           <div className="flex border-b border-slate-200 bg-slate-50 p-1 gap-0.5">
-            <button data-tab="tab-templates" className="tab-btn flex-1 min-w-0 px-1 py-1.5 text-[11px] leading-tight font-bold rounded-lg transition bg-white text-indigo-600 shadow-xs">🏆 Vzory (10)</button>
-            <button data-tab="tab-color" className="tab-btn flex-1 min-w-0 px-1 py-1.5 text-[11px] leading-tight font-bold rounded-lg transition text-slate-600 hover:text-indigo-600">🎨 Farba</button>
-            <button data-tab="tab-text" className="tab-btn flex-1 min-w-0 px-1 py-1.5 text-[11px] leading-tight font-bold rounded-lg transition text-slate-600 hover:text-indigo-600">🔤 Text</button>
-            <button data-tab="tab-graphics" className="tab-btn flex-1 min-w-0 px-1 py-1.5 text-[11px] leading-tight font-bold rounded-lg transition text-slate-600 hover:text-indigo-600">⭐ Motívy</button>
-            <button data-tab="tab-layers" className="tab-btn flex-1 min-w-0 px-1 py-1.5 text-[11px] leading-tight font-bold rounded-lg transition text-slate-600 hover:text-indigo-600">📑 Vrstvy (<span id="layersCountBadge">1</span>)</button>
+            <button data-tab="tab-templates" className="tab-btn flex-1 min-w-0 px-1 py-1.5 text-[11px] leading-tight font-bold rounded-lg transition bg-indigo-600 text-white shadow-md">🏆 Vzory (10)</button>
+            <button data-tab="tab-color" className="tab-btn flex-1 min-w-0 px-1 py-1.5 text-[11px] leading-tight font-bold rounded-lg transition text-slate-600 hover:bg-white hover:text-indigo-600">🎨 Farba</button>
+            <button data-tab="tab-text" className="tab-btn flex-1 min-w-0 px-1 py-1.5 text-[11px] leading-tight font-bold rounded-lg transition text-slate-600 hover:bg-white hover:text-indigo-600">🔤 Text</button>
+            <button data-tab="tab-graphics" className="tab-btn flex-1 min-w-0 px-1 py-1.5 text-[11px] leading-tight font-bold rounded-lg transition text-slate-600 hover:bg-white hover:text-indigo-600">⭐ Motívy</button>
+            <button data-tab="tab-layers" className="tab-btn flex-1 min-w-0 px-1 py-1.5 text-[11px] leading-tight font-bold rounded-lg transition text-slate-600 hover:bg-white hover:text-indigo-600">📑 Vrstvy (<span id="layersCountBadge">1</span>)</button>
           </div>
 
           <div id="transformInspector" className="mx-3 mt-3 p-3 bg-gradient-to-br from-indigo-50/90 via-slate-50 to-white border border-indigo-200/80 rounded-xl space-y-2.5 transition-all shadow-2xs">
@@ -253,7 +254,7 @@ export default function Celenky({ supabase, onSpat }) {
             </div>
           </div>
 
-          <div className="p-3.5 space-y-4 custom-scroll max-h-[460px] overflow-y-auto">
+          <div className="p-3.5 space-y-4 custom-scroll lg:flex-1 lg:min-h-0 lg:overflow-y-auto">
             {/* TAB 0: VZORY */}
             <div id="tab-templates" className="tab-content space-y-2.5">
               {vlastneVzory.length > 0 && (
@@ -458,6 +459,7 @@ export default function Celenky({ supabase, onSpat }) {
             <span>Objekt môžete otáčať za hornú rúčku ⟳, meniť veľkosť za rohy alebo cez posuvníky vľavo.</span>
           </div>
         </aside>
+        </div>
 
         {/* PRAVÝ PANEL: 3D náhľad + 2D editor + objednávka */}
         <section className="lg:col-span-8 flex flex-col gap-4">

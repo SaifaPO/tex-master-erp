@@ -603,8 +603,9 @@ export function initCelenkyEngine(root, opts = {}) {
   function setupControls() {
     qa('.tab-btn').forEach(btn => on(btn, 'click', () => {
       const tabId = btn.getAttribute('data-tab');
-      qa('.tab-btn').forEach(b => { b.classList.remove('bg-white', 'text-indigo-600', 'shadow-xs'); b.classList.add('text-slate-600'); });
-      btn.classList.add('bg-white', 'text-indigo-600', 'shadow-xs'); btn.classList.remove('text-slate-600');
+      // vybrana zalozka: vyrazne sýte pozadie + biely text (predtým len jemne biele pozadie)
+      qa('.tab-btn').forEach(b => { b.classList.remove('bg-indigo-600', 'text-white', 'shadow-md'); b.classList.add('text-slate-600', 'hover:bg-white', 'hover:text-indigo-600'); });
+      btn.classList.add('bg-indigo-600', 'text-white', 'shadow-md'); btn.classList.remove('text-slate-600', 'hover:bg-white', 'hover:text-indigo-600');
       qa('.tab-content').forEach(c => c.classList.add('hidden'));
       q(`#${tabId}`).classList.remove('hidden');
     }));
