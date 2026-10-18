@@ -1538,6 +1538,7 @@ export default function App() {
   const [newMatManufacturer, setNewMatManufacturer] = useState('');
 
   const [editingProduct, setEditingProduct] = useState(null);
+  const [inlineSirkaLatky, setInlineSirkaLatky] = useState(''); // rýchle doplnenie šírky látky priamo v úprave produktu
   const [editFlash, setEditFlash] = useState(false); // krátke zvýraznenie formulára po kliknutí na Upraviť v katalógu
   const [newModelCode, setNewModelCode] = useState('');
   const [newModelName, setNewModelName] = useState('');
@@ -4472,6 +4473,17 @@ export default function App() {
     const dbField = field === 'costPrice' ? 'cost_price' : field;
     const payload = isNumericField ? { [dbField]: Number(value) || 0 } : { [dbField]: value };
     await supabase.from('dotlacovka_price_list').update(payload).eq('id', id);
+  };
+
+  // Doplní šírku látky (cm) do Skladu priamo z úpravy produktu — bez prepínania do Skladu a obnovovania stránky.
+  const handleSetMaterialWidth = async (materialId, value) => {
+    const w = parseFloat(String(value).replace(',', '.'));
+    if (!(w > 0)) { triggerNotification('error', 'Zadaj šírku látky v cm (číslo väčšie ako 0).'); return; }
+    const { error } = await supabase.from('materials').update({ width: w }).eq('id', materialId);
+    if (error) { triggerNotification('error', `Šírku sa nepodarilo uložiť: ${error.message}`); return; }
+    setMaterials(prev => prev.map(m => m.id === materialId ? { ...m, width: w } : m));
+    setInlineSirkaLatky('');
+    triggerNotification('success', `Šírka látky ${w} cm uložená do Skladu — výpočet sa hneď prepočítal.`);
   };
 
   // Upraviť model z registra: nastaví model na úpravu, krátko zvýrazní formulár, ukáže hlášku a hneď vyskočí hore na formulár.
@@ -7959,10 +7971,20 @@ export default function App() {
                           <label className="block text-slate-400 font-semibold mb-2">Rozpis sublimačnej potlače (Kostra cien)</label>
                           <p className="text-[11px] text-slate-400 mb-2">Plocha potlače: <strong className="text-white">{plochaLatkyCm2.toFixed(0)} cm²</strong> ({sublimaciaZKs ? `16 000 cm² (1 bm papiera) ÷ ${aktualnyFormularProdukt.ksNaBmSublimacie} ks na 1 bm` : 'spotreba látky × šírka látky zo Skladu'}).</p>
                           {plochaLatkyCm2 <= 0 && !sublimaciaZKs && (
+                            <>
                             <p className="text-[11px] text-amber-300 bg-amber-950/30 border border-amber-800/40 rounded p-2 mb-2">
                               ⚠️ Plocha látky vychádza 0, preto papier, atrament, strihanie aj laser vychádzajú 0.{' '}
                               {!aktualnyFormularProdukt.layer1?.materialId ? 'Nie je vybraná hlavná látka (vrstva 1).' : (!(parseFloat(latkaL1?.width) > 0) ? `Látka "${latkaL1?.name || '?'}" nemá vo Sklade vyplnenú šírku (cm) — doplň ju v Sklad → Materiály.` : 'Spotreba látky (m/ks) nie je vyplnená.')}
                             </p>
+                            {latkaL1 && !(parseFloat(latkaL1.width) > 0) && (
+                              <div className="flex flex-wrap items-center gap-2 mb-2 bg-slate-900 border border-amber-800/40 rounded p-2">
+                                <span className="text-[11px] text-slate-300">Šírka látky „{latkaL1.name}" vo Sklade:</span>
+                                <input type="number" step="1" min="1" placeholder="cm, napr. 150" value={inlineSirkaLatky} onChange={(e) => setInlineSirkaLatky(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSetMaterialWidth(latkaL1.id, inlineSirkaLatky); } }} className="w-32 bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white" />
+                                <span className="text-[11px] text-slate-500">cm</span>
+                                <button type="button" onClick={() => handleSetMaterialWidth(latkaL1.id, inlineSirkaLatky)} className="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold text-[11px] px-3 py-1.5 rounded">Uložiť do Skladu</button>
+                              </div>
+                            )}
+                            </>
                           )}
                           <div className="mb-2 bg-slate-900 border border-slate-800 rounded p-2">
                             <label className="block text-[11px] text-slate-300 font-semibold mb-1">Hotový výrobok na kusy (napr. bezšvová buffka)? Koľko kusov sa vojde na 1 bm sublimačného papiera</label>
