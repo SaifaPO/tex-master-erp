@@ -30,8 +30,19 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState, onDragLog
     const stiahnute = v.reduce((sum, x) => sum + (x.done ? x.total : Math.min(x.loaded, x.total)), 0);
     const spolu = v.reduce((sum, x) => sum + x.total, 0);
     const pct = hotovo ? 100 : Math.min(97, Math.floor((stiahnute / spolu) * 97));
-    setNacitanie((prev) => (prev.pct === pct && prev.hotovo === hotovo ? prev : { pct, hotovo }));
+    // percento nikdy neklesá (skutočný postup sa môže líšiť od časového odhadu nižšie)
+    setNacitanie((prev) => { const np = hotovo ? 100 : Math.max(prev.pct, pct); return prev.pct === np && prev.hotovo === hotovo ? prev : { pct: np, hotovo }; });
   };
+  // Skutočný postup sťahovania chodí v skokoch (server často neposiela celkovú veľkosť) a po stiahnutí model ešte chvíľu spracúvame —
+  // preto sa percento plynulo dopĺňa aj podľa uplynutého času (do 97 %), a keď je skutočný postup vyšší, použije sa ten.
+  useEffect(() => {
+    const t0 = Date.now();
+    const id = setInterval(() => {
+      const odhad = Math.min(97, Math.floor(97 * (1 - Math.exp(-(Date.now() - t0) / 6000))));
+      setNacitanie((prev) => (prev.hotovo || prev.pct >= odhad ? prev : { pct: odhad, hotovo: false }));
+    }, 250);
+    return () => clearInterval(id);
+  }, []);
   const textureCanvasRef = useRef(null);
   const sceneRef = useRef(null);
   const cameraRef = useRef(null);
@@ -120,7 +131,7 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState, onDragLog
     const scene = new THREE.Scene();
     sceneRef.current = scene;
     const aspect = container.clientWidth / Math.max(1, container.clientHeight);
-    const camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 1000);
+    const camera = new THREE.PerspectiveCamera(40, aspect, 0.1, 1000);
     camera.position.set(0, 0, 4.2);
     cameraRef.current = camera;
 
@@ -501,17 +512,73 @@ function texturaReklamZvnutra() {
   return t;
 }
 
+// Skutočná 360° fotka štadióna (equirectangular, pomer 2:1): public/models/stadium-360.jpg. Ak súbor neexistuje, použije sa
+// vyrobený štadión (vektorový, nižšie). Mierka sveta: 1 jednotka ≈ 0,55 m (súprava dres+trenírky ≈ 1,1 m = 2 jednotky);
+// kamera je približne vo výške očí a dres visí v úrovni hrude nad trávnikom.
+const panorama = { stav: 'nenacitana', tex: null };
+function nacitajPanoramu(hotovo) {
+  if (panorama.stav !== 'nenacitana') { hotovo(); return; }
+  panorama.stav = 'nacitava';
+  // fotka má 8192×4096 — pre grafické karty a mobily sa zmenší na 4096×2048 (aj tak ostrý pri našom zábere)
+  new THREE.ImageLoader().load('/models/stadium-360.jpg', (img) => {
+    const c = document.createElement('canvas');
+    c.width = 4096; c.height = 2048;
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 8;
+    panorama.tex = t; panorama.stav = 'ok'; hotovo();
+  }, undefined, () => { panorama.stav = 'chyba'; hotovo(); });
+}
+
 function nastavProstredie(scene, env, type) {
+  env.typ = type;
   if (env.group) {
     scene.remove(env.group);
     env.group.traverse((o) => { o.geometry?.dispose?.(); if (o.material) { o.material.map?.dispose?.(); o.material.dispose?.(); } });
     env.group = null;
   }
   const g = new THREE.Group();
-  const Y = -2.0; // úroveň podlahy
+  const Y = type === 'stadium' ? 0 : -2.0; // úroveň podlahy (štadión: skupina je posunutá a zväčšená nižšie)
   const plocha = (geo, mat, y) => { const m = new THREE.Mesh(geo, mat); m.position.y = y; return m; };
+  const PODLAHA_Y = -2.0;
+
+  if (type === 'stadium' && panorama.stav === 'ok') {
+    // 360° fotka na veľkej gule okolo dresu; stred gule vo výške očí (≈1,7 m nad trávnikom ≈ 3,1 jednotky)
+    const geo = new THREE.SphereGeometry(150, 96, 56);
+    geo.scale(-1, 1, 1);
+    const obloha = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: panorama.tex, toneMapped: false, depthWrite: false }));
+    obloha.position.y = PODLAHA_Y + 3.1;
+    obloha.rotation.y = Math.PI; // stred ihriska a hlavná tribúna za dresom pri pohľade spredu
+    obloha.renderOrder = -10;
+    g.add(obloha);
+    // trávnik pod dresom: tmavozelený kruh s plynulým prechodom do fotky + tieň dresu
+    const grad = plochaTextura(512, 512, (c, w, h) => {
+      const gr = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
+      gr.addColorStop(0, 'rgba(47,115,52,1)'); gr.addColorStop(0.55, 'rgba(47,115,52,0.9)'); gr.addColorStop(1, 'rgba(47,115,52,0)');
+      c.fillStyle = gr; c.fillRect(0, 0, w, h);
+      for (let i = 0; i < 1800; i++) { // jemná štruktúra trávy
+        const x = Math.random() * w, y = Math.random() * h;
+        c.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.06)';
+        c.fillRect(x, y, 2, 6);
+      }
+    });
+    const trava = new THREE.Mesh(new THREE.CircleGeometry(16, 64), new THREE.MeshStandardMaterial({ map: grad, transparent: true, roughness: 1, depthWrite: false }));
+    trava.rotation.x = -Math.PI / 2; trava.position.y = PODLAHA_Y; trava.receiveShadow = true; trava.renderOrder = -5;
+    g.add(trava);
+    const tien = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.ShadowMaterial({ opacity: 0.4 }));
+    tien.rotation.x = -Math.PI / 2; tien.position.y = PODLAHA_Y + 0.01; tien.receiveShadow = true;
+    g.add(tien);
+    scene.add(g);
+    env.group = g;
+    return;
+  }
 
   if (type === 'stadium') {
+    // vyrobený štadión (záloha, kým nie je k dispozícii 360° fotka) — väčší, aby pomer k dresu zodpovedal skutočnosti
+    g.position.y = PODLAHA_Y;
+    g.scale.setScalar(3);
+    nacitajPanoramu(() => { if (panorama.stav === 'ok' && env.typ === 'stadium') nastavProstredie(scene, env, 'stadium'); });
     // vonkajšia tráva + hracia plocha
     const trava = plocha(new THREE.CircleGeometry(14.5, 64), new THREE.MeshStandardMaterial({ color: 0x1f5c2a, roughness: 0.95 }), Y);
     trava.rotation.x = -Math.PI / 2; trava.receiveShadow = true; g.add(trava);

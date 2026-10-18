@@ -1,34 +1,10 @@
 import React from 'react';
 import { Plus, Trash2, ArrowUp, ArrowDown, Move } from 'lucide-react';
-import { ERB_TVARY, POZICIE_LOGA_PRED } from './dresPresets';
+import { POZICIE_LOGA_PRED } from './dresPresets';
+import ErbEditor from './ErbEditor';
+import { nacitajZoSuboru } from './obrazokUtil';
 
-const nacitajObrazok = (src, crossOrigin = false) => new Promise((resolve) => {
-  const img = new Image();
-  if (crossOrigin) img.crossOrigin = 'anonymous';
-  img.onload = () => resolve(img);
-  img.onerror = () => resolve(null);
-  img.src = src;
-});
-
-const nacitajZoSuboru = (file) => new Promise((resolve) => {
-  const reader = new FileReader();
-  reader.onload = (ev) => nacitajObrazok(ev.target.result).then(resolve);
-  reader.readAsDataURL(file);
-});
-
-export default function LogaTab({ configState, grafiky, onZmenLoga }) {
-  const naUploadErb = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const img = await nacitajZoSuboru(file);
-    if (img) onZmenLoga({ typErbu: 'custom', vlastnyErbImg: img });
-  };
-
-  const vyberZKniznice = async (url) => {
-    const img = await nacitajObrazok(url, true);
-    if (img) onZmenLoga({ typErbu: 'custom', vlastnyErbImg: img });
-  };
-
+export default function LogaTab({ configState, grafiky, fonty, onZmenLoga }) {
   const rukavLoga = configState.loga.rukavLoga || [];
 
   const pridajRukavLogo = async (strana, e) => {
@@ -76,61 +52,7 @@ export default function LogaTab({ configState, grafiky, onZmenLoga }) {
         <p className="text-[11px] text-indigo-200 leading-snug">Tip: erb aj logá si môžete presunúť aj priamo ťahaním myšou na 3D modeli dresu.</p>
       </div>
 
-      <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/80 space-y-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <span className="text-xs font-bold text-white block">1. Klubový Znak (Na srdci)</span>
-            <span className="text-[10px] text-slate-400">Presuňte ťahaním na modeli, alebo</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button type="button" onClick={() => onZmenLoga({ erbOffset: { x: 0, y: 0 } })} title="Vrátiť na pôvodné miesto" className="text-[10px] text-slate-400 hover:text-white px-1.5 py-1 rounded border border-slate-700 hover:border-slate-500">Reset polohy</button>
-            <input type="checkbox" checked={configState.loga.zobrazitErb} onChange={(e) => onZmenLoga({ zobrazitErb: e.target.checked })} className="w-4 h-4 rounded text-indigo-500 bg-slate-900 border-slate-700" />
-          </div>
-        </div>
-
-        <label className="block text-[11px] text-slate-400 mb-1">Text v znaku (napr. názov klubu)</label>
-        <input
-          type="text" maxLength={12} placeholder="FC TÍM"
-          value={configState.loga.erbText}
-          onChange={(e) => onZmenLoga({ typErbu: ERB_TVARY.some((t) => t.id === configState.loga.typErbu) ? configState.loga.typErbu : 'kruh', erbText: e.target.value })}
-          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white font-bold uppercase tracking-widest focus:outline-none focus:border-indigo-500"
-        />
-
-        <div className="grid grid-cols-4 gap-2">
-          {ERB_TVARY.map(t => (
-            <button
-              key={t.id}
-              onClick={() => onZmenLoga({ typErbu: t.id })}
-              className={`p-2 rounded-lg bg-slate-800 border-2 flex flex-col items-center ${configState.loga.typErbu === t.id ? 'border-indigo-500' : 'border-slate-700 hover:border-slate-500'}`}
-            >
-              <span className="text-[10px] font-semibold text-slate-300">{t.nazov}</span>
-            </button>
-          ))}
-        </div>
-
-        {grafiky && grafiky.length > 0 && (
-          <div className="pt-1">
-            <label className="block text-[11px] text-slate-400 mb-1.5">Alebo vlastné logo z knižnice grafík:</label>
-            <div className="grid grid-cols-5 gap-2">
-              {grafiky.map(g => (
-                <button
-                  key={g.id}
-                  title={g.nazov}
-                  onClick={() => vyberZKniznice(g.url)}
-                  className={`aspect-square rounded-lg bg-slate-800 border-2 overflow-hidden ${configState.loga.typErbu === 'custom' ? 'border-indigo-500' : 'border-slate-700 hover:border-slate-500'}`}
-                >
-                  <img src={g.url} alt={g.nazov} className="w-full h-full object-contain" />
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="pt-2">
-          <label className="block text-[11px] text-slate-400 mb-1">Alebo nahrať vlastné hotové logo (.PNG, .SVG):</label>
-          <input type="file" accept="image/*" onChange={naUploadErb} className="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-semibold file:bg-slate-800 file:text-indigo-400 hover:file:bg-slate-700 cursor-pointer" />
-        </div>
-      </div>
+      <ErbEditor configState={configState} grafiky={grafiky} fonty={fonty} onZmenLoga={onZmenLoga} />
 
       <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/80 space-y-3">
         <div className="flex items-center justify-between">

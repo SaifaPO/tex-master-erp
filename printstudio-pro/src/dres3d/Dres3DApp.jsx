@@ -269,7 +269,7 @@ export default function Dres3DApp({ supabase, produktId }) {
               <PotlacTab configState={configState} fonty={katalog.fonty} onZmenText={handleZmenText} onZmenCislo={handleZmenCislo} />
             )}
             {aktivnyTab === 'loga' && (
-              <LogaTab configState={configState} grafiky={katalog.grafiky} onZmenLoga={handleZmenLoga} />
+              <LogaTab configState={configState} grafiky={katalog.grafiky} fonty={katalog.fonty} onZmenLoga={handleZmenLoga} />
             )}
             {aktivnyTab === 'golier' && (
               <GolierMaterialTab

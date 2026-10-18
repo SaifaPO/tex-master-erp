@@ -1,3 +1,4 @@
+import { renderClubCrest } from './erbRenderer';
 // Kreslenie 2D textúry dresu na canvas — portované z 3d_konfigurator_dresov.html.
 // Čisté funkcie parametrizované `configState` (pozri dresPresets.js DEFAULT_CONFIG_STATE) —
 // žiadny globálny stav, žiadna závislosť na DOM mimo dodaného 2D kontextu.
@@ -457,8 +458,8 @@ function renderSleeves(c, W, H, configState, maVlastnyVzor, regions) {
 
 // Logo klubu, logo výrobcu a číslo na hrudi sú o 1 cm vyššie (Martin 2026-10-18).
 const HRUD_POSUN_HORE_PX = 10 * PX_PER_MM;
-// Chrbát: menovka o 13 cm vyššie, číslo o 11,5 cm vyššie (medzera meno–číslo o 1,5 cm väčšia).
-const MENO_POSUN_HORE_PX = 130 * PX_PER_MM; // 3 cm + ďalších 10 cm (Martin 2026-10-18)
+// Chrbát: menovka o 9 cm vyššie, číslo o 7,5 cm vyššie (medzera meno–číslo o 1,5 cm väčšia).
+const MENO_POSUN_HORE_PX = 90 * PX_PER_MM; // 3 cm + 10 cm − 4 cm = 9 cm vyššie než pôvodne (Martin 2026-10-18)
 const MEDZERA_MENO_CISLO_PX = 31 * PX_PER_MM;
 
 function renderFrontDetails(c, x, y, w, h, configState, regions) {
@@ -560,63 +561,8 @@ function renderBackDetails(c, x, y, w, h, configState) {
   }
 }
 
-// Generátor "blank" klubového znaku — zákazník napíše vlastný text (napr. "FC TORNAĽA"),
-// ktorý sa vykreslí do zvoleného tvaru (kruh/štít/erb/ovál). Ak má nahraté vlastné logo
-// (typErbu === 'custom'), použije sa namiesto generátora.
-export function renderClubCrest(c, cx, cy, size, configState) {
-  c.save();
-  if (configState.loga.typErbu === 'custom' && configState.loga.vlastnyErbImg) {
-    drawImageFit(c, configState.loga.vlastnyErbImg, cx, cy, size, size);
-    c.restore();
-    return;
-  }
-
-  c.translate(cx, cy);
-  const tvar = configState.loga.typErbu || 'kruh';
-
-  c.fillStyle = '#ffffff';
-  c.beginPath();
-  if (tvar === 'stit' || tvar === 'erb') {
-    c.moveTo(0, -size * 0.5);
-    c.lineTo(size * 0.45, -size * 0.35);
-    c.lineTo(size * 0.45, size * 0.1);
-    c.bezierCurveTo(size * 0.45, size * 0.45, 0, size * 0.65, 0, size * 0.65);
-    c.bezierCurveTo(0, size * 0.65, -size * 0.45, size * 0.45, -size * 0.45, size * 0.1);
-    c.lineTo(-size * 0.45, -size * 0.35);
-    c.closePath();
-  } else if (tvar === 'ovál') {
-    c.ellipse(0, 0, size * 0.5, size * 0.38, 0, 0, Math.PI * 2);
-  } else {
-    c.arc(0, 0, size * 0.5, 0, Math.PI * 2);
-  }
-  c.fill();
-  c.strokeStyle = configState.farby.akcent;
-  c.lineWidth = 6;
-  c.stroke();
-
-  if (tvar === 'erb') {
-    // dekoratívny vnútorný prstenec, aby sa "erb" vizuálne odlíšil od jednoduchého štítu
-    c.beginPath();
-    c.arc(0, 0, size * 0.34, 0, Math.PI * 2);
-    c.strokeStyle = configState.farby.vzor;
-    c.lineWidth = 4;
-    c.stroke();
-  }
-
-  c.fillStyle = configState.farby.vzor;
-  c.font = `900 ${Math.floor(size * 0.19)}px "${configState.text.fontRodina}", sans-serif`;
-  c.textAlign = 'center';
-  c.textBaseline = 'middle';
-  const text = (configState.loga.erbText || 'FC').toUpperCase();
-  const maxW = size * (tvar === 'ovál' ? 0.85 : 0.7);
-  let fontSize = Math.floor(size * 0.19);
-  while (fontSize > 8 && c.measureText(text).width > maxW) {
-    fontSize -= 1;
-    c.font = `900 ${fontSize}px "${configState.text.fontRodina}", sans-serif`;
-  }
-  c.fillText(text, 0, size * 0.02);
-  c.restore();
-}
+// Generátor klubového znaku je v erbRenderer.js (tvary, farby vnútra a lemoviek, viacriadkový text, objekty, vlastný obrázok).
+export { renderClubCrest };
 
 // Tri malé samostatné strihové kúsky (goliera/väzby) — presné súradnice z UV dát modelu.
 function renderCollarDecorations(c, W, H, configState) {

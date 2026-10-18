@@ -33,12 +33,7 @@ export const RYCHLE_FARBY = ['#ffffff', '#000000', '#dc2626', '#1e3a8a', '#2563e
 
 // Tvary pre generátor "blank" klubového znaku — zákazník napíše vlastný text (napr. "FC
 // TORNAĽA") a vyberie tvar, do ktorého sa text vykreslí. Nahrádza pôvodné emoji-erby.
-export const ERB_TVARY = [
-  { id: 'kruh', nazov: 'Kruh' },
-  { id: 'stit', nazov: 'Štít' },
-  { id: 'erb', nazov: 'Erb' },
-  { id: 'ovál', nazov: 'Ovál' },
-];
+export { ERB_TVARY, ERB_VZORY_VNUTRA, ERB_OBJEKTY } from './erbRenderer';
 
 // Pozície voliteľného čísla na hrudi — zákazník si vyberie, kam presne má číslo ísť, keďže
 // môže kolidovať so znakom na srdci alebo logom sponzora v strede.
@@ -106,6 +101,24 @@ export const DEFAULT_CONFIG_STATE = {
   loga: {
     typErbu: 'kruh',
     erbText: 'FC TÍM',
+    erbTvar: null, // null = podľa typErbu
+    erbFarbaVnutro: '#ffffff',
+    erbVnutroDruha: '#1e3a8a',
+    erbVnutroVzor: 'plne',
+    erbFarbaLemovka: null, // null = akcentová farba dresu
+    erbLemovkaHrubka: 3.4,
+    erbLemovka2Farba: '#000000',
+    erbLemovka2Hrubka: 0,
+    erbFarbaText: null, // null = farba vzoru dresu
+    erbTextObrys: null,
+    erbFont: null, // null = font dresu
+    erbTextVelkost: 1,
+    erbObjekt: 'none',
+    erbObjektPoz: 'hore',
+    erbObjektVelkost: 1,
+    erbObjektFarba: null,
+    erbObrazok: null,
+    erbObrazokVelkost: 1,
     vlastnyErbImg: null,
     zobrazitErb: true,
     // Logo výrobcu (predné aj na krku vzadu) je fixné — súbory public/models/logo-pred.png
