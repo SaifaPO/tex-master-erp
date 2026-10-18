@@ -14,6 +14,7 @@ import MesacnyReportTab from './MesacnyReportTab';
 import OdovzdanieZakazky from './OdovzdanieZakazky';
 import PrintStudioAdmin from './printstudio/PrintStudioAdmin';
 import GlobalSearchPalette from './GlobalSearchPalette';
+import FakturaEmail from './FakturaEmail';
 import { nacitajKostru, vcSublimaciaGarment, vcSublimaciaGarmentRozpis, vcRezanyTransfer, vcSietotlacCelkom, vcSietotlacRozpad } from './printstudio/vyrobneNaklady';
 import { priceAt } from './printstudio/pricingEngine';
 import {
@@ -12195,14 +12196,15 @@ export default function App() {
 
         {selectedInvoiceForDetail && (
           <div className="fixed inset-0 bg-slate-950/95 z-50 overflow-y-auto print:relative print:inset-auto print:bg-white">
-            <div className="max-w-3xl mx-auto bg-white text-black p-8 my-6 rounded-xl print:my-0 print:rounded-none print:shadow-none shadow-2xl">
-              <div className="flex justify-between items-start mb-6 print:hidden">
+            <div id="faktura-dokument" className="max-w-3xl mx-auto bg-white text-black p-8 my-6 rounded-xl print:my-0 print:rounded-none print:shadow-none shadow-2xl">
+              <div data-nepdf="1" className="flex justify-between items-start mb-6 print:hidden">
                 <div className="flex gap-2">
                   {selectedInvoiceForDetail.status !== 'paid' && (
                     <button onClick={() => handleMarkInvoicePaid(selectedInvoiceForDetail)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Check className="h-4 w-4" /> Označiť ako uhradenú</button>
                   )}
                   <button onClick={() => handleStartCorrectInvoice(selectedInvoiceForDetail)} className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Edit2 className="h-4 w-4" /> Opraviť</button>
                   <button onClick={() => printWithFilename(selectedInvoiceForDetail.invoiceNumber)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Printer className="h-4 w-4" /> Tlačiť / PDF</button>
+                  <FakturaEmail supabase={supabase} faktura={selectedInvoiceForDetail} zakaznici={customers} firma={companySettings} idDokumentu="faktura-dokument" triggerNotification={triggerNotification} />
                 </div>
                 <button onClick={() => setSelectedInvoiceForDetail(null)} className="p-1 rounded bg-slate-200 text-slate-600 hover:text-slate-900"><X className="h-5 w-5" /></button>
               </div>
@@ -12270,7 +12272,7 @@ export default function App() {
               </div>
 
               {(selectedInvoiceForDetail.corrections || []).length > 0 && (
-                <div className="print:hidden mt-6 pt-4 border-t border-slate-200 space-y-2">
+                <div data-nepdf="1" className="print:hidden mt-6 pt-4 border-t border-slate-200 space-y-2">
                   <h4 className="text-xs font-bold text-amber-700 uppercase">História opráv</h4>
                   {selectedInvoiceForDetail.corrections.map((c, i) => (
                     <div key={i} className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-[11px] text-slate-700">
