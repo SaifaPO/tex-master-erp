@@ -224,7 +224,9 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState, onDragLog
       const hits = raycaster.intersectObjects(jerseyMeshesRef.current, false);
       if (hits.length === 0 || !hits[0].uv) return null;
       const canvas = textureCanvasRef.current;
-      return { px: hits[0].uv.x * canvas.width, py: hits[0].uv.y * canvas.height };
+      // UV tohto modelu sú mimo 0..1 (napr. v od -0,92 do -0,31 pri tele dresu) a textúra sa opakuje — preto sa zabalia do 0..1
+      const zabal = (v) => ((v % 1) + 1) % 1;
+      return { px: zabal(hits[0].uv.x) * canvas.width, py: zabal(hits[0].uv.y) * canvas.height };
     };
     const najdiRegion = (px, py) => {
       let najdeny = null, najmensiaPlocha = Infinity;
@@ -929,20 +931,7 @@ function odstranDuplicitneVrstvy(root) {
 
   const outward = new THREE.Vector3();
   const normal = new THREE.Vector3();
-  // Kusy s rovnakou textúrou aj UV môžu byť rôzne diely na rôznych miestach (napr. predná a zadná polovica lemovacieho prúžku na krku
-  // alebo na spodku, ľavý a pravý rukáv) — duplicitnými vrstvami sú len tie, ktoré ležia na tom istom mieste (stred do 1,5 cm).
-  const stred = (m) => { if (!m.geometry.boundingBox) m.geometry.computeBoundingBox(); return m.geometry.boundingBox.getCenter(new THREE.Vector3()); };
-  const zhluky = [];
   groups.forEach((group) => {
-    const kopie = [];
-    group.forEach((m) => {
-      const c = stred(m);
-      const k = kopie.find((z) => z.c.distanceTo(c) < 1.5);
-      if (k) k.m.push(m); else kopie.push({ c, m: [m] });
-    });
-    kopie.forEach((k) => zhluky.push(k.m));
-  });
-  zhluky.forEach((group) => {
     if (group.length < 2) return;
     let best = null, bestScore = -Infinity;
     group.forEach((m) => {

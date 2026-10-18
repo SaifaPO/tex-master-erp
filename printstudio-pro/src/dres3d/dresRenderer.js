@@ -199,23 +199,6 @@ export function farbaSitia(configState) {
   return s && s.mod === 'vlastna' && /^#[0-9a-f]{6}$/i.test(s.farba || '') ? s.farba : configState.farby.golier;
 }
 
-// Dvojité prešitie (dva súbežné rady stehov) pozdĺž pásu — rovnaké ako na skutočnom drese na konci rukávov a na spodku.
-// Pás je v textúre rozvinutý vodorovne (dlhšia strana = dĺžka švu), rady idú po jeho dlhšej strane.
-function kresliDvojiteSitie(c, r, farba, dlzkaStehuPx) {
-  const lw = Math.max(1.3, r.h * 0.07);
-  [0.36, 0.64].forEach((pos) => {
-    const y = r.y + r.h * pos;
-    c.save();
-    c.lineWidth = lw; c.lineCap = 'butt';
-    c.setLineDash([dlzkaStehuPx, dlzkaStehuPx * 0.7]);
-    c.strokeStyle = 'rgba(0,0,0,0.38)';
-    c.beginPath(); c.moveTo(r.x, y + lw * 0.8); c.lineTo(r.x + r.w, y + lw * 0.8); c.stroke();
-    c.strokeStyle = farba;
-    c.beginPath(); c.moveTo(r.x, y); c.lineTo(r.x + r.w, y); c.stroke();
-    c.restore();
-  });
-}
-
 export function updateJerseyTexture(ctx, canvas, configState) {
   const W = canvas.width;
   const H = canvas.height;
@@ -413,13 +396,6 @@ function renderSleeves(c, W, H, configState, maVlastnyVzor, regions) {
   c.fillRect(manzetaL.x, manzetaL.y, manzetaL.w, manzetaL.h);
   c.fillRect(manzetaP.x, manzetaP.y, manzetaP.w, manzetaP.h);
   c.fillRect(lem.x, lem.y, lem.w, lem.h);
-  // dvojité prešitie na konci rukávov, na spodku dresu a na golieri (pokračuje aj vpredu)
-  const nit = farbaSitia(configState);
-  kresliDvojiteSitie(c, manzetaL, nit, 3);
-  kresliDvojiteSitie(c, manzetaP, nit, 3);
-  kresliDvojiteSitie(c, lem, nit, 5);
-  kresliDvojiteSitie(c, toPx(PANELY.spodokPredok, W, H), nit, 5);
-  kresliDvojiteSitie(c, toPx(PANELY.spodokZadok, W, H), nit, 5);
 
   // Ľubovoľný počet log na každom rukáve, poukladaných nad sebou v poradí `poradie`
   // (0 = najvyššie). `velkost` je násobok "normálnej" veľkosti (1 = normálna, zadané
@@ -572,7 +548,6 @@ function renderCollarDecorations(c, W, H, configState) {
   c.fillStyle = configState.farby.golier;
   const manzeta = toPx(PANELY.golierKus1, W, H);
   c.fillRect(manzeta.x, manzeta.y, manzeta.w, manzeta.h);
-  kresliDvojiteSitie(c, manzeta, nit, 2);
   c.fillStyle = nit;
   ['golierKus2', 'golierKus3'].forEach((key) => {
     const r = toPx(PANELY[key], W, H);
@@ -595,9 +570,9 @@ export function kresliVnutroDresu(canvas, velkostText = 'XL') {
   c.textAlign = 'center';
   c.textBaseline = 'middle';
   c.fillStyle = '#9ca3af';
-  c.font = '700 22px Inter, Arial, sans-serif';
-  c.fillText('JERSEY SIZE', 0, -26);
-  c.font = '800 66px Inter, Arial, sans-serif';
-  c.fillText(velkostText, 0, 20);
+  c.font = '700 11px Inter, Arial, sans-serif';
+  c.fillText('JERSEY SIZE', 0, -13);
+  c.font = '800 33px Inter, Arial, sans-serif';
+  c.fillText(velkostText, 0, 10);
   c.restore();
 }
