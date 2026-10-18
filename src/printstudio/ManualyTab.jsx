@@ -297,8 +297,9 @@ function nacitajFont(nazov) {
 function VzorkaFontu({ font, mod }) {
   const rodina = `'${font}', sans-serif`;
   const farby = mod === 1 ? { vypln: '#1e293b' } : mod === 2 ? { vypln: '#facc15', k1: '#1e293b' } : { vypln: '#facc15', k1: '#dc2626', k2: '#1e293b' };
-  const riadok = (text, y, velkost) => {
-    const spolocne = { x: 100, y, textAnchor: 'middle', fontFamily: rodina, fontWeight: 700, fontSize: velkost, strokeLinejoin: 'round', strokeLinecap: 'round' };
+  const riadok = (text, y, velkost, medzera) => {
+    // medzera medzi znakmi je väčšia, aby sa pri viacfarebných variantoch kontúry susedných znakov nelepili
+    const spolocne = { x: 100 + medzera / 2, y, textAnchor: 'middle', fontFamily: rodina, fontWeight: 700, fontSize: velkost, letterSpacing: medzera, strokeLinejoin: 'round', strokeLinecap: 'round' };
     return (
       <g>
         {farby.k2 && <text {...spolocne} fill={farby.k2} stroke={farby.k2} strokeWidth={velkost * 0.2}>{text}</text>}
@@ -309,8 +310,8 @@ function VzorkaFontu({ font, mod }) {
   };
   return (
     <svg viewBox="0 0 200 96" className="w-full bg-slate-50 rounded-lg">
-      {riadok('NOVÁK', 36, 34)}
-      {riadok('10', 84, 56)}
+      {riadok('NOVÁK', 36, 30.6, 4)}
+      {riadok('10', 85, 61.6, 6)}
     </svg>
   );
 }
