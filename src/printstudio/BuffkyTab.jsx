@@ -91,8 +91,9 @@ export default function BuffkyTab({ supabase }) {
   const nakladPotlacKs = nakladBmSublimacia / BUFFIEK_NA_BM;
   const produktBasic = produkty.find(p => p.id === naklady.produkt_id);
   const cenaCistaBuffka = produktBasic ? Number(produktBasic.zakladna_cena) : Number(naklady.cena_buffka_ks);
-  const nakladKsBasic = cenaCistaBuffka + nakladPotlacKs;
-  const nakladKsPremium = (materialNakladKs) => Number(materialNakladKs || 0) + nakladPotlacKs + Number(naklady.cena_sitia_bok_ks || 0);
+  // Náklad = celá výrobná cena produktu z Katalógu produktov (cez blank) — už zahŕňa potlač aj šitie. Bez prepojeného blanku sa použije záložná ručná cena + potlač.
+  const nakladKsBasic = produktBasic ? cenaCistaBuffka : cenaCistaBuffka + nakladPotlacKs;
+  const nakladKsPremium = (materialNakladKs) => Number(materialNakladKs || 0);
 
   if (isLoading) return <p className="text-sm text-slate-500">Načítavam…</p>;
 
@@ -129,28 +130,24 @@ export default function BuffkyTab({ supabase }) {
       {/* TUBULAR BASIC */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-6 bg-slate-900/60 rounded-2xl border border-slate-800 p-5">
-          <h3 className="font-bold text-sm text-white mb-1">Tubular Basic — vstupné náklady (na 1 ks)</h3>
+          <h3 className="font-bold text-sm text-white mb-1">Tubular Basic — výrobná cena z Katalógu produktov</h3>
           <p className="text-[11px] text-slate-500 mb-3">Bez švov, bez obšívania — potlač priamo na bezšvovú tubulárnu pletenú látku.</p>
           <div className="space-y-2.5 text-xs">
             <div>
-              <label className="block text-slate-400 mb-1">Nákup čistej (nepotlačenej) buffky — produkt zo záložky Produkty</label>
+              <label className="block text-slate-400 mb-1">Blank bezšvovej buffky (cena sa berie z Katalógu produktov)</label>
               <select value={naklady.produkt_id || ''} onChange={(e) => ulozNaklady({ produkt_id: e.target.value ? Number(e.target.value) : null })} className="w-full px-2 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs">
                 <option value="">-- bez produktu: použije sa ručná cena nižšie --</option>
                 {produkty.map(p => <option key={p.id} value={p.id}>{p.nazov} — {Number(p.zakladna_cena).toFixed(2)} €/ks</option>)}
               </select>
-              {produktBasic && <p className="text-[10px] text-emerald-400 mt-1">Použije sa skutočná nákupná cena produktu: {Number(produktBasic.zakladna_cena).toFixed(2)} €/ks.</p>}
+              {produktBasic ? <p className="text-[10px] text-emerald-400 mt-1">Výrobná cena z katalógu (celá — vrátane potlače a šitia): {Number(produktBasic.zakladna_cena).toFixed(2)} €/ks.</p> : <p className="text-[10px] text-amber-500 mt-1 flex items-center gap-1"><AlertTriangle className="w-3 h-3 shrink-0" /> Nie je vybraný blank — použije sa záložná ručná cena + potlač.</p>}
             </div>
-            <Field label="Ručná cena čistej buffky (€/ks, bez DPH) — len ak nie je vybraný produkt" value={naklady.cena_buffka_ks} step="0.05" onChange={(v) => ulozNaklady({ cena_buffka_ks: v })} />
+            {!produktBasic && <Field label="Záložná ručná cena čistej buffky (€/ks, bez DPH)" value={naklady.cena_buffka_ks} step="0.05" onChange={(v) => ulozNaklady({ cena_buffka_ks: v })} />}
             <div className="flex items-center gap-3 p-2.5 bg-slate-950 rounded-xl border border-slate-800">
               <FotoSlot supabase={supabase} url={nastavenia.foto_basic_url} priecinok="buffky-materialy" onZmena={(url) => ulozNastavenia({ foto_basic_url: url })} />
               <span className="text-slate-400">Fotka materiálu Tubular Basic — zobrazí sa zákazníkovi v konfigurátore.</span>
             </div>
-            <div className="p-2.5 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between">
-              <span className="text-slate-400">Potlač — 5 buffiek/1bm sublimácie (živo z Kostra cien)</span>
-              <span className="text-white font-mono font-bold">{nakladBmSublimacia.toFixed(2)} € / bm ÷ {BUFFIEK_NA_BM} = {nakladPotlacKs.toFixed(2)} €/ks</span>
-            </div>
           </div>
-          <p className="text-xs text-slate-400 mt-2">Náklad na potlač sa počíta automaticky z ceny sublimačnej potlače v Kostra cien (rovnaká hodnota, akú používa aj Textilná metráž) — nič sa tu ručne nezadáva.</p>
+          <p className="text-xs text-slate-400 mt-2">Cenu upravujete v Katalógu produktov (výrobná cena produktu), nie tu. Tu ostáva len poštovné, expres, fotky materiálov, grafiky a objednávky.</p>
         </div>
 
         <div className="lg:col-span-6 bg-slate-900/60 rounded-2xl border border-slate-800 p-5">
@@ -178,9 +175,8 @@ export default function BuffkyTab({ supabase }) {
       {/* PREMIUM */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-6 bg-slate-900/60 rounded-2xl border border-slate-800 p-5">
-          <h3 className="font-bold text-sm text-white mb-1">Premium — vstupné náklady</h3>
+          <h3 className="font-bold text-sm text-white mb-1">Premium — výrobná cena z Katalógu produktov</h3>
           <p className="text-[11px] text-slate-500 mb-3">Jeden bočný šev (zošité ako rukáv trička), obšitý horný aj spodný okraj — výber z materiálov nižšie, každý linknutý na produkt zo záložky Produkty (jeho "Základná cena" = nákupná cena za ks).</p>
-          <Field label="Cena šitia bočného švu (€/ks, bez DPH)" value={naklady.cena_sitia_bok_ks} step="0.05" onChange={(v) => ulozNaklady({ cena_sitia_bok_ks: v })} />
           <div className="space-y-2 mt-3">
             {premiumMaterialy.map(m => {
               const produkt = produkty.find(p => p.id === m.produkt_id);
