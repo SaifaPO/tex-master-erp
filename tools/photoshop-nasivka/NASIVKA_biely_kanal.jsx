@@ -69,15 +69,13 @@ function vlozMaskuDoKanala(doc, idx, prah, nazovKanala) {
   var d = new ActionDescriptor(); d.putInteger(cTID('Lvl '), prah);
   executeAction(cTID('Thrs'), d, DialogModes.NO);
   tmp.changeMode(ChangeMode.GRAYSCALE);
-  tmp.selection.selectAll(); tmp.selection.copy();
+  // sivý kanál z kópie sa priamo skopíruje do pôvodného dokumentu ako alfa kanál (spoľahlivejšie než kopírovať/vložiť)
+  var ch = tmp.channels[0].duplicate(doc);
   tmp.close(SaveOptions.DONOTSAVECHANGES);
 
   app.activeDocument = doc;
   doc.selection.deselect();
-  var ch = doc.channels.add(); ch.name = nazovKanala;   // alfa kanál
-  doc.activeChannels = [ch];
-  doc.paste();
-  doc.selection.deselect();
+  ch.name = nazovKanala;
   return ch;
 }
 
