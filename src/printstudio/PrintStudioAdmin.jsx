@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link2, Scissors, Tag, Box, Palette, Type, Image as ImageIcon, Banknote, Camera, ShoppingBag, Flag, Shirt, Calculator, Waves, ShoppingCart, ExternalLink, Layers3, Ruler, Printer, Circle, Wind, Grid3x3, HardDrive, BadgePercent, Inbox, LayoutGrid, Library, Coins, Settings2 } from 'lucide-react';
+import { Siren, Link2, Scissors, Tag, Box, Palette, Type, Image as ImageIcon, Banknote, Camera, ShoppingBag, Flag, Shirt, Calculator, Waves, ShoppingCart, ExternalLink, Layers3, Ruler, Printer, Circle, Wind, Grid3x3, HardDrive, BadgePercent, Inbox, LayoutGrid, Library, Coins, Settings2 } from 'lucide-react';
 import KategorieTab from './KategorieTab';
 import ProduktyTab from './ProduktyTab';
 import FarbyTab from './FarbyTab';
@@ -23,6 +23,7 @@ import Transfer3dTab from './Transfer3dTab';
 import StolovaTab from './StolovaTab';
 import PonukaDresovTab from './PonukaDresovTab';
 import VysivkaModul from '../VysivkaModul';
+import SosTlacidlaTab from './SosTlacidlaTab';
 import SnurkyTab from './SnurkyTab';
 import FolieTab from './FolieTab';
 import ObjednavkyVsetkyTab from './ObjednavkyVsetkyTab';
@@ -68,6 +69,7 @@ const SUBTABS = [
   { id: 'manualy', label: 'Manuály (tlač A4)', icon: Flag },
   { id: 'dtf-separator', label: 'DTF/DTG Separátor', icon: Grid3x3 },
   { id: 'vysivka', label: 'Výšivka (editor)', icon: Shirt },
+  { id: 'sos', label: 'SOS tlačidlá (stanice)', icon: Siren },
   { id: 'ulozisko', label: 'Úložisko', icon: HardDrive },
 ];
 
@@ -76,7 +78,7 @@ const SKUPINY = [
   { id: 'aplikacie', label: 'Aplikácie', icon: LayoutGrid, tabs: ['dresy', 'buffky', 'celenky', 'transfer3d', 'stolova', 'snurky', 'folie', 'ponuka', 'vlajky', 'beachvlajky', 'metraze'] },
   { id: 'kniznica', label: 'Knižnica', icon: Library, tabs: ['produkty', 'kategorie', 'farby', 'fonty', 'grafiky', 'mockupy'] },
   { id: 'ceny', label: 'Ceny a tlač', icon: Coins, tabs: ['cenotvorba', 'kostra-cien', 'potlace', 'kalkulacka-tlace', 'predajny-cennik'] },
-  { id: 'nastavenia', label: 'Nastavenia', icon: Settings2, tabs: ['shopify', 'b2b-kody', 'manualy', 'dtf-separator', 'vysivka', 'ulozisko'] },
+  { id: 'nastavenia', label: 'Nastavenia', icon: Settings2, tabs: ['shopify', 'b2b-kody', 'manualy', 'dtf-separator', 'vysivka', 'sos', 'ulozisko'] },
 ];
 
 export default function PrintStudioAdmin({ supabase, initialSubtab }) {
@@ -164,6 +166,7 @@ export default function PrintStudioAdmin({ supabase, initialSubtab }) {
         {subtab === 'folie' && <FolieTab supabase={supabase} />}
         {subtab === 'b2b-kody' && <B2bKodyTab supabase={supabase} />}
         {subtab === 'dtf-separator' && <DtfSeparatorTab supabase={supabase} />}
+        {subtab === 'sos' && <SosTlacidlaTab supabase={supabase} />}
         {subtab === 'vysivka' && <VysivkaModul supabase={supabase} vyska="calc(100vh - 260px)" />}
         {subtab === 'ulozisko' && <UloziskoTab supabase={supabase} />}
       </div>

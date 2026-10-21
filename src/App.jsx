@@ -509,7 +509,7 @@ const mapInvoiceToDb = (inv) => ({ id: inv.id, invoice_number: inv.invoiceNumber
 const PROBLEM_CATEGORIES = ['Chýba materiál', 'Chyba vo výrobe/tlači', 'Poškodený materiál', 'Nesúhlasí rozmer/farba', 'Porucha stroja', 'Iné'];
 
 // Ziadosti o pomoc medzi stanicami (odlisne od problem_reports vyssie — zivy chat s pauzou casomiery, nie zavinenie/naklady)
-const mapHelpRequestFromDb = (r) => ({ id: r.id, orderId: r.order_id, itemId: r.item_id, stationId: r.station_id, raisedById: r.raised_by_id || '', raisedByName: r.raised_by_name || '', targetRole: r.target_role || '', targetEmployeeId: r.target_employee_id || '', targetEmployeeName: r.target_employee_name || '', message: r.message, imageUrl: r.image_url || '', status: r.status, replies: r.replies || [], createdAt: r.created_at, resolvedAt: r.resolved_at });
+const mapHelpRequestFromDb = (r) => ({ id: r.id, orderId: r.order_id, itemId: r.item_id, stationId: r.station_id, raisedById: r.raised_by_id || '', raisedByName: r.raised_by_name || '', targetRole: r.target_role || '', targetEmployeeId: r.target_employee_id || '', targetEmployeeName: r.target_employee_name || '', message: r.message, imageUrl: r.image_url || '', status: r.status, replies: r.replies || [], createdAt: r.created_at, resolvedAt: r.resolved_at, ackedAt: r.acked_at || null, ackedByName: r.acked_by_name || '', zdroj: r.zdroj || '', typ: r.typ || '' });
 const mapHelpRequestToDb = (h) => ({ id: h.id, order_id: h.orderId, item_id: h.itemId, station_id: h.stationId, raised_by_id: h.raisedById || null, raised_by_name: h.raisedByName || null, target_role: h.targetRole || null, target_employee_id: h.targetEmployeeId || null, target_employee_name: h.targetEmployeeName || null, message: h.message, image_url: h.imageUrl || null, status: h.status, replies: h.replies || [], resolved_at: h.resolvedAt || null });
 
 const BLANK_GOODS_TYPES = ['Tričko', 'Polokošeľa', 'Mikina', 'Tepláky', 'Šiltovka', 'Ponožky', 'Vlajka', 'Iné'];
@@ -1170,6 +1170,8 @@ export default function App() {
   const [helpRequestMessage, setHelpRequestMessage] = useState('');
   const [helpRequestImageFile, setHelpRequestImageFile] = useState(null);
   const [helpRequestImagePreview, setHelpRequestImagePreview] = useState('');
+  const [sosBezi, setSosBezi] = useState(false);
+  const [sosVysledok, setSosVysledok] = useState('');
   const [isSubmittingHelpRequest, setIsSubmittingHelpRequest] = useState(false);
   const [activeHelpReplyId, setActiveHelpReplyId] = useState(null);
   const [helpReplyText, setHelpReplyText] = useState('');
@@ -1836,7 +1838,7 @@ export default function App() {
           const me = currentUserRef.current;
           const isRecipient = me && (me.role === 'master' || me.role === 'supervisor' || me.role === h.targetRole || me.id === h.targetEmployeeId);
           if (isRecipient) {
-            playAlertBeep(2, 740);
+            playAlertBeep(h.zdroj === 'tlacidlo' || h.zdroj === 'sos_ekran' ? 4 : 2, h.zdroj === 'tlacidlo' || h.zdroj === 'sos_ekran' ? 880 : 740);
             showDesktopNotification('🆘 Žiadosť o pomoc', `${h.raisedByName} (${STATION_CONFIGS[h.stationId]?.name || h.stationId}): ${h.message}`);
           }
         }
@@ -5793,6 +5795,52 @@ export default function App() {
     } finally {
       setIsSubmittingHelpRequest(false);
     }
+  };
+
+  // --- SOS tlačidlo na stanici: jedným stlačením sa vytvorí žiadosť o pomoc pre grafika zákazky, ktorá je práve na stanici ---
+  const SOS_TYPY = [
+    { kod: 'pomoc', ikona: '🆘', nazov: 'Potrebujem pomoc', farba: 'bg-rose-600 hover:bg-rose-500' },
+    { kod: 'grafika', ikona: '🎨', nazov: 'Chyba v grafike', farba: 'bg-indigo-600 hover:bg-indigo-500' },
+    { kod: 'material', ikona: '📦', nazov: 'Chýba materiál', farba: 'bg-amber-600 hover:bg-amber-500' },
+    { kod: 'stroj', ikona: '🔧', nazov: 'Nefunguje stroj', farba: 'bg-slate-600 hover:bg-slate-500' },
+  ];
+  const SOS_AKTIVNE = { grafik: ['priprava', 'export'], strihanie: ['strihanie'], laser: ['rezanie'], sublimacia: ['tlac'], transfer: ['tlac'], sietotlac: ['tlac'], sitie: ['sije'], balenie: ['prebieha'] };
+  // zákazka, ktorá je práve rozrobená na stanici (naposledy spustená)
+  const najdiAktivnuPolozku = (stationId) => {
+    let best = null;
+    orders.forEach(o => (o.items || []).forEach(it => {
+      const st = it.stationStatuses?.[stationId];
+      if (!st || !(SOS_AKTIVNE[stationId] || []).includes(st)) return;
+      const start = String(it.stationMeta?.[stationId]?.startedAt || '');
+      if (!best || start > best.start) best = { order: o, item: it, start };
+    }));
+    return best;
+  };
+  const handleSosPreset = async (typ) => {
+    setSosBezi(true); setSosVysledok('');
+    try {
+      const naj = najdiAktivnuPolozku(selectedTerminalStation);
+      // komu: grafik, ktorý zákazku robil; potom priradený grafik; inak supervízor
+      const empId = naj ? (naj.item.stationMeta?.grafik?.assignedEmployeeId || naj.item.assignedDesignerId || '') : '';
+      const emp = empId ? employees.find(e => e.id === empId) : null;
+      const cislo = naj ? (naj.order.orderNumber || naj.order.id) : '';
+      const sprava = `${typ.ikona} ${STATION_CONFIGS[selectedTerminalStation]?.name || selectedTerminalStation}: ${typ.nazov}` + (naj ? ` — zákazka ${cislo} (${naj.order.customer}, ${naj.item.productName || ''})` : ' — na stanici nie je rozrobená žiadna zákazka');
+      const { error } = await supabase.from('help_requests').insert({
+        ...mapHelpRequestToDb({ id: `hr-${Date.now()}`, orderId: naj ? naj.order.id : '-', itemId: naj ? naj.item.itemId : '-', stationId: selectedTerminalStation, raisedById: currentUser.id, raisedByName: `${currentUser.firstName} ${currentUser.lastName}`,
+          targetRole: emp ? '' : 'supervisor', targetEmployeeId: emp ? emp.id : '', targetEmployeeName: emp ? `${emp.firstName} ${emp.lastName}` : '', message: sprava, imageUrl: '', status: 'open', replies: [] }),
+        zdroj: 'sos_ekran', typ: typ.kod,
+      });
+      if (error) throw error;
+      setSosVysledok(`Odoslané — upozornený: ${emp ? `${emp.firstName} ${emp.lastName}` : 'supervízor'}. Počkajte, niekto príde.`);
+    } catch (e) {
+      setSosVysledok('Nepodarilo sa odoslať: ' + (e.message || e));
+    } finally { setSosBezi(false); }
+  };
+  const handleAckHelpRequest = async (request) => {
+    const meno = `${currentUser.firstName} ${currentUser.lastName}`;
+    const { error } = await supabase.from('help_requests').update({ acked_at: new Date().toISOString(), acked_by_name: meno }).eq('id', request.id);
+    if (error) { triggerNotification('error', error.message.includes('acked') ? error.message + ' — spusti v Supabase migration_sos_stanice.sql' : error.message); return; }
+    triggerNotification('success', 'Ďakujeme — pracovník na stanici vie, že idete.');
   };
 
   const handleAddHelpReply = async (request) => {
@@ -10044,6 +10092,21 @@ export default function App() {
                     <input ref={qrInputRef} type="text" value={manualQrInput} onChange={(e) => setManualQrInput(e.target.value)} placeholder="Sem pípnite kód položky zo sprievodky..." className="w-full bg-slate-900 border-2 border-slate-700 focus:border-indigo-500 text-slate-100 font-mono text-center tracking-wider text-md rounded-xl px-4 py-3 focus:outline-none" />
                     <button onClick={() => handleQrScan(manualQrInput)} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs py-2 rounded-lg mt-3">Potvrdiť Sken manuálne</button>
                   </div>
+                  {(() => {
+                    const naj = najdiAktivnuPolozku(selectedTerminalStation);
+                    return (
+                      <div className="bg-rose-950/20 border border-rose-500/40 p-5 rounded-xl space-y-4">
+                        <div>
+                          <h3 className="text-lg font-extrabold text-rose-300 uppercase tracking-wide">🆘 Potrebujem pomoc</h3>
+                          <p className="text-xs text-slate-400 mt-1">{naj ? <>Zákazka na stanici: <strong className="text-white">{naj.order.orderNumber || naj.order.id} · {naj.order.customer}</strong> — zavolá sa grafik, ktorý ju robil.</> : 'Na stanici nie je rozrobená žiadna zákazka — upozorní sa supervízor.'}</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          {SOS_TYPY.map(t => <button key={t.kod} disabled={sosBezi} onClick={() => handleSosPreset(t)} className={`${t.farba} disabled:opacity-50 text-white font-extrabold text-xl sm:text-2xl py-7 rounded-2xl flex flex-col items-center gap-1 shadow-lg active:scale-95 transition-transform`}><span className="text-4xl">{t.ikona}</span>{t.nazov}</button>)}
+                        </div>
+                        {sosVysledok && <p className="text-base font-bold text-emerald-300">{sosVysledok}</p>}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>
@@ -10650,6 +10713,8 @@ export default function App() {
                   <div key={h.id} className={`bg-slate-950 border rounded-xl p-4 space-y-2 ${h.status === 'paused' ? 'border-amber-700/50' : 'border-rose-700/50'}`}>
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${h.status === 'paused' ? 'bg-amber-900/50 text-amber-300' : 'bg-rose-900/50 text-rose-300'}`}>{h.status === 'paused' ? 'Pozastavené' : 'Otvorené'}</span>
+                      {h.ackedAt && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-900/50 text-sky-300">✓ Ide: {h.ackedByName}</span>}
+                      {h.zdroj === 'tlacidlo' && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-fuchsia-900/50 text-fuchsia-300">🔘 z tlačidla</span>}
                       <span className="bg-slate-800 text-slate-300 text-[10px] font-bold px-2 py-0.5 rounded">{h.targetRole === 'sales' ? 'Pre obchodníka' : h.targetRole === 'supervisor' ? 'Pre supervízora' : h.targetEmployeeName ? `Pre: ${h.targetEmployeeName}` : ''}</span>
                       <span className="font-mono text-[10px] text-slate-500">{h.itemId} • {STATION_CONFIGS[h.stationId]?.name || h.stationId}</span>
                     </div>
@@ -10674,6 +10739,7 @@ export default function App() {
                         <button onClick={() => { setActiveHelpReplyId(h.id); setHelpReplyText(''); setHelpReplyImageFile(null); }} className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold px-3 py-1.5 rounded-lg shrink-0">Odpovedať</button>
                       )}
                       {canAct && h.status !== 'paused' && <button onClick={() => handlePauseForHelpRequest(h)} className="bg-amber-800 hover:bg-amber-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg shrink-0">Pozastaviť</button>}
+                      {canAct && !h.ackedAt && <button onClick={() => handleAckHelpRequest(h)} className="bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-extrabold px-4 py-1.5 rounded-lg shrink-0">Idem</button>}
                       {canAct && <button onClick={() => handleResolveHelpRequest(h)} className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg shrink-0">Vyriešené</button>}
                     </div>
                   </div>
