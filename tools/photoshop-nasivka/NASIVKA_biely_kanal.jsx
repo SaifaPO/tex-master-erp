@@ -69,6 +69,8 @@ function vlozMaskuDoKanala(doc, idx, prah, nazovKanala) {
   var d = new ActionDescriptor(); d.putInteger(cTID('Lvl '), prah);
   executeAction(cTID('Thrs'), d, DialogModes.NO);
   tmp.changeMode(ChangeMode.GRAYSCALE);
+  var d2 = new ActionDescriptor(); d2.putInteger(cTID('Lvl '), 128);   // po prevode do sivej presne čiernobiela maska
+  executeAction(cTID('Thrs'), d2, DialogModes.NO);
   // sivý kanál z kópie sa priamo skopíruje do pôvodného dokumentu ako alfa kanál (spoľahlivejšie než kopírovať/vložiť)
   var ch = tmp.channels[0].duplicate(doc);
   tmp.close(SaveOptions.DONOTSAVECHANGES);
@@ -110,8 +112,13 @@ function vytvorBielyKanal(doc, orig, idx, p) {
   spot.color = zelena;
   spot.opacity = 100;
   doc.activeChannels = [spot];
+  // nový spot kanál je celý čierny (= 100 % farby všade) -> mimo výberu vyplň bielou (= bez farby), vo výbere ostáva 100 % bielej
   var cierna = new SolidColor(); cierna.rgb.red = 0; cierna.rgb.green = 0; cierna.rgb.blue = 0;
-  doc.selection.fill(cierna);                         // 100 % bielej farby
+  var biela = new SolidColor(); biela.rgb.red = 255; biela.rgb.green = 255; biela.rgb.blue = 255;
+  doc.selection.invert();
+  doc.selection.fill(biela);
+  doc.selection.invert();
+  doc.selection.fill(cierna);
   doc.selection.deselect();
   doc.activeChannels = doc.componentChannels;
   spot.visible = true;
