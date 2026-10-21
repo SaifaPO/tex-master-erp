@@ -16,6 +16,7 @@ import Transfer3D from './Transfer3D';
 import Stolova from './Stolova';
 import Snurka from './Snurka';
 import Folie from './Folie';
+import PonukaDresov from './ponuka/PonukaDresov';
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -31,11 +32,11 @@ export default function App() {
   const jeBuffka = new URLSearchParams(window.location.search).get('typ') === 'buffka';
   const jeTransfer3d = new URLSearchParams(window.location.search).get('typ') === 'transfer3d';
   const typUrl = new URLSearchParams(window.location.search).get('typ');
-  const jeStolova = typUrl === 'stolova', jeSnurka = typUrl === 'snurka', jeFolie = typUrl === 'folie';
+  const jeStolova = typUrl === 'stolova', jeSnurka = typUrl === 'snurka', jeFolie = typUrl === 'folie', jePonuka = typUrl === 'ponuka';
 
   useEffect(() => {
     if (!supabase) { setLoadError('Supabase klient nie je nakonfigurovaný (chýbajú VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).'); setIsLoading(false); return; }
-    if (jeVlajka || jeZastava || jeCelenka || jeBuffka || jeTransfer3d || jeStolova || jeSnurka || jeFolie) { setIsLoading(false); return; }
+    if (jeVlajka || jeZastava || jeCelenka || jeBuffka || jeTransfer3d || jeStolova || jeSnurka || jeFolie || jePonuka) { setIsLoading(false); return; }
     (async () => {
       const { kategorie: kats, produkty: prods } = await nacitajKategorieAProdukty(supabase);
       setKategorie(kats);
@@ -72,6 +73,7 @@ export default function App() {
   if (jeStolova) return <Stolova supabase={supabase} />;
   if (jeSnurka) return <Snurka supabase={supabase} />;
   if (jeFolie) return <Folie supabase={supabase} />;
+  if (jePonuka) return <PonukaDresov supabase={supabase} />;
 
   const vybranyProdukt = aktualnyProduktId != null ? produkty.find(p => p.id === aktualnyProduktId) : null;
   const jeDres3D = vybranyProdukt?.typ_konfiguratora === '3d_dres';
