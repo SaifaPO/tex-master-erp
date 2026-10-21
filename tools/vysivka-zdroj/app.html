@@ -1,0 +1,2178 @@
+<title>Stitch Editor</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>/*FONTS*/</style>
+<style>
+/* Layout: pracovný stôl v troch stĺpcoch — nastavenia | plocha s látkou a mm pravítkom | nite a výroba */
+:root {
+  --bg: #e9e7e3;
+  --panel: #fbfaf8;
+  --sunk: #f1efeb;
+  --line: #d9d5ce;
+  --fg: #1c1e21;
+  --muted: #69665f;
+  --accent: #0f6a64;
+  --accent-ink: #ffffff;
+  --accent-soft: #dcebe8;
+  --gold: #a87a2a;
+  --warn: #9a5b00;
+  --warn-bg: #fbf0dc;
+  --danger: #a3302a;
+  --stage: #d6d3cd;
+  --ruler: #f4f2ee;
+  --ruler-ink: #77736b;
+  --shadow: 0 1px 2px rgba(30, 28, 24, .08), 0 4px 16px rgba(30, 28, 24, .06);
+  --f-display: "Archivo", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #17191b; --panel: #202326; --sunk: #191b1e; --line: #33373b; --fg: #ebe8e3; --muted: #9c988f;
+    --accent: #3fb3a8; --accent-ink: #0d1a19; --accent-soft: #1d3634; --gold: #d3a54f;
+    --warn: #e8b35c; --warn-bg: #3a2e19; --danger: #ef7d73; --stage: #2a2d30; --ruler: #222528; --ruler-ink: #8f8b83;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 4px 16px rgba(0, 0, 0, .25);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #17191b; --panel: #202326; --sunk: #191b1e; --line: #33373b; --fg: #ebe8e3; --muted: #9c988f;
+  --accent: #3fb3a8; --accent-ink: #0d1a19; --accent-soft: #1d3634; --gold: #d3a54f;
+  --warn: #e8b35c; --warn-bg: #3a2e19; --danger: #ef7d73; --stage: #2a2d30; --ruler: #222528; --ruler-ink: #8f8b83;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 4px 16px rgba(0, 0, 0, .25);
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 14px; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+
+.app { height: 100%; display: grid; grid-template-rows: auto 1fr; }
+
+/* ---------- horná lišta ---------- */
+.top {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding-block: 8px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  background: var(--panel); border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.brand-mark { width: 28px; height: 28px; flex: none; }
+.brand-name { font-family: var(--f-display); font-weight: 800; font-size: 17px; letter-spacing: .01em; white-space: nowrap; }
+.brand-file { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+.seg { display: inline-flex; background: var(--sunk); border: 1px solid var(--line); border-radius: 9px; padding: 2px; gap: 2px; }
+.seg button { border: 0; background: transparent; padding: 6px 11px; border-radius: 7px; font-size: 13px; font-weight: 500; color: var(--muted); white-space: nowrap; }
+.seg button[aria-pressed="true"] { background: var(--panel); color: var(--fg); box-shadow: var(--shadow); }
+.tools { display: inline-flex; gap: 2px; background: var(--sunk); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+.tool { width: 54px; height: 44px; border: 0; border-radius: 8px; background: transparent; color: var(--muted);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 10.5px; font-weight: 500; }
+.tool svg { width: 18px; height: 18px; }
+.tool:hover { color: var(--fg); }
+.tool[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+.tool:disabled { opacity: .35; cursor: default; }
+.tool-sep { width: 1px; background: var(--line); margin: 6px 3px; }
+.brushbox { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
+.brushbox input[type=range] { width: 90px; }
+.spacer { flex: 1; }
+.headstat { font-size: 13px; color: var(--muted); white-space: nowrap; }
+.headstat b { color: var(--fg); font-weight: 600; }
+.btn { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 8px 12px; font-weight: 500; font-size: 13px; }
+.btn:hover { border-color: var(--muted); }
+.btn-primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; padding: 9px 16px; }
+.btn-primary:hover { filter: brightness(1.08); border-color: var(--accent); }
+.btn-sm { padding: 5px 9px; font-size: 12.5px; }
+
+/* ---------- pracovná plocha ---------- */
+.work { display: grid; grid-template-columns: 300px minmax(0, 1fr) 300px; min-height: 0; }
+.panel { background: var(--panel); overflow-y: auto; min-height: 0; }
+.left { border-right: 1px solid var(--line); }
+.right { border-left: 1px solid var(--line); }
+.tabs { display: flex; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--panel); z-index: 2; }
+.tabs button { flex: 1; border: 0; background: transparent; padding: 12px 8px; font-weight: 600; font-size: 13px; color: var(--muted); border-bottom: 2px solid transparent; }
+.tabs button[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); }
+.sec { padding: 16px; border-bottom: 1px solid var(--line); display: grid; gap: 12px; }
+.sec:last-child { border-bottom: 0; }
+.label { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.h3 { font-family: var(--f-display); font-weight: 700; font-size: 15px; margin: 0; text-wrap: balance; }
+.hint { font-size: 12.5px; color: var(--muted); line-height: 1.45; margin: 0; }
+.field { display: grid; gap: 6px; }
+.field-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.field-row label, .field > label { font-size: 13px; font-weight: 500; }
+.unit { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; background: var(--panel); }
+.unit input { width: 64px; border: 0; padding: 5px 6px; text-align: right; background: transparent; font-family: var(--f-mono); font-size: 13px; }
+.unit span { padding: 5px 7px; background: var(--sunk); color: var(--muted); font-size: 12px; border-left: 1px solid var(--line); }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+input[type=checkbox] { accent-color: var(--accent); width: 16px; height: 16px; }
+.text { width: 100%; border: 1px solid var(--line); border-radius: 7px; padding: 7px 9px; background: var(--panel); font-size: 13px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 4px 10px; font-size: 12px; }
+.chip[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.upload { border: 1.5px dashed var(--line); border-radius: 10px; padding: 14px; display: grid; gap: 8px; justify-items: start; background: var(--sunk); }
+.badge { font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; padding: 2px 7px; border-radius: 5px; background: var(--warn-bg); color: var(--warn); }
+.stepper { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.stepper button { border: 0; background: var(--sunk); width: 30px; height: 30px; font-size: 16px; }
+.stepper output { min-width: 34px; text-align: center; font-family: var(--f-mono); }
+.swatches { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.sw { width: 28px; height: 28px; border-radius: 50%; border: 1px solid rgba(0, 0, 0, .18); padding: 0; position: relative; }
+.sw[aria-pressed="true"]::after { content: ""; position: absolute; inset: -4px; border: 2px solid var(--accent); border-radius: 50%; }
+.note { font-size: 12.5px; line-height: 1.45; padding: 9px 11px; border-radius: 8px; background: var(--warn-bg); color: var(--warn); }
+.empty { padding: 28px 16px; text-align: center; color: var(--muted); display: grid; gap: 8px; justify-items: center; }
+.empty svg { width: 36px; height: 36px; opacity: .5; }
+
+/* objekt */
+.obj-head { display: flex; align-items: center; gap: 10px; }
+.obj-sw { width: 22px; height: 22px; border-radius: 6px; border: 1px solid rgba(0, 0, 0, .15); flex: none; }
+.obj-meta { font-size: 12px; color: var(--muted); }
+.typeseg { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--sunk); border: 1px solid var(--line); border-radius: 9px; padding: 2px; gap: 2px; }
+.typeseg button { border: 0; background: transparent; border-radius: 7px; padding: 7px 4px; font-size: 12.5px; font-weight: 500; color: var(--muted); }
+.typeseg button[aria-pressed="true"] { background: var(--panel); color: var(--fg); box-shadow: var(--shadow); }
+.auto-tag { font-size: 11px; color: var(--accent); font-weight: 600; }
+.row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ---------- plocha ---------- */
+.stage { position: relative; background: var(--stage); min-height: 0; overflow: hidden; }
+#cv { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
+.float { position: absolute; display: flex; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 4px; box-shadow: var(--shadow); }
+.zoombox { right: 12px; top: 34px; flex-direction: column; }
+.zoombox button { width: 32px; height: 32px; border: 0; background: transparent; border-radius: 7px; font-size: 16px; color: var(--fg); }
+.zoombox button:hover { background: var(--sunk); }
+.simbar { left: 34px; right: 12px; bottom: 12px; align-items: center; gap: 10px; padding: 6px 10px; flex-wrap: wrap; }
+.simbar input { flex: 1; min-width: 120px; }
+.simbar .playbtn { width: 34px; height: 34px; border-radius: 50%; border: 0; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; flex: none; }
+.simbar .playbtn svg { width: 14px; height: 14px; }
+.simtxt { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.overlay { position: absolute; inset: 0; display: grid; place-items: center; background: color-mix(in srgb, var(--stage) 70%, transparent); z-index: 5; }
+.overlay .box { background: var(--panel); border-radius: 12px; padding: 14px 18px; box-shadow: var(--shadow); display: flex; gap: 12px; align-items: center; font-weight: 600; }
+.spin { width: 18px; height: 18px; border: 2.5px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: sp 0.8s linear infinite; }
+@keyframes sp { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation-duration: 3s; } }
+.drop { border: 3px dashed var(--accent); }
+
+/* ---------- pravý panel ---------- */
+.stats-top { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.big { display: grid; gap: 2px; }
+.big .v { font-family: var(--f-display); font-weight: 700; font-size: 26px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.big .k { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.kv { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; font-size: 13px; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; text-align: right; font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.job { background: var(--sunk); border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: grid; gap: 10px; }
+.job-total { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 8px; }
+.job-total b { font-family: var(--f-display); font-size: 18px; white-space: nowrap; }
+.threads { display: grid; gap: 8px; }
+.thread { border: 1px solid var(--line); border-radius: 10px; padding: 9px; display: grid; gap: 7px; background: var(--panel); }
+.thread[data-active="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.thread[data-skip="true"] { opacity: .55; }
+.t-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.t-sw { width: 26px; height: 26px; border-radius: 6px; border: 1px solid rgba(0, 0, 0, .18); flex: none; position: relative; overflow: hidden; }
+.t-sw input { position: absolute; inset: -6px; width: 40px; height: 40px; opacity: 0; cursor: pointer; }
+.t-name { flex: 1; min-width: 0; border: 0; background: transparent; font-weight: 600; font-size: 13px; padding: 2px 0; }
+.t-name:hover, .t-name:focus { background: var(--sunk); border-radius: 4px; }
+.t-code { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 6px; padding: 4px 7px; font-size: 12px; background: var(--panel); font-family: var(--f-mono); }
+.t-st { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.ibtn { border: 1px solid var(--line); background: var(--panel); border-radius: 6px; width: 28px; height: 26px; display: grid; place-items: center; color: var(--muted); flex: none; }
+.ibtn svg { width: 14px; height: 14px; }
+.ibtn:hover { color: var(--fg); border-color: var(--muted); }
+.t-merge { border: 1px solid var(--line); border-radius: 6px; padding: 3px 4px; font-size: 12px; background: var(--panel); width: 74px; flex: none; color: var(--muted); }
+.seq { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 13px; }
+.seq li { display: grid; grid-template-columns: 22px 14px 1fr auto; align-items: center; gap: 8px; }
+.seq .n { font-family: var(--f-mono); color: var(--muted); font-size: 12px; text-align: right; }
+.seq .d { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0, 0, 0, .2); }
+.seq .c { font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+
+/* ---------- dialóg & toast ---------- */
+.modal-bg { position: fixed; inset: 0; background: rgba(15, 16, 18, .45); display: grid; place-items: center; z-index: 50;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.modal { background: var(--panel); border-radius: 14px; width: min(480px, 100%); box-shadow: var(--shadow); max-height: 90vh; overflow: auto; }
+.modal header { padding: 18px 20px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; }
+.modal h2 { font-family: var(--f-display); font-size: 19px; margin: 0; }
+.modal .body { padding: 18px 20px; display: grid; gap: 12px; }
+.modal footer { padding: 14px 20px; border-top: 1px solid var(--line); display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; background: var(--sunk); border-radius: 0 0 14px 14px; }
+.fmt { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border: 1.5px solid var(--line); border-radius: 10px; }
+.fmt[data-on="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.fmt[data-off="true"] { opacity: .55; }
+.fmt b { display: block; }
+.fmt span { font-size: 12.5px; color: var(--muted); }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(24px + env(safe-area-inset-bottom, 0px)); background: var(--fg); color: var(--bg);
+  padding: 10px 16px; border-radius: 10px; font-size: 13px; font-weight: 500; z-index: 60; box-shadow: var(--shadow); max-width: calc(100% - 32px); }
+
+/* ---------- vysvetlivky ---------- */
+.qi { width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--line); background: var(--sunk); color: var(--muted);
+  font-size: 11px; font-weight: 700; line-height: 1; display: inline-grid; place-items: center; padding: 0; flex: none; margin-left: 6px; vertical-align: 1px; }
+.qi:hover, .qi[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
+.lbl { display: inline-flex; align-items: center; }
+.helpbox { font-size: 12.5px; line-height: 1.5; background: var(--accent-soft); color: var(--fg); border-radius: 8px; padding: 10px 12px; display: grid; gap: 6px; }
+.helpbox p { margin: 0; }
+.helpbox .hb-row { display: grid; grid-template-columns: 74px 1fr; gap: 8px; }
+.helpbox .hb-k { font-weight: 600; color: var(--accent); font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; padding-top: 1px; }
+select.text { padding: 6px 8px; }
+textarea.text { resize: vertical; min-height: 96px; font-family: var(--f-mono); line-height: 1.5; }
+.typeseg.four { grid-template-columns: repeat(4, 1fr); }
+.typeseg.two { grid-template-columns: repeat(2, 1fr); }
+.tlist { display: flex; flex-wrap: wrap; gap: 6px; }
+.tchip { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 5px 9px; font-size: 12.5px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tchip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.ins { display: flex; gap: 6px; flex-wrap: wrap; }
+.legend { display: flex; gap: 12px; align-items: center; font-size: 11.5px; color: var(--muted); }
+.legend i { display: inline-block; width: 18px; height: 0; border-top: 2px solid var(--fg); vertical-align: middle; margin-right: 4px; }
+.legend i.j { border-top: 2px dashed #c62828; }
+.legend i.u { border-top-color: rgba(40,130,200,.85); }
+
+/* ---------- príručka ---------- */
+.modal.wide { width: min(780px, 100%); }
+.guide { display: grid; gap: 22px; }
+.g-sec { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 16px; align-items: start; }
+.g-sec svg { width: 150px; height: 110px; background: var(--sunk); border-radius: 10px; border: 1px solid var(--line); }
+.g-sec h3 { font-family: var(--f-display); font-size: 16px; margin: 0 0 4px; }
+.g-sec p { margin: 0 0 6px; font-size: 13.5px; line-height: 1.55; max-width: 62ch; }
+.g-sec ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.55; color: var(--muted); }
+.g-nav { display: flex; flex-wrap: wrap; gap: 6px; }
+@media (max-width: 560px) { .g-sec { grid-template-columns: 1fr; } }
+
+/* ---------- úzke obrazovky ---------- */
+@media (max-width: 1600px) { .headstat { display: none; } .tool { width: 46px; } .brand-file { max-width: 170px; } }
+@media (max-width: 1360px) { .brand-file { display: none; } }
+/* užšie okno (napr. ERP s bočným menu): nástroje len ako ikony, popis v tooltipe */
+@media (max-width: 1280px) and (min-width: 861px) {
+  .tool { width: 36px; font-size: 0; gap: 0; }
+  .seg button { padding: 6px 8px; }
+  .top { gap: 8px; }
+}
+@media (max-width: 1100px) {
+  .work { grid-template-columns: 270px minmax(0, 1fr) 270px; }
+}
+@media (max-width: 860px) {
+  html, body { height: auto; }
+  .app { height: auto; display: block; }
+  .work { display: flex; flex-direction: column; }
+  .stage { order: 1; height: 62vh; min-height: 380px; }
+  .left { order: 2; border-right: 0; border-top: 1px solid var(--line); overflow: visible; }
+  .right { order: 3; border-left: 0; border-top: 1px solid var(--line); overflow: visible; }
+  .tools { width: 100%; overflow-x: auto; }
+  .tool { width: 50px; flex: none; }
+  .top .spacer { display: none; }
+}
+</style>
+
+<div class="app" id="app">
+  <header class="top">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 28 28" aria-hidden="true">
+        <circle cx="14" cy="14" r="12" fill="none" stroke="var(--gold)" stroke-width="3"/>
+        <circle cx="14" cy="14" r="8" fill="var(--accent)"/>
+        <path d="M9 11 L19 17 M9 14 L19 20 M9 8 L19 14" stroke="var(--accent-ink)" stroke-width="1.4" stroke-linecap="round"/>
+      </svg>
+      <span class="brand-name">Stitch Editor</span>
+      <span class="brand-file" id="fileName"></span>
+    </div>
+    <div class="seg" role="group" aria-label="Zobrazenie">
+      <button id="v-real" aria-pressed="true">Výšivka</button>
+      <button id="v-lines" aria-pressed="false">Stehy</button>
+      <button id="v-orig" aria-pressed="false">Originál</button>
+    </div>
+    <div class="tools" role="toolbar" aria-label="Nástroje">
+      <button class="tool" data-tool="select" aria-pressed="true" title="Výber (V)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M5 3l14 8-6 2-3 6z"/></svg>Výber</button>
+      <button class="tool" data-tool="pan" aria-pressed="false" title="Posun (H)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg>Posun</button>
+      <button class="tool" data-tool="brush" aria-pressed="false" title="Štetec (B)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 3l3 3-9 9-3-3z"/><path d="M9 12c-3 0-5 2-5 5 0 1-1 2-2 2 2 2 6 2 8 0 1-1 2-3 2-4"/></svg>Štetec</button>
+      <button class="tool" data-tool="erase" aria-pressed="false" title="Guma (E)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M16 3l5 5-11 11H5l-3-3z"/><path d="M9 10l5 5M10 21h11"/></svg>Guma</button>
+      <button class="tool" data-tool="fill" aria-pressed="false" title="Prefarbiť objekt (G)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M11 3l8 8-7 7-8-8z"/><path d="M4 10h14M20 15s2 2.5 2 4a2 2 0 01-4 0c0-1.5 2-4 2-4z"/></svg>Prefarbiť</button>
+      <button class="tool" data-tool="text" aria-pressed="false" title="Text (T)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 5h14M12 5v14M9 19h6"/></svg>Text</button>
+      <span class="tool-sep"></span>
+      <button class="tool" id="undoBtn" title="Späť (Ctrl+Z)" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 010 10h-3"/></svg>Späť</button>
+      <button class="tool" id="redoBtn" title="Znova (Ctrl+Shift+Z)" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14l5-5-5-5"/><path d="M20 9H9a5 5 0 000 10h3"/></svg>Znova</button>
+    </div>
+    <div class="brushbox" id="brushBox" hidden>
+      <label for="brushSize">Hrot</label>
+      <input type="range" id="brushSize" min="0.3" max="6" step="0.1" value="1.2">
+      <span class="num" id="brushVal">1,2 mm</span>
+    </div>
+    <div class="spacer"></div>
+    <span class="headstat" id="headStat"></span>
+    <button class="btn" id="guideBtn">Príručka</button>
+    <button class="btn" id="saveOrderBtn" hidden>Uložiť do zákazky</button>
+    <button class="btn btn-primary" id="exportBtn">Export pre stroj</button>
+  </header>
+
+  <div class="work">
+    <!-- ľavý panel -->
+    <aside class="panel left">
+      <div class="tabs" role="tablist">
+        <button role="tab" id="tab-design" aria-selected="true">Dizajn</button>
+        <button role="tab" id="tab-obj" aria-selected="false">Objekt</button>
+        <button role="tab" id="tab-text" aria-selected="false">Text</button>
+      </div>
+
+      <div id="pane-design">
+        <div class="sec">
+          <div class="upload" id="uploadBox">
+            <div class="field-row" style="width:100%"><span class="h3">Predloha</span><span class="badge" id="sampleBadge">Ukážka</span></div>
+            <p class="hint">PNG s priehľadným pozadím dá najčistejší výsledok. Funguje aj JPG a SVG. Obrázok môžeš pretiahnuť aj priamo na plochu. Uložený projekt (.json) sa otvorí rovnakým tlačidlom.</p>
+            <input type="file" id="file" accept="image/png,image/jpeg,image/svg+xml,image/webp,.json,application/json" hidden>
+            <div class="row-actions"><button class="btn" id="uploadBtn">Nahrať logo</button><button class="btn" id="blankBtn">Len text (bez loga)</button></div>
+          </div>
+          <div class="field">
+            <label for="dName">Názov dizajnu</label>
+            <input class="text" id="dName" type="text" maxlength="40">
+          </div>
+        </div>
+
+        <div class="sec">
+          <span class="label">Rozmer a farby</span>
+          <div class="field-row">
+            <label for="wmm" class="lbl">Šírka výšivky<button class="qi" data-help="width" aria-label="Vysvetlenie">?</button></label>
+            <span class="unit"><input id="wmm" type="number" min="20" max="300" step="1" value="90"><span>mm</span></span>
+          </div>
+          <div class="chips" id="presets">
+            <button class="chip" data-w="90">Hruď 90</button>
+            <button class="chip" data-w="70">Rukáv 70</button>
+            <button class="chip" data-w="55">Šiltovka 55</button>
+            <button class="chip" data-w="250">Chrbát 250</button>
+          </div>
+          <div class="field-row">
+            <label class="lbl">Počet farieb<button class="qi" data-help="colors" aria-label="Vysvetlenie">?</button></label>
+            <div class="stepper"><button id="kMinus" aria-label="Menej farieb">−</button><output id="kVal">4</output><button id="kPlus" aria-label="Viac farieb">+</button></div>
+          </div>
+          <div class="field-row">
+            <label for="rmBg" class="lbl">Odstrániť jednofarebné pozadie<button class="qi" data-help="removeBg" aria-label="Vysvetlenie">?</button></label>
+            <input type="checkbox" id="rmBg" checked>
+          </div>
+          <div class="note" id="recalcNote" hidden>Zmena rozmeru alebo počtu farieb prepočíta dizajn od začiatku. Ručné úpravy sa stratia.</div>
+          <button class="btn" id="recalcBtn">Prepočítať dizajn</button>
+        </div>
+
+        <div class="sec">
+          <span class="label">Predvolené stehy</span>
+          <div class="field">
+            <div class="field-row"><label for="gFill" class="lbl">Hustota výplne<button class="qi" data-help="fillSpacing" aria-label="Vysvetlenie">?</button></label><span class="num" id="gFillV"></span></div>
+            <input type="range" id="gFill" min="0.3" max="0.7" step="0.01">
+          </div>
+          <div class="field">
+            <div class="field-row"><label for="gSatin" class="lbl">Hustota satinu<button class="qi" data-help="satinSpacing" aria-label="Vysvetlenie">?</button></label><span class="num" id="gSatinV"></span></div>
+            <input type="range" id="gSatin" min="0.25" max="0.6" step="0.01">
+          </div>
+          <div class="field">
+            <div class="field-row"><label for="gPull" class="lbl">Kompenzácia ťahu<button class="qi" data-help="pullComp" aria-label="Vysvetlenie">?</button></label><span class="num" id="gPullV"></span></div>
+            <input type="range" id="gPull" min="0" max="0.5" step="0.05">
+          </div>
+          <div class="field">
+            <div class="field-row"><label for="gSatW" class="lbl">Satin do šírky<button class="qi" data-help="satinMaxWidth" aria-label="Vysvetlenie">?</button></label><span class="num" id="gSatWV"></span></div>
+            <input type="range" id="gSatW" min="1.5" max="6" step="0.1">
+            <p class="hint">Užšie tvary (písmo, obrysy, pásiky) sa automaticky šijú lesklým satinom, širšie výplňou.</p>
+          </div>
+          <div class="field-row"><label for="gUnder" class="lbl">Podklad (underlay)<button class="qi" data-help="underlay" aria-label="Vysvetlenie">?</button></label><input type="checkbox" id="gUnder" checked></div>
+          <div class="field">
+            <label for="gPattern" class="lbl">Vzor výplne (tatami)<button class="qi" data-help="pattern" aria-label="Vysvetlenie">?</button></label>
+            <select class="text" id="gPattern"></select>
+          </div>
+          <div class="field">
+            <div class="field-row"><label for="gSplit" class="lbl">Deliť satin nad<button class="qi" data-help="splitLen" aria-label="Vysvetlenie">?</button></label><span class="num" id="gSplitV"></span></div>
+            <input type="range" id="gSplit" min="5" max="12" step="0.5">
+          </div>
+        </div>
+
+        <div class="sec">
+          <span class="label lbl">Látka<button class="qi" data-help="fabric" aria-label="Vysvetlenie">?</button></span>
+          <div class="swatches" id="fabricSw"></div>
+        </div>
+      </div>
+
+      <div id="pane-obj" hidden></div>
+      <div id="pane-text" hidden></div>
+    </aside>
+
+    <!-- plocha -->
+    <main class="stage" id="stage">
+      <canvas id="cv" aria-label="Náhľad výšivky"></canvas>
+      <div class="float zoombox">
+        <button id="zIn" aria-label="Priblížiť">+</button>
+        <button id="zOut" aria-label="Oddialiť">−</button>
+        <button id="zFit" aria-label="Celý dizajn" title="Celý dizajn">⤢</button>
+      </div>
+      <div class="float simbar">
+        <button class="playbtn" id="playBtn" aria-label="Simulovať šitie">
+          <svg viewBox="0 0 14 14" fill="currentColor" id="playIcon"><path d="M3 1.5v11l9.5-5.5z"/></svg>
+        </button>
+        <input type="range" id="sim" min="0" max="1" value="1" aria-label="Priebeh šitia">
+        <span class="simtxt num" id="simTxt"></span>
+        <span class="legend" id="legend" hidden><span><i></i>steh</span><span><i class="u"></i>podklad</span><span><i class="j"></i>skok so strihom</span></span>
+      </div>
+      <div class="overlay" id="busy" hidden><div class="box"><span class="spin"></span><span id="busyTxt">Digitalizujem…</span></div></div>
+    </main>
+
+    <!-- pravý panel -->
+    <aside class="panel right">
+      <div class="sec">
+        <div class="stats-top">
+          <div class="big"><span class="v" id="sStitches">–</span><span class="k">Stehov</span></div>
+          <div class="big"><span class="v" id="sTime">–</span><span class="k">Čas šitia</span></div>
+        </div>
+        <div class="field">
+          <div class="field-row"><label for="speed" class="lbl">Rýchlosť stroja<button class="qi" data-help="speed" aria-label="Vysvetlenie">?</button></label><span class="num" id="speedV"></span></div>
+          <input type="range" id="speed" min="300" max="1200" step="50" value="800">
+        </div>
+        <dl class="kv">
+          <dt>Rozmer</dt><dd id="sSize">–</dd>
+          <dt>Farby / výmeny nití</dt><dd id="sColors">–</dd>
+          <dt class="lbl">Strihy<button class="qi" data-help="trims" aria-label="Vysvetlenie">?</button></dt><dd id="sTrims">–</dd>
+          <dt>Spotreba vrchnej nite</dt><dd id="sThread">–</dd>
+        </dl>
+        <div class="job">
+          <span class="label lbl">Zákazka<button class="qi" data-help="job" aria-label="Vysvetlenie">?</button></span>
+          <div class="field-row"><label for="pieces">Počet kusov</label><span class="unit"><input id="pieces" type="number" min="1" value="20"><span>ks</span></span></div>
+          <div class="field-row"><label for="heads">Hláv stroja</label><span class="unit"><input id="heads" type="number" min="1" max="24" value="1"><span>hl.</span></span></div>
+          <div class="job-total"><span class="hint">Spolu s upínaním<br>(1 min na cyklus)</span><b class="num" id="jobTime">–</b></div>
+        </div>
+      </div>
+      <div class="sec">
+        <div class="field-row"><span class="label">Nite</span><button class="btn btn-sm" id="addThread">+ Farba</button></div>
+        <p class="hint">Klikni na niť, ktorou má štetec a prefarbenie kresliť. Kód nite sa prenesie do výrobného listu.</p>
+        <div class="threads" id="threads"></div>
+      </div>
+      <div class="sec">
+        <span class="label lbl">Poradie šitia<button class="qi" data-help="sequence" aria-label="Vysvetlenie">?</button></span>
+        <ol class="seq" id="seq"></ol>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="modal-bg" id="exportModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="exTitle">
+    <header><h2 id="exTitle">Export pre stroj</h2><button class="ibtn" id="exClose" aria-label="Zavrieť">✕</button></header>
+    <div class="body">
+      <label class="fmt" data-on="true"><input type="radio" name="fmt" checked>
+        <div><b>DST · Tajima</b><span>Priemyselný štandard. Načítajú ho stroje Tajima, ZSK, Barudan, SWF, Ricoma, Happy, Melco aj väčšina viachlavových strojov.</span></div></label>
+      <label class="fmt" data-off="true"><input type="radio" name="fmt" disabled>
+        <div><b>PES, JEF, VP3, EXP</b><span>Formáty domácich strojov (Brother, Janome, Pfaff, Bernina). Doplníme, keď bude jasné, aký stroj kúpite.</span></div></label>
+      <p class="hint">Stiahne sa ZIP balík: program <span class="num">.dst</span>, náhľad výšivky v PNG, výrobný list s poradím nití, počtom stehov a časom a projekt <span class="num">.json</span>, ktorým dizajn neskôr znova otvoríš na úpravy.</p>
+      <div class="note" id="exWarn" hidden></div>
+    </div>
+    <footer>
+      <button class="btn" id="exPng">Iba náhľad PNG</button>
+      <button class="btn btn-primary" id="exZip">Stiahnuť ZIP</button>
+    </footer>
+  </div>
+</div>
+<div class="modal-bg" id="guideModal" hidden>
+  <div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="gTitle">
+    <header><h2 id="gTitle">Príručka vyšívania</h2><button class="ibtn" id="gClose" aria-label="Zavrieť">✕</button></header>
+    <div class="body"><div class="guide" id="guideBody"></div></div>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+/*ENGINE*/
+</script>
+<script>
+'use strict';
+const E = StitchEngine, R = E.R;
+const $ = id => document.getElementById(id);
+const SAMPLE_LOGO = "__LOGO__";
+
+/* ---------------- stav ---------------- */
+const S = {
+  name: 'HC Presov', isSample: true, img: null, srcCanvas: null,
+  widthMM: 90, k: 4, removeBg: true,
+  W: 0, H: 0, labels: null, palette: [], colorOrder: [],
+  overrides: {}, objs: [], comp: null, keyOf: new Map(), nextKey: 1, byKey: new Map(),
+  order: [], cmds: [], stats: null, blocks: [], render: null,
+  global: { fillSpacing: 0.40, satinSpacing: 0.38, pullComp: 0.15, underlay: true, satinMaxWidth: 2.8, pattern: 'tatami', splitLen: 7 },
+  texts: [], textBuilt: new Map(), selText: null, nextText: 1, roster: [], rosterIdx: 0,
+  fabric: '#f3f1ed', view: 'real', tool: 'select', brushMM: 1.2, active: 0,
+  sel: null, speed: 800, pieces: 20, heads: 1,
+  sim: null, playing: false,
+  zoom: 1, panX: 0, panY: 0,
+  undo: [], redo: [],
+};
+const FABRICS = [
+  { c: '#f3f1ed', n: 'Biela' }, { c: '#1d1e21', n: 'Čierna' }, { c: '#8d9096', n: 'Sivý melír' },
+  { c: '#1e2a44', n: 'Navy' }, { c: '#b3212f', n: 'Červená' }, { c: '#1f6b3a', n: 'Zelená' },
+];
+const NAMES = [
+  ['Biela', [250, 250, 248]], ['Krémová', [240, 230, 200]], ['Čierna', [25, 25, 25]], ['Sivá', [140, 140, 140]], ['Svetlosivá', [200, 200, 200]],
+  ['Červená', [200, 30, 45]], ['Bordová', [110, 20, 35]], ['Oranžová', [235, 120, 30]], ['Zlatá', [205, 165, 95]], ['Žltá', [245, 210, 40]],
+  ['Zelená', [40, 150, 70]], ['Tmavozelená', [20, 80, 45]], ['Modrá', [30, 90, 180]], ['Námornícka', [25, 35, 70]], ['Svetlomodrá', [110, 170, 225]],
+  ['Fialová', [110, 50, 140]], ['Ružová', [230, 120, 170]], ['Hnedá', [110, 70, 40]], ['Béžová', [210, 185, 150]],
+];
+const nameFor = rgb => NAMES.reduce((b, n) => {
+  const d = (n[1][0] - rgb[0]) ** 2 + (n[1][1] - rgb[1]) ** 2 + (n[1][2] - rgb[2]) ** 2;
+  return d < b[1] ? [n[0], d] : b;
+}, ['', Infinity])[0];
+const hex = rgb => '#' + rgb.map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
+const rgbOf = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+const lum = c => 0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2];
+const fmtN = n => Math.round(n).toLocaleString('sk-SK');
+const fmt1 = n => n.toLocaleString('sk-SK', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const fmt2 = n => n.toLocaleString('sk-SK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtTime = min => {
+  const s = Math.round(min * 60);
+  if (s >= 3600) return Math.floor(s / 3600) + ' h ' + String(Math.floor(s % 3600 / 60)).padStart(2, '0') + ' min';
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') + ' min';
+};
+
+let toastT;
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 2800); }
+function busy(txt, fn) {
+  $('busyTxt').textContent = txt; $('busy').hidden = false;
+  setTimeout(() => { try { fn(); } catch (e) { console.error(e); toast('Spracovanie zlyhalo: ' + e.message); } finally { $('busy').hidden = true; } }, 30);
+}
+
+/* ---------------- spracovanie ---------------- */
+function loadImageFrom(src, name, isSample, after) {
+  const img = new Image();
+  img.onload = () => {
+    S.img = img; S.isSample = isSample; S.imgSrc = src;
+    S.name = name; $('dName').value = name;
+    $('sampleBadge').hidden = !isSample;
+    $('fileName').textContent = isSample ? 'Ukážka · HC Prešov' : (EMBED.orderLabel || name);
+    busy('Digitalizujem…', () => {
+      if (after) after(img); else quantizeAll();
+      S.userView = false; fit();
+      embedPost({ type: 'stitch:loaded', name: S.name });
+    });
+  };
+  img.onerror = () => { toast('Tento obrázok sa nedá otvoriť. Skús PNG alebo JPG.'); embedPost({ type: 'stitch:error', message: 'Obrázok sa nepodarilo otvoriť.' }); };
+  img.src = src;
+}
+
+function quantizeAll() {
+  if (!S.img) { newBlank(true); return; }
+  const img = S.img;
+  const iw = img.naturalWidth || img.width || 500, ih = img.naturalHeight || img.height || 500;
+  const W = Math.round(S.widthMM * R), H = Math.max(10, Math.round(W * ih / iw));
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const x = c.getContext('2d', { willReadFrequently: true });
+  x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high';
+  x.drawImage(img, 0, 0, W, H);
+  const rgba = x.getImageData(0, 0, W, H).data;
+  S.srcCanvas = c; S.W = W; S.H = H;
+  const q = E.quantize(rgba, W, H, S.k, { removeBg: S.removeBg });
+  let labels = E.modeFilter(q.labels, W, H, q.palette.length);
+  labels = E.removeSmall(labels, W, H, E.defaults.minArea * R * R);
+  S.labels = labels;
+  const oldPal = S.palette;
+  S.palette = q.palette.map(rgb => ({ rgb, name: nameFor(rgb), code: '', skip: false }));
+  if (S.texts.length) remapTextLabels(oldPal);
+  S.colorOrder = S.palette.map((_, i) => i).sort((a, b) => lum(S.palette[b].rgb) - lum(S.palette[a].rgb));
+  S.overrides = {}; S.comp = null; S.keyOf = new Map(); S.sel = null;
+  S.undo = []; S.redo = []; updUndo();
+  S.active = S.colorOrder[S.colorOrder.length - 1] ?? 0;
+  $('recalcNote').hidden = true;
+  rebuild();
+  if (S.texts.length) refreshTexts();
+}
+
+function rebuild() {
+  const { comp, objs } = E.buildObjects(S.labels, S.W, S.H, S.global);
+  const used = new Set(), keyOf = new Map(), byKey = new Map();
+  for (const ob of objs) {
+    let key = null;
+    if (S.comp) {
+      const cnt = new Map();
+      for (let y = 0; y < ob.bh; y += 2) for (let x = 0; x < ob.bw; x += 2) {
+        if (!ob.own[y * ob.bw + x]) continue;
+        const gi = (y + ob.oy) * S.W + (x + ob.ox);
+        const o = S.comp[gi]; if (o >= 0) cnt.set(o, (cnt.get(o) || 0) + 1);
+      }
+      let best = -1, bc = 0;
+      for (const [o, v] of cnt) if (v > bc) { bc = v; best = o; }
+      const k = S.keyOf.get(best);
+      if (k && !used.has(k)) key = k;
+    }
+    if (!key) key = 'o' + (S.nextKey++);
+    used.add(key); ob.key = key; keyOf.set(ob.id, key); byKey.set(key, ob);
+  }
+  S.comp = comp; S.objs = objs; S.keyOf = keyOf; S.byKey = byKey;
+  if (S.sel && !byKey.has(S.sel)) S.sel = null;
+  restitch();
+}
+
+const paramsOf = ob => E.objectParams(ob, S.overrides[ob.key], S.global);
+const skipped = ob => S.palette[ob.label].skip || !!(S.overrides[ob.key] && S.overrides[ob.key].skip);
+
+/* lem okolo objektu */
+const BORDER_CACHE = new Map();
+function borderFor(ob, cfg, id) {
+  let b;
+  if (cfg.type === 'satin') {
+    const ck = ob.key + '|' + cfg.width;
+    b = BORDER_CACHE.get(ck);
+    if (!b || b.parentRef !== ob) { b = E.borderObject(ob, cfg.width, cfg.label, S.global); b.parentRef = ob; BORDER_CACHE.set(ck, b); }
+  } else {
+    b = Object.assign({}, ob, { mask: ob.own });
+  }
+  return Object.assign(b, { id, key: ob.key + '#lem', label: cfg.label, borderCfg: cfg, parent: ob, isBorder: true });
+}
+function paramsFor(ob) {
+  if (ob.isBorder) {
+    const c = ob.borderCfg;
+    if (c.type === 'satin') return E.objectParams(ob, { type: 'satin', pullComp: 0.1, underlayType: 'center', splitLen: 7 }, S.global);
+    return E.objectParams(ob, { type: 'running', stitchLen: 2.0, passes: c.type === 'triple' ? 3 : 1 }, S.global);
+  }
+  if (ob.textLayer) {
+    const L = ob.textLayer;
+    return E.objectParams(ob, Object.assign(L.stitch !== 'auto' ? { type: L.stitch } : {}, { angle: L.angle }), S.global);
+  }
+  return paramsOf(ob);
+}
+const threadFor = ob => {
+  if (!S.palette[ob.label]) return null;
+  if (S.palette[ob.label].skip) return null;
+  if (!ob.isBorder && !ob.textLayer && skipped(ob)) return null;
+  if (ob.isBorder && ob.parent && !ob.parent.textLayer && skipped(ob.parent)) return null;
+  return ob.label;
+};
+function computeProgram() {
+  for (let i = 0; i < S.palette.length; i++) if (!S.colorOrder.includes(i)) S.colorOrder.push(i);
+  const { order } = E.orderObjects(S.objs, S.W, S.colorOrder);
+  const rank = l => S.colorOrder.indexOf(l);
+  const borders = [];
+  order.forEach(ob => {
+    const c = S.overrides[ob.key] && S.overrides[ob.key].border;
+    if (c && c.type && c.type !== 'none') borders.push(borderFor(ob, c, 200000 + ob.id));
+  });
+  borders.sort((a, b) => rank(a.label) - rank(b.label));
+  const tf = [], tb = [];
+  S.texts.forEach(L => { const t = S.textBuilt.get(L.id); if (!t) return; tf.push(...t.objs); if (t.border) tb.push(t.border); });
+  const full = order.concat(borders, tf, tb);
+  S.order = full;
+  S.objById = new Map(full.map(o => [o.id, o]));
+  return E.assemble(full, (ob, st) => E.stitchObject(ob, paramsFor(ob), st), threadFor, S.global);
+}
+
+function restitch() {
+  S.cmds = computeProgram();
+  // bloky (poradie šitia)
+  S.blocks = [];
+  let cur = null;
+  S.cmds.forEach((c, i) => {
+    if (c.t === 's') {
+      if (!cur || cur.thread !== c.c) { cur = { thread: c.c, stitches: 0, start: i }; S.blocks.push(cur); }
+      cur.stitches++;
+    }
+  });
+  S.sim = null;
+  buildRenderCache();
+  updStats(); renderThreads(); renderObjPane(); draw();
+}
+
+/* ---------------- vykresľovanie ---------------- */
+const cv = $('cv'), ctx = cv.getContext('2d');
+let dpr = 1, cw = 0, ch = 0;
+const LIGHT = (() => { const x = -0.55, y = -0.84, n = Math.hypot(x, y); return [x / n, y / n]; })();
+const LEVELS = 6;
+
+function buildRenderCache() {
+  // segmenty po blokoch farieb; index príkazu kvôli simulácii
+  const segs = [];
+  let prev = null, blk = null;
+  S.cmds.forEach((c, i) => {
+    if (c.t === 's') {
+      if (prev) {
+        if (!blk || blk.thread !== c.c) { blk = { thread: c.c, xs: [], idx: [], u: [] }; segs.push(blk); }
+        blk.xs.push(prev[0], prev[1], c.x, c.y); blk.idx.push(i); blk.u.push(c.k === 'u' || c.k === 'tr' ? 1 : 0);
+      }
+      prev = [c.x, c.y];
+    } else if (c.t === 'j') prev = [c.x, c.y];
+    else prev = null;
+  });
+  S.render = { segs, full: segs.map(b => buildPaths(b, Infinity)) };
+}
+
+function buildPaths(b, limit) {
+  const shadow = new Path2D(), body = [], hi = [], ushadow = new Path2D(), ubody = new Path2D();
+  for (let l = 0; l < LEVELS; l++) { body.push(new Path2D()); hi.push(new Path2D()); }
+  const xs = b.xs;
+  let n = 0;
+  for (let k = 0; k < b.idx.length; k++) {
+    if (b.idx[k] >= limit) break;
+    const x0 = xs[k * 4], y0 = xs[k * 4 + 1], x1 = xs[k * 4 + 2], y1 = xs[k * 4 + 3];
+    // podklad a presuny ležia pod vrchnými stehmi: kreslia sa zvlášť a skôr, bez lesku
+    if (b.u[k]) { ushadow.moveTo(x0, y0); ushadow.lineTo(x1, y1); ubody.moveTo(x0, y0); ubody.lineTo(x1, y1); n++; continue; }
+    const dx = x1 - x0, dy = y1 - y0, len = Math.hypot(dx, dy) || 1;
+    const sheen = Math.abs((dx * LIGHT[0] + dy * LIGHT[1]) / len);
+    const l = Math.min(LEVELS - 1, Math.floor(sheen * LEVELS));
+    shadow.moveTo(x0, y0); shadow.lineTo(x1, y1);
+    body[l].moveTo(x0, y0); body[l].lineTo(x1, y1);
+    // lesk: kratší, posunutý ku svetlu
+    const sx = dx * 0.2, sy = dy * 0.2;
+    hi[l].moveTo(x0 + sx, y0 + sy); hi[l].lineTo(x1 - sx, y1 - sy);
+    n++;
+  }
+  return { shadow, body, hi, ushadow, ubody, n };
+}
+function strokeBlock(x, P, rgb) {
+  x.save(); x.translate(0.4, 0.6); x.strokeStyle = 'rgba(0,0,0,0.22)'; x.lineWidth = 3.6; x.stroke(P.ushadow); x.restore();
+  x.strokeStyle = hex(shade(rgb, 0.78)); x.lineWidth = 2.8; x.stroke(P.ubody);
+  x.save(); x.translate(0.6, 0.9); x.strokeStyle = 'rgba(0,0,0,0.30)'; x.lineWidth = 4.4; x.stroke(P.shadow); x.restore();
+  for (let l = 0; l < LEVELS; l++) { x.strokeStyle = hex(shade(rgb, 0.80 + 0.30 * l / (LEVELS - 1))); x.lineWidth = 3.4; x.stroke(P.body[l]); }
+  x.save(); x.translate(-0.45, -0.6); x.globalAlpha = 0.55;
+  for (let l = 0; l < LEVELS; l++) { x.strokeStyle = hex(mixW(shade(rgb, 0.85 + 0.3 * l / (LEVELS - 1)), 0.32 + 0.1 * l / LEVELS)); x.lineWidth = 1.0; x.stroke(P.hi[l]); }
+  x.restore();
+}
+
+const shade = (rgb, f) => rgb.map(v => v * f);
+const mixW = (rgb, t) => rgb.map(v => v + (255 - v) * t);
+
+let fabricPat = null, fabricFor = null;
+function fabricPattern() {
+  if (fabricFor === S.fabric && fabricPat) return fabricPat;
+  const t = document.createElement('canvas'); t.width = t.height = 6;
+  const x = t.getContext('2d');
+  const base = rgbOf(S.fabric);
+  x.fillStyle = S.fabric; x.fillRect(0, 0, 6, 6);
+  // keprová väzba
+  for (let i = 0; i < 6; i++) {
+    x.fillStyle = hex(shade(base, lum(base) > 128 ? 0.95 : 1.18));
+    x.fillRect(i, (i * 2) % 6, 1, 2);
+    x.fillStyle = hex(mixW(base, 0.05));
+    x.fillRect(i, (i * 2 + 3) % 6, 1, 1);
+  }
+  fabricPat = ctx.createPattern(t, 'repeat'); fabricFor = S.fabric;
+  return fabricPat;
+}
+
+let selOverlay = null;
+function selectionCanvas() {
+  if (!S.sel) return null;
+  const ob = S.byKey.get(S.sel); if (!ob) return null;
+  if (selOverlay && selOverlay.key === S.sel && selOverlay.ob === ob) return selOverlay;
+  const c = document.createElement('canvas'); c.width = ob.bw; c.height = ob.bh;
+  const x = c.getContext('2d'); const id = x.createImageData(ob.bw, ob.bh);
+  const ac = rgbOf(getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#0f6a64');
+  for (let i = 0; i < ob.own.length; i++) {
+    if (!ob.own[i]) continue;
+    // obrys = pixel na hrane
+    const xx = i % ob.bw, yy = (i / ob.bw) | 0;
+    const edge = !ob.own[i - 1] || !ob.own[i + 1] || !ob.own[i - ob.bw] || !ob.own[i + ob.bw] || xx === 0 || yy === 0;
+    id.data[i * 4] = ac[0]; id.data[i * 4 + 1] = ac[1]; id.data[i * 4 + 2] = ac[2]; id.data[i * 4 + 3] = edge ? 255 : 70;
+  }
+  x.putImageData(id, 0, 0);
+  selOverlay = { key: S.sel, ob, c };
+  return selOverlay;
+}
+
+let drawQueued = false;
+function draw() { if (!drawQueued) { drawQueued = true; requestAnimationFrame(() => { drawQueued = false; drawNow(); }); } }
+
+function drawNow() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  if (!S.W) return;
+  const z = S.zoom;
+  // podklad: látka
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (S.view === 'lines') { ctx.fillStyle = '#fbfbfa'; ctx.fillRect(0, 0, cw, ch); }
+  else { ctx.fillStyle = fabricPattern(); ctx.fillRect(0, 0, cw, ch); }
+  ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * S.panX, dpr * S.panY);
+  ctx.imageSmoothingEnabled = true;
+
+  if (S.view === 'orig') {
+    if (S.img) ctx.drawImage(S.srcCanvas, 0, 0);
+  } else if (S.view === 'real') {
+    const limit = S.sim == null ? Infinity : S.sim;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    S.render.segs.forEach((b, bi) => {
+      if (b.idx[0] >= limit) return;
+      const P = limit === Infinity ? S.render.full[bi] : buildPaths(b, limit);
+      strokeBlock(ctx, P, S.palette[b.thread].rgb);
+    });
+  } else {
+    // stehy: tenké čiary, body vpichov, skoky
+    const limit = S.sim == null ? Infinity : S.sim;
+    let prev = null;
+    ctx.lineWidth = 1.1 / z;
+    const dots = z > 2.2;
+    let curC = -1;
+    ctx.beginPath();
+    const flush = () => { ctx.stroke(); ctx.beginPath(); };
+    for (let i = 0; i < S.cmds.length && i < limit; i++) {
+      const c = S.cmds[i];
+      if (c.t === 's') {
+        const key = c.c * 2 + (c.k === 'u' ? 1 : 0);
+        if (key !== curC) {
+          flush(); curC = key; const rgb = S.palette[c.c].rgb, base = lum(rgb) > 215 ? shade(rgb, 0.62) : rgb;
+          ctx.strokeStyle = c.k === 'u' ? 'rgba(40,130,200,.85)' : hex(base);
+        }
+        if (prev) { ctx.moveTo(prev[0], prev[1]); ctx.lineTo(c.x, c.y); }
+        prev = [c.x, c.y];
+      } else if (c.t === 'j') {
+        flush();
+        if (prev) {
+          ctx.save(); ctx.setLineDash([4 / z, 3 / z]); ctx.strokeStyle = 'rgba(200,40,40,.75)';
+          ctx.beginPath(); ctx.moveTo(prev[0], prev[1]); ctx.lineTo(c.x, c.y); ctx.stroke(); ctx.restore();
+          const rgb = S.palette[c.c].rgb; ctx.strokeStyle = hex(lum(rgb) > 215 ? shade(rgb, 0.62) : rgb); ctx.lineWidth = 1.1 / z;
+        }
+        ctx.beginPath(); prev = [c.x, c.y];
+      } else { flush(); prev = null; curC = -1; }
+    }
+    flush();
+    if (dots) {
+      ctx.fillStyle = 'rgba(30,30,30,.55)';
+      const r = 1.3 / z;
+      for (let i = 0; i < S.cmds.length && i < limit; i++) {
+        const c = S.cmds[i]; if (c.t !== 's') continue;
+        ctx.fillRect(c.x - r, c.y - r, 2 * r, 2 * r);
+      }
+    }
+  }
+
+  // ihla pri simulácii
+  if (S.sim != null && S.view !== 'orig') {
+    let p = null;
+    for (let i = Math.min(S.sim, S.cmds.length) - 1; i >= 0; i--) if (S.cmds[i].t === 's') { p = S.cmds[i]; break; }
+    if (p) {
+      ctx.strokeStyle = '#c62828'; ctx.lineWidth = 2 / z;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 7 / z, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(p.x - 12 / z, p.y); ctx.lineTo(p.x + 12 / z, p.y); ctx.moveTo(p.x, p.y - 12 / z); ctx.lineTo(p.x, p.y + 12 / z); ctx.stroke();
+    }
+  }
+
+  // výber
+  const so = selectionCanvas();
+  if (so) {
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(so.c, so.ob.ox, so.ob.oy);
+    ctx.imageSmoothingEnabled = true;
+  }
+
+  // vybraný text: rámik; pri presúvaní aj silueta na novom mieste
+  if (S.selText) {
+    const L = S.texts.find(t => t.id === S.selText), t = L && S.textBuilt.get(L.id);
+    if (t) {
+      const ox = Math.round(L.x - t.tw / 2), oy = Math.round(L.y - t.th / 2);
+      if (ox !== t.ox || oy !== t.oy) {
+        if (!t.sil) {
+          const c = document.createElement('canvas'); c.width = t.tw; c.height = t.th;
+          const x = c.getContext('2d'), id = x.createImageData(t.tw, t.th);
+          for (let i = 0; i < t.mask.length; i++) if (t.mask[i]) { id.data[i * 4] = 15; id.data[i * 4 + 1] = 106; id.data[i * 4 + 2] = 100; id.data[i * 4 + 3] = 150; }
+          x.putImageData(id, 0, 0); t.sil = c;
+        }
+        ctx.drawImage(t.sil, ox, oy);
+      }
+      ctx.save(); ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#0f6a64';
+      ctx.lineWidth = 1.5 / z; ctx.setLineDash([6 / z, 4 / z]);
+      ctx.strokeRect(ox - 8, oy - 8, t.tw + 16, t.th + 16); ctx.restore();
+    }
+  }
+
+  // ťah štetcom (náhľad pred prepočtom)
+  if (stroke && stroke.pts.length) {
+    ctx.fillStyle = S.tool === 'erase' ? 'rgba(220,60,60,.35)' : hex(S.palette[S.active].rgb) + '99';
+    const r = S.brushMM * R;
+    for (const p of stroke.pts) { ctx.beginPath(); ctx.arc(p[0], p[1], r, 0, Math.PI * 2); ctx.fill(); }
+  }
+  // kurzor štetca
+  if ((S.tool === 'brush' || S.tool === 'erase') && hover) {
+    ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.lineWidth = 1 / z;
+    ctx.beginPath(); ctx.arc(hover[0], hover[1], S.brushMM * R, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.8)';
+    ctx.beginPath(); ctx.arc(hover[0], hover[1], S.brushMM * R + 1 / z, 0, Math.PI * 2); ctx.stroke();
+  }
+
+  drawRulers();
+}
+
+function drawRulers() {
+  // mm pravítka hore a vľavo
+  const z = S.zoom, RW = 22;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const css = getComputedStyle(document.documentElement);
+  const bg = css.getPropertyValue('--ruler').trim(), ink = css.getPropertyValue('--ruler-ink').trim();
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, cw, RW); ctx.fillRect(0, 0, RW, ch);
+  ctx.fillStyle = ink; ctx.strokeStyle = ink; ctx.lineWidth = 1;
+  ctx.font = '10px "IBM Plex Mono", monospace';
+  const pxPerMM = z * R;
+  const steps = [1, 2, 5, 10, 20, 50, 100];
+  const major = steps.find(s => s * pxPerMM >= 48) || 100;
+  const minor = steps.slice().reverse().find(s => s < major && s * pxPerMM >= 6) || major;
+  const toX = mm => S.panX + mm * pxPerMM, toY = mm => S.panY + mm * pxPerMM;
+  const mm0x = Math.floor((RW - S.panX) / pxPerMM / minor) * minor, mm1x = (cw - S.panX) / pxPerMM;
+  ctx.beginPath();
+  for (let mm = mm0x; mm <= mm1x; mm += minor) {
+    const x = Math.round(toX(mm)) + 0.5; if (x < RW) continue;
+    const isMaj = Math.abs(mm / major - Math.round(mm / major)) < 1e-6;
+    ctx.moveTo(x, RW); ctx.lineTo(x, RW - (isMaj ? 9 : 4));
+    if (isMaj) ctx.fillText(String(Math.round(mm)), x + 3, 10);
+  }
+  const mm0y = Math.floor((RW - S.panY) / pxPerMM / minor) * minor, mm1y = (ch - S.panY) / pxPerMM;
+  for (let mm = mm0y; mm <= mm1y; mm += minor) {
+    const y = Math.round(toY(mm)) + 0.5; if (y < RW) continue;
+    const isMaj = Math.abs(mm / major - Math.round(mm / major)) < 1e-6;
+    ctx.moveTo(RW, y); ctx.lineTo(RW - (isMaj ? 9 : 4), y);
+    if (isMaj) { ctx.save(); ctx.translate(10, y + 3); ctx.rotate(-Math.PI / 2); ctx.fillText(String(Math.round(mm)), 0, 0); ctx.restore(); }
+  }
+  ctx.stroke();
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, RW, RW);
+  ctx.fillStyle = ink; ctx.fillText('mm', 3, 14);
+  ctx.strokeStyle = css.getPropertyValue('--line').trim();
+  ctx.beginPath(); ctx.moveTo(0, RW + 0.5); ctx.lineTo(cw, RW + 0.5); ctx.moveTo(RW + 0.5, 0); ctx.lineTo(RW + 0.5, ch); ctx.stroke();
+}
+
+function resize() {
+  const r = $('stage').getBoundingClientRect();
+  dpr = window.devicePixelRatio || 1; cw = r.width; ch = r.height;
+  cv.width = Math.max(1, Math.round(cw * dpr)); cv.height = Math.max(1, Math.round(ch * dpr));
+  if (!S.userView) fit(); else draw();
+}
+function fit() {
+  if (!S.W || cw < 50) return;
+  let x0 = 0, y0 = 0, x1 = S.W, y1 = S.H;
+  if (!S.img && !(S.objs && S.objs.length)) { x0 = Infinity; y0 = Infinity; x1 = -Infinity; y1 = -Infinity; }
+  for (const [, t] of S.textBuilt) { x0 = Math.min(x0, t.ox); y0 = Math.min(y0, t.oy); x1 = Math.max(x1, t.ox + t.tw); y1 = Math.max(y1, t.oy + t.th); }
+  if (!isFinite(x0)) { x0 = 0; y0 = 0; x1 = S.W; y1 = S.H; }
+  const pad = 70, bw = Math.max(50, x1 - x0), bh = Math.max(50, y1 - y0);
+  S.zoom = Math.min((cw - pad - 22) / bw, (ch - pad - 80) / bh);
+  S.panX = 22 + (cw - 22 - bw * S.zoom) / 2 - x0 * S.zoom; S.panY = 22 + (ch - 22 - 50 - bh * S.zoom) / 2 - y0 * S.zoom;
+  draw();
+}
+function zoomAt(f, sx, sy) {
+  S.userView = true;
+  const nz = Math.max(0.05, Math.min(40, S.zoom * f));
+  S.panX = sx - (sx - S.panX) * nz / S.zoom; S.panY = sy - (sy - S.panY) * nz / S.zoom; S.zoom = nz; draw();
+}
+new ResizeObserver(resize).observe($('stage'));
+
+/* ---------------- interakcia s plochou ---------------- */
+let drag = null, stroke = null, hover = null;
+const toGrid = e => { const r = cv.getBoundingClientRect(); const sx = e.clientX - r.left, sy = e.clientY - r.top; return [(sx - S.panX) / S.zoom, (sy - S.panY) / S.zoom, sx, sy]; };
+
+cv.addEventListener('pointerdown', e => {
+  if (!S.W) return;
+  cv.setPointerCapture(e.pointerId);
+  const [gx, gy, sx, sy] = toGrid(e);
+  const panMode = S.tool === 'pan' || e.button === 1 || e.button === 2 || spaceDown;
+  if (!panMode && S.tool === 'select') {
+    const L = hitText(gx, gy);
+    if (L) { selectText(L); drag = { sx, sy, text: L, tx: L.x, ty: L.y, moved: false, undoPushed: false }; return; }
+  }
+  if (S.tool === 'text') { addText(gx, gy); return; }
+  if (panMode || S.tool === 'select') { drag = { sx, sy, px: S.panX, py: S.panY, moved: false, pan: panMode }; return; }
+  if (S.tool === 'brush' || S.tool === 'erase') {
+    if (S.view === 'orig') setView('real');
+    pushUndo(); stroke = { pts: [[gx, gy]] }; paint(gx, gy); draw(); return;
+  }
+  if (S.tool === 'fill') {
+    const ob = hit(gx, gy);
+    if (!ob) { toast('Klikni priamo na časť výšivky.'); return; }
+    if (ob.label === S.active) { toast('Objekt už má túto farbu.'); return; }
+    pushUndo(); recolor(ob, S.active);
+  }
+});
+cv.addEventListener('pointermove', e => {
+  const [gx, gy, sx, sy] = toGrid(e);
+  hover = [gx, gy];
+  if (drag && drag.text) {
+    if (Math.hypot(sx - drag.sx, sy - drag.sy) > 4) {
+      if (!drag.undoPushed) { pushUndo(); drag.undoPushed = true; }
+      drag.moved = true;
+      drag.text.x = drag.tx + (sx - drag.sx) / S.zoom; drag.text.y = drag.ty + (sy - drag.sy) / S.zoom;
+      draw();
+    }
+    return;
+  }
+  if (drag) {
+    if (Math.hypot(sx - drag.sx, sy - drag.sy) > 4) drag.moved = true;
+    if (drag.moved) { S.userView = true; S.panX = drag.px + sx - drag.sx; S.panY = drag.py + sy - drag.sy; }
+    draw(); return;
+  }
+  if (stroke) {
+    const last = stroke.pts[stroke.pts.length - 1];
+    const d = Math.hypot(gx - last[0], gy - last[1]), step = Math.max(1, S.brushMM * R * 0.4);
+    for (let t = step; t <= d; t += step) { const p = [last[0] + (gx - last[0]) * t / d, last[1] + (gy - last[1]) * t / d]; stroke.pts.push(p); paint(p[0], p[1]); }
+  }
+  if (S.tool === 'brush' || S.tool === 'erase' || stroke) draw();
+});
+const endPointer = e => {
+  if (drag && drag.text) {
+    const L = drag.text, moved = drag.moved; drag = null;
+    if (moved) { const t = S.textBuilt.get(L.id); if (t) moveBuiltText(L, t); busy('Prepočítavam stehy…', () => restitch()); }
+    return;
+  }
+  if (drag) {
+    if (!drag.moved && !drag.pan && S.tool === 'select') { const [gx, gy] = toGrid(e); select(hit(gx, gy)); }
+    drag = null; return;
+  }
+  if (stroke) { stroke = null; busy('Prepočítavam stehy…', () => rebuild()); }
+};
+cv.addEventListener('pointerup', endPointer);
+cv.addEventListener('pointercancel', () => { drag = null; if (stroke) { stroke = null; busy('Prepočítavam stehy…', () => rebuild()); } });
+cv.addEventListener('pointerleave', () => { hover = null; draw(); });
+cv.addEventListener('contextmenu', e => e.preventDefault());
+cv.addEventListener('wheel', e => { e.preventDefault(); const [, , sx, sy] = toGrid(e); zoomAt(Math.exp(-e.deltaY * 0.0015), sx, sy); }, { passive: false });
+
+function hitText(gx, gy) {
+  for (let i = S.texts.length - 1; i >= 0; i--) {
+    const t = S.textBuilt.get(S.texts[i].id); if (!t) continue;
+    const x = Math.floor(gx - t.ox), y = Math.floor(gy - t.oy);
+    if (x >= -6 && y >= -6 && x < t.tw + 6 && y < t.th + 6) {
+      for (let dy = -6; dy <= 6; dy += 3) for (let dx = -6; dx <= 6; dx += 3) {
+        const xx = x + dx, yy = y + dy;
+        if (xx >= 0 && yy >= 0 && xx < t.tw && yy < t.th && t.mask[yy * t.tw + xx]) return S.texts[i];
+      }
+    }
+  }
+  return null;
+}
+function hit(gx, gy) {
+  const x = Math.floor(gx), y = Math.floor(gy);
+  if (x < 0 || y < 0 || x >= S.W || y >= S.H) return null;
+  const id = S.comp[y * S.W + x];
+  if (id < 0) return null;
+  return S.byKey.get(S.keyOf.get(id)) || null;
+}
+function paint(gx, gy) {
+  const r = S.brushMM * R, r2 = r * r, v = S.tool === 'erase' ? -1 : S.active;
+  for (let y = Math.max(0, Math.floor(gy - r)); y <= Math.min(S.H - 1, Math.ceil(gy + r)); y++)
+    for (let x = Math.max(0, Math.floor(gx - r)); x <= Math.min(S.W - 1, Math.ceil(gx + r)); x++)
+      if ((x + 0.5 - gx) ** 2 + (y + 0.5 - gy) ** 2 <= r2) S.labels[y * S.W + x] = v;
+}
+function recolor(ob, label) {
+  for (let y = 0; y < ob.bh; y++) for (let x = 0; x < ob.bw; x++) {
+    if (!ob.own[y * ob.bw + x]) continue;
+    S.labels[(y + ob.oy) * S.W + (x + ob.ox)] = label;
+  }
+  busy('Prepočítavam stehy…', () => rebuild());
+}
+function select(ob) {
+  S.sel = ob ? ob.key : null; selOverlay = null;
+  if (ob) S.selText = null;
+  if (ob) setTab('obj');
+  renderObjPane(); draw();
+}
+
+let spaceDown = false;
+window.addEventListener('keydown', e => {
+  if (e.target.matches('input, select, textarea')) return;
+  if (e.code === 'Space') { spaceDown = true; e.preventDefault(); }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? doRedo() : doUndo(); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); doRedo(); return; }
+  const map = { v: 'select', h: 'pan', b: 'brush', e: 'erase', g: 'fill', t: 'text' };
+  if (map[e.key.toLowerCase()] && !e.ctrlKey && !e.metaKey) setTool(map[e.key.toLowerCase()]);
+  if ((e.key === 'Delete' || e.key === 'Backspace') && S.selText) { removeText(S.selText); return; }
+  if ((e.key === 'Delete' || e.key === 'Backspace') && S.sel) { setOv(S.sel, { skip: true }); toast('Objekt sa nebude šiť. Vrátiš ho v paneli Objekt.'); }
+  if (e.key === 'Escape') select(null);
+});
+window.addEventListener('keyup', e => { if (e.code === 'Space') spaceDown = false; });
+
+/* ---------------- undo ---------------- */
+function snapshot() { return { labels: S.labels.slice(), palette: JSON.parse(JSON.stringify(S.palette)), overrides: JSON.parse(JSON.stringify(S.overrides)), colorOrder: S.colorOrder.slice(), texts: JSON.parse(JSON.stringify(S.texts)) }; }
+function restore(s) { S.labels = s.labels; S.palette = s.palette; S.overrides = s.overrides; S.colorOrder = s.colorOrder; S.texts = s.texts; S.textBuilt = new Map(); }
+function pushUndo() { S.undo.push(snapshot()); if (S.undo.length > 30) S.undo.shift(); S.redo = []; updUndo(); }
+function doUndo() { if (!S.undo.length) return; S.redo.push(snapshot()); restore(S.undo.pop()); updUndo(); busy('Vraciam…', () => { rebuild(); refreshTexts(); }); }
+function doRedo() { if (!S.redo.length) return; S.undo.push(snapshot()); restore(S.redo.pop()); updUndo(); busy('Obnovujem…', () => { rebuild(); refreshTexts(); }); }
+function updUndo() { $('undoBtn').disabled = !S.undo.length; $('redoBtn').disabled = !S.redo.length; }
+$('undoBtn').onclick = doUndo; $('redoBtn').onclick = doRedo;
+
+/* ---------------- nástroje & zobrazenie ---------------- */
+function setTool(t) {
+  S.tool = t;
+  document.querySelectorAll('.tool[data-tool]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tool === t)));
+  $('brushBox').hidden = !(t === 'brush' || t === 'erase');
+  cv.style.cursor = t === 'pan' ? 'grab' : t === 'select' ? 'default' : t === 'fill' ? 'cell' : t === 'text' ? 'text' : 'none';
+  if (t === 'text') toast('Klikni na plochu tam, kde má byť nový text.');
+  if (t === 'fill' || t === 'brush') toast('Kreslí sa farbou: ' + S.palette[S.active].name + '. Inú vyberieš vpravo v Nitiach.');
+  draw();
+}
+document.querySelectorAll('.tool[data-tool]').forEach(b => b.onclick = () => setTool(b.dataset.tool));
+$('brushSize').oninput = e => { S.brushMM = +e.target.value; $('brushVal').textContent = fmt1(S.brushMM) + ' mm'; draw(); };
+function setView(v) {
+  S.view = v;
+  [['real', 'v-real'], ['lines', 'v-lines'], ['orig', 'v-orig']].forEach(([k, id]) => $(id).setAttribute('aria-pressed', String(k === v)));
+  $('legend').hidden = v !== 'lines';
+  draw();
+}
+$('v-real').onclick = () => setView('real'); $('v-lines').onclick = () => setView('lines'); $('v-orig').onclick = () => setView('orig');
+$('zIn').onclick = () => zoomAt(1.3, cw / 2, ch / 2); $('zOut').onclick = () => zoomAt(1 / 1.3, cw / 2, ch / 2); $('zFit').onclick = () => { S.userView = false; fit(); };
+
+function setTab(t) {
+  [['design', 'tab-design', 'pane-design'], ['obj', 'tab-obj', 'pane-obj'], ['text', 'tab-text', 'pane-text']].forEach(([k, tb, pn]) => {
+    $(tb).setAttribute('aria-selected', String(t === k)); $(pn).hidden = t !== k;
+  });
+  if (t === 'text') renderTextPane();
+}
+$('tab-design').onclick = () => setTab('design'); $('tab-obj').onclick = () => setTab('obj'); $('tab-text').onclick = () => setTab('text');
+
+/* ---------------- simulácia ---------------- */
+let playT = null;
+function simSet(v) {
+  S.sim = v >= S.cmds.length ? null : v;
+  $('sim').value = v; updSimTxt(); draw();
+}
+function updSimTxt() {
+  const n = S.sim == null ? S.cmds.length : S.sim;
+  let st = 0, bi = 0, tr = 0, cc = 0;
+  for (let i = 0; i < n && i < S.cmds.length; i++) { const c = S.cmds[i]; if (c.t === 's') st++; else if (c.t === 'trim') tr++; else if (c.t === 'cc') cc++; }
+  for (let i = 0; i < S.blocks.length; i++) if (S.blocks[i].start < n) bi = i;
+  const min = st / S.speed + (tr * 2.5 + cc * 4) / 60;
+  $('simTxt').textContent = fmtN(st) + ' / ' + fmtN(S.stats ? S.stats.stitches : 0) + ' st · farba ' + (S.blocks.length ? bi + 1 : 0) + '/' + S.blocks.length + ' · ' + fmtTime(min);
+}
+$('sim').oninput = e => { stopPlay(); simSet(+e.target.value); };
+function stopPlay() { S.playing = false; cancelAnimationFrame(playT); $('playIcon').innerHTML = '<path d="M3 1.5v11l9.5-5.5z"/>'; }
+$('playBtn').onclick = () => {
+  if (S.playing) { stopPlay(); return; }
+  if (S.view === 'orig') setView('real');
+  S.playing = true; $('playIcon').innerHTML = '<path d="M2.5 1.5h3v11h-3zM8.5 1.5h3v11h-3z"/>';
+  let pos = S.sim == null ? 0 : S.sim;
+  const total = S.cmds.length, perSec = Math.max(400, total / 12);
+  let last = performance.now();
+  const tick = now => {
+    if (!S.playing) return;
+    pos += (now - last) / 1000 * perSec; last = now;
+    if (pos >= total) { simSet(total); stopPlay(); return; }
+    simSet(Math.floor(pos)); playT = requestAnimationFrame(tick);
+  };
+  playT = requestAnimationFrame(tick);
+};
+
+/* ---------------- štatistika ---------------- */
+function updStats() {
+  const s = S.stats = E.stats(S.cmds, null, S.speed);
+  $('sStitches').textContent = fmtN(s.stitches);
+  $('sTime').textContent = fmtTime(s.minutes);
+  $('sSize').textContent = fmt1(s.widthMM) + ' × ' + fmt1(s.heightMM) + ' mm';
+  const used = new Set(S.blocks.map(b => b.thread));
+  $('sColors').textContent = used.size + ' / ' + s.colorChanges;
+  $('sTrims').textContent = fmtN(s.trims);
+  $('sThread').textContent = fmt1(s.perColor.reduce((a, p) => a + p.meters, 0)) + ' m';
+  $('speedV').textContent = S.speed + ' st/min';
+  $('headStat').innerHTML = '<b class="num">' + fmtN(s.stitches) + '</b> stehov · <b class="num">' + fmtTime(s.minutes) + '</b>';
+  const cycles = Math.ceil(Math.max(1, S.pieces) / Math.max(1, S.heads));
+  $('jobTime').textContent = fmtTime(cycles * (s.minutes + 1));
+  $('sim').max = S.cmds.length; $('sim').value = S.sim == null ? S.cmds.length : S.sim;
+  updSimTxt();
+  // poradie šitia
+  const seq = $('seq'); seq.innerHTML = '';
+  S.blocks.forEach((b, i) => {
+    const li = document.createElement('li'); const p = S.palette[b.thread];
+    li.innerHTML = '<span class="n"></span><span class="d"></span><span class="t"></span><span class="c"></span>';
+    li.children[0].textContent = i + 1; li.children[1].style.background = hex(p.rgb);
+    li.children[2].textContent = p.name + (p.code ? ' · ' + p.code : '');
+    li.children[3].textContent = fmtN(b.stitches) + ' st';
+    seq.appendChild(li);
+  });
+}
+$('speed').oninput = e => { S.speed = +e.target.value; updStats(); };
+$('pieces').oninput = e => { S.pieces = Math.max(1, +e.target.value || 1); updStats(); };
+$('heads').oninput = e => { S.heads = Math.max(1, +e.target.value || 1); updStats(); };
+
+/* ---------------- nite ---------------- */
+const ICON = {
+  up: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 10l4-4 4 4"/></svg>',
+  down: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6l4 4 4-4"/></svg>',
+  eye: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z"/><circle cx="8" cy="8" r="2"/></svg>',
+  eyeOff: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 2l12 12M6.5 3.3A7 7 0 0115 8s-.8 1.6-2.4 3M10 12.6A6.8 6.8 0 011 8s.9-1.8 2.7-3.2"/></svg>',
+};
+function threadUsage() {
+  const cnt = new Array(S.palette.length).fill(0);
+  for (let i = 0; i < S.labels.length; i++) if (S.labels[i] >= 0) cnt[S.labels[i]]++;
+  return cnt;
+}
+function renderThreads() {
+  const box = $('threads'); box.innerHTML = '';
+  const usage = threadUsage();
+  const per = new Map((S.stats ? S.stats.perColor : []).map(p => [p.thread, p]));
+  const list = S.colorOrder.filter(i => usage[i] > 0 || S.palette[i].added);
+  list.forEach((i, pos) => {
+    const p = S.palette[i];
+    const el = document.createElement('div');
+    el.className = 'thread'; el.dataset.active = String(i === S.active); el.dataset.skip = String(!!p.skip);
+    const st = per.get(i);
+    el.innerHTML = `
+      <div class="t-row">
+        <label class="t-sw" style="background:${hex(p.rgb)}" title="Zmeniť farbu"><input type="color" value="${hex(p.rgb)}" aria-label="Farba nite"></label>
+        <input class="t-name" value="" aria-label="Názov nite">
+        <span class="t-st num">${st ? fmtN(st.stitches) + ' st · ' + fmt1(st.meters) + ' m' : (p.skip ? 'nešije sa' : '–')}</span>
+      </div>
+      <div class="t-row">
+        <input class="t-code" placeholder="kód nite" aria-label="Kód nite">
+        <button class="ibtn" data-a="up" title="Šiť skôr" ${pos === 0 ? 'disabled' : ''}>${ICON.up}</button>
+        <button class="ibtn" data-a="down" title="Šiť neskôr" ${pos === list.length - 1 ? 'disabled' : ''}>${ICON.down}</button>
+        <button class="ibtn" data-a="skip" title="${p.skip ? 'Šiť túto farbu' : 'Nešiť túto farbu (napr. biela na bielom tričku)'}">${p.skip ? ICON.eyeOff : ICON.eye}</button>
+        <select class="t-merge" aria-label="Zlúčiť s inou niťou"><option value="">Zlúčiť…</option></select>
+      </div>`;
+    el.querySelector('.t-name').value = p.name;
+    el.querySelector('.t-code').value = p.code;
+    const sel = el.querySelector('.t-merge');
+    list.filter(j => j !== i).forEach(j => { const o = document.createElement('option'); o.value = j; o.textContent = '→ ' + S.palette[j].name; sel.appendChild(o); });
+    el.addEventListener('click', e => {
+      if (e.target.closest('input, button, select, label')) return;
+      S.active = i; renderThreads();
+      if (S.tool !== 'brush' && S.tool !== 'fill') toast('Aktívna niť: ' + p.name + '. Použi Štetec alebo Prefarbiť.');
+    });
+    el.querySelector('input[type=color]').addEventListener('input', e => { p.rgb = rgbOf(e.target.value); el.querySelector('.t-sw').style.background = e.target.value; selOverlay = null; draw(); updStats(); });
+    el.querySelector('input[type=color]').addEventListener('change', () => { if (!p.nameEdited) { p.name = nameFor(p.rgb); } renderThreads(); });
+    el.querySelector('.t-name').addEventListener('change', e => { p.name = e.target.value.trim() || nameFor(p.rgb); p.nameEdited = true; updStats(); });
+    el.querySelector('.t-code').addEventListener('change', e => { p.code = e.target.value.trim(); updStats(); });
+    el.querySelector('[data-a=up]').onclick = () => moveColor(i, -1, list);
+    el.querySelector('[data-a=down]').onclick = () => moveColor(i, 1, list);
+    el.querySelector('[data-a=skip]').onclick = () => { pushUndo(); p.skip = !p.skip; busy('Prepočítavam…', () => restitch()); };
+    sel.onchange = () => {
+      const j = +sel.value; if (sel.value === '') return;
+      pushUndo();
+      for (let k = 0; k < S.labels.length; k++) if (S.labels[k] === i) S.labels[k] = j;
+      if (S.active === i) S.active = j;
+      busy('Zlučujem nite…', () => rebuild());
+    };
+    box.appendChild(el);
+  });
+}
+function moveColor(i, d, list) {
+  const a = list.indexOf(i), b = a + d; if (b < 0 || b >= list.length) return;
+  pushUndo();
+  const ia = S.colorOrder.indexOf(list[a]), ib = S.colorOrder.indexOf(list[b]);
+  [S.colorOrder[ia], S.colorOrder[ib]] = [S.colorOrder[ib], S.colorOrder[ia]];
+  busy('Mením poradie…', () => restitch());
+}
+$('addThread').onclick = () => {
+  pushUndo();
+  S.palette.push({ rgb: [36, 99, 175], name: 'Modrá', code: '', skip: false, added: true });
+  S.colorOrder.push(S.palette.length - 1);
+  S.active = S.palette.length - 1;
+  renderThreads(); setTool('brush');
+  toast('Nová niť je aktívna. Kresli štetcom alebo prefarbi objekt.');
+};
+
+/* ---------------- panel objektu ---------------- */
+function setOv(key, patch) {
+  pushUndo();
+  S.overrides[key] = Object.assign({}, S.overrides[key] || {}, patch);
+  busy('Prepočítavam stehy…', () => restitch());
+}
+function renderObjPane() {
+  const pane = $('pane-obj');
+  const ob = S.sel && S.byKey.get(S.sel);
+  if (!ob) {
+    pane.innerHTML = `<div class="empty">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M5 3l14 8-6 2-3 6z"/></svg>
+      <b>Nie je vybraný žiadny objekt</b>
+      <p class="hint">Nástrojom Výber klikni na časť výšivky (písmeno, plochu, obrys). Tu potom zmeníš typ stehu, uhol, hustotu alebo farbu.</p></div>`;
+    return;
+  }
+  const p = paramsOf(ob), ov = S.overrides[ob.key] || {};
+  const pal = S.palette[ob.label];
+  let maxdt = 0; for (let i = 0; i < ob.dt.length; i++) if (ob.mask[i] && ob.dt[i] > maxdt) maxdt = ob.dt[i];
+  const widthMM = 2 * maxdt / R, areaMM = ob.area / (R * R);
+  const st = S.cmds.reduce((a, c) => a + (c.t === 's' && (c.o === ob.id || c.o === 200000 + ob.id) ? 1 : 0), 0);
+  const warns = [];
+  if (p.type === 'satin' && widthMM > 7) warns.push('Satin širší ako 7 mm sa môže na látke zachytávať. Prepni na Výplň.');
+  if (widthMM < 1.0 && p.type !== 'running') warns.push('Ťah je tenší ako 1 mm. Na látke môže zaniknúť; zváž hrubšie písmo alebo väčší rozmer.');
+  if (p.type === 'fill' && widthMM < 2.2) warns.push('Úzky tvar vo výplni má zubaté okraje. Satin bude čistejší.');
+  const typeBtn = (t, n) => `<button data-type="${t}" aria-pressed="${p.type === t}">${n}</button>`;
+  const rng = (id, label, min, max, step, val, unit, help) => `<div class="field">
+      <div class="field-row"><label for="${id}" class="lbl">${label}${help ? qi(help) : ''}</label><span class="num" id="${id}V">${(+val).toLocaleString('sk-SK', { maximumFractionDigits: 2 })} ${unit}</span></div>
+      <input type="range" id="${id}" min="${min}" max="${max}" step="${step}" value="${val}"></div>`;
+  const bc = ov.border || { type: 'none', width: 1.2, label: S.colorOrder.find(l => l !== ob.label && threadUsage()[l] > 0) ?? ob.label };
+  const uOpts = p.type === 'satin'
+    ? [['center', 'Stredový'], ['edge', 'Okrajový'], ['zigzag', 'Cik-cak'], ['edge+zigzag', 'Okraj + cik-cak']]
+    : [['fill', 'Krížový (riedka výplň)'], ['edge', 'Obrysový'], ['edge+fill', 'Obrys + krížový']];
+  pane.innerHTML = `
+    <div class="sec">
+      <div class="obj-head"><span class="obj-sw" style="background:${hex(pal.rgb)}"></span>
+        <div><div class="h3">${pal.name}${ov.skip ? ' · nešije sa' : ''}</div>
+        <div class="obj-meta num">${fmt1(areaMM)} mm² · ťah do ${fmt1(widthMM)} mm · ${fmtN(st)} st</div></div></div>
+      ${warns.map(w => `<div class="note">${w}</div>`).join('')}
+    </div>
+    <div class="sec">
+      <div class="field-row"><span class="label lbl">Typ stehu${qi('stitchType')}</span>${ov.type ? '' : '<span class="auto-tag">automaticky</span>'}</div>
+      <div class="typeseg">${typeBtn('fill', 'Výplň')}${typeBtn('satin', 'Satin')}${typeBtn('running', 'Rovný')}</div>
+      <p class="hint">${p.type === 'fill' ? 'Tatami výplň v riadkoch. Na plochy širšie ako ~3 mm.' : p.type === 'satin' ? 'Lesklý cik-cak od okraja k okraju. Na písmo, obrysy a pásiky do ~7 mm.' : 'Jednoduchý steh po obryse. Na kontúry a jemné detaily.'}</p>
+      ${p.type === 'fill' ? rng('oAngle', 'Uhol stehov', -90, 90, 5, p.angle, '°', 'angle') : ''}
+      ${p.type === 'fill' ? `<div class="field"><label for="oPattern" class="lbl">Vzor výplne${qi('pattern')}</label><select class="text" id="oPattern">${PATTERN_NAMES.map(([k, n]) => `<option value="${k}" ${p.pattern === k ? 'selected' : ''}>${n}</option>`).join('')}</select></div>` : ''}
+      ${p.type !== 'running' ? rng('oSpacing', 'Hustota (rozostup)', p.type === 'satin' ? 0.25 : 0.3, p.type === 'satin' ? 0.6 : 0.8, 0.01, p.spacing, 'mm', p.type === 'satin' ? 'satinSpacing' : 'fillSpacing') : ''}
+      ${p.type !== 'satin' ? rng('oLen', 'Dĺžka stehu', p.type === 'running' ? 1.2 : 2.5, p.type === 'running' ? 4 : 5, 0.1, p.stitchLen, 'mm', p.type === 'running' ? 'runLength' : 'fillStitch') : ''}
+      ${p.type === 'satin' ? rng('oSplit', 'Deliť satin nad', 5, 12, 0.5, p.splitLen || 7, 'mm', 'splitLen') : ''}
+      ${p.type !== 'running' ? rng('oPull', 'Kompenzácia ťahu', 0, 0.5, 0.05, p.pullComp, 'mm', 'pullComp') : ''}
+      ${p.type !== 'running' ? `<div class="field-row"><label for="oUnder" class="lbl">Podklad (underlay)${qi('underlay')}</label><input type="checkbox" id="oUnder" ${p.underlay ? 'checked' : ''}></div>
+        ${p.underlay ? `<div class="field"><label for="oUType" class="lbl">Typ podkladu${qi(p.type === 'satin' ? 'underlaySatin' : 'underlayFill')}</label><select class="text" id="oUType">${uOpts.map(([k, n]) => `<option value="${k}" ${p.underlayType === k ? 'selected' : ''}>${n}</option>`).join('')}</select></div>` : ''}`
+        : `<div class="field-row"><label for="oPass" class="lbl">Trojitý steh (výraznejší)${qi('triple')}</label><input type="checkbox" id="oPass" ${p.passes === 3 ? 'checked' : ''}></div>`}
+    </div>
+    <div class="sec">
+      <span class="label lbl">Lem okolo objektu${qi('border')}</span>
+      <div class="typeseg four" id="oBType">
+        ${[['none', 'Bez lemu'], ['satin', 'Satin'], ['run', 'Rovný'], ['triple', 'Trojitý']].map(([k, n]) => `<button data-b="${k}" aria-pressed="${bc.type === k}">${n}</button>`).join('')}
+      </div>
+      ${bc.type === 'satin' ? rng('oBW', 'Šírka lemu', 0.8, 4, 0.1, bc.width, 'mm', 'borderWidth') : ''}
+      ${bc.type !== 'none' ? `<div class="field"><span class="hint">Farba lemu</span><div class="swatches" id="oBColors"></div></div>` : ''}
+    </div>
+    <div class="sec">
+      <span class="label">Farba objektu</span>
+      <div class="swatches" id="oColors"></div>
+      <div class="row-actions">
+        <button class="btn btn-sm" id="oSkip">${ov.skip ? 'Šiť tento objekt' : 'Nešiť tento objekt'}</button>
+        <button class="btn btn-sm" id="oReset" ${Object.keys(ov).length ? '' : 'disabled'}>Obnoviť automatiku</button>
+      </div>
+    </div>`;
+  pane.querySelectorAll('[data-type]').forEach(b => b.onclick = () => {
+    const t = b.dataset.type;
+    setOv(ob.key, { type: t, spacing: undefined, stitchLen: undefined, underlayType: undefined, splitLen: undefined });
+  });
+  const bindR = (id, key, unit) => {
+    const el = pane.querySelector('#' + id); if (!el) return;
+    el.oninput = () => { pane.querySelector('#' + id + 'V').textContent = (+el.value).toLocaleString('sk-SK', { maximumFractionDigits: 2 }) + ' ' + unit; };
+    el.onchange = () => setOv(ob.key, { [key]: +el.value });
+  };
+  bindR('oAngle', 'angle', '°'); bindR('oSpacing', 'spacing', 'mm'); bindR('oLen', 'stitchLen', 'mm'); bindR('oPull', 'pullComp', 'mm'); bindR('oSplit', 'splitLen', 'mm');
+  const pt = pane.querySelector('#oPattern'); if (pt) pt.onchange = () => setOv(ob.key, { pattern: pt.value });
+  const ut = pane.querySelector('#oUType'); if (ut) ut.onchange = () => setOv(ob.key, { underlayType: ut.value });
+  pane.querySelectorAll('#oBType [data-b]').forEach(b => b.onclick = () => setOv(ob.key, { border: Object.assign({}, bc, { type: b.dataset.b }) }));
+  const bw = pane.querySelector('#oBW');
+  if (bw) {
+    bw.oninput = () => { pane.querySelector('#oBWV').textContent = (+bw.value).toLocaleString('sk-SK', { maximumFractionDigits: 2 }) + ' mm'; };
+    bw.onchange = () => setOv(ob.key, { border: Object.assign({}, bc, { width: +bw.value }) });
+  }
+  const bcol = pane.querySelector('#oBColors');
+  if (bcol) {
+    const us = threadUsage();
+    S.colorOrder.filter(i => us[i] > 0 || S.palette[i].added).forEach(i => {
+      const b = document.createElement('button'); b.className = 'sw'; b.style.background = hex(S.palette[i].rgb);
+      b.title = S.palette[i].name; b.setAttribute('aria-label', 'Lem ' + S.palette[i].name); b.setAttribute('aria-pressed', String(i === bc.label));
+      b.onclick = () => setOv(ob.key, { border: Object.assign({}, bc, { label: i }) });
+      bcol.appendChild(b);
+    });
+  }
+  const u = pane.querySelector('#oUnder'); if (u) u.onchange = () => setOv(ob.key, { underlay: u.checked });
+  const ps = pane.querySelector('#oPass'); if (ps) ps.onchange = () => setOv(ob.key, { passes: ps.checked ? 3 : 1 });
+  pane.querySelector('#oSkip').onclick = () => setOv(ob.key, { skip: !ov.skip });
+  pane.querySelector('#oReset').onclick = () => { pushUndo(); delete S.overrides[ob.key]; busy('Prepočítavam stehy…', () => restitch()); };
+  const usage = threadUsage();
+  const cbox = pane.querySelector('#oColors');
+  S.colorOrder.filter(i => usage[i] > 0 || S.palette[i].added).forEach(i => {
+    const b = document.createElement('button'); b.className = 'sw'; b.style.background = hex(S.palette[i].rgb);
+    b.title = S.palette[i].name; b.setAttribute('aria-pressed', String(i === ob.label)); b.setAttribute('aria-label', S.palette[i].name);
+    b.onclick = () => { if (i === ob.label) return; pushUndo(); recolor(ob, i); };
+    cbox.appendChild(b);
+  });
+}
+
+/* ---------------- dizajn panel ---------------- */
+function bindGlobal(id, key, unit, rebuildAll) {
+  const el = $(id), out = $(id + 'V');
+  el.value = S.global[key];
+  out.textContent = fmt2(S.global[key]) + ' ' + unit;
+  el.oninput = () => { out.textContent = fmt2(+el.value) + ' ' + unit; };
+  el.onchange = () => { S.global[key] = +el.value; busy('Prepočítavam stehy…', () => rebuildAll ? rebuild() : restitch()); };
+}
+bindGlobal('gFill', 'fillSpacing', 'mm'); bindGlobal('gSatin', 'satinSpacing', 'mm'); bindGlobal('gPull', 'pullComp', 'mm');
+bindGlobal('gSatW', 'satinMaxWidth', 'mm', true);
+$('gUnder').onchange = e => { S.global.underlay = e.target.checked; busy('Prepočítavam stehy…', () => restitch()); };
+$('dName').oninput = e => { S.name = e.target.value; };
+const markDirty = () => { $('recalcNote').hidden = false; };
+$('wmm').onchange = e => { S.widthMM = Math.max(20, Math.min(300, +e.target.value || 90)); e.target.value = S.widthMM; markPresets(); markDirty(); };
+function markPresets() { document.querySelectorAll('#presets .chip').forEach(c => c.setAttribute('aria-pressed', String(+c.dataset.w === S.widthMM))); }
+document.querySelectorAll('#presets .chip').forEach(c => c.onclick = () => { S.widthMM = +c.dataset.w; $('wmm').value = S.widthMM; markPresets(); markDirty(); });
+$('kMinus').onclick = () => { S.k = Math.max(2, S.k - 1); $('kVal').textContent = S.k; markDirty(); };
+$('kPlus').onclick = () => { S.k = Math.min(10, S.k + 1); $('kVal').textContent = S.k; markDirty(); };
+$('rmBg').onchange = e => { S.removeBg = e.target.checked; markDirty(); };
+$('recalcBtn').onclick = () => busy('Digitalizujem…', () => { quantizeAll(); fit(); });
+FABRICS.forEach(f => {
+  const b = document.createElement('button'); b.className = 'sw'; b.style.background = f.c; b.title = f.n; b.setAttribute('aria-label', 'Látka ' + f.n);
+  b.setAttribute('aria-pressed', String(f.c === S.fabric));
+  b.onclick = () => { S.fabric = f.c; document.querySelectorAll('#fabricSw .sw').forEach(x => x.setAttribute('aria-pressed', String(x === b))); draw(); };
+  $('fabricSw').appendChild(b);
+});
+markPresets();
+
+/* nahrávanie */
+$('uploadBtn').onclick = () => $('file').click();
+function openFile(f) {
+  if (f && (/\.json$/i.test(f.name) || f.type === 'application/json')) {
+    f.text().then(t => { try { importProject(JSON.parse(t)); } catch (e) { toast('Súbor projektu sa nedá prečítať: ' + e.message); } });
+    return;
+  }
+  if (!f || !/^image\//.test(f.type)) { toast('Nahraj obrázok PNG, JPG, SVG alebo projekt .json.'); return; }
+  const r = new FileReader();
+  r.onload = () => loadImageFrom(r.result, f.name.replace(/\.[^.]+$/, ''), false);
+  r.readAsDataURL(f);
+}
+$('file').onchange = e => openFile(e.target.files[0]);
+const stage = $('stage');
+stage.addEventListener('dragover', e => { e.preventDefault(); stage.classList.add('drop'); });
+stage.addEventListener('dragleave', () => stage.classList.remove('drop'));
+stage.addEventListener('drop', e => { e.preventDefault(); stage.classList.remove('drop'); openFile(e.dataTransfer.files[0]); });
+
+/* ---------------- export ---------------- */
+const crcT = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(d) { let c = 0xFFFFFFFF; for (let i = 0; i < d.length; i++) c = crcT[(c ^ d[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function makeZip(files) {
+  const enc = new TextEncoder(), parts = [], central = [];
+  let off = 0;
+  const now = new Date();
+  const dt = ((now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1)) & 0xFFFF;
+  const dd = (((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate()) & 0xFFFF;
+  for (const f of files) {
+    const name = enc.encode(f.name), data = f.data, crc = crc32(data);
+    const h = new DataView(new ArrayBuffer(30));
+    h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint16(8, 0, true);
+    h.setUint16(10, dt, true); h.setUint16(12, dd, true); h.setUint32(14, crc, true);
+    h.setUint32(18, data.length, true); h.setUint32(22, data.length, true); h.setUint16(26, name.length, true); h.setUint16(28, 0, true);
+    parts.push(new Uint8Array(h.buffer), name, data);
+    const c = new DataView(new ArrayBuffer(46));
+    c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true); c.setUint16(10, 0, true);
+    c.setUint16(12, dt, true); c.setUint16(14, dd, true); c.setUint32(16, crc, true); c.setUint32(20, data.length, true); c.setUint32(24, data.length, true);
+    c.setUint16(28, name.length, true); c.setUint32(42, off, true);
+    central.push(new Uint8Array(c.buffer), name);
+    off += 30 + name.length + data.length;
+  }
+  const cs = central.reduce((a, b) => a + b.length, 0);
+  const e = new DataView(new ArrayBuffer(22));
+  e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true);
+  e.setUint32(12, cs, true); e.setUint32(16, off, true);
+  const all = [...parts, ...central, new Uint8Array(e.buffer)];
+  const out = new Uint8Array(all.reduce((a, b) => a + b.length, 0));
+  let p = 0; for (const a of all) { out.set(a, p); p += a.length; }
+  return out;
+}
+
+function renderPreviewPNG(pxPerMM = 8) {
+  const s = S.stats; const pad = 6 * R;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const c of S.cmds) if (c.t === 's') { x0 = Math.min(x0, c.x); y0 = Math.min(y0, c.y); x1 = Math.max(x1, c.x); y1 = Math.max(y1, c.y); }
+  const sc = pxPerMM / R;
+  const W = Math.ceil((x1 - x0 + 2 * pad) * sc), H = Math.ceil((y1 - y0 + 2 * pad) * sc);
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const x = c.getContext('2d');
+  x.fillStyle = x.createPattern((() => { fabricFor = null; const p = document.createElement('canvas'); p.width = p.height = 6; const px = p.getContext('2d'); const base = rgbOf(S.fabric); px.fillStyle = S.fabric; px.fillRect(0, 0, 6, 6); for (let i = 0; i < 6; i++) { px.fillStyle = hex(shade(base, lum(base) > 128 ? 0.95 : 1.18)); px.fillRect(i, (i * 2) % 6, 1, 2); } return p; })(), 'repeat');
+  x.fillRect(0, 0, W, H);
+  x.setTransform(sc, 0, 0, sc, (pad - x0) * sc, (pad - y0) * sc);
+  x.lineCap = 'round';
+  S.render.segs.forEach((b, bi) => {
+    strokeBlock(x, S.render.full[bi], S.palette[b.thread].rgb);
+  });
+  return c;
+}
+const canvasBytes = c => new Promise(res => c.toBlob(b => b.arrayBuffer().then(a => res(new Uint8Array(a))), 'image/png'));
+const esc = t => String(t).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+
+function productionSheet(pngDataUrl) {
+  const s = S.stats;
+  const per = new Map(s.perColor.map(p => [p.thread, p]));
+  const rows = S.blocks.map((b, i) => {
+    const p = S.palette[b.thread];
+    return `<tr><td>${i + 1}</td><td><span style="display:inline-block;width:14px;height:14px;border-radius:3px;border:1px solid #999;background:${hex(p.rgb)};vertical-align:-2px"></span> ${esc(p.name)}</td><td>${esc(p.code || '—')}</td><td>${hex(p.rgb)}</td><td style="text-align:right">${fmtN(b.stitches)}</td></tr>`;
+  }).join('');
+  const meters = s.perColor.reduce((a, p) => a + p.meters, 0);
+  return `<!doctype html><html lang="sk"><head><meta charset="utf-8"><title>Výrobný list – ${esc(S.name)}</title>
+<style>body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:24px;max-width:800px}h1{font-size:22px;margin:0 0 4px}
+.m{color:#555;font-size:13px;margin-bottom:18px}.g{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start}
+img{max-width:100%;border:1px solid #ccc}table{border-collapse:collapse;width:100%;font-size:13px}td,th{border-bottom:1px solid #ddd;padding:6px 4px;text-align:left}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#555}dl{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:13px;margin:0 0 16px}dt{color:#555}
+@media print{body{margin:10mm}}</style></head><body>
+<h1>${esc(S.name)}</h1><div class="m">Výrobný list výšivky · ${new Date().toLocaleDateString('sk-SK')} · súbor ${esc(fileBase())}.dst</div>
+<div class="g"><img src="${pngDataUrl}" alt="Náhľad výšivky"><div>
+<dl><dt>Rozmer</dt><dd>${fmt1(s.widthMM)} × ${fmt1(s.heightMM)} mm</dd><dt>Stehov</dt><dd>${fmtN(s.stitches)}</dd>
+<dt>Farieb / výmen</dt><dd>${new Set(S.blocks.map(b => b.thread)).size} / ${s.colorChanges}</dd><dt>Strihov</dt><dd>${fmtN(s.trims)}</dd>
+<dt>Čas pri ${S.speed} st/min</dt><dd>${fmtTime(s.minutes)}</dd><dt>Vrchná niť (odhad)</dt><dd>${fmt1(meters)} m</dd>
+<dt>Zákazka</dt><dd>${S.pieces} ks na ${S.heads} hl. ≈ ${fmtTime(Math.ceil(S.pieces / S.heads) * (s.minutes + 1))}</dd></dl>
+<table><thead><tr><th>Ihla / poradie</th><th>Niť</th><th>Kód</th><th>Farba</th><th style="text-align:right">Stehov</th></tr></thead><tbody>${rows}</tbody></table>
+</div></div></body></html>`;
+}
+const fileBase = () => (S.name || 'vysivka').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'vysivka';
+
+let downloadsNS;
+const dlReady = (window.claude && window.claude.use) ? window.claude.use('downloads').then(d => (downloadsNS = d)).catch(() => (downloadsNS = null)) : Promise.resolve(null);
+async function offer(filename, bytes) {
+  await dlReady;
+  if (downloadsNS) {
+    try { await downloadsNS.save({ filename, data: new Blob([bytes]) }); toast('Uložené: ' + filename); }
+    catch (e) {
+      if (e && e.code === 'declined') toast('Sťahovanie zrušené.');
+      else if (e && e.code === 'rate_limited') toast('Jedno sťahovanie už čaká na potvrdenie.');
+      else toast('Sťahovanie tu nie je dostupné.');
+    }
+    return;
+  }
+  // samostatný súbor mimo claude.ai: bežné stiahnutie
+  const url = URL.createObjectURL(new Blob([bytes]));
+  const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+  return true;
+}
+$('exportBtn').onclick = () => {
+  const s = S.stats; const w = [];
+  if (!s || !s.stitches) { toast('Dizajn zatiaľ nemá žiadne stehy.'); return; }
+  if (s.widthMM > 300 || s.heightMM > 300) w.push('Dizajn je väčší ako 300 mm. Over veľkosť rámu stroja.');
+  if (S.objs.some(ob => { if (skipped(ob) || paramsOf(ob).type !== 'satin') return false; let m = 0; for (let i = 0; i < ob.dt.length; i++) if (ob.dt[i] > m) m = ob.dt[i]; return 2 * m / R > 7; })) w.push('Niektoré satin objekty sú širšie ako 7 mm.');
+  $('exWarn').hidden = !w.length; $('exWarn').textContent = w.join(' ');
+  $('exportModal').hidden = false;
+};
+$('exClose').onclick = () => $('exportModal').hidden = true;
+$('exportModal').onclick = e => { if (e.target === $('exportModal')) $('exportModal').hidden = true; };
+$('exZip').onclick = async () => {
+  const base = fileBase();
+  const dst = E.writeDST(S.cmds, base.toUpperCase());
+  const prev = renderPreviewPNG(8);
+  const png = await canvasBytes(prev);
+  const small = renderPreviewPNG(4).toDataURL('image/png');
+  const sheet = new TextEncoder().encode(productionSheet(small));
+  const zip = makeZip([
+    { name: base + '.dst', data: dst },
+    { name: base + '_nahlad.png', data: png },
+    { name: base + '_vyrobny_list.html', data: sheet },
+    { name: base + '_projekt.json', data: new TextEncoder().encode(JSON.stringify(exportProject(true))) },
+  ]);
+  $('exportModal').hidden = true;
+  await offer(base + '.zip', zip);
+};
+$('exPng').onclick = async () => {
+  const png = await canvasBytes(renderPreviewPNG(8));
+  $('exportModal').hidden = true;
+  await offer(fileBase() + '_nahlad.png', png);
+};
+
+/* ---------------- vysvetlivky ---------------- */
+const PATTERN_NAMES = [['tatami', 'Tatami 1/3 (štandard)'], ['tatami4', 'Tatami 1/4 (jemné)'], ['brick', 'Tehla 1/2'], ['diagonal', 'Diagonálne línie'], ['wave', 'Vlnka'], ['plain', 'Bez posunu (drážky)']];
+const qi = k => `<button class="qi" data-help="${k}" aria-label="Vysvetlenie" aria-expanded="false">?</button>`;
+const HELP = {
+  width: { w: 'Skutočná šírka výšivky na látke. Výška sa dopočíta podľa pomeru strán loga.', t: 'Hruď 70–100 mm, rukáv 60–80 mm, šiltovka 50–60 mm. Pri zmenšení sa detaily a písmo zúžia; pod ~5 mm výšky písma už nie je čitateľné.' },
+  colors: { w: 'Koľko farieb nití aplikácia z obrázka rozpozná. Každá farba = jedna ihla na stroji.', up: 'Zachytí aj odtiene a tiene, ale pribudnú výmeny nití a drobné kúsky.', down: 'Podobné farby sa zlúčia do jednej.', t: 'Nastav presne toľko, koľko má logo farieb (bez pozadia). Prechody a tiene vyšívka nevie, logo treba zjednodušiť.' },
+  removeBg: { w: 'Pri obrázku bez priehľadnosti (JPG) odstráni farbu, ktorú majú rohy obrázka, aby sa pozadie nevyšívalo.', t: 'PNG s priehľadným pozadím je vždy lepšie.' },
+  fillSpacing: { w: 'Vzdialenosť medzi riadkami výplne. Určuje, ako husto niť pokryje látku.', up: 'Riedka výplň, menej stehov, rýchlejšie, mäkšie. Pri príliš veľkej presvitá látka.', down: 'Hustejšia, lepšie kryje, ale tuhšia a ťažšia, môže zvlniť tenkú látku alebo lámať ihly.', t: 'Štandard 0,40 mm. Tenký dres 0,42–0,45 mm; mikina, šiltovka, keper 0,36–0,40 mm.' },
+  satinSpacing: { w: 'Vzdialenosť medzi susednými stehmi satinu (cik-caku).', up: 'Riedky satin, presvitá látka.', down: 'Plnší a lesklejší, ale pri príliš hustom sa nite tlačia a trhajú.', t: 'Štandard 0,35–0,42 mm. Úzke písmo do 2 mm môže byť o niečo redšie.' },
+  pullComp: { w: 'Niť pri šití sťahuje látku k sebe, takže tvary vyjdú užšie, ako sú na obrazovke, a medzi farbami vzniknú škáry. Kompenzácia predĺži každý steh na oboch koncoch o túto hodnotu.', up: 'Tvary sú širšie, farby sa viac prekrývajú.', down: 'Riziko bielych škár medzi farbami a tenších písmen.', t: 'Pevné látky (šiltovka, keper, plátno) 0,10–0,15 mm. Pružné (dres, piké, úplet) 0,20–0,35 mm.' },
+  satinMaxWidth: { w: 'Hranica, podľa ktorej aplikácia rozhoduje: tvary užšie ako táto hodnota šije satinom, širšie výplňou.', up: 'Viac tvarov dostane lesklý satin.', down: 'Viac tvarov pôjde výplňou.', t: 'Satin vyzerá najlepšie do 6–7 mm šírky; širší sa zachytáva a povoľuje.' },
+  underlay: { w: 'Podklad je riedka vrstva stehov pod hlavnými stehmi. Prišije látku ku stabilizátoru, zdvihne vrchné stehy (výšivka je plastickejšia) a zabráni, aby sa niť prepadávala do štruktúry látky.', t: 'Nechaj zapnutý takmer vždy. Vypína sa len pri veľmi malých detailoch, kde by podklad presvital.' },
+  underlayFill: { w: 'Ako je urobený podklad pod výplňou.', t: 'Krížový: riedka výplň kolmo na vrchnú, stabilizuje plochu. Obrysový: rovný steh tesne vnútri okraja, spevní hranu. Obrys + krížový: najpevnejšie, na pružné a hrubé látky (mikiny, piké).' },
+  underlaySatin: { w: 'Ako je urobený podklad pod satinom.', t: 'Stredový: jedna čiara v strede, na úzky satin do ~2 mm. Okrajový: dve čiary pri okrajoch, spevní hrany širšieho satinu. Cik-cak: zdvihne satin, je plastickejší. Okraj + cik-cak: na široký satin a pružné látky.' },
+  pattern: { w: 'Výplň (tatami) sa šije v riadkoch a vpichy ihly sú v každom riadku posunuté. Posun určuje vzor, ktorý vidno na hotovej ploche.', t: 'Tatami 1/3 je štandard, vpichy splynú a plocha je hladká. 1/4 je ešte jemnejšie. Tehla a Diagonála vytvoria viditeľnú textúru (dekoratívne). Bez posunu vzniknú viditeľné drážky, na bežné použitie nevhodné.' },
+  splitLen: { w: 'Satinový steh dlhší ako táto hodnota sa rozdelí ďalším vpichom (delený satin). Dlhé stehy sa totiž zachytávajú o predmety a povoľujú pri praní.', up: 'Dlhšie stehy, viac lesku, menšia odolnosť.', down: 'Kratšie stehy, odolnejšie, ale menej lesklé.', t: 'Štandard 7 mm; pri šiltovkách a pracovných odevoch 5–6 mm.' },
+  fabric: { w: 'Farba látky v náhľade. Nič nemení na programe, len ukazuje, ako bude výšivka vyzerať na odeve.', t: 'Ak sa vyšíva na bielu látku, bielu niť môžeš v Nitiach vypnúť (oko), ušetríš stehy aj čas.' },
+  speed: { w: 'Rýchlosť stroja v stehoch za minútu. Ovplyvňuje len odhad času.', t: 'Priemyselné stroje 800–1000 st/min na plochy; pri malom písme, satine a šiltovkách sa šije pomalšie, 600–750 st/min. K času sa pripočítava ~2,5 s za strih a ~4 s za výmenu farby.' },
+  trims: { w: 'Strih = stroj prestrihne niť a presunie sa skokom na iné miesto. Robí sa tam, kde by spojovacia niť bola na výšivke vidieť.', t: 'Každý strih stojí čas (~2,5 s) a zanecháva na rube uzlík. Menej strihov = rýchlejšie a čistejšie šitie.' },
+  job: { w: 'Odhad času celej zákazky: počet cyklov (kusy ÷ hlavy) × čas jednej výšivky + 1 min na upnutie do rámu.', t: 'Pri viachlavovom stroji sa naraz šije toľko kusov, koľko má hláv.' },
+  sequence: { w: 'Poradie, v akom sa farby šijú. Číslo = poradie výmeny nite (ihly).', t: 'Najprv veľké plochy a pozadie, nakoniec detaily, písmo a obrysy navrch. Poradie zmeníš šípkami pri nitiach.' },
+  stitchType: { w: 'Výplň (tatami): riadky stehov cez celú plochu, na veľké plochy. Satin: lesklý cik-cak od okraja k okraju, na písmo, pásiky a obrysy do ~7 mm. Rovný: jednoduchá čiara stehov, na jemné kontúry a detaily.', t: 'Automatika volí podľa šírky tvaru. Úzky tvar vo výplni má zubaté okraje; široký satin sa zachytáva.' },
+  angle: { w: 'Smer, ktorým idú riadky výplne. Niť odráža svetlo podľa smeru, ako pokosený trávnik.', t: 'Susedné plochy s rôznym uhlom budú pôsobiť odlišne a logo bude plastickejšie. Látka sa najviac sťahuje kolmo na smer stehu.' },
+  fillStitch: { w: 'Dĺžka jedného stehu v riadku výplne.', up: 'Hladší a lesklejší povrch, menej stehov, ale dlhé stehy sa ľahšie zachytia.', down: 'Pevnejšie a matnejšie, viac stehov.', t: 'Štandard 3–4 mm.' },
+  runLength: { w: 'Dĺžka stehu pri rovnom stehu.', t: '2–2,5 mm; na ostré oblúky a malé detaily kratší (1,5 mm), na rovné úseky dlhší.' },
+  triple: { w: 'Každý úsek sa prešije trikrát (tam, späť, tam). Čiara je hrubšia a výraznejšia.', t: 'Na obrysy a jemné línie, ktoré majú byť viditeľné.' },
+  border: { w: 'Lem (obšitie) je satinová alebo rovná línia okolo objektu. Zakryje zubaté okraje výplne a škáry medzi farbami a logo vyzerá upravenejšie a plastickejšie.', t: 'Satinový lem 1–2 mm je typický pri erboch, nášivkách a číslach. Rovný alebo trojitý lem je jemnejší obrys. Lem sa šije až po všetkých plochách, aby ležal navrchu.' },
+  borderWidth: { w: 'Šírka satinového lemu. Polovica leží na objekte, polovica mimo neho, takže lem prekryje jeho okraj.', t: 'Jemný lem 0,8–1,2 mm, výrazný 1,5–2,5 mm.' },
+  textHeight: { w: 'Výška veľkých písmen v milimetroch.', t: 'Satinové písmo minimálne 5 mm, ideálne 7 mm a viac. Mená na hruď 10–20 mm, čísla 50–100 mm. Pod 4 mm sa písmená zlievajú.' },
+  letterSpacing: { w: 'Medzera medzi písmenami navyše.', t: 'Pri malom písme pridaj 0,3–0,6 mm, aby sa písmená nezlievali; pri veľkom stačí 0.' },
+  bend: { w: 'Ohne text do oblúka. Kladná hodnota ∩ (nahor, napr. horný okraj erbu), záporná ∪ (nadol, spodný okraj).', t: 'Pri 100 % tvorí text polkruh.' },
+  roster: { w: 'Zoznam hráčov: na každý riadok číslo a meno (napr. 10 Novák). Text so značkou {MENO} alebo {CISLO} sa pre každého hráča vymení.', t: 'Export súpisky vytvorí ZIP, v ktorom má každý hráč vlastný DST súbor, plus tabuľku s počtom stehov a časom.' },
+};
+function helpHTML(k) {
+  const h = HELP[k]; if (!h) return '';
+  let out = `<p>${h.w}</p>`;
+  if (h.up) out += `<div class="hb-row"><span class="hb-k">Viac</span><span>${h.up}</span></div>`;
+  if (h.down) out += `<div class="hb-row"><span class="hb-k">Menej</span><span>${h.down}</span></div>`;
+  if (h.t) out += `<div class="hb-row"><span class="hb-k">Prax</span><span>${h.t}</span></div>`;
+  return out;
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('.qi'); if (!b) return;
+  e.preventDefault(); e.stopPropagation();
+  const k = b.dataset.help;
+  const anchor = b.closest('.field') || b.closest('.field-row') || b.closest('dl') || b.closest('.job') || b.parentElement;
+  const nx = anchor.nextElementSibling;
+  if (nx && nx.classList.contains('helpbox') && nx.dataset.for === k) { nx.remove(); b.setAttribute('aria-expanded', 'false'); return; }
+  if (nx && nx.classList.contains('helpbox')) nx.remove();
+  const box = document.createElement('div'); box.className = 'helpbox'; box.dataset.for = k; box.innerHTML = helpHTML(k);
+  anchor.after(box); b.setAttribute('aria-expanded', 'true');
+}, true);
+
+/* predvolený vzor a delenie satinu */
+PATTERN_NAMES.forEach(([k, n]) => { const o = document.createElement('option'); o.value = k; o.textContent = n; $('gPattern').appendChild(o); });
+$('gPattern').value = S.global.pattern;
+$('gPattern').onchange = e => { S.global.pattern = e.target.value; busy('Prepočítavam stehy…', () => restitch()); };
+$('gSplit').value = S.global.splitLen; $('gSplitV').textContent = fmt1(S.global.splitLen) + ' mm';
+$('gSplit').oninput = e => { $('gSplitV').textContent = fmt1(+e.target.value) + ' mm'; };
+$('gSplit').onchange = e => { S.global.splitLen = +e.target.value; busy('Prepočítavam stehy…', () => restitch()); };
+
+/* ---------------- text ---------------- */
+const FONTS = [
+  { id: 'oswald', n: 'Oswald', fam: 'SE Oswald', w: 700, note: 'kondenzované, univerzálne' },
+  { id: 'bebas', n: 'Bebas Neue', fam: 'SE Bebas', w: 400, note: 'športové, veľké písmená' },
+  { id: 'anton', n: 'Anton', fam: 'SE Anton', w: 400, note: 'veľmi hrubé, čísla' },
+  { id: 'teko', n: 'Teko', fam: 'SE Teko', w: 600, note: 'dresové čísla' },
+  { id: 'archivo', n: 'Archivo', fam: 'SE Archivo', w: 800, note: 'široké, výrazné' },
+  { id: 'roboto', n: 'Roboto Condensed', fam: 'SE Roboto Condensed', w: 700, note: 'čitateľné aj malé' },
+  { id: 'slab', n: 'Alfa Slab One', fam: 'SE Alfa Slab', w: 400, note: 'pätkové, college' },
+  { id: 'script', n: 'Kaushan Script', fam: 'SE Kaushan', w: 400, note: 'písané, podpis' },
+];
+const fontOf = L => FONTS.find(f => f.id === L.font) || FONTS[0];
+const fontStr = (F, px) => `${F.w} ${px}px "${F.fam}", "Arial Narrow", Arial, sans-serif`;
+
+function textValue(L) {
+  const row = S.roster[S.rosterIdx] || { num: '10', name: 'Novák' };
+  let v = L.text.replace(/\{MENO\}/gi, row.name || '').replace(/\{(CISLO|ČÍSLO)\}/gi, row.num || '');
+  if (L.upper) v = v.toLocaleUpperCase('sk-SK');
+  return v;
+}
+
+async function textMask(L, value) {
+  const F = fontOf(L);
+  try { await document.fonts.load(fontStr(F, 100), value); } catch (e) { /* písmo nedostupné -> náhradné */ }
+  const c = document.createElement('canvas'), x = c.getContext('2d');
+  x.font = fontStr(F, 100);
+  const cap = x.measureText('H').actualBoundingBoxAscent || 72;
+  const px = L.height * R * 100 / cap;
+  x.font = fontStr(F, px);
+  const chars = [...value];
+  const adv = chars.map(ch => x.measureText(ch).width);
+  const sp = L.spacing * R;
+  const total = adv.reduce((a, b) => a + b, 0) + sp * Math.max(0, chars.length - 1);
+  const asc = px * 1.1, desc = px * 0.4;
+  const bend = (L.bend || 0) / 100;
+  const pl = [];
+  let acc = -total / 2;
+  const r = Math.abs(bend) > 0.01 ? total / (Math.abs(bend) * Math.PI) : 0;
+  chars.forEach((ch, i) => {
+    const mid = acc + adv[i] / 2;
+    if (!r) pl.push({ ch, x: mid, y: 0, rot: 0, a: adv[i] });
+    else {
+      const th = mid / r;
+      if (bend > 0) pl.push({ ch, x: r * Math.sin(th), y: r - r * Math.cos(th), rot: th, a: adv[i] });
+      else pl.push({ ch, x: r * Math.sin(th), y: -r + r * Math.cos(th), rot: -th, a: adv[i] });
+    }
+    acc += adv[i] + sp;
+  });
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const p of pl) for (const [cx, cy] of [[-p.a / 2, -asc], [p.a / 2, -asc], [-p.a / 2, desc], [p.a / 2, desc]]) {
+    const X = p.x + cx * Math.cos(p.rot) - cy * Math.sin(p.rot), Y = p.y + cx * Math.sin(p.rot) + cy * Math.cos(p.rot);
+    x0 = Math.min(x0, X); x1 = Math.max(x1, X); y0 = Math.min(y0, Y); y1 = Math.max(y1, Y);
+  }
+  const W = Math.ceil(x1 - x0) + 8, H = Math.ceil(y1 - y0) + 8;
+  if (!isFinite(W) || W * H > 40e6 || W < 2) return null;
+  c.width = W; c.height = H;
+  x.font = fontStr(F, px); x.fillStyle = '#000'; x.textBaseline = 'alphabetic';
+  for (const p of pl) { x.save(); x.translate(p.x - x0 + 4, p.y - y0 + 4); x.rotate(p.rot); x.fillText(p.ch, -p.a / 2, 0); x.restore(); }
+  const d = x.getImageData(0, 0, W, H).data;
+  // orez na skutočné písmená
+  let mx0 = W, my0 = H, mx1 = -1, my1 = -1;
+  for (let y = 0; y < H; y++) for (let xx = 0; xx < W; xx++) if (d[(y * W + xx) * 4 + 3] > 110) { if (xx < mx0) mx0 = xx; if (xx > mx1) mx1 = xx; if (y < my0) my0 = y; if (y > my1) my1 = y; }
+  if (mx1 < 0) return null;
+  const pad = 2, tw = mx1 - mx0 + 1 + 2 * pad, th = my1 - my0 + 1 + 2 * pad;
+  const mask = new Uint8Array(tw * th);
+  for (let y = my0; y <= my1; y++) for (let xx = mx0; xx <= mx1; xx++) if (d[(y * W + xx) * 4 + 3] > 110) mask[(y - my0 + pad) * tw + (xx - mx0 + pad)] = 1;
+  return { mask, tw, th };
+}
+
+async function buildText(L) {
+  const value = textValue(L);
+  if (!value.trim()) return null;
+  const m = await textMask(L, value);
+  if (!m) return null;
+  const { tw, th } = m;
+  const ox = Math.round(L.x - tw / 2), oy = Math.round(L.y - th / 2);
+  let lab = new Int16Array(tw * th).fill(-1);
+  for (let i = 0; i < m.mask.length; i++) if (m.mask[i]) lab[i] = L.label;
+  lab = E.removeSmall(lab, tw, th, 25);
+  const { objs } = E.buildObjects(lab, tw, th, S.global);
+  const mask = new Uint8Array(tw * th);
+  for (let i = 0; i < lab.length; i++) mask[i] = lab[i] >= 0 ? 1 : 0;
+  let maxW = 0;
+  objs.forEach((ob, k) => {
+    ob.ox += ox; ob.oy += oy; ob.cx += ox; ob.cy += oy;
+    ob.id = 300000 + L.id * 1000 + k; ob.key = 'T' + L.id + ':' + k; ob.textLayer = L;
+    let md = 0; for (let i = 0; i < ob.dt.length; i++) if (ob.mask[i] && ob.dt[i] > md) md = ob.dt[i];
+    maxW = Math.max(maxW, 2 * md / R);
+  });
+  let border = null;
+  if (L.border && L.border.type !== 'none') {
+    const u = E.makeObject(mask, tw, th, ox, oy, L.border.label, { opts: S.global });
+    border = L.border.type === 'satin' ? E.borderObject(u, L.border.width, L.border.label, S.global) : Object.assign({}, u);
+    Object.assign(border, { id: 300000 + L.id * 1000 + 999, key: 'T' + L.id + '#lem', label: L.border.label, isBorder: true, borderCfg: L.border, parent: { textLayer: L } });
+  }
+  return { objs, border, mask, tw, th, ox, oy, value, strokeMM: maxW };
+}
+function moveBuiltText(L, t) {
+  const nox = Math.round(L.x - t.tw / 2), noy = Math.round(L.y - t.th / 2);
+  const dx = nox - t.ox, dy = noy - t.oy;
+  for (const ob of t.objs.concat(t.border ? [t.border] : [])) { ob.ox += dx; ob.oy += dy; ob.cx += dx; ob.cy += dy; }
+  t.ox = nox; t.oy = noy;
+}
+async function buildAllTexts() {
+  const m = new Map();
+  for (const L of S.texts) {
+    if (!S.palette[L.label]) L.label = 0;
+    if (L.border && !S.palette[L.border.label]) L.border.label = 0;
+    const b = await buildText(L); if (b) m.set(L.id, b);
+  }
+  S.textBuilt = m;
+}
+let textJob = Promise.resolve();
+function refreshTexts() {
+  textJob = textJob.then(async () => {
+    $('busyTxt').textContent = 'Sádzam text…'; $('busy').hidden = false;
+    try { await buildAllTexts(); restitch(); } catch (e) { console.error(e); toast('Text sa nepodarilo pripraviť: ' + e.message); }
+    finally { $('busy').hidden = true; }
+    if (!$('pane-text').hidden) renderTextPane();
+  });
+  return textJob;
+}
+
+function defaultTextLabel() {
+  // najtmavšia použitá niť (alebo aktívna)
+  if (S.palette[S.active]) return S.active;
+  return 0;
+}
+function addText(gx, gy, preset) {
+  pushUndo();
+  const L = Object.assign({
+    id: S.nextText++, text: 'TEXT', font: 'oswald', height: 10, spacing: 0.3, bend: 0, upper: true,
+    label: defaultTextLabel(), stitch: 'auto', angle: 45, x: gx, y: gy,
+    border: { type: 'none', width: 1.2, label: S.colorOrder[0] ?? 0 },
+  }, preset || {});
+  S.texts.push(L);
+  selectText(L);
+  setTool('select');
+  refreshTexts().then(() => { const inp = $('tText'); if (inp) { inp.focus(); inp.select(); } });
+}
+function removeText(id) {
+  pushUndo();
+  S.texts = S.texts.filter(t => t.id !== id); S.textBuilt.delete(id);
+  if (S.selText === id) S.selText = null;
+  busy('Prepočítavam stehy…', () => { restitch(); renderTextPane(); });
+}
+function selectText(L) {
+  S.selText = L ? L.id : null; S.sel = null; selOverlay = null;
+  if (L) setTab('text'); else renderTextPane();
+  renderObjPane(); draw();
+}
+function textCenter() {
+  let x0 = 0, y0 = 0, x1 = S.W, y1 = S.H;
+  return [(x0 + x1) / 2, (y0 + y1) / 2];
+}
+const TEXT_PRESETS = [
+  { n: 'Meno hráča', p: { text: '{MENO}', height: 12, font: 'oswald' } },
+  { n: 'Číslo', p: { text: '{CISLO}', height: 60, font: 'anton', spacing: 1 } },
+  { n: 'Nápis v oblúku', p: { text: 'HOCKEY CLUB', height: 8, font: 'oswald', bend: 35, spacing: 0.6 } },
+  { n: 'Podpis', p: { text: 'Novák', height: 14, font: 'script', upper: false } },
+];
+function parseRoster(txt) {
+  return txt.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(l => {
+    const m = l.match(/^(\d{1,3})\s*[;,.\t ]\s*(.+)$/) || l.match(/^(.+?)\s*[;,\t ]\s*(\d{1,3})$/);
+    if (m && /^\d+$/.test(m[1])) return { num: m[1], name: m[2].trim() };
+    if (m && /^\d+$/.test(m[2])) return { num: m[2], name: m[1].trim() };
+    if (/^\d{1,3}$/.test(l)) return { num: l, name: '' };
+    return { num: '', name: l };
+  });
+}
+
+let textInputT = null, textUndoArmed = true;
+function renderTextPane() {
+  const pane = $('pane-text');
+  const L = S.texts.find(t => t.id === S.selText);
+  const built = L && S.textBuilt.get(L.id);
+  const usage = threadUsage();
+  const threads = S.colorOrder.filter(i => usage[i] > 0 || S.palette[i].added);
+  let html = `<div class="sec">
+      <div class="field-row"><span class="h3">Texty a čísla</span><button class="btn btn-sm" id="tAdd">+ Text</button></div>
+      <p class="hint">Mená, čísla a nápisy sa vysádzajú písmom a vyšijú satinom (tenké písmo) alebo výplňou (hrubé čísla). Polohu zmeníš potiahnutím na ploche nástrojom Výber.</p>
+      <div class="chips">${TEXT_PRESETS.map((p, i) => `<button class="chip" data-preset="${i}">+ ${p.n}</button>`).join('')}</div>
+      ${S.texts.length ? `<div class="tlist">${S.texts.map(t => `<button class="tchip" data-tid="${t.id}" aria-pressed="${t.id === S.selText}">${esc(t.text || '(prázdny)')}</button>`).join('')}</div>` : ''}
+    </div>`;
+  if (L) {
+    const warn = [];
+    if (L.height < 5) warn.push('Písmo menšie ako 5 mm je na hranici čitateľnosti; satinové písmená sa môžu zlievať.');
+    if (built && built.strokeMM && built.strokeMM < 0.9) warn.push('Ťahy písma sú tenšie ako 0,9 mm. Zväčši text alebo zvoľ hrubšie písmo.');
+    if (built && built.strokeMM > 7 && L.stitch === 'satin') warn.push('Ťahy sú širšie ako 7 mm; satin sa bude zachytávať. Zvoľ Výplň alebo Auto.');
+    if (!built) warn.push('Text je prázdny alebo sa nepodarilo vysádzať.');
+    html += `<div class="sec">
+      <div class="field"><label for="tText">Text</label><input class="text" id="tText" value="${esc(L.text)}" maxlength="60">
+        <div class="ins"><button class="chip" data-ins="{MENO}">{MENO}</button><button class="chip" data-ins="{CISLO}">{CISLO}</button><span class="hint">vloží meno / číslo zo súpisky</span></div></div>
+      <div class="field"><label for="tFont">Písmo</label><select class="text" id="tFont">${FONTS.map(f => `<option value="${f.id}" ${f.id === L.font ? 'selected' : ''}>${f.n} · ${f.note}</option>`).join('')}</select></div>
+      <div class="field"><div class="field-row"><label for="tH" class="lbl">Výška písmen${qi('textHeight')}</label><span class="unit"><input id="tHn" type="number" min="3" max="250" step="0.5" value="${L.height}"><span>mm</span></span></div>
+        <input type="range" id="tH" min="3" max="150" step="0.5" value="${Math.min(150, L.height)}"></div>
+      <div class="field"><div class="field-row"><label for="tSp" class="lbl">Rozostup písmen${qi('letterSpacing')}</label><span class="num" id="tSpV">${fmt1(L.spacing)} mm</span></div>
+        <input type="range" id="tSp" min="-1" max="6" step="0.1" value="${L.spacing}"></div>
+      <div class="field"><div class="field-row"><label for="tBend" class="lbl">Ohyb do oblúka${qi('bend')}</label><span class="num" id="tBendV">${L.bend} %</span></div>
+        <input type="range" id="tBend" min="-100" max="100" step="5" value="${L.bend}"></div>
+      <div class="field-row"><label for="tUp">Veľké písmená</label><input type="checkbox" id="tUp" ${L.upper ? 'checked' : ''}></div>
+      ${warn.map(w => `<div class="note">${w}</div>`).join('')}
+      ${built ? `<p class="hint num">${fmt1(built.tw / R)} × ${fmt1(built.th / R)} mm · ťah do ${fmt1(built.strokeMM)} mm</p>` : ''}
+    </div>
+    <div class="sec">
+      <span class="label lbl">Steh${qi('stitchType')}</span>
+      <div class="typeseg">${[['auto', 'Auto'], ['satin', 'Satin'], ['fill', 'Výplň']].map(([k, n]) => `<button data-ts="${k}" aria-pressed="${L.stitch === k}">${n}</button>`).join('')}</div>
+      ${L.stitch === 'fill' ? `<div class="field"><div class="field-row"><label for="tAng" class="lbl">Uhol výplne${qi('angle')}</label><span class="num" id="tAngV">${L.angle} °</span></div><input type="range" id="tAng" min="-90" max="90" step="5" value="${L.angle}"></div>` : ''}
+      <span class="hint">Farba nite</span><div class="swatches" id="tColors"></div>
+    </div>
+    <div class="sec">
+      <span class="label lbl">Lem okolo textu${qi('border')}</span>
+      <div class="typeseg four" id="tBType">${[['none', 'Bez lemu'], ['satin', 'Satin'], ['run', 'Rovný'], ['triple', 'Trojitý']].map(([k, n]) => `<button data-b="${k}" aria-pressed="${L.border.type === k}">${n}</button>`).join('')}</div>
+      ${L.border.type === 'satin' ? `<div class="field"><div class="field-row"><label for="tBW" class="lbl">Šírka lemu${qi('borderWidth')}</label><span class="num" id="tBWV">${fmt1(L.border.width)} mm</span></div><input type="range" id="tBW" min="0.8" max="4" step="0.1" value="${L.border.width}"></div>` : ''}
+      ${L.border.type !== 'none' ? `<span class="hint">Farba lemu</span><div class="swatches" id="tBColors"></div>` : ''}
+      <div class="row-actions"><button class="btn btn-sm" id="tDel">Odstrániť text</button></div>
+    </div>`;
+  }
+  html += `<div class="sec">
+      <span class="label lbl">Súpiska hráčov${qi('roster')}</span>
+      <textarea class="text" id="tRoster" placeholder="10 Novák&#10;7 Kováč&#10;23 Horváth">${esc(S.roster.map(r => (r.num ? r.num + ' ' : '') + r.name).join('\n'))}</textarea>
+      ${S.roster.length ? `<div class="field"><label for="tRow">Náhľad hráča</label><select class="text" id="tRow">${S.roster.map((r, i) => `<option value="${i}" ${i === S.rosterIdx ? 'selected' : ''}>${esc((r.num ? r.num + ' · ' : '') + r.name)}</option>`).join('')}</select></div>` : ''}
+      <p class="hint">${S.roster.length ? S.roster.length + ' hráčov. ' : ''}Do textu vlož {MENO} alebo {CISLO}. Export vytvorí pre každého hráča vlastný DST.</p>
+      <button class="btn" id="tExport" ${S.roster.length ? '' : 'disabled'}>Exportovať súpisku (ZIP)</button>
+    </div>`;
+  pane.innerHTML = html;
+
+  pane.querySelector('#tAdd').onclick = () => { const c = textCenter(); addText(c[0], c[1]); };
+  pane.querySelectorAll('[data-preset]').forEach(b => b.onclick = () => { const c = textCenter(); addText(c[0], c[1], TEXT_PRESETS[+b.dataset.preset].p); });
+  pane.querySelectorAll('[data-tid]').forEach(b => b.onclick = () => selectText(S.texts.find(t => t.id === +b.dataset.tid)));
+  const ta = pane.querySelector('#tRoster');
+  ta.onchange = () => {
+    S.roster = parseRoster(ta.value); S.rosterIdx = Math.min(S.rosterIdx, Math.max(0, S.roster.length - 1));
+    refreshTexts();
+  };
+  const row = pane.querySelector('#tRow'); if (row) row.onchange = () => { S.rosterIdx = +row.value; refreshTexts(); };
+  pane.querySelector('#tExport').onclick = exportRoster;
+  if (!L) return;
+
+  const upd = (patch, now) => {
+    if (textUndoArmed) { pushUndo(); textUndoArmed = false; setTimeout(() => textUndoArmed = true, 1500); }
+    Object.assign(L, patch);
+    clearTimeout(textInputT);
+    textInputT = setTimeout(() => refreshTexts(), now ? 0 : 450);
+  };
+  const ti = pane.querySelector('#tText');
+  ti.oninput = () => { upd({ text: ti.value }); const chip = pane.querySelector(`[data-tid="${L.id}"]`); if (chip) chip.textContent = ti.value || '(prázdny)'; };
+  pane.querySelectorAll('[data-ins]').forEach(b => b.onclick = () => {
+    const pos = ti.selectionStart ?? ti.value.length;
+    ti.value = ti.value.slice(0, pos) + b.dataset.ins + ti.value.slice(ti.selectionEnd ?? pos);
+    upd({ text: ti.value }, true);
+  });
+  pane.querySelector('#tFont').onchange = e => upd({ font: e.target.value }, true);
+  const tH = pane.querySelector('#tH'), tHn = pane.querySelector('#tHn');
+  tH.oninput = () => { tHn.value = tH.value; };
+  tH.onchange = () => upd({ height: +tH.value }, true);
+  tHn.onchange = () => { const v = Math.max(3, Math.min(250, +tHn.value || 10)); tHn.value = v; upd({ height: v }, true); };
+  const tSp = pane.querySelector('#tSp');
+  tSp.oninput = () => { pane.querySelector('#tSpV').textContent = fmt1(+tSp.value) + ' mm'; };
+  tSp.onchange = () => upd({ spacing: +tSp.value }, true);
+  const tB = pane.querySelector('#tBend');
+  tB.oninput = () => { pane.querySelector('#tBendV').textContent = tB.value + ' %'; };
+  tB.onchange = () => upd({ bend: +tB.value }, true);
+  pane.querySelector('#tUp').onchange = e => upd({ upper: e.target.checked }, true);
+  pane.querySelectorAll('[data-ts]').forEach(b => b.onclick = () => upd({ stitch: b.dataset.ts }, true));
+  const ang = pane.querySelector('#tAng');
+  if (ang) { ang.oninput = () => { pane.querySelector('#tAngV').textContent = ang.value + ' °'; }; ang.onchange = () => upd({ angle: +ang.value }, true); }
+  const sw = (box, cur, fn) => threads.forEach(i => {
+    const b = document.createElement('button'); b.className = 'sw'; b.style.background = hex(S.palette[i].rgb);
+    b.title = S.palette[i].name; b.setAttribute('aria-label', S.palette[i].name); b.setAttribute('aria-pressed', String(i === cur));
+    b.onclick = () => fn(i); box.appendChild(b);
+  });
+  sw(pane.querySelector('#tColors'), L.label, i => upd({ label: i }, true));
+  pane.querySelectorAll('#tBType [data-b]').forEach(b => b.onclick = () => upd({ border: Object.assign({}, L.border, { type: b.dataset.b }) }, true));
+  const bw = pane.querySelector('#tBW');
+  if (bw) { bw.oninput = () => { pane.querySelector('#tBWV').textContent = fmt1(+bw.value) + ' mm'; }; bw.onchange = () => upd({ border: Object.assign({}, L.border, { width: +bw.value }) }, true); }
+  const bc = pane.querySelector('#tBColors'); if (bc) sw(bc, L.border.label, i => upd({ border: Object.assign({}, L.border, { label: i }) }, true));
+  pane.querySelector('#tDel').onclick = () => removeText(L.id);
+}
+
+const rosterReady = () => S.roster.length && S.texts.some(L => /\{(MENO|CISLO|ČÍSLO)\}/i.test(L.text));
+async function buildRosterFiles() {
+  $('busyTxt').textContent = 'Pripravujem súpisku…'; $('busy').hidden = false;
+  const keep = S.rosterIdx, files = [], csv = ['cislo;meno;subor;stehov;cas_min'], players = [];
+  const used = new Set();
+  try {
+    for (let i = 0; i < S.roster.length; i++) {
+      S.rosterIdx = i;
+      await buildAllTexts();
+      const cmds = computeProgram();
+      const st = E.stats(cmds, null, S.speed);
+      const r = S.roster[i];
+      let fn = ((r.num ? r.num + '_' : '') + (r.name || '')).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || ('hrac_' + (i + 1));
+      while (used.has(fn)) fn += '_' + (i + 1);
+      used.add(fn);
+      const dst = E.writeDST(cmds, fn.toUpperCase());
+      files.push({ name: fn + '.dst', data: dst });
+      players.push({ num: r.num, name: r.name, file: fn + '.dst', dst, stitches: st.stitches, minutes: +st.minutes.toFixed(2) });
+      csv.push([r.num, r.name, fn + '.dst', st.stitches, st.minutes.toFixed(1).replace('.', ',')].join(';'));
+    }
+  } finally {
+    S.rosterIdx = keep; $('busy').hidden = true;
+  }
+  files.push({ name: 'supiska.csv', data: new TextEncoder().encode('\ufeff' + csv.join('\r\n')) });
+  await refreshTexts();
+  return { files, players, csv: csv.join('\r\n') };
+}
+async function exportRoster() {
+  if (!S.roster.length) { toast('Najprv vlož súpisku hráčov.'); return; }
+  if (!rosterReady()) { toast('Žiadny text neobsahuje {MENO} ani {CISLO}. Vlož značku do textu.'); return; }
+  const { files } = await buildRosterFiles();
+  await offer(fileBase() + '_supiska.zip', makeZip(files));
+}
+
+/* ---------------- plocha bez loga ---------------- */
+function newBlank(keepTexts, noText) {
+  const oldPal = S.palette;
+  S.img = null; S.isSample = false;
+  if (!keepTexts) { S.name = 'Napis'; $('dName').value = S.name; }
+  $('sampleBadge').hidden = true; $('fileName').textContent = 'Bez loga';
+  const W = Math.round(S.widthMM * R), H = Math.round(W * 0.5);
+  S.W = W; S.H = H;
+  S.srcCanvas = document.createElement('canvas'); S.srcCanvas.width = W; S.srcCanvas.height = H;
+  S.labels = new Int16Array(W * H).fill(-1);
+  S.palette = [['Čierna', [25, 25, 25]], ['Biela', [250, 250, 248]], ['Červená', [200, 30, 45]], ['Zlatá', [205, 165, 95]], ['Námornícka', [25, 35, 70]]]
+    .map(([name, rgb]) => ({ rgb, name, code: '', skip: false, added: true }));
+  S.colorOrder = S.palette.map((_, i) => i).sort((a, b) => lum(S.palette[b].rgb) - lum(S.palette[a].rgb));
+  S.overrides = {}; S.comp = null; S.keyOf = new Map(); S.sel = null;
+  S.undo = []; S.redo = []; updUndo();
+  S.active = 0;
+  if (noText) { S.texts = []; S.selText = null; }
+  else if (!keepTexts || !S.texts.length) {
+    S.texts = [];
+    S.texts.push({ id: S.nextText++, text: '{MENO}', font: 'oswald', height: 12, spacing: 0.4, bend: 0, upper: true, label: 0, stitch: 'auto', angle: 45, x: W / 2, y: H / 2, border: { type: 'none', width: 1.2, label: 3 } });
+    S.selText = S.texts[0].id;
+  } else remapTextLabels(oldPal);
+  $('recalcNote').hidden = true;
+  rebuild();
+  refreshTexts().then(() => { S.userView = false; fit(); if (!noText) setTab('text'); });
+}
+function remapTextLabels(oldPal) {
+  const near = rgb => { let b = 0, bd = Infinity; S.palette.forEach((p, i) => { const d = (p.rgb[0] - rgb[0]) ** 2 + (p.rgb[1] - rgb[1]) ** 2 + (p.rgb[2] - rgb[2]) ** 2; if (d < bd) { bd = d; b = i; } }); return b; };
+  for (const L of S.texts) {
+    if (oldPal[L.label]) L.label = near(oldPal[L.label].rgb);
+    if (L.border && oldPal[L.border.label]) L.border.label = near(oldPal[L.border.label].rgb);
+  }
+}
+$('blankBtn').onclick = () => busy('Pripravujem plochu…', () => newBlank(false));
+
+/* ---------------- príručka ---------------- */
+function svgRows(fn) { let s = ''; fn(l => s += l); return s; }
+const GC = { k: '#3a3a3a', r: '#c62828', g: '#c9a25c', w: '#9aa0a6', a: 'var(--accent)' };
+const GUIDE = [
+  { h: 'Výplň (tatami)', svg: svgRows(add => {
+      add(`<defs><clipPath id="gc1"><path d="M18 22 Q75 4 132 22 L130 90 Q75 106 20 90 Z"/></clipPath></defs><g clip-path="url(#gc1)"><g transform="rotate(-30 75 55)">`);
+      const offs = [0, 1 / 3, 2 / 3];
+      for (let i = 0; i < 30; i++) {
+        const y = -20 + i * 5.2, o = offs[i % 3] * 18;
+        for (let x = -60 + o; x < 220; x += 18) add(`<line x1="${x.toFixed(1)}" y1="${y}" x2="${(x + 16.5).toFixed(1)}" y2="${y}" stroke="${GC.g}" stroke-width="3.4" stroke-linecap="round"/>`);
+      }
+      add(`</g></g>`);
+    }),
+    p: 'Riadky stehov vedľa seba pokryjú celú plochu. V každom riadku sú vpichy posunuté (vzor tatami), takže netvoria čiary a plocha je hladká. Používa sa na všetky plochy širšie ako ~3 mm.',
+    li: ['Hustota = rozostup riadkov (štandard 0,40 mm).', 'Uhol = smer riadkov; rôzne uhly susedných plôch dodajú logu hĺbku.', 'Vzor = posun vpichov (Tatami 1/3, 1/4, tehla, diagonála, vlnka).'] },
+  { h: 'Satin', svg: svgRows(add => {
+      for (let t = 0; t <= 1.0001; t += 0.035) {
+        const cx = 20 + t * 110, cy = 70 - Math.sin(t * Math.PI) * 35, w = 9 + 3 * Math.sin(t * Math.PI);
+        const nx = -Math.cos(t * Math.PI) * 0.6, ny = 1;
+        const n = Math.hypot(nx, ny);
+        add(`<line x1="${cx - nx / n * w}" y1="${cy - ny / n * w}" x2="${cx + nx / n * w + 2}" y2="${cy + ny / n * w}" stroke="${GC.r}" stroke-width="2.2" stroke-linecap="round"/>`);
+      }
+    }),
+    p: 'Dlhé stehy idú cik-cak od jedného okraja tvaru k druhému. Niť leží rovno, preto je satin lesklý a pôsobí plasticky. Je to typický steh pre písmo, pásiky a obrysy.',
+    li: ['Vhodná šírka 1–7 mm. Užší sa zlieva, širší sa zachytáva (rieši delený satin).', 'Hustota satinu 0,35–0,42 mm.', 'V spojoch a ostrých rohoch (K, X, B, Z) aplikácia ťah rozreže šikmou reznou čiarou, každá časť má vlastný satin a smer stehov sa pri konci nerozbieha do vejára.', 'Šije sa „podklad tam, satin späť“, takže presuny nite vedú vždy pod ešte nešitými časťami a nie je ich vidno.'] },
+  { h: 'Rovný steh', svg: svgRows(add => {
+      let d = ''; for (let t = 0; t <= 1.0001; t += 0.08) { const x = 18 + t * 114, y = 60 + Math.sin(t * 7) * 22; d += (d ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1); add(`<circle cx="${x}" cy="${y}" r="2.2" fill="${GC.k}"/>`); }
+      add(`<path d="${d}" fill="none" stroke="${GC.k}" stroke-width="2"/>`);
+    }),
+    p: 'Jednoduchá čiara stehov za sebou, ako na šijacom stroji. Slúži na jemné kontúry, tenké detaily a ako podklad. Trojitý rovný steh (tam, späť, tam) je hrubší a výraznejší.',
+    li: ['Dĺžka stehu 2–2,5 mm, na oblúky kratšia.'] },
+  { h: 'Podklad (underlay)', svg: svgRows(add => {
+      for (let x = 22; x < 130; x += 9) add(`<line x1="${x}" y1="22" x2="${x - 12}" y2="90" stroke="${GC.w}" stroke-width="1.6" stroke-dasharray="4 3"/>`);
+      for (let x = 30; x < 125; x += 3.2) add(`<line x1="${x}" y1="38" x2="${x + 3}" y2="74" stroke="${GC.r}" stroke-width="2" stroke-linecap="round" opacity=".85"/>`);
+    }),
+    p: 'Riedke stehy, ktoré sa ušijú pred hlavnými stehmi. Prišijú látku ku stabilizátoru, aby sa nekrčila, a zdvihnú vrchné stehy, takže výšivka je plnšia a lesklejšia.',
+    li: ['Pod výplňou: krížový (riedka výplň kolmo), obrysový, alebo oboje.', 'Pod satinom: stredový (úzky satin), okrajový, cik-cak, okraj + cik-cak (široký satin, pružné látky).'] },
+  { h: 'Kompenzácia ťahu', svg: svgRows(add => {
+      add(`<rect x="30" y="25" width="90" height="60" rx="6" fill="none" stroke="${GC.a}" stroke-width="1.5" stroke-dasharray="5 4"/>`);
+      add(`<rect x="40" y="30" width="70" height="50" rx="6" fill="${GC.g}" opacity=".85"/>`);
+      add(`<path d="M22 55h14M128 55h-14" stroke="${GC.r}" stroke-width="2" marker-end="url(#ar)"/><defs><marker id="ar" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0 0L6 3L0 6z" fill="${GC.r}"/></marker></defs>`);
+    }),
+    p: 'Pri šití niť sťahuje látku, takže tvar vyjde užší, ako je na obrazovke (čiarkovaný rámik), a medzi farbami vzniknú škáry. Kompenzácia stehy na koncoch predĺži, aby výsledok mal správnu šírku.',
+    li: ['Pevná látka (šiltovka, keper) 0,10–0,15 mm.', 'Pružná látka (dres, piké, úplet) 0,20–0,35 mm.'] },
+  { h: 'Lem (obšitie)', svg: svgRows(add => {
+      for (let y = 36; y < 76; y += 3.5) add(`<line x1="${75 - Math.sqrt(Math.max(0, 22 * 22 - (y - 56) ** 2))}" y1="${y}" x2="${75 + Math.sqrt(Math.max(0, 22 * 22 - (y - 56) ** 2))}" y2="${y}" stroke="${GC.r}" stroke-width="2.2"/>`);
+      for (let a = 0; a < Math.PI * 2; a += 0.12) add(`<line x1="${75 + Math.cos(a) * 19}" y1="${56 + Math.sin(a) * 19}" x2="${75 + Math.cos(a + .06) * 27}" y2="${56 + Math.sin(a + .06) * 27}" stroke="${GC.g}" stroke-width="2.2" stroke-linecap="round"/>`);
+    }),
+    p: 'Satinová alebo rovná línia okolo objektu. Prekryje zubaté okraje výplne a škáry medzi farbami a výšivka pôsobí upravene, ako nášivka. Lem sa šije až na konci, aby ležal navrchu.',
+    li: ['Satinový lem 1–2 mm: erby, nášivky, čísla.', 'Rovný alebo trojitý lem: jemný obrys.', 'Nastavíš ho v paneli Objekt alebo pri texte.'] },
+  { h: 'Skoky, strihy a prechody', svg: svgRows(add => {
+      add(`<rect x="14" y="30" width="44" height="50" rx="5" fill="${GC.g}" opacity=".85"/><rect x="92" y="30" width="44" height="50" rx="5" fill="${GC.g}" opacity=".85"/>`);
+      add(`<path d="M58 55 L92 55" stroke="#c62828" stroke-width="2" stroke-dasharray="5 4"/><text x="75" y="48" font-size="10" text-anchor="middle" fill="${GC.r}">✂</text>`);
+    }),
+    p: 'Keď stroj prejde z jedného miesta na druhé, niť medzi nimi ostane napnutá. Ak by vedla cez inú farbu alebo cez prázdnu látku (napríklad cez ústa koňa), bola by viditeľná, preto ju stroj prestrihne a skočí (strih). Krátke presuny vnútri toho istého tvaru sa robia malými stehmi, ktoré prekryje ďalšia výplň.',
+    li: ['V zobrazení Stehy sú skoky so strihom červené čiarkované.', 'Každý strih stojí čas (~2,5 s), preto aplikácia strihá len tam, kde treba.'] },
+  { h: 'Písmo a malé detaily', svg: svgRows(add => {
+      add(`<text x="75" y="52" font-size="30" font-weight="700" text-anchor="middle" fill="${GC.k}" font-family="Oswald, Arial Narrow, sans-serif">ABC</text><text x="75" y="80" font-size="10" text-anchor="middle" fill="${GC.w}" font-family="Arial">min. 5 mm výška</text>`);
+    }),
+    p: 'Satinové písmo potrebuje aspoň 5 mm výšky a ťahy aspoň ~1 mm, inak sa písmená zlievajú. Na malé texty volí hrubšie kondenzované písmo a pridaj rozostup.',
+    li: ['Mená na hruď 10–20 mm, čísla 50–100 mm.', 'Veľké čísla (ťah nad 7 mm) sa šijú výplňou, často so satinovým lemom.'] },
+  { h: 'Poradie farieb a vrstvy', svg: svgRows(add => {
+      add(`<rect x="20" y="22" width="110" height="66" rx="6" fill="${GC.w}" opacity=".5"/><circle cx="75" cy="55" r="24" fill="${GC.r}" opacity=".9"/><text x="75" y="60" font-size="14" font-weight="700" text-anchor="middle" fill="#fff" font-family="Arial">10</text>`);
+    }),
+    p: 'Najprv sa šije pozadie a veľké plochy, potom menšie objekty a nakoniec písmo, detaily a lemy. Aplikácia drobné detaily nevynecháva z plochy pod nimi (plocha sa prešije celá a detail ide navrch), aby nevznikli škáry. Zároveň sa snaží o čo najmenej výmen nití.',
+    li: ['Poradie farieb zmeníš šípkami v paneli Nite.'] },
+];
+function renderGuide() {
+  $('guideBody').innerHTML = GUIDE.map(g => `<section class="g-sec"><svg viewBox="0 0 150 110" aria-hidden="true">${g.svg}</svg>
+    <div><h3>${g.h}</h3><p>${g.p}</p>${g.li ? `<ul>${g.li.map(x => `<li>${x}</li>`).join('')}</ul>` : ''}</div></section>`).join('');
+}
+$('guideBtn').onclick = () => { renderGuide(); $('guideModal').hidden = false; };
+$('gClose').onclick = () => $('guideModal').hidden = true;
+$('guideModal').onclick = e => { if (e.target === $('guideModal')) $('guideModal').hidden = true; };
+
+/* ---------------- projekt (uloženie a znovuotvorenie) ---------------- */
+function rleEncode(arr) {
+  const out = []; if (!arr.length) return out;
+  let v = arr[0], n = 1;
+  for (let i = 1; i < arr.length; i++) { if (arr[i] === v) n++; else { out.push(v, n); v = arr[i]; n = 1; } }
+  out.push(v, n); return out;
+}
+function rleDecode(rle, len) {
+  const a = new Int16Array(len); let p = 0;
+  for (let i = 0; i < rle.length; i += 2) { a.fill(rle[i], p, p + rle[i + 1]); p += rle[i + 1]; }
+  return a;
+}
+function exportProject(withImage) {
+  // úpravy objektov sa ukladajú podľa "semienka" objektu (stabilné pre rovnaké farebné plochy)
+  const ov = {};
+  for (const [key, o] of Object.entries(S.overrides)) { const ob = S.byKey.get(key); if (ob) ov[ob.seed] = o; }
+  const P = {
+    app: 'stitch-editor', version: 1, savedAt: new Date().toISOString(),
+    name: S.name, widthMM: S.widthMM, k: S.k, removeBg: S.removeBg, W: S.W, H: S.H,
+    global: S.global, palette: S.palette, colorOrder: S.colorOrder, overrides: ov,
+    texts: S.texts, roster: S.roster, fabric: S.fabric, speed: S.speed, pieces: S.pieces, heads: S.heads,
+    labels: rleEncode(S.labels), hasImage: !!S.img,
+  };
+  if (withImage && S.img && typeof S.imgSrc === 'string' && S.imgSrc.startsWith('data:') && S.imgSrc.length < 4e6 && !S.isSample) P.image = S.imgSrc;
+  return P;
+}
+function importProject(P, imageSrc) {
+  if (!P || P.app !== 'stitch-editor' || !P.labels) { toast('Toto nie je projekt výšivky.'); return; }
+  const apply = img => {
+    S.W = P.W; S.H = P.H; S.widthMM = P.widthMM; S.k = P.k; S.removeBg = P.removeBg;
+    $('wmm').value = S.widthMM; $('kVal').textContent = S.k; $('rmBg').checked = !!S.removeBg; markPresets();
+    Object.assign(S.global, P.global || {});
+    ['gFill', 'gSatin', 'gPull', 'gSatW'].forEach(id => { const el = $(id); const key = { gFill: 'fillSpacing', gSatin: 'satinSpacing', gPull: 'pullComp', gSatW: 'satinMaxWidth' }[id]; el.value = S.global[key]; $(id + 'V').textContent = fmt2(S.global[key]) + ' mm'; });
+    $('gUnder').checked = !!S.global.underlay; $('gPattern').value = S.global.pattern || 'tatami';
+    $('gSplit').value = S.global.splitLen; $('gSplitV').textContent = fmt1(S.global.splitLen) + ' mm';
+    S.srcCanvas = document.createElement('canvas'); S.srcCanvas.width = S.W; S.srcCanvas.height = S.H;
+    if (img) S.srcCanvas.getContext('2d').drawImage(img, 0, 0, S.W, S.H);
+    S.labels = rleDecode(P.labels, S.W * S.H);
+    S.palette = P.palette; S.colorOrder = P.colorOrder;
+    S.overrides = {}; S.comp = null; S.keyOf = new Map(); S.sel = null; S.selText = null;
+    S.undo = []; S.redo = []; updUndo();
+    S.fabric = P.fabric || S.fabric; S.speed = P.speed || S.speed; S.pieces = P.pieces || S.pieces; S.heads = P.heads || S.heads;
+    $('speed').value = S.speed; $('pieces').value = S.pieces; $('heads').value = S.heads;
+    S.texts = P.texts || []; S.roster = P.roster || []; S.rosterIdx = 0;
+    S.nextText = S.texts.reduce((m, t) => Math.max(m, t.id + 1), 1);
+    S.active = S.colorOrder[S.colorOrder.length - 1] ?? 0;
+    S.name = P.name || S.name; $('dName').value = S.name;
+    $('sampleBadge').hidden = true; $('fileName').textContent = EMBED.orderLabel || S.name;
+    $('recalcNote').hidden = true;
+    rebuild();
+    for (const ob of S.objs) if (P.overrides && P.overrides[ob.seed]) S.overrides[ob.key] = P.overrides[ob.seed];
+    restitch();
+    refreshTexts().then(() => { S.userView = false; fit(); toast('Projekt otvorený: ' + S.name); embedPost({ type: 'stitch:loaded', name: S.name, project: true }); });
+  };
+  const src = imageSrc || P.image;
+  if (P.hasImage && src) {
+    const img = new Image();
+    img.onload = () => { S.img = img; S.imgSrc = src; S.isSample = false; busy('Otváram projekt…', () => apply(img)); };
+    img.onerror = () => { S.img = null; busy('Otváram projekt…', () => apply(null)); };
+    img.src = src;
+  } else { S.img = null; busy('Otváram projekt…', () => apply(null)); }
+}
+
+/* ---------------- režim ERP (vloženie cez iframe) ----------------
+   Stránka sa otvorí s ?embed=1. Rodičovská aplikácia (TEX-MASTER) posiela a prijíma správy postMessage:
+   ← stitch:ready              editor je pripravený
+   → stitch:load {image, name, widthMM, colors, orderId, orderLabel, project, roster}
+   ← stitch:loaded {name}
+   → stitch:requestSave        (voliteľné, rovnaké ako tlačidlo Uložiť do zákazky)
+   ← stitch:save {orderId, name, stats, threads, files:{dst, png, sheet, project}, roster?}
+   ← stitch:error {message}                                                        */
+const QS = (() => { try { return new URLSearchParams(location.search); } catch (e) { return new URLSearchParams(); } })();
+const EMBED = { on: QS.get('embed') === '1' && window.parent !== window, origin: QS.get('origin') || location.origin, orderId: QS.get('order') || null, orderLabel: QS.get('label') || null };
+function embedPost(msg) { if (EMBED.on) try { window.parent.postMessage(msg, EMBED.origin); } catch (e) { console.warn(e); } }
+async function srcFromAny(image) {
+  if (!image) return null;
+  if (image instanceof Blob) return await new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(image); });
+  if (typeof image === 'string' && !image.startsWith('data:')) {
+    // vzdialený obrázok (napr. podpísaná URL zo Supabase Storage) -> dataURL, aby canvas nebol "tainted"
+    const b = await fetch(image).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); });
+    return await srcFromAny(b);
+  }
+  return image;
+}
+async function embedLoad(m) {
+  try {
+    if (m.orderId !== undefined) EMBED.orderId = m.orderId;
+    if (m.orderLabel) EMBED.orderLabel = m.orderLabel;
+    $('saveOrderBtn').hidden = !EMBED.orderId;
+    if (m.widthMM) { S.widthMM = Math.max(20, Math.min(300, +m.widthMM)); $('wmm').value = S.widthMM; markPresets(); }
+    if (m.colors) { S.k = Math.max(2, Math.min(10, +m.colors)); $('kVal').textContent = S.k; }
+    const src = await srcFromAny(m.image);
+    if (m.project) { importProject(typeof m.project === 'string' ? JSON.parse(m.project) : m.project, src); return; }
+    const afterRoster = () => { if (Array.isArray(m.roster) && m.roster.length) { S.roster = m.roster.map(r => ({ num: String(r.num ?? r.cislo ?? ''), name: String(r.name ?? r.meno ?? '') })); renderTextPane(); } };
+    if (src) loadImageFrom(src, m.name || 'Vysivka', false, () => { quantizeAll(); afterRoster(); });
+    else { busy('Pripravujem plochu…', () => { newBlank(false); if (m.name) { S.name = m.name; $('dName').value = m.name; } afterRoster(); }); }
+  } catch (e) {
+    console.error(e); toast('Obrázok zo zákazky sa nepodarilo načítať: ' + e.message);
+    embedPost({ type: 'stitch:error', message: String(e.message || e) });
+  }
+}
+// pôvodná predloha ako súbor (na neskoršie otvorenie projektu so zobrazením Originál)
+async function sourceBlob() {
+  if (!S.img || S.isSample || typeof S.imgSrc !== 'string') return null;
+  try { return await fetch(S.imgSrc).then(r => r.blob()); } catch (e) { return null; }
+}
+async function saveToOrder() {
+  const s = S.stats;
+  if (!s || !s.stitches) { toast('Dizajn zatiaľ nemá žiadne stehy.'); return; }
+  $('busyTxt').textContent = 'Ukladám do zákazky…'; $('busy').hidden = false;
+  try {
+    const base = fileBase();
+    const dst = E.writeDST(S.cmds, base.toUpperCase());
+    const png = await new Promise(res => renderPreviewPNG(8).toBlob(res, 'image/png'));
+    const sheet = productionSheet(renderPreviewPNG(4).toDataURL('image/png'));
+    const per = new Map(s.perColor.map(p => [p.thread, p]));
+    const threads = S.blocks.map((b, i) => { const p = S.palette[b.thread]; return { order: i + 1, name: p.name, code: p.code || '', hex: hex(p.rgb), stitches: b.stitches, meters: +((per.get(b.thread) || {}).meters || 0).toFixed(2) }; });
+    let roster = null;
+    if (rosterReady()) {
+      const r = await buildRosterFiles();
+      roster = r.players.map(p => ({ num: p.num, name: p.name, file: p.file, dst: p.dst, stitches: p.stitches, minutes: p.minutes }));
+    }
+    $('busy').hidden = true;
+    embedPost({
+      type: 'stitch:save', orderId: EMBED.orderId, name: S.name, fileBase: base,
+      stats: { stitches: s.stitches, minutes: +s.minutes.toFixed(2), speed: S.speed, trims: s.trims, colorChanges: s.colorChanges, colors: new Set(S.blocks.map(b => b.thread)).size, widthMM: +s.widthMM.toFixed(1), heightMM: +s.heightMM.toFixed(1), threadMeters: +s.perColor.reduce((a, p) => a + p.meters, 0).toFixed(2) },
+      threads, files: { dst, png, sheet, project: exportProject(false), source: await sourceBlob() }, roster,
+    });
+    toast('Odoslané do zákazky.');
+  } catch (e) { $('busy').hidden = true; console.error(e); toast('Uloženie zlyhalo: ' + e.message); }
+}
+$('saveOrderBtn').onclick = saveToOrder;
+if (EMBED.on) {
+  window.addEventListener('message', e => {
+    if (e.origin !== EMBED.origin || !e.data || typeof e.data.type !== 'string') return;
+    if (e.data.type === 'stitch:load') embedLoad(e.data);
+    else if (e.data.type === 'stitch:requestSave') saveToOrder();
+  });
+  $('saveOrderBtn').hidden = !EMBED.orderId;
+  $('saveOrderBtn').classList.add('btn-primary'); $('exportBtn').classList.remove('btn-primary');
+  if (EMBED.orderLabel) $('fileName').textContent = EMBED.orderLabel;
+}
+
+/* ---------------- štart ---------------- */
+$('speed').value = S.speed;
+setTab('design');
+resize();
+if (EMBED.on) {
+  // v ERP začíname bez ukážky; obrázok alebo projekt pošle zákazka
+  busy('Pripravujem plochu…', () => {
+    newBlank(false, true); S.name = 'Vysivka'; $('dName').value = S.name;
+    $('fileName').textContent = EMBED.orderLabel || 'Nový dizajn';
+    embedPost({ type: 'stitch:ready', version: 1 });
+  });
+} else loadImageFrom(SAMPLE_LOGO, 'HC Presov', true);
+window.__S = S; // pre testy
+</script>

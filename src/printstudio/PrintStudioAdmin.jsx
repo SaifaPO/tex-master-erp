@@ -21,6 +21,7 @@ import CelenkyTab from './CelenkyTab';
 import BuffkyTab from './BuffkyTab';
 import Transfer3dTab from './Transfer3dTab';
 import StolovaTab from './StolovaTab';
+import VysivkaModul from '../VysivkaModul';
 import SnurkyTab from './SnurkyTab';
 import FolieTab from './FolieTab';
 import ObjednavkyVsetkyTab from './ObjednavkyVsetkyTab';
@@ -64,6 +65,7 @@ const SUBTABS = [
   { id: 'b2b-kody', label: 'B2B kódy (agentúry)', icon: BadgePercent },
   { id: 'manualy', label: 'Manuály (tlač A4)', icon: Flag },
   { id: 'dtf-separator', label: 'DTF/DTG Separátor', icon: Grid3x3 },
+  { id: 'vysivka', label: 'Výšivka (editor)', icon: Shirt },
   { id: 'ulozisko', label: 'Úložisko', icon: HardDrive },
 ];
 
@@ -72,7 +74,7 @@ const SKUPINY = [
   { id: 'aplikacie', label: 'Aplikácie', icon: LayoutGrid, tabs: ['dresy', 'buffky', 'celenky', 'transfer3d', 'stolova', 'snurky', 'folie', 'vlajky', 'beachvlajky', 'metraze'] },
   { id: 'kniznica', label: 'Knižnica', icon: Library, tabs: ['produkty', 'kategorie', 'farby', 'fonty', 'grafiky', 'mockupy'] },
   { id: 'ceny', label: 'Ceny a tlač', icon: Coins, tabs: ['cenotvorba', 'kostra-cien', 'potlace', 'kalkulacka-tlace', 'predajny-cennik'] },
-  { id: 'nastavenia', label: 'Nastavenia', icon: Settings2, tabs: ['shopify', 'b2b-kody', 'manualy', 'dtf-separator', 'ulozisko'] },
+  { id: 'nastavenia', label: 'Nastavenia', icon: Settings2, tabs: ['shopify', 'b2b-kody', 'manualy', 'dtf-separator', 'vysivka', 'ulozisko'] },
 ];
 
 export default function PrintStudioAdmin({ supabase, initialSubtab }) {
@@ -159,6 +161,7 @@ export default function PrintStudioAdmin({ supabase, initialSubtab }) {
         {subtab === 'folie' && <FolieTab supabase={supabase} />}
         {subtab === 'b2b-kody' && <B2bKodyTab supabase={supabase} />}
         {subtab === 'dtf-separator' && <DtfSeparatorTab supabase={supabase} />}
+        {subtab === 'vysivka' && <VysivkaModul supabase={supabase} vyska="calc(100vh - 260px)" />}
         {subtab === 'ulozisko' && <UloziskoTab supabase={supabase} />}
       </div>
     </div>

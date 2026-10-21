@@ -16,6 +16,7 @@ import PrintStudioAdmin from './printstudio/PrintStudioAdmin';
 import GlobalSearchPalette from './GlobalSearchPalette';
 import FakturaEmail from './FakturaEmail';
 import FakturaDokument from './FakturaDokument';
+import VysivkaModul from './VysivkaModul';
 import VykazyDphTab from './VykazyDphTab';
 import { stiahniEFakturu } from './eFaktura';
 import { zostavaUhradit, TYPY_DOKLADOV } from './fakturaTexty';
@@ -1612,6 +1613,7 @@ export default function App() {
   const [scanNotification, setScanNotification] = useState(null);
 
   const [selectedOrderDetails, setSelectedOrderDetails] = useState(null);
+  const [vysivkaZakazka, setVysivkaZakazka] = useState(null);
   const [isEditingOrder, setIsEditingOrder] = useState(false);
   const [orderEditDraft, setOrderEditDraft] = useState(null);
   const [showAddItemForm, setShowAddItemForm] = useState(false);
@@ -2191,7 +2193,7 @@ export default function App() {
       ['kalkulacka-tlace', 'Kalkulačka tlače (Cen. ponuky)'], ['predajny-cennik', 'Predajný cenník (tlač A4)'],
       ['manualy', 'Manuály (tlač A4)'], ['shopify', 'Shopify prepojenie'], ['vlajky', 'Vlajky'],
       ['beachvlajky', 'Beachvlajky'], ['dresy', 'Výroba dresov'], ['celenky', 'Čelenky'], ['buffky', 'Buffky'],
-      ['dtf-separator', 'DTF/DTG Separátor'], ['ulozisko', 'Úložisko'],
+      ['dtf-separator', 'DTF/DTG Separátor'], ['vysivka', 'Výšivka (editor)'], ['ulozisko', 'Úložisko'],
     ];
     psSub.forEach(([id, label]) => push(entries, label, 'PrintStudio Pro', psVisible, () => { setActiveTab('printstudio'); setPrintstudioJumpTarget(id); }));
 
@@ -12447,6 +12449,18 @@ export default function App() {
           );
         })()}
 
+        {vysivkaZakazka && (
+          <div className="fixed inset-0 z-[80] bg-slate-950 p-4 overflow-y-auto print:hidden">
+            <div className="max-w-[1600px] mx-auto space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-bold text-white">Výšivka — zákazka {vysivkaZakazka.cislo}</h3>
+                <button onClick={() => setVysivkaZakazka(null)} className="p-1.5 rounded bg-slate-800 text-slate-300 hover:text-white"><X className="h-5 w-5" /></button>
+              </div>
+              <VysivkaModul supabase={supabase} zakazka={vysivkaZakazka} vyska="calc(100vh - 140px)" />
+            </div>
+          </div>
+        )}
+
         {selectedOrderDetails && (
           <div className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-7xl max-h-[85vh] overflow-y-auto overflow-x-hidden bg-slate-950 p-6 rounded-t-2xl border border-slate-800 border-b-0 shadow-2xl space-y-6 print:static print:inset-auto print:z-auto print:mx-0 print:w-auto print:max-w-none print:max-h-none print:overflow-visible print:bg-white print:text-black print:border-none print:shadow-none print:rounded-none print:p-0 animate-in slide-in-from-bottom-8 fade-in duration-200">
             <div className="sticky -top-6 -mx-6 px-6 pt-6 -mt-6 bg-slate-950 flex flex-wrap justify-between items-center gap-3 border-b border-slate-800 pb-4 print:hidden print:static print:m-0 print:p-0 print:border-0 z-10">
@@ -12461,6 +12475,7 @@ export default function App() {
                 {hasPermission('create_order') && (
                   <button onClick={() => { setActiveTab('invoices'); handleStartNewInvoice(selectedOrderDetails); }} className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Banknote className="h-4 w-4" /> Vystaviť faktúru</button>
                 )}
+                <button onClick={() => { const logo = (selectedOrderDetails.items || []).find(it => it.rozpisUrl && /^image\//.test(it.rozpisMimeType || '')); setVysivkaZakazka({ id: selectedOrderDetails.id, cislo: selectedOrderDetails.orderNumber || selectedOrderDetails.id, zakaznik: selectedOrderDetails.customer, predlohaUrl: logo?.rozpisUrl || '' }); }} className="bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Shirt className="h-4 w-4" /> Výšivka</button>
                 <button onClick={() => printWithFilename(selectedOrderDetails.orderNumber || selectedOrderDetails.id)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Printer className="h-4 w-4" /> Tlačiť (A4)</button>
                 <button onClick={() => openOrderDetails(null)} className="bg-slate-800 hover:bg-slate-750 text-slate-400 px-3 py-2 rounded-lg text-xs">Zatvoriť</button>
               </div>
