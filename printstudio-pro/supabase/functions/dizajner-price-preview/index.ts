@@ -45,7 +45,8 @@ function elektrinaZariadeniaEurZaHod(costMetrics: Riadok[], zariadenieId: string
   const zariadenie = costMetrics.find((m) => m.id === zariadenieId);
   const cenaElektriny = costMetrics.find((m) => m.name === 'Cena elektriny');
   if (!zariadenie || !cenaElektriny) return 0;
-  return (parseFloat(zariadenie.power_kw) || 0) * (parseFloat(cenaElektriny.value) || 0);
+  // elektrina (kW x cena kWh) + amortizacia stroja (€/hod) = realna hodinova cena behu stroja (rovnako ako v ERP)
+  return (parseFloat(zariadenie.power_kw) || 0) * (parseFloat(cenaElektriny.value) || 0) + (parseFloat(zariadenie.amortizacia_hod) || 0);
 }
 
 function vcSublimaciaGarment(textilSub: Riadok | null, sublimaciaGarment: Riadok | null, costMetrics: Riadok[], plochaCm2: number) {
@@ -170,7 +171,7 @@ Deno.serve(async (req) => {
 
     const [{ data: cfg }, { data: costMetrics }] = await Promise.all([
       supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
-      supabase.from('cost_metrics').select('id, name, value, power_kw'),
+      supabase.from('cost_metrics').select('id, name, value, power_kw, amortizacia_hod'),
     ]);
     const pricingConfig: PricingConfig = cfg
       ? { coefA: Number(cfg.coef_a), coefB: Number(cfg.coef_b), marginFloor: Number(cfg.margin_floor), coefP: Number(cfg.coef_p), cielovaHodnotaZakazky: Number(cfg.cielova_hodnota_zakazky ?? 25000), dphPercent: Number(cfg.dph_percent ?? 23) }
