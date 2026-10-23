@@ -125,7 +125,9 @@ function vcSietotlacCelkom(
   const casTlaceSvetly = parseFloat(sietotlac.cas_tlace_min) || 0;
   const casTlaceTmavy = parseFloat(sietotlac.cas_tlace_min_tmavy) || 0;
   const casTlace = jeTmavy ? (casTlaceTmavy > 0 ? casTlaceTmavy : casTlaceSvetly) : casTlaceSvetly;
-  const celkovyCasMin = casTlace + (parseFloat(sietotlac.cas_fixacie_min) || 0);
+  // Pri fixacii v tunelovej susicke operator tlaci dalsie kusy — z casu fixacie sa pocita len podiel (fixacia_praca_percent, 50 = polovica).
+  const podielFixacie = sietotlac.fixacia_praca_percent == null || sietotlac.fixacia_praca_percent === '' ? 1 : Math.min(100, Math.max(0, parseFloat(sietotlac.fixacia_praca_percent) || 0)) / 100;
+  const celkovyCasMin = casTlace + (parseFloat(sietotlac.cas_fixacie_min) || 0) * podielFixacie;
   const praca = (celkovyCasMin / 60) * (parseFloat(sietotlac.cena_prace_hod) || 0);
   const karuselEurHod = elektrinaZariadeniaEurZaHod(costMetrics, sietotlac.karusel_zariadenie_id);
   const tunelEurHod = elektrinaZariadeniaEurZaHod(costMetrics, sietotlac.fixacny_tunel_zariadenie_id);

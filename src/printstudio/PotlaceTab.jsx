@@ -64,7 +64,8 @@ export default function PotlaceTab({ supabase }) {
   const [sublimacia, setSublimacia] = useState({ cena_cm2: 0, min_cena: 0 });
   const [dtf, setDtf] = useState({ cena_cm2: 0, min_cena: 0 });
   const [vysivka, setVysivka] = useState({ cena_cm2: 0, min_cena: 0 });
-  const [sietotlac, setSietotlac] = useState({ cena_cm2: 0, cena_cm2_tmavy: 0, min_cena: 0, priplatok_farba: 0, cena_farba_kg: 0, naklady_manipulacia: 0, naklad_sito_zakazka: 0, naklad_cistenie_zakazka: 0, odporucany_min_ks: 30 });
+  const [sietotlac, setSietotlac] = useState({ cena_cm2: 0, cena_cm2_tmavy: 0, min_cena: 0, priplatok_farba: 0, cena_farba_kg: 0, naklady_manipulacia: 0, naklad_sito_zakazka: 0, naklad_cistenie_zakazka: 0, odporucany_min_ks: 30, cena_prace_hod: 0, cas_tlace_min: 0, cas_tlace_min_tmavy: 0, cas_fixacie_min: 0, karusel_zariadenie_id: null, fixacny_tunel_zariadenie_id: null });
+  const [costMetrics, setCostMetrics] = useState([]);
   const [rezany, setRezany] = useState({ min_cena: 0, cena_prace_hod: 0, cas_rezania_min: 0, cas_vylupovania_min: 0, cas_nazehlovania_min: 0, naklady_manipulacia: 0, sirka_vyuzitelna_cm: 49 });
   const [folie, setFolie] = useState([]);
   const [laser, setLaser] = useState({ min_cena: 0, cena_prace_hod: 0, naklady_manipulacia: 0, laser_zariadenie_id: null });
@@ -90,7 +91,7 @@ export default function PotlaceTab({ supabase }) {
 
   const nacitaj = async () => {
     setIsLoading(true);
-    const [{ data: tech }, { data: sieto }, { data: fol }, { data: rez }, { data: cfg }, { data: tSub }, { data: sGarment }, { data: dtfNak }, { data: vysNak }, { data: sietoVel }, { data: laserNak }, { data: laserHrub }] = await Promise.all([
+    const [{ data: tech }, { data: sieto }, { data: fol }, { data: rez }, { data: cfg }, { data: tSub }, { data: sGarment }, { data: dtfNak }, { data: vysNak }, { data: sietoVel }, { data: laserNak }, { data: laserHrub }, { data: metriky }] = await Promise.all([
       supabase.from('cennik_technologie').select('*'),
       supabase.from('cennik_sietotlac').select('*').eq('id', 1).maybeSingle(),
       supabase.from('cennik_folie').select('*').order('id'),
@@ -103,14 +104,20 @@ export default function PotlaceTab({ supabase }) {
       supabase.from('cennik_sietotlac_velkosti').select('*').order('poradie'),
       supabase.from('cennik_laser_rezanie').select('*').eq('id', 1).maybeSingle(),
       supabase.from('cennik_laser_hrubky').select('*').order('poradie'),
+      supabase.from('cost_metrics').select('*'),
     ]);
+    setCostMetrics(metriky || []);
     const subRow = (tech || []).find(t => t.technologia === 'sublimacia');
     const dtfRow = (tech || []).find(t => t.technologia === 'dtf');
     const vysRow = (tech || []).find(t => t.technologia === 'vysivka');
     if (subRow) setSublimacia({ cena_cm2: subRow.cena_cm2, min_cena: subRow.min_cena });
     if (dtfRow) setDtf({ cena_cm2: dtfRow.cena_cm2, min_cena: dtfRow.min_cena });
     if (vysRow) setVysivka({ cena_cm2: vysRow.cena_cm2, min_cena: vysRow.min_cena });
-    if (sieto) setSietotlac({ cena_cm2: sieto.cena_cm2, cena_cm2_tmavy: sieto.cena_cm2_tmavy, min_cena: sieto.min_cena, priplatok_farba: sieto.priplatok_farba, cena_farba_kg: sieto.cena_farba_kg || 0, naklady_manipulacia: sieto.naklady_manipulacia || 0, naklad_sito_zakazka: sieto.naklad_sito_zakazka || 0, naklad_cistenie_zakazka: sieto.naklad_cistenie_zakazka || 0, odporucany_min_ks: sieto.odporucany_min_ks || 30 });
+    if (sieto) setSietotlac({ cena_cm2: sieto.cena_cm2, cena_cm2_tmavy: sieto.cena_cm2_tmavy, min_cena: sieto.min_cena, priplatok_farba: sieto.priplatok_farba, cena_farba_kg: sieto.cena_farba_kg || 0, naklady_manipulacia: sieto.naklady_manipulacia || 0, naklad_sito_zakazka: sieto.naklad_sito_zakazka || 0, naklad_cistenie_zakazka: sieto.naklad_cistenie_zakazka || 0, odporucany_min_ks: sieto.odporucany_min_ks || 30,
+      // casy, praca a stroje (karusel, tunel) — bez nich by sa pri sietotlaci nepocitala praca ani elektrina (kalkulacka by bola nizsia ako Cenove ponuky)
+      cena_prace_hod: sieto.cena_prace_hod || 0, cas_tlace_min: sieto.cas_tlace_min || 0, cas_tlace_min_tmavy: sieto.cas_tlace_min_tmavy || 0, cas_fixacie_min: sieto.cas_fixacie_min || 0,
+      karusel_zariadenie_id: sieto.karusel_zariadenie_id || null, fixacny_tunel_zariadenie_id: sieto.fixacny_tunel_zariadenie_id || null,
+      ...(sieto.fixacia_praca_percent != null ? { fixacia_praca_percent: sieto.fixacia_praca_percent } : {}) });
     if (rez) setRezany({ min_cena: rez.min_cena, cena_prace_hod: rez.cena_prace_hod || 0, cas_rezania_min: rez.cas_rezania_min || 0, cas_vylupovania_min: rez.cas_vylupovania_min || 0, cas_nazehlovania_min: rez.cas_nazehlovania_min || 0, naklady_manipulacia: rez.naklady_manipulacia || 0, sirka_vyuzitelna_cm: rez.sirka_vyuzitelna_cm || 49 });
     setFolie(fol || []);
     if ((fol || []).length > 0) setTestFoliaId(fol[0].id);
@@ -174,7 +181,7 @@ export default function PotlaceTab({ supabase }) {
 
   // --- Vyrobne ceny (VC) — vzorce zdielane s Cenovymi ponukami cez vyrobneNaklady.js, nic sa tu
   // uz nezaduva duplicitne (viackrat sposobilo nezhodu cien medzi appkami).
-  const kostraLive = { textilSub, sublimaciaGarment, dtf: dtfNaklady, sietotlac, sietotlacVelkosti, rezany, folie, vysivkaNaklady, laserRezanie: laser, laserHrubky, costMetrics: [] };
+  const kostraLive = { textilSub, sublimaciaGarment, dtf: dtfNaklady, sietotlac, sietotlacVelkosti, rezany, folie, vysivkaNaklady, laserRezanie: laser, laserHrubky, costMetrics };
 
   const vcSublimacia = vcSublimaciaGarmentZo(kostraLive, plocha);
   const vcDtf = vcDtfGarmentZo(kostraLive, plocha);

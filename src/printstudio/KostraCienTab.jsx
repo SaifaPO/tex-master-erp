@@ -555,6 +555,7 @@ export default function KostraCienTab({ supabase }) {
               </select>
             </div>
             <Field label="Čas fixácie (min/ks)" value={sietotlac.cas_fixacie_min} step="0.1" onChange={(v) => ulozSietotlac({ cas_fixacie_min: v })} hint={casFlatHint(sietotlac.cas_fixacie_min)} />
+            <Field label="Podiel práce pri fixácii (%)" value={sietotlac.fixacia_praca_percent ?? 100} step="5" onChange={(v) => ulozSietotlac({ fixacia_praca_percent: Math.min(100, Math.max(0, v)) })} hint="Pri tunelovej sušičke operátor tlačí ďalšie kusy. 50 = polovičný úkon, 0 = fixácia sa počíta len elektrinou a amortizáciou tunela, 100 = celý čas." />
             <Field label="Čas tlače — tmavý textil (min/ks)" value={sietotlac.cas_tlace_min_tmavy} step="0.05" onChange={(v) => ulozSietotlac({ cas_tlace_min_tmavy: v })} hint={`${casFlatHint(sietotlac.cas_tlace_min_tmavy)} — na tmavý textil sa ťahajú 2 vrstvy farby, preto trvá dlhšie; nevyplnené = rovnaký čas ako svetlý`} />
           </div>
           {(sietotlac.karusel_zariadenie_id || sietotlac.fixacny_tunel_zariadenie_id) && (

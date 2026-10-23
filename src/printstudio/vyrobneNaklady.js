@@ -216,7 +216,10 @@ function elektrinaSietotlacFlat(kostra, jeTmavy) {
 function pracaSietotlacFlat(kostra, jeTmavy) {
   const sietotlac = kostra.sietotlac;
   if (!sietotlac) return 0;
-  const celkovyCasMin = casTlaceMinPre(sietotlac, jeTmavy) + (parseFloat(sietotlac.cas_fixacie_min) || 0);
+  // Pri fixacii v tunelovej susicke operator tlaci dalsie kusy, preto sa mu z casu fixacie pocita len podiel fixacia_praca_percent
+  // (50 = polovicny ukon, 0 = len elektrina + amortizacia tunela, 100 = cely cas). Bez stlpca (stara DB) sa pocita cely cas ako doteraz.
+  const podielFixacie = sietotlac.fixacia_praca_percent == null || sietotlac.fixacia_praca_percent === '' ? 1 : Math.min(100, Math.max(0, parseFloat(sietotlac.fixacia_praca_percent) || 0)) / 100;
+  const celkovyCasMin = casTlaceMinPre(sietotlac, jeTmavy) + (parseFloat(sietotlac.cas_fixacie_min) || 0) * podielFixacie;
   return (celkovyCasMin / 60) * (parseFloat(sietotlac.cena_prace_hod) || 0);
 }
 // Celkova VC za 1 KUS (vsetky farby + manipulacia + praca + elektrina strojov na kus) + cistenie
