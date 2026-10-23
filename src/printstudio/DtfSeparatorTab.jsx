@@ -4,6 +4,7 @@ import { renderHalftone } from './dtfSeparator/lib/halftone.js';
 import { generateLpiTestSheet } from './dtfSeparator/lib/testSheet.js';
 import { renderSeparation, DEFAULT_CHANNEL_ANGLES, CHANNEL_LABELS } from './dtfSeparator/lib/separation.js';
 import { renderDtgFullColor } from './dtfSeparator/lib/dtgFullColor.js';
+import { renderColorPop, COLORPOP_PALETTES } from './dtfSeparator/lib/colorpop.js';
 import { setPngDpi } from './dtfSeparator/lib/pngDpi.js';
 
 // Predtym samostatna appka (dtf-separator/) s vlastnym Vercel deployom a provizornym zdielanym
@@ -63,6 +64,9 @@ export default function DtfSeparatorTab() {
   const [blackPoint, setBlackPoint] = useState(0);
   const [whitePoint, setWhitePoint] = useState(255);
   const [invert, setInvert] = useState(false);
+  const [cpColors, setCpColors] = useState(COLORPOP_PALETTES[0].colors); // paleta ColorPop, od najsvetlejsej po najtmavsiu
+  const [cpKnockout, setCpKnockout] = useState('none'); // 'none' | 'darkest' | 'lightest'
+  const [cpSpreadAngles, setCpSpreadAngles] = useState(true);
 
   const [channelAngles, setChannelAngles] = useState(DEFAULT_CHANNEL_ANGLES);
   const [whiteBaseEnabled, setWhiteBaseEnabled] = useState(true);
@@ -80,6 +84,7 @@ export default function DtfSeparatorTab() {
   const [previewResultCanvas, setPreviewResultCanvas] = useState(null); // rezim 'spot'
   const [separationResult, setSeparationResult] = useState(null); // rezim 'cmyk' — { channels, white, composite }
   const [dtgResult, setDtgResult] = useState(null); // rezim 'dtg' — { composite, white, dotStencil }
+  const [cpResult, setCpResult] = useState(null); // rezim 'colorpop' — { composite, white }
   const [isRendering, setIsRendering] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const canvasWrapRef = useRef(null);
@@ -169,6 +174,14 @@ export default function DtfSeparatorTab() {
           whiteBase: { enabled: whiteBaseEnabled, chokePx, threshold: whiteThreshold, previewBackground: previewBg }
         });
         setSeparationResult(result);
+      } else if (mode === 'colorpop') {
+        const result = renderColorPop(workingPreviewCanvas, {
+          palette: cpColors, knockout: cpKnockout, spreadAngles: cpSpreadAngles,
+          lpi, angleDeg, dotShape, algorithm, outputDpi: scaledOutputDpi, blackPoint, whitePoint, invert,
+          backgroundRemoval: { enabled: bgRemovalEnabled, tolerance: bgTolerance, feather: bgFeather },
+          whiteBase: { enabled: whiteBaseEnabled, chokePx, threshold: whiteThreshold }
+        });
+        setCpResult(result);
       } else if (mode === 'dtg') {
         const result = renderDtgFullColor(workingPreviewCanvas, {
           lpi, angleDeg, dotShape, algorithm, outputDpi: scaledOutputDpi, blackPoint, whitePoint, invert,
@@ -184,11 +197,14 @@ export default function DtfSeparatorTab() {
     }, 180);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workingPreviewCanvas, mode, lpi, angleDeg, dotShape, algorithm, inkColor, outputDpi, blackPoint, whitePoint, invert, channelAngles, whiteBaseEnabled, chokePx, whiteThreshold, previewBg, bgRemovalEnabled, bgTolerance, bgFeather]);
+  }, [workingPreviewCanvas, mode, lpi, angleDeg, dotShape, algorithm, inkColor, outputDpi, blackPoint, whitePoint, invert, channelAngles, whiteBaseEnabled, chokePx, whiteThreshold, previewBg, bgRemovalEnabled, bgTolerance, bgFeather, cpColors, cpKnockout, cpSpreadAngles]);
 
   // "Po" vrstva zavisi od rezimu — pre spot je to jediny vysledok, pre cmyk/dtg podla toho, ktory
   // kanal/nahlad je prave zvoleny. "Pred" je vzdy workingPreviewCanvas (povodny obrazok).
-  const afterLayer = mode === 'cmyk'
+  const garmentMode = mode === 'cmyk' || mode === 'dtg' || mode === 'colorpop'; // rezimy s nahladom na farbe textilie
+  const afterLayer = mode === 'colorpop'
+    ? (cpResult && (dtgView === 'white' ? cpResult.white : cpResult.composite))
+    : mode === 'cmyk'
     ? (separationResult && (channelView === 'composite' ? separationResult.composite : channelView === 'white' ? separationResult.white : separationResult.channels[channelView]))
     : mode === 'dtg'
     ? (dtgResult && (dtgView === 'white' ? dtgResult.white : dtgView === 'stencil' ? dtgResult.dotStencil : dtgResult.composite))
@@ -200,7 +216,7 @@ export default function DtfSeparatorTab() {
     node.width = workingPreviewCanvas.width;
     node.height = workingPreviewCanvas.height;
     ctx.clearRect(0, 0, node.width, node.height);
-    ctx.fillStyle = (mode === 'cmyk' || mode === 'dtg') ? previewBg : '#ffffff';
+    ctx.fillStyle = garmentMode ? previewBg : '#ffffff';
     ctx.fillRect(0, 0, node.width, node.height);
 
     // Pridrzanie mysi/prsta ("preblik") vzdy ukaze cisty original, bez ohladu na split/vybrany kanal.
@@ -289,6 +305,15 @@ export default function DtfSeparatorTab() {
           downloadCanvas(full.channels.y, 'Y', outputDpi);
           downloadCanvas(full.channels.k, 'K', outputDpi);
           if (full.white) downloadCanvas(full.white, 'White-underbase', outputDpi);
+        } else if (mode === 'colorpop') {
+          const full = renderColorPop(workingCanvas, {
+            palette: cpColors, knockout: cpKnockout, spreadAngles: cpSpreadAngles,
+            lpi, angleDeg, dotShape, algorithm, outputDpi, blackPoint, whitePoint, invert,
+            backgroundRemoval: { enabled: bgRemovalEnabled, tolerance: bgTolerance, feather: bgFeather },
+            whiteBase: { enabled: whiteBaseEnabled, chokePx, threshold: whiteThreshold }
+          });
+          downloadCanvas(full.composite, `colorpop_${lpi}lpi_${cpColors.length}farby`, outputDpi);
+          if (full.white) downloadCanvas(full.white, 'White-underbase', outputDpi);
         } else if (mode === 'dtg') {
           const full = renderDtgFullColor(workingCanvas, {
             lpi, angleDeg, dotShape, algorithm, outputDpi, blackPoint, whitePoint, invert,
@@ -340,8 +365,8 @@ export default function DtfSeparatorTab() {
           ) : (
             <>
               <div className="flex flex-wrap items-center gap-2 bg-slate-900 border border-slate-800 rounded-xl p-2">
-                {mode === 'dtg' ? (
-                  DTG_VIEWS.map(v => (
+                {(mode === 'dtg' || mode === 'colorpop') ? (
+                  (mode === 'colorpop' ? ['composite', 'white'] : DTG_VIEWS).map(v => (
                     <button key={v} onClick={() => setDtgView(v)} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${dtgView === v ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}>
                       {DTG_VIEW_LABELS[v]}
                     </button>
@@ -377,7 +402,7 @@ export default function DtfSeparatorTab() {
                   </>
                 )}
               </div>
-              {(mode === 'cmyk' || mode === 'dtg') && (
+              {garmentMode && (
                 <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-xl p-2 text-xs text-slate-400">
                   <span>Náhľad na farbe textílie:</span>
                   {SHIRT_SWATCHES.map(c => (
@@ -393,7 +418,7 @@ export default function DtfSeparatorTab() {
                   onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setIsDraggingFile(false); }}
                   onDrop={(e) => { e.preventDefault(); setIsDraggingFile(false); handleFile(e.dataTransfer.files?.[0]); }}
                   className={`rounded-xl overflow-hidden border-2 flex items-center justify-center flex-1 transition-colors ${isDraggingFile ? 'border-dashed border-indigo-500 bg-indigo-950/20' : 'border-slate-800'}`}
-                  style={{ backgroundColor: isDraggingFile ? undefined : ((mode === 'cmyk' || mode === 'dtg') ? previewBg : '#ffffff') }}
+                  style={{ backgroundColor: isDraggingFile ? undefined : (garmentMode ? previewBg : '#ffffff') }}
                 >
                   <canvas
                     ref={(node) => { canvasWrapRef.current = node; drawCanvasRef(node); }}
@@ -408,7 +433,7 @@ export default function DtfSeparatorTab() {
                 </div>
                 {magnifierEnabled && (
                   <div className="shrink-0 bg-slate-950 border border-slate-800 rounded-xl p-2 mx-auto sm:mx-0">
-                    <canvas ref={magnifierCanvasRef} width={MAGNIFIER_SIZE} height={MAGNIFIER_SIZE} className="rounded-lg" style={{ backgroundColor: (mode === 'cmyk' || mode === 'dtg') ? previewBg : '#ffffff' }} />
+                    <canvas ref={magnifierCanvasRef} width={MAGNIFIER_SIZE} height={MAGNIFIER_SIZE} className="rounded-lg" style={{ backgroundColor: garmentMode ? previewBg : '#ffffff' }} />
                     <p className="text-[10px] text-slate-500 text-center mt-1">{magnifierZoom}× lupa</p>
                   </div>
                 )}
@@ -426,8 +451,46 @@ export default function DtfSeparatorTab() {
               <button onClick={() => setMode('spot')} className={`py-1.5 rounded text-xs font-bold ${mode === 'spot' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Spot color (1 farba) — sieťotlač</button>
               <button onClick={() => setMode('cmyk')} className={`py-1.5 rounded text-xs font-bold ${mode === 'cmyk' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>CMYK proces (4 farby) — sieťotlač</button>
               <button onClick={() => setMode('dtg')} className={`py-1.5 rounded text-xs font-bold ${mode === 'dtg' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>DTF/DTG plnofarebné (raster efekt)</button>
+              <button onClick={() => setMode('colorpop')} className={`py-1.5 rounded text-xs font-bold ${mode === 'colorpop' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>ColorPop — viacfarebný raster (DTF/DTG/sieťotlač)</button>
             </div>
           </div>
+
+          {mode === 'colorpop' && (
+            <div className="space-y-3 border border-slate-800 rounded-lg p-2.5">
+              <span className="text-[10px] text-slate-500 uppercase font-bold">Farebná paleta (od najsvetlejšej po najtmavšiu)</span>
+              <div className="grid grid-cols-2 gap-1.5 max-h-52 overflow-y-auto pr-1">
+                {COLORPOP_PALETTES.map(pal => (
+                  <button key={pal.name} onClick={() => setCpColors(pal.colors)} title={pal.name} className="flex flex-col gap-1 p-1.5 rounded-lg bg-slate-950 border border-slate-800 hover:border-indigo-500 text-left">
+                    <span className="flex h-3 rounded overflow-hidden">{pal.colors.map((c, i) => <span key={i} style={{ backgroundColor: c }} className="flex-1" />)}</span>
+                    <span className="text-[10px] text-slate-400 truncate">{pal.name}</span>
+                  </button>
+                ))}
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-500 block mb-1">Vlastné farby (2–5):</span>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {cpColors.map((c, i) => (
+                    <input key={i} type="color" value={c} onChange={(e) => setCpColors(prev => prev.map((x, j) => (j === i ? e.target.value : x)))} className="h-8 w-9 bg-slate-950 border border-slate-700 rounded cursor-pointer" />
+                  ))}
+                  <button onClick={() => setCpColors(prev => (prev.length < 5 ? [...prev, prev[prev.length - 1]] : prev))} disabled={cpColors.length >= 5} className="text-[10px] font-bold bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 px-2 py-1.5 rounded">+ farba</button>
+                  <button onClick={() => setCpColors(prev => (prev.length > 2 ? prev.slice(0, -1) : prev))} disabled={cpColors.length <= 2} className="text-[10px] font-bold bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 px-2 py-1.5 rounded">− farba</button>
+                  <button onClick={() => setCpColors(prev => [...prev].reverse())} className="text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1.5 rounded">⇄ obrátiť</button>
+                </div>
+                <p className="text-[9px] text-slate-600 mt-1">Prvá farba je podkladová plocha (najsvetlejšie miesta), ďalšie farby sa pridávajú ako raster smerom do tmavých tónov.</p>
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Knock-out (mäkšia tlač, farba textílie presvitá)</label>
+                <select value={cpKnockout} onChange={(e) => setCpKnockout(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white">
+                  <option value="none">Bez knock-outu (plná plocha)</option>
+                  <option value="darkest">Vyradiť najtmavšiu farbu</option>
+                  <option value="lightest">Vyradiť najsvetlejšiu farbu</option>
+                </select>
+              </div>
+              <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
+                <input type="checkbox" checked={cpSpreadAngles} onChange={(e) => setCpSpreadAngles(e.target.checked)} className="accent-indigo-600" /> Rôzny uhol každej farby (menej moaré)
+              </label>
+            </div>
+          )}
 
           <div>
             <label className="text-xs text-slate-400 flex justify-between mb-1"><span>LPI (veľkosť rastra)</span><span className="text-white font-mono">{lpi}</span></label>
@@ -445,7 +508,7 @@ export default function DtfSeparatorTab() {
             </div>
           </div>
 
-          {mode === 'spot' || mode === 'dtg' ? (
+          {mode === 'spot' || mode === 'dtg' || mode === 'colorpop' ? (
             <div>
               <label className="text-xs text-slate-400 flex justify-between mb-1"><span>Uhol rastra</span><span className="text-white font-mono">{angleDeg}°</span></label>
               <input type="range" min="0" max="90" step="0.5" value={angleDeg} onChange={(e) => setAngleDeg(Number(e.target.value))} disabled={algorithm === 'floyd'} className="w-full disabled:opacity-40" />
@@ -481,7 +544,7 @@ export default function DtfSeparatorTab() {
                 <input type="color" value={inkColor} onChange={(e) => setInkColor(e.target.value)} className="w-full h-8 bg-slate-950 border border-slate-800 rounded cursor-pointer" />
               </div>
             )}
-            <div className={mode === 'cmyk' || mode === 'dtg' ? 'col-span-2' : ''}>
+            <div className={garmentMode ? 'col-span-2' : ''}>
               <label className="text-xs text-slate-400 block mb-1">Output DPI</label>
               <input type="number" min="72" max="600" step="1" value={outputDpi} onChange={(e) => setOutputDpi(Number(e.target.value) || 300)} className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-xs text-white" />
             </div>
@@ -525,14 +588,14 @@ export default function DtfSeparatorTab() {
               <label className="text-xs text-slate-400 flex justify-between mb-1"><span>Biely bod</span><span className="text-white font-mono">{whitePoint}</span></label>
               <input type="range" min="1" max="255" value={whitePoint} onChange={(e) => setWhitePoint(Math.max(Number(e.target.value), blackPoint + 1))} className="w-full" />
             </div>
-            {(mode === 'spot' || mode === 'dtg') && (
+            {(mode === 'spot' || mode === 'dtg' || mode === 'colorpop') && (
               <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
                 <input type="checkbox" checked={invert} onChange={(e) => setInvert(e.target.checked)} className="accent-indigo-600" /> Invertovať (svetlé = viac atramentu)
               </label>
             )}
           </div>
 
-          {mode === 'dtg' && (
+          {(mode === 'dtg' || mode === 'colorpop') && (
             <div className="border-t border-slate-800 pt-3 space-y-3">
               <label className="flex items-center gap-2 text-xs text-slate-300 font-bold cursor-pointer">
                 <input type="checkbox" checked={bgRemovalEnabled} onChange={(e) => setBgRemovalEnabled(e.target.checked)} className="accent-indigo-600" /> Odstrániť pozadie (okraje do stratena)
@@ -553,7 +616,7 @@ export default function DtfSeparatorTab() {
             </div>
           )}
 
-          {(mode === 'cmyk' || mode === 'dtg') && (
+          {garmentMode && (
             <div className="border-t border-slate-800 pt-3 space-y-3">
               <label className="flex items-center gap-2 text-xs text-slate-300 font-bold cursor-pointer">
                 <input type="checkbox" checked={whiteBaseEnabled} onChange={(e) => setWhiteBaseEnabled(e.target.checked)} className="accent-indigo-600" /> Generovať bielu podkladovú vrstvu (underbase)
@@ -577,7 +640,7 @@ export default function DtfSeparatorTab() {
           <button onClick={handleDownloadPng} disabled={!workingCanvas || isDownloading} className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-bold py-2.5 rounded-lg text-sm flex items-center justify-center gap-2">
             {isDownloading
               ? <><RefreshCw className="h-4 w-4 animate-spin" /> Spracúvam v plnom rozlíšení…</>
-              : <><Download className="h-4 w-4" /> {mode === 'cmyk' ? 'Stiahnuť vrstvy (C, M, Y, K, White)' : mode === 'dtg' ? 'Stiahnuť PNG (plnofarebné + biely podklad)' : 'Stiahnuť PNG (plné rozlíšenie)'}</>}
+              : <><Download className="h-4 w-4" /> {mode === 'cmyk' ? 'Stiahnuť vrstvy (C, M, Y, K, White)' : mode === 'dtg' || mode === 'colorpop' ? 'Stiahnuť PNG (farebné + biely podklad)' : 'Stiahnuť PNG (plné rozlíšenie)'}</>}
           </button>
         </div>
       </div>

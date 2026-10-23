@@ -14,6 +14,7 @@
     "bysquare": "^4.0.0",
     "html2canvas-pro": "^2.5.2",
     "html5-qrcode": "^2.3.8",
+    "imagetracerjs": "^1.2.6",
     "jspdf": "^4.2.1",
     "jszip": "^3.10.1",
     "lucide-react": "^1.27.0",

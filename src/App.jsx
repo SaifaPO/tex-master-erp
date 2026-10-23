@@ -2195,7 +2195,7 @@ export default function App() {
       ['kalkulacka-tlace', 'Kalkulačka tlače (Cen. ponuky)'], ['predajny-cennik', 'Predajný cenník (tlač A4)'],
       ['manualy', 'Manuály (tlač A4)'], ['shopify', 'Shopify prepojenie'], ['vlajky', 'Vlajky'],
       ['beachvlajky', 'Beachvlajky'], ['dresy', 'Výroba dresov'], ['celenky', 'Čelenky'], ['buffky', 'Buffky'],
-      ['dtf-separator', 'DTF/DTG Separátor'], ['vysivka', 'Výšivka (editor)'], ['ulozisko', 'Úložisko'],
+      ['dtf-separator', 'DTF/DTG Separátor'], ['vektorizer', 'Vektorizér obrázkov'], ['vysivka', 'Výšivka (editor)'], ['ulozisko', 'Úložisko'],
     ];
     psSub.forEach(([id, label]) => push(entries, label, 'PrintStudio Pro', psVisible, () => { setActiveTab('printstudio'); setPrintstudioJumpTarget(id); }));
 
