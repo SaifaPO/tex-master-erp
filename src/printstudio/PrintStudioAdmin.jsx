@@ -29,6 +29,7 @@ import FolieTab from './FolieTab';
 import ObjednavkyVsetkyTab from './ObjednavkyVsetkyTab';
 import DtfSeparatorTab from './DtfSeparatorTab';
 import VektorizerTab from './VektorizerTab';
+import LaserSpotrebaTab from './LaserSpotrebaTab';
 import B2bKodyTab from './B2bKodyTab';
 import UloziskoTab from '../UloziskoTab';
 
@@ -62,6 +63,7 @@ const SUBTABS = [
   { id: 'mockupy', label: 'Fotky produktov', icon: Camera },
   { id: 'cenotvorba', label: 'Cenotvorba (marže)', icon: Calculator },
   { id: 'kostra-cien', label: 'Kostra cien', icon: Layers3 },
+  { id: 'laser-spotreba', label: 'Laser – spotreba metráže', icon: Scissors },
   { id: 'potlace', label: 'Potlače', icon: Banknote },
   { id: 'kalkulacka-tlace', label: 'Kalkulačka tlače (Cen. ponuky)', icon: ShoppingCart },
   { id: 'predajny-cennik', label: 'Predajný cenník (tlač A4)', icon: Printer },
@@ -79,7 +81,7 @@ const SKUPINY = [
   { id: 'objednavky', label: 'Objednávky', icon: Inbox, tabs: ['objednavky'] },
   { id: 'aplikacie', label: 'Aplikácie', icon: LayoutGrid, tabs: ['dresy', 'buffky', 'celenky', 'transfer3d', 'stolova', 'snurky', 'folie', 'ponuka', 'vlajky', 'beachvlajky', 'metraze'] },
   { id: 'kniznica', label: 'Knižnica', icon: Library, tabs: ['produkty', 'kategorie', 'farby', 'fonty', 'grafiky', 'mockupy'] },
-  { id: 'ceny', label: 'Ceny a tlač', icon: Coins, tabs: ['cenotvorba', 'kostra-cien', 'potlace', 'kalkulacka-tlace', 'predajny-cennik'] },
+  { id: 'ceny', label: 'Ceny a tlač', icon: Coins, tabs: ['cenotvorba', 'kostra-cien', 'laser-spotreba', 'potlace', 'kalkulacka-tlace', 'predajny-cennik'] },
   { id: 'nastavenia', label: 'Nastavenia', icon: Settings2, tabs: ['shopify', 'b2b-kody', 'manualy', 'dtf-separator', 'vektorizer', 'vysivka', 'sos', 'ulozisko'] },
 ];
 
@@ -169,6 +171,7 @@ export default function PrintStudioAdmin({ supabase, initialSubtab }) {
         {subtab === 'b2b-kody' && <B2bKodyTab supabase={supabase} />}
         {subtab === 'dtf-separator' && <DtfSeparatorTab supabase={supabase} />}
         {subtab === 'vektorizer' && <VektorizerTab />}
+        {subtab === 'laser-spotreba' && <LaserSpotrebaTab supabase={supabase} />}
         {subtab === 'sos' && <SosTlacidlaTab supabase={supabase} />}
         {subtab === 'vysivka' && <VysivkaModul supabase={supabase} vyska="calc(100vh - 260px)" />}
         {subtab === 'ulozisko' && <UloziskoTab supabase={supabase} />}

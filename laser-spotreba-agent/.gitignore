@@ -1,0 +1,4 @@
+config.json
+stav.db
+agent.log*
+__pycache__/
