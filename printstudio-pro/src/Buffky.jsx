@@ -509,12 +509,12 @@ export default function Buffky({ supabase, onSpat }) {
       <div className="max-w-7xl w-full mx-auto p-3 sm:p-4">
         <div className="bg-slate-900 border border-slate-800 p-4 sm:p-6 rounded-2xl shadow-sm">
           <h3 className="text-sm font-bold text-white mb-1">Množstevné zľavy</h3>
-          <p className="text-[11px] text-slate-500 mb-3">Ceny v tabuľke sú bez DPH.</p>
+          <p className="text-[11px] text-slate-500 mb-3">Ceny v tabuľke sú bez DPH.{b2b.zlavaPercent > 0 && <> Máte zadaný B2B kód <strong>{b2b.kod}</strong> — v tabuľke vidíte aj ceny po zľave {Number(b2b.zlavaPercent)} %.</>}</p>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-slate-800 text-slate-500 font-semibold">
-                  <th className="p-2.5">Počet ks</th><th className="p-2.5">Cena €/ks (bez DPH)</th><th className="p-2.5">Zľava</th>
+                  <th className="p-2.5">Počet ks</th><th className="p-2.5">Cena €/ks (bez DPH)</th>{b2b.zlavaPercent > 0 && <th className="p-2.5 text-amber-400">S B2B zľavou (−{Number(b2b.zlavaPercent)} %)</th>}<th className="p-2.5">Zľava</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
@@ -527,6 +527,7 @@ export default function Buffky({ supabase, onSpat }) {
                     <tr key={level} className={isCurrent ? 'bg-cyan-500/10 font-semibold' : ''}>
                       <td className="p-2.5 text-slate-300">od {level} ks {isCurrent && <span className="ml-1 text-[10px] bg-cyan-600 text-white px-2 py-0.5 rounded-full">Váš odber</span>}</td>
                       <td className="p-2.5 font-mono font-bold text-white">{rate.toFixed(2)} €</td>
+                    {b2b.zlavaPercent > 0 && <td className="p-2.5 font-mono font-bold text-amber-300">{(Math.round(rate * (100 - Number(b2b.zlavaPercent))) / 100).toFixed(2)} €</td>}
                       <td className={`p-2.5 font-mono ${discount > 0 ? 'text-emerald-400' : 'text-slate-500'}`}>{discount > 0 ? `-${discount}%` : 'Základ'}</td>
                     </tr>
                   );
