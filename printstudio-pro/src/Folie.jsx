@@ -43,7 +43,7 @@ function stylFarby(trieda, hex) {
 
 // Fotky vzoriek fólií (Siser) uložené v public/folie — názov súboru = kód farby, resp. druh_<kód druhu>. Vlastná fotka z administrácie (foto_url) má prednosť.
 const FOTO_FARBY = new Set(['ps_white', 'ps_black', 'ps_red', 'ps_royal', 'ps_green', 'ps_yellow', 'ps_orange', 'ps_grey', 'ps_gold', 'ps_silver', 'g_silver', 'g_gold', 'g_black', 'g_red', 'g_blue', 'g_pink', 'm_gold', 'm_silver', 'm_red', 'm_blue', 'r_silver', 'sb_white', 'sb_yellow', 'f_white', 'f_black', 'f_red', 'f_blue', 'f_yellow', 'f_green']);
-const FOTO_DRUHY = new Set(['psfilm', 'glitter', 'metal', 'reflex', 'subli', 'flock']);
+const FOTO_DRUHY = new Set(['psfilm', 'glitter', 'electric', 'reflex', 'subli', 'flock']);
 const fotoFarby = (c) => (c ? (c.foto_url || (FOTO_FARBY.has(c.kod) ? `/folie/${c.kod}.webp` : null)) : null);
 const fotoDruhu = (d) => (d ? (d.foto_url || (FOTO_DRUHY.has(d.kod) ? `/folie/druh_${d.kod}.webp` : null)) : null);
 
@@ -210,7 +210,7 @@ export default function Folie({ supabase }) {
             )}
             <div>
               <label className="text-xs font-medium text-slate-500 mb-2 flex justify-between"><span>Výber farby</span><span className="font-bold text-indigo-700">{farbaObj?.nazov}</span></label>
-              <div className="flex flex-wrap gap-2 p-2 bg-slate-50 rounded-lg border border-slate-200 min-h-[56px]">
+              <div className="flex flex-wrap gap-2 p-2 bg-slate-50 rounded-lg border border-slate-200 min-h-[56px] max-h-72 overflow-y-auto">
                 {farbyDruhu.map((c) => (
                   <button key={c.kod} type="button" title={c.nazov} onClick={() => setFarba(c.kod)} className={`${fotoFarby(c) ? 'w-11 h-11 rounded-lg' : 'w-8 h-8 rounded-full'} cursor-pointer transition hover:scale-110`}
                     style={{ ...(fotoFarby(c) ? { backgroundColor: c.hex, backgroundImage: `url(${fotoFarby(c)})`, backgroundSize: 'cover', backgroundPosition: 'center' } : stylFarby(druhObj?.trieda, c.hex)), border: farba === c.kod ? '2px solid #4f46e5' : (c.hex.toUpperCase() === '#FFFFFF' ? '1px solid #e5e7eb' : '2px solid transparent'), boxShadow: farba === c.kod ? '0 0 0 3px rgba(79,70,229,0.3)' : '0 1px 3px rgba(0,0,0,0.1)' }} />
