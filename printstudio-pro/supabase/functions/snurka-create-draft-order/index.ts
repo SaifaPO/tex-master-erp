@@ -174,7 +174,7 @@ Deno.serve(async (req) => {
       price: c.spolu, requiresShipping: !osobnyOdber,
       properties: [
         { name: '_cislo_objednavky', value: cislo }, { name: '_objednavka_id', value: objednavkaId }, { name: '_snurka', value: 'true' },
-        { name: '_model', value: model.kod }, { name: '_pocet_ks', value: String(ks) }, { name: '_subor_liec', value: url1 || '' }, { name: '_subor_rub', value: url2 || '' },
+        { name: '_model', value: model.kod }, { name: '_casti_tlace_mm', value: model.casti_mm ? `${String(model.casti_mm).replace(/,/g, ' + ')} mm (vedľa seba, medzera 10 mm na strih)` : `${model.sirka_mm} mm` }, { name: '_pocet_ks', value: String(ks) }, { name: '_subor_liec', value: url1 || '' }, { name: '_subor_rub', value: url2 || '' },
         { name: '_osobny_odber', value: osobnyOdber ? 'áno' : 'nie' }, { name: '_b2b_kod', value: c.zlavaPercent > 0 ? String(b2bKod).trim().toUpperCase() : '' },
       ],
     }, `${cislo} (šnúrky na krk)` + (url1 ? `\nLíce: ${url1}` : '') + (url2 ? `\nRub: ${url2}` : ''), 'snurky');

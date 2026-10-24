@@ -6,9 +6,10 @@ import { vytvorEngine, SYMBOLY, FONTY_PREDVOLENE, VZORY_POZADIA, svgDoDataUri } 
 
 // Spoločný editor „líce + rub“ (stolové vlajky, šnúrky na krk). Vracia dve časti cez render-prop children({ nastroje, plocha }):
 // `nastroje` = ľavý panel (strana, pozadie, text, symboly, obrázok, knižnica grafík, úprava objektu), `plocha` = pracovná plocha s plátnami.
+// `casti` (pole dĺžok v mm) = tlač v samostatných častiach vedľa seba na jednej ploche (napr. šnúrka 70 + 12 cm) — zobrazia sa ako samostatné rámy s medzerou na strih.
 // Cez ref: exportuj() -> { front, back (Blob PNG ≈300 DPI), json }, nahlad(), pocetObjektov(), nastavRozmer().
 const PlochaEditor = forwardRef(function PlochaEditor({
-  sirkaMm, vyskaMm, tvar = null, ppm = 2, rozlozenie = 'vedla', nazvyStran = ['Líce', 'Rub'], spadavkaMm = 0,
+  sirkaMm, vyskaMm, tvar = null, ppm = 2, rozlozenie = 'vedla', nazvyStran = ['Líce', 'Rub'], spadavkaMm = 0, casti = null, medzeraCastiMm = 10,
   fonty = [], grafiky = [], symboly = SYMBOLY, children,
 }, ref) {
   const wrapFront = useRef(null), wrapBack = useRef(null), vonkajsi = useRef(null);
@@ -175,6 +176,7 @@ const PlochaEditor = forwardRef(function PlochaEditor({
         <div className="flex items-center gap-3 text-xs">
           <span className="font-semibold text-slate-700">Plocha pre dizajn</span>
           <span className="font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">{sirkaMm} × {vyskaMm} mm</span>
+          {casti && casti.length > 1 && <span className="text-slate-500">Tlač v {casti.length} častiach — medzi nimi šrafovaná medzera {medzeraCastiMm} mm na strih</span>}
           {spadavkaMm > 0 && <span className="text-slate-500 flex items-center gap-2"><span className="inline-block w-3 h-3 border-2 border-red-500 border-dashed" /> okraj výroby <span className="inline-block w-3 h-3 border border-green-600 border-dotted ml-1" /> bezpečná zóna ({spadavkaMm} mm)</span>}
         </div>
         <div className="flex bg-slate-100 rounded-lg p-0.5 text-xs">
@@ -190,7 +192,22 @@ const PlochaEditor = forwardRef(function PlochaEditor({
               <div key={k} style={{ width: sirkaPx, paddingTop: 24 }} className="relative">
                 <span className={`absolute top-0 left-0 text-xs font-bold px-2 py-0.5 rounded ${strana === k ? 'bg-indigo-600 text-white' : 'bg-white/90 text-slate-600'}`}>{n}</span>
                 <div ref={r} className="relative" style={{ width: sirkaPx, height: vyskaPx, filter: strana === k ? 'drop-shadow(0 0 10px rgba(79,70,229,0.55))' : 'drop-shadow(0 6px 10px rgba(0,0,0,0.12))', opacity: strana === k ? 1 : 0.7, transition: 'opacity .2s' }} onMouseDown={() => setStrana(k)}>
-                  {spadavkaMm > 0 && <div className="absolute inset-0 pointer-events-none z-10" style={{ border: '2px dashed rgba(255,0,0,.6)' }}><div className="absolute" style={{ inset: spadavkaMm * ppm, border: '1px dotted rgba(0,150,0,.8)' }} /></div>}
+                  {casti && casti.length > 0 ? (
+                    <div className="absolute inset-0 pointer-events-none z-10">
+                      {casti.map((dl, i) => {
+                        const lavo = (casti.slice(0, i).reduce((s, x) => s + x, 0) + i * medzeraCastiMm) * ppm;
+                        return (
+                          <React.Fragment key={i}>
+                            {i > 0 && <div className="absolute top-0 bottom-0" style={{ left: lavo - medzeraCastiMm * ppm, width: medzeraCastiMm * ppm, background: 'repeating-linear-gradient(45deg, rgba(100,116,139,.75) 0 4px, rgba(226,232,240,.9) 4px 8px)' }} />}
+                            <div className="absolute top-0 bottom-0" style={{ left: lavo, width: dl * ppm, border: '2px dashed rgba(255,0,0,.6)' }}>
+                              {spadavkaMm > 0 && <div className="absolute" style={{ inset: spadavkaMm * ppm, border: '1px dotted rgba(0,150,0,.8)' }} />}
+                              <span className="absolute left-1 top-0.5 text-[11px] font-bold text-red-600 bg-white/85 px-1 rounded" style={{ fontSize: Math.min(vyskaPx * 0.6, 11 / Math.max(zoom, 0.01)) }}>Časť {i + 1} · {dl / 10} cm</span>
+                            </div>
+                          </React.Fragment>
+                        );
+                      })}
+                    </div>
+                  ) : (spadavkaMm > 0 && <div className="absolute inset-0 pointer-events-none z-10" style={{ border: '2px dashed rgba(255,0,0,.6)' }}><div className="absolute" style={{ inset: spadavkaMm * ppm, border: '1px dotted rgba(0,150,0,.8)' }} /></div>)}
                   <div ref={(el) => { guideRefs.current[`${k}-v`] = el; }} className="absolute pointer-events-none z-20" style={{ display: 'none', background: '#3b82f6', width: 1, height: '100%', left: '50%', top: 0 }} />
                   <div ref={(el) => { guideRefs.current[`${k}-h`] = el; }} className="absolute pointer-events-none z-20" style={{ display: 'none', background: '#3b82f6', height: 1, width: '100%', top: '50%', left: 0 }} />
                 </div>

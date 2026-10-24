@@ -41,6 +41,10 @@ export default function Snurka({ supabase }) {
   }, [supabase]);
 
   const mod = d.modely.find((x) => x.kod === model);
+  // Tlač v častiach (napr. "700,120" mm): časti sa kreslia vedľa seba na jednej ploche s medzerou na strih
+  const MEDZERA_CASTI = 10;
+  const casti = (mod?.casti_mm || '').split(',').map((x) => Number(String(x).trim())).filter((x) => x > 0);
+  const sirkaPlochy = casti.length ? casti.reduce((s, x) => s + x, 0) + MEDZERA_CASTI * (casti.length - 1) : (mod?.sirka_mm || 936);
   const { cena, chyba } = useCenaNahlad(supabase, 'snurka-create-draft-order', { model, pocetKs, osobnyOdber, b2bKod: b2b.kod }, !!mod);
 
   const objednat = async () => {
@@ -76,7 +80,7 @@ export default function Snurka({ supabase }) {
       <div className="px-4 py-2 bg-white border-b border-slate-200"><B2bKod b2b={b2b} /></div>
       {d.nast.info_text && <p className="px-4 pt-3 text-xs text-slate-500 text-center">{d.nast.info_text}</p>}
 
-      <PlochaEditor ref={editorRef} sirkaMm={mod?.sirka_mm || 936} vyskaMm={mod?.vyska_mm || 26} ppm={3} rozlozenie="pod" spadavkaMm={3} fonty={d.fonty} grafiky={d.grafiky}>
+      <PlochaEditor ref={editorRef} sirkaMm={sirkaPlochy} vyskaMm={mod?.vyska_mm || 26} ppm={3} rozlozenie="pod" spadavkaMm={3} casti={casti.length ? casti : null} medzeraCastiMm={MEDZERA_CASTI} fonty={d.fonty} grafiky={d.grafiky}>
         {({ nastroje, plocha }) => (
           <main className="flex-1 w-full max-w-[1500px] mx-auto px-4 sm:px-6 py-5 grid grid-cols-1 lg:grid-cols-[24rem_1fr] gap-5 items-start">
             <aside className="space-y-4">
@@ -102,11 +106,11 @@ export default function Snurka({ supabase }) {
               {plocha}
               <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-wrap items-end gap-4">
                 <div className="w-32"><label className="block text-xs font-medium text-slate-500 mb-1">Počet kusov</label><NumberInput min="1" step="1" value={pocetKs} onChange={(v) => setPocetKs(Math.max(1, Math.round(v)))} fallback={1} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" /></div>
-                <p className="text-xs text-slate-500 flex-1 min-w-[200px]">Rozmer šnúrky {mod?.sirka_mm} × {mod?.vyska_mm} mm. Tlačové súbory (líce aj rub, ≈ 300 DPI) sa vygenerujú automaticky pri odoslaní objednávky. Dôležité texty nechajte v zelenom ráme (bezpečná zóna).</p>
+                <p className="text-xs text-slate-500 flex-1 min-w-[200px]">{casti.length > 1 ? `Tlač v ${casti.length} častiach (${casti.map((x) => x / 10).join(' + ')} cm), výška ${mod?.vyska_mm} mm.` : `Rozmer šnúrky ${sirkaPlochy} × ${mod?.vyska_mm} mm.`} Tlačové súbory (líce aj rub, ≈ 300 DPI) sa vygenerujú automaticky pri odoslaní objednávky. Dôležité texty nechajte v zelenom ráme (bezpečná zóna).</p>
               </div>
               <div className="max-w-xl">
                 <CenaSuhrn cena={cena} chyba={chyba} osobnyOdber={osobnyOdber} onOsobnyOdber={setOsobnyOdber} onObjednat={objednat} bezi={bezi} chybaObjednavky={chybaObj} potvrdenie={potvrdenie}
-                  riadky={[['Typ šnúrky', mod?.nazov || '—'], ['Rozmer', mod ? `${mod.sirka_mm} × ${mod.vyska_mm} mm` : '—'], ['Počet kusov', `${pocetKs} ks`]]} />
+                  riadky={[['Typ šnúrky', mod?.nazov || '—'], ['Rozmer', mod ? (casti.length > 1 ? `${casti.map((x) => x / 10).join(' + ')} cm × ${mod.vyska_mm} mm` : `${sirkaPlochy} × ${mod.vyska_mm} mm`) : '—'], ['Počet kusov', `${pocetKs} ks`]]} />
               </div>
             </section>
           </main>

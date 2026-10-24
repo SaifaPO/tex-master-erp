@@ -26,7 +26,7 @@ export default function SnurkyTab({ supabase }) {
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h2 className="text-xl font-bold text-white flex items-center gap-2"><Link2 className="text-indigo-400 h-5 w-5" /> Šnúrky na krk — dizajnér s vlastnou potlačou</h2>
-          <p className="text-xs text-slate-400 mt-1">Zákazník si vyberie typ šnúrky a nakreslí dizajn na líce aj rub (plocha {modely[0]?.sirka_mm || 936} × {modely[0]?.vyska_mm || 26} mm). Tlačové PNG (≈ 300 DPI) dostanete pri objednávke. Ceny sú bez DPH.</p>
+          <p className="text-xs text-slate-400 mt-1">Zákazník si vyberie typ šnúrky a nakreslí dizajn na líce aj rub (plocha podľa typu — niektoré typy sa tlačia v častiach, napr. 70 + 12 cm). Tlačové PNG (≈ 300 DPI) dostanete pri objednávke. Ceny sú bez DPH.</p>
         </div>
         <div className="flex items-center gap-3 text-xs">
           <span className={ulozene ? 'text-emerald-400' : 'text-amber-400'}>{ulozene ? '✓ Uložené' : 'Ukladám…'}</span>
@@ -38,7 +38,7 @@ export default function SnurkyTab({ supabase }) {
 
       <SkupinaMoznosti supabase={supabase} tabulka="snurka_modely" nadpis="Typy šnúrok" popis="Rozmer potlačiteľnej plochy v mm a náklad na 1 ks (materiál, tlač, spona, šitie). Ak vyberiete produkt z Katalógu, náklad sa berie z jeho výrobnej ceny."
         riadky={modely} setRiadky={setModely} priecinok="snurky" erp={erp} novy={{ sirka_mm: 936, vyska_mm: 26, naklad_eur: 0, popis: '' }}
-        polia={[{ k: 'sirka_mm', l: 'Dĺžka plochy', j: 'mm', step: '1' }, { k: 'vyska_mm', l: 'Výška plochy', j: 'mm', step: '1' }, { k: 'naklad_eur', l: 'Náklad', j: '€/ks' }]} />
+        polia={[{ k: 'sirka_mm', l: 'Dĺžka plochy (ak nie sú časti)', j: 'mm', step: '1' }, { k: 'vyska_mm', l: 'Výška plochy', j: 'mm', step: '1' }, { k: 'naklad_eur', l: 'Náklad', j: '€/ks' }]} textovePolia={[{ k: 'casti_mm', l: 'Časti tlače v mm oddelené čiarkou (napr. 700,120) — prázdne = jedna plocha' }]} />
 
       <KalkulackaKarta supabase={supabase} funkcia="snurka-create-draft-order" pred={async () => { if (!ulozene) await new Promise((r) => setTimeout(r, 1000)); }}
         telo={{ model: kalk.model, pocetKs: kalk.ks }} popisky={{ model: 'Model šnúrky' }}>
