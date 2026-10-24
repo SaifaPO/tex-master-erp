@@ -34,9 +34,15 @@ const CSS = `
   .pbt-wave path{ fill:var(--pbt-fg); }
   @keyframes pbt-wave{ from{ transform:translate3d(0,0,0); } to{ transform:translate3d(-16.667%,0,0); } }
   /* režim bez priebehu: atrament stúpa dokola */
-  .pbt-loader:not(.is-progress) .pbt-level{ animation:pbt-rise 2.4s cubic-bezier(.45,0,.25,1) infinite backwards; }
-  .pbt-loader:not(.is-progress) .pbt-letter--b .pbt-level{ animation-delay:.18s; }
-  .pbt-loader:not(.is-progress) .pbt-letter--t .pbt-level{ animation-delay:.36s; }
+  .pbt-loader:not(.is-progress):not(.is-plynule) .pbt-level{ animation:pbt-rise 2.4s cubic-bezier(.45,0,.25,1) infinite backwards; }
+  .pbt-loader:not(.is-progress):not(.is-plynule) .pbt-letter--b .pbt-level{ animation-delay:.18s; }
+  .pbt-loader:not(.is-progress):not(.is-plynule) .pbt-letter--t .pbt-level{ animation-delay:.36s; }
+  /* plynulé naplnenie do 99 % (časovo, bez ohľadu na skutočné načítanie) — na 99 % sa hladina zastaví a čaká, kým sa model dokončí */
+  .pbt-loader.is-plynule .pbt-level{ animation:pbt-naplnenie 14s linear both; }
+  .pbt-loader.is-plynule .pbt-letter--b .pbt-level{ animation-delay:.25s; }
+  .pbt-loader.is-plynule .pbt-letter--t .pbt-level{ animation-delay:.5s; }
+  @keyframes pbt-naplnenie{ 0%{ transform:translate3d(0,96.6%,0); } 4%{ transform:translate3d(0,92%,0); } 25%{ transform:translate3d(0,46%,0); } 50%{ transform:translate3d(0,13%,0); } 75%{ transform:translate3d(0,-6%,0); } 100%{ transform:translate3d(0,-13.9%,0); } }
+  .pbt-loader.is-done{ opacity:0; pointer-events:none; transition:opacity .35s ease; }
   @keyframes pbt-rise{
     0%  { transform:translate3d(0,96.6%,0); opacity:1; }
     55% { transform:translate3d(0,-15%,0); opacity:1; }
@@ -69,14 +75,15 @@ function Pismeno({ k, clipId, uroven }) {
   );
 }
 
-export default function PbtLoader({ progress = null, absolute = false, light = false }) {
+// plynule = hladina sa sama (časovo) plynulo natiahne do 99 % a tam počká; hotovo = rýchle zmiznutie (loader sa potom odstráni z DOM zvonka)
+export default function PbtLoader({ progress = null, absolute = false, light = false, plynule = false, hotovo = false }) {
   const uid = useId().replace(/[^a-zA-Z0-9]/g, '');
   const jePriebeh = typeof progress === 'number';
   const p = jePriebeh ? Math.max(0, Math.min(1, progress)) : 0;
   const uroven = jePriebeh ? 96.6 - p * 111.6 : null; // 96,6 % = prázdne, -15 % = plné
   const sx = 1 / VB.w, sy = 1 / VB.h;
   return (
-    <div className={`pbt-loader${light ? ' pbt-loader--light' : ''}${absolute ? ' pbt-loader--abs' : ''}${jePriebeh ? ' is-progress' : ''}`} role="status" aria-live="polite" aria-label="Načítava sa">
+    <div className={`pbt-loader${light ? ' pbt-loader--light' : ''}${absolute ? ' pbt-loader--abs' : ''}${jePriebeh ? ' is-progress' : ''}${plynule && !jePriebeh ? ' is-plynule' : ''}${hotovo ? ' is-done' : ''}`} role="status" aria-live="polite" aria-label="Načítava sa">
       <style>{CSS}</style>
       <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
         <defs>

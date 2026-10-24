@@ -20,6 +20,13 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState, onDragLog
   // Nacitavanie 3D modelov (dres ~19 MB, trenirky ~1 MB): percento do kruhoveho indikatora. Ak server neposle celkovu
   // velkost (komprimovany prenos), pouzije sa odhad z velkosti suborov; po stiahnuti ostava 97 % kym sa model spracuje.
   const [nacitanie, setNacitanie] = useState({ pct: 0, hotovo: false });
+  // loader sa po dokončení modelu krátko vytratí (fade) a potom sa odstráni z DOM
+  const [loaderZobraz, setLoaderZobraz] = useState(true);
+  useEffect(() => {
+    if (!nacitanie.hotovo) return undefined;
+    const t = setTimeout(() => setLoaderZobraz(false), 450);
+    return () => clearTimeout(t);
+  }, [nacitanie.hotovo]);
   const postupRef = useRef({ dres: { loaded: 0, total: 19405704, done: false }, trenirky: { loaded: 0, total: 1075576, done: false } });
   const hlasPostup = (kluc, e, done) => {
     const p = postupRef.current[kluc];
@@ -444,7 +451,7 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState, onDragLog
       <canvas ref={textureCanvasRef} width={2048} height={2048} className="hidden" />
       <div ref={containerRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
 
-      {!nacitanie.hotovo && <PbtLoader absolute progress={nacitanie.pct / 100} />}
+      {loaderZobraz && <PbtLoader absolute plynule hotovo={nacitanie.hotovo} />}
 
       <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none z-10">
         <div className="bg-slate-900/80 backdrop-blur-sm px-2.5 py-1 rounded-lg border border-slate-800 text-[11px] text-slate-300 flex items-center gap-1.5 shadow-md">
