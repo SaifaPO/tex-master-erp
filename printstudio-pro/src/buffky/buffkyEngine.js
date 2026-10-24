@@ -75,6 +75,25 @@ export function initBuffkyEngine(root, opts = {}) {
   const canvas = q('#designCanvas');
   const ctx = canvas.getContext('2d');
 
+  // Vrstva pre vyber objektu (ramik, rohy, otacanie, vodiace ciary) je ODDELENA od plochy navrhu, aby sa nikdy
+  // nepremietla do 3D textury ani do tlacoveho suboru. Pri objekte plava aj panel s rozmerom v cm a tlacidlami.
+  const wrap = canvas.parentElement;
+  const overlay = document.createElement('canvas');
+  overlay.width = canvas.width; overlay.height = canvas.height;
+  overlay.className = 'absolute inset-0 w-full h-full pointer-events-none';
+  overlay.style.zIndex = '5';
+  wrap.appendChild(overlay);
+  const octx = overlay.getContext('2d');
+  const toolbar = document.createElement('div');
+  toolbar.className = 'absolute flex items-center gap-1 select-none';
+  toolbar.style.cssText = 'display:none;z-index:10;transform:translateX(-50%);';
+  toolbar.innerHTML =
+    '<span data-r="size" class="px-2 py-1 rounded-lg bg-slate-900/95 border border-cyan-500/60 text-[11px] font-mono text-cyan-300 whitespace-nowrap shadow"></span>' +
+    '<button type="button" data-r="dup" title="Duplikovať" class="w-7 h-7 rounded-lg bg-slate-900/95 hover:bg-slate-700 border border-slate-600 text-slate-200 text-xs shadow"><i class="fa-solid fa-clone"></i></button>' +
+    '<button type="button" data-r="del" title="Zmazať" class="w-7 h-7 rounded-lg bg-rose-950/95 hover:bg-rose-900 border border-rose-700/70 text-rose-300 text-xs shadow"><i class="fa-solid fa-trash-can"></i></button>';
+  wrap.appendChild(toolbar);
+  cleanupFns.push(() => { overlay.remove(); toolbar.remove(); });
+
   let scene, camera, renderer, controls, buffMesh, buffTexture, seamLine1, seamLine2, seamMesh;
   const seamBadges = [];
   let rafId = null;
@@ -278,7 +297,8 @@ export function initBuffkyEngine(root, opts = {}) {
     box.appendChild(pozadie);
   }
 
-  function render2D() {
+  function render2D(opakovanie) {
+    drzVsetkyMimoSpoja();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = state.backgroundColor;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -286,7 +306,7 @@ export function initBuffkyEngine(root, opts = {}) {
     kresliNahrane(ctx, canvas.width, canvas.height);
 
     const sc = canvas.width / CANON;
-    state.items.forEach((item, index) => {
+    state.items.forEach((item) => {
       ctx.save();
       ctx.translate(item.x * sc, item.y * sc);
       ctx.rotate(((item.rotation || 0) * Math.PI) / 180);
@@ -312,25 +332,13 @@ export function initBuffkyEngine(root, opts = {}) {
         item.width = item.fontSize; item.height = item.fontSize;
       }
 
-      if (index === state.selectedItemIndex) {
-        ctx.restore(); ctx.save();
-        ctx.translate(item.x * sc, item.y * sc);
-        ctx.rotate(((item.rotation || 0) * Math.PI) / 180);
-        const boundW = ((item.width || 100) * (item.scale || 1) + 20) * sc;
-        const boundH = ((item.height || 40) * (item.scale || 1) + 20) * sc;
-        ctx.strokeStyle = '#06b6d4'; ctx.lineWidth = 3; ctx.setLineDash([8, 6]);
-        ctx.strokeRect(-boundW / 2, -boundH / 2, boundW, boundH);
-        ctx.fillStyle = '#06b6d4';
-        ctx.fillRect(-boundW / 2 - 4, -boundH / 2 - 4, 8, 8);
-        ctx.fillRect(boundW / 2 - 4, -boundH / 2 - 4, 8, 8);
-        ctx.fillRect(-boundW / 2 - 4, boundH / 2 - 4, 8, 8);
-        ctx.fillRect(boundW / 2 - 4, boundH / 2 - 4, 8, 8);
-      }
       ctx.restore();
     });
 
+    if (!opakovanie && drzVsetkyMimoSpoja()) { render2D(true); return; }
     if (buffTexture) buffTexture.needsUpdate = true;
     vykresliZoznamVrstiev(false);
+    kresliVyber();
   }
 
   /* ---------- THREE.JS 3D nahlad ---------- */
@@ -477,7 +485,88 @@ export function initBuffkyEngine(root, opts = {}) {
     renderer.render(scene, camera);
   }
 
-  /* ---------- 2D drag interakcia (len presun, ako v povodnom navrhu) ---------- */
+  /* ---------- 2D interakcia: presun, zmena velkosti (rohy), otacanie (kruzok nad objektom), magneticke vystredenie ---------- */
+  const CM_NA_JEDNOTKU = 50 / CANON;   // 1000 kanonickych jednotiek = 50 cm
+  const SNAP_PRAH = 12;                // magneticka vzdialenost k stredu (kanonicke jednotky)
+  const SNAP_UHOL = 5;                 // magnet pri otacani (0, 45, 90 ... stupnov)
+  const PAD = 20;                      // odstup ramika od objektu
+  const ROT_ODSTUP = 48;               // vzdialenost kruzka otacania nad ramikom
+  const HANDLE_HIT = 30;               // citlivost uchopov
+  const stredyX = isPremium ? [500] : [250, 750]; // Basic: stred predneho (A) a zadneho (B) panelu
+  const stredyY = [500];
+  let akcia = null;                    // { typ: 'move' | 'scale' | 'rotate', ... }
+  state.snap = { x: null, y: null };
+
+  // BASIC: v strede plochy (x = 500) je SPOJ panelov A a B — objekt sa nesmie dotykat ani prechadzat cez neho,
+  // musi cely lezat bud na prednej (A), alebo na zadnej (B) strane. Premium ma sev na okraji plochy, tam to netreba.
+  const SEV_ODSTUP = 8;
+  function polovicaSirky(item) {
+    const s = item.scale || 1, w = (item.width || 0) * s, h = (item.height || 0) * s, r = ((item.rotation || 0) * Math.PI) / 180;
+    return (Math.abs(w * Math.cos(r)) + Math.abs(h * Math.sin(r))) / 2;
+  }
+  // vrati true, ak sa objekt musel posunut / zmensit
+  function drzMimoSpoja(item) {
+    if (isPremium) return false;
+    const x0 = item.x, s0 = item.scale;
+    const limit = (CANON / 2 - SEV_ODSTUP - 8) / 2;       // najvacsia povolena polovica sirky objektu (panel A / B je 25 cm = 500 jednotiek)
+    let hx = polovicaSirky(item);
+    if (hx > limit) { item.scale = (item.scale || 1) * (limit / hx); hx = limit; }
+    const lavy = item.x < CANON / 2;
+    const lo = lavy ? Math.max(20, hx + 4) : CANON / 2 + SEV_ODSTUP + hx;
+    const hi = lavy ? CANON / 2 - SEV_ODSTUP - hx : Math.min(CANON - 20, CANON - hx - 4);
+    item.x = lo > hi ? (lo + hi) / 2 : Math.min(Math.max(item.x, lo), hi);
+    return Math.abs(item.x - x0) > 0.01 || item.scale !== s0;
+  }
+  function drzVsetkyMimoSpoja() {
+    let zmena = false;
+    state.items.forEach((it) => { if (drzMimoSpoja(it)) zmena = true; });
+    return zmena;
+  }
+
+  function geometriaVyberu(item) {
+    const s = item.scale || 1;
+    const bw = (item.width || 100) * s + 2 * PAD, bh = (item.height || 40) * s + 2 * PAD;
+    const r = ((item.rotation || 0) * Math.PI) / 180, c = Math.cos(r), sn = Math.sin(r);
+    const sv = (lx, ly) => ({ x: item.x + lx * c - ly * sn, y: item.y + lx * sn + ly * c });
+    return { bw, bh, rohy: [sv(-bw / 2, -bh / 2), sv(bw / 2, -bh / 2), sv(bw / 2, bh / 2), sv(-bw / 2, bh / 2)], rot: sv(0, -bh / 2 - ROT_ODSTUP), hore: sv(0, -bh / 2) };
+  }
+
+  function kresliVyber() {
+    octx.clearRect(0, 0, overlay.width, overlay.height);
+    const item = state.items[state.selectedItemIndex];
+    if (!item) { toolbar.style.display = 'none'; return; }
+    const sc = overlay.width / CANON;
+    octx.save();
+    octx.scale(sc, sc);
+    // vodiace ciary stredu (ukazu sa, ked objekt "zaskoci" na stred)
+    octx.strokeStyle = '#f0abfc'; octx.lineWidth = 2 / sc; octx.setLineDash([10 / sc, 6 / sc]);
+    if (state.snap.x != null) { octx.beginPath(); octx.moveTo(state.snap.x, 0); octx.lineTo(state.snap.x, CANON); octx.stroke(); }
+    if (state.snap.y != null) { octx.beginPath(); octx.moveTo(0, state.snap.y); octx.lineTo(CANON, state.snap.y); octx.stroke(); }
+    // ramik + rohy + otacanie
+    const g = geometriaVyberu(item);
+    octx.strokeStyle = '#06b6d4'; octx.lineWidth = 3 / sc; octx.setLineDash([8 / sc, 6 / sc]);
+    octx.beginPath(); g.rohy.forEach((pt, i) => (i === 0 ? octx.moveTo(pt.x, pt.y) : octx.lineTo(pt.x, pt.y))); octx.closePath(); octx.stroke();
+    octx.setLineDash([]);
+    octx.beginPath(); octx.moveTo(g.hore.x, g.hore.y); octx.lineTo(g.rot.x, g.rot.y); octx.stroke();
+    const hs = 14 / sc;
+    g.rohy.forEach((pt) => { octx.fillStyle = '#ffffff'; octx.fillRect(pt.x - hs / 2, pt.y - hs / 2, hs, hs); octx.strokeRect(pt.x - hs / 2, pt.y - hs / 2, hs, hs); });
+    octx.beginPath(); octx.arc(g.rot.x, g.rot.y, 9 / sc, 0, Math.PI * 2); octx.fillStyle = '#06b6d4'; octx.fill();
+    octx.restore();
+
+    // panel pri objekte: rozmer v cm v realnom case + duplikovat / zmazat
+    const s = item.scale || 1;
+    const wCm = (item.width || 0) * s * CM_NA_JEDNOTKU, hCm = (item.height || 0) * s * CM_NA_JEDNOTKU;
+    const uhol = Math.round(item.rotation || 0);
+    toolbar.querySelector('[data-r="size"]').textContent = `${wCm.toFixed(1)} × ${hCm.toFixed(1)} cm` + (uhol ? ` · ${uhol}°` : '');
+    const ys = g.rohy.map((pt) => pt.y);
+    const spodok = Math.max(...ys) + 16, vrch = Math.min(...ys, g.rot.y) - 16;
+    const dole = spodok < CANON - 60;
+    toolbar.style.display = 'flex';
+    toolbar.style.left = Math.min(84, Math.max(16, (item.x / CANON) * 100)) + '%';
+    toolbar.style.top = ((dole ? spodok : Math.max(8, vrch)) / CANON) * 100 + '%';
+    toolbar.style.transform = dole ? 'translateX(-50%)' : 'translate(-50%, -100%)';
+  }
+
   function getCanvasCoords(e) {
     const rect = canvas.getBoundingClientRect();
     const scaleX = CANON / rect.width, scaleY = CANON / rect.height;
@@ -486,33 +575,100 @@ export function initBuffkyEngine(root, opts = {}) {
     return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
   }
 
+  // uchop pod kurzorom pre vybraty objekt: 'rotate' | 'scale' | null
+  function uchopPodKurzorom(x, y) {
+    const sel = state.items[state.selectedItemIndex];
+    if (!sel) return null;
+    const g = geometriaVyberu(sel);
+    if (Math.hypot(x - g.rot.x, y - g.rot.y) <= HANDLE_HIT) return 'rotate';
+    if (g.rohy.some((r) => Math.hypot(x - r.x, y - r.y) <= HANDLE_HIT)) return 'scale';
+    return null;
+  }
+
   function onCanvasDown(e) {
     const { x, y } = getCanvasCoords(e);
+    const sel = state.items[state.selectedItemIndex];
+    const uchop = uchopPodKurzorom(x, y);
+    if (sel && uchop) {
+      akcia = uchop === 'rotate' ? { typ: 'rotate' } : { typ: 'scale', d0: Math.max(10, Math.hypot(x - sel.x, y - sel.y)), s0: sel.scale || 1 };
+      state.isDragging = true;
+      render2D();
+      return true;
+    }
     let clickedIndex = -1;
     for (let i = state.items.length - 1; i >= 0; i--) {
       const item = state.items[i];
+      // bod prevedeny do suradnic objektu (s ohladom na otocenie)
+      const r = -((item.rotation || 0) * Math.PI) / 180, c = Math.cos(r), sn = Math.sin(r);
+      const lx = (x - item.x) * c - (y - item.y) * sn, ly = (x - item.x) * sn + (y - item.y) * c;
       const halfW = ((item.width || 80) * (item.scale || 1)) / 2 + 10;
       const halfH = ((item.height || 40) * (item.scale || 1)) / 2 + 10;
-      if (x >= item.x - halfW && x <= item.x + halfW && y >= item.y - halfH && y <= item.y + halfH) {
+      if (Math.abs(lx) <= halfW && Math.abs(ly) <= halfH) {
         clickedIndex = i; state.dragOffsetX = x - item.x; state.dragOffsetY = y - item.y; break;
       }
     }
     state.selectedItemIndex = clickedIndex;
     state.isDragging = clickedIndex !== -1;
+    akcia = clickedIndex !== -1 ? { typ: 'move' } : null;
     updateSelectedLabel();
     render2D();
+    return clickedIndex !== -1;
   }
 
   function onCanvasMove(e) {
-    if (!state.isDragging || state.selectedItemIndex === -1) return;
+    if (!state.isDragging || state.selectedItemIndex === -1 || !akcia) {
+      if (e.target === canvas) {
+        const { x, y } = getCanvasCoords(e);
+        const uchop = uchopPodKurzorom(x, y);
+        canvas.style.cursor = uchop === 'rotate' ? 'grab' : uchop === 'scale' ? 'nwse-resize' : '';
+      }
+      return;
+    }
     const { x, y } = getCanvasCoords(e);
     const item = state.items[state.selectedItemIndex];
-    item.x = Math.max(20, Math.min(CANON - 20, x - state.dragOffsetX));
-    item.y = Math.max(20 + hemMargin, Math.min(CANON - 20 - hemMargin, y - state.dragOffsetY));
+    if (akcia.typ === 'scale') {
+      item.scale = Math.min(12, Math.max(0.05, akcia.s0 * (Math.hypot(x - item.x, y - item.y) / akcia.d0)));
+    } else if (akcia.typ === 'rotate') {
+      let a = (Math.atan2(y - item.y, x - item.x) * 180) / Math.PI + 90;
+      a = ((a % 360) + 360) % 360;
+      for (const k of [0, 45, 90, 135, 180, 225, 270, 315, 360]) if (Math.abs(a - k) <= SNAP_UHOL) { a = k % 360; break; }
+      item.rotation = Math.round(a * 10) / 10;
+    } else {
+      let nx = x - state.dragOffsetX, ny = y - state.dragOffsetY;
+      state.snap = { x: null, y: null };
+      for (const cx of stredyX) if (Math.abs(nx - cx) <= SNAP_PRAH) { nx = cx; state.snap.x = cx; break; }
+      for (const cy of stredyY) if (Math.abs(ny - cy) <= SNAP_PRAH) { ny = cy; state.snap.y = cy; break; }
+      item.x = Math.max(20, Math.min(CANON - 20, nx));
+      item.y = Math.max(20 + hemMargin, Math.min(CANON - 20 - hemMargin, ny));
+    }
     render2D();
   }
 
-  function onCanvasUp() { state.isDragging = false; }
+  function onCanvasUp() {
+    const bolSnap = state.snap.x != null || state.snap.y != null;
+    state.isDragging = false; akcia = null; state.snap = { x: null, y: null };
+    if (bolSnap) kresliVyber();
+  }
+
+  function duplikujVybrany() {
+    const idx = state.selectedItemIndex;
+    if (idx === -1) return;
+    const { imgElement, ...rest } = state.items[idx];
+    const copy = JSON.parse(JSON.stringify(rest));
+    if (imgElement) copy.imgElement = imgElement;
+    copy.x = Math.min(CANON - 50, copy.x + 30); copy.y = Math.min(CANON - 50, copy.y + 30);
+    state.items.push(copy); state.selectedItemIndex = state.items.length - 1; updateSelectedLabel(); render2D(); toast('Prvok bol duplikovaný');
+  }
+  function zmazVybrany() {
+    const idx = state.selectedItemIndex;
+    if (idx === -1) return;
+    state.items.splice(idx, 1); state.selectedItemIndex = -1; updateSelectedLabel(); render2D(); toast('Prvok bol odstránený');
+  }
+  on(toolbar, 'click', (e) => {
+    const b = e.target.closest ? e.target.closest('[data-r]') : null;
+    const r = b && b.getAttribute('data-r');
+    if (r === 'dup') duplikujVybrany(); else if (r === 'del') zmazVybrany();
+  });
 
   function updateSelectedLabel() {
     vykresliZoznamVrstiev(true);
@@ -621,20 +777,8 @@ export function initBuffkyEngine(root, opts = {}) {
       const idx = state.selectedItemIndex;
       if (idx > 0) { const t = state.items[idx]; state.items[idx] = state.items[idx - 1]; state.items[idx - 1] = t; state.selectedItemIndex = idx - 1; render2D(); }
     });
-    on(q('#btnDuplicate'), 'click', () => {
-      const idx = state.selectedItemIndex;
-      if (idx !== -1) {
-        const { imgElement, ...rest } = state.items[idx];
-        const copy = JSON.parse(JSON.stringify(rest));
-        if (imgElement) copy.imgElement = imgElement;
-        copy.x = Math.min(CANON - 50, copy.x + 30); copy.y = Math.min(CANON - 50, copy.y + 30);
-        state.items.push(copy); state.selectedItemIndex = state.items.length - 1; render2D(); toast('Prvok bol duplikovaný');
-      }
-    });
-    on(q('#btnDeleteSelected'), 'click', () => {
-      const idx = state.selectedItemIndex;
-      if (idx !== -1) { state.items.splice(idx, 1); state.selectedItemIndex = -1; updateSelectedLabel(); render2D(); toast('Prvok bol odstránený'); }
-    });
+    on(q('#btnDuplicate'), 'click', duplikujVybrany);
+    on(q('#btnDeleteSelected'), 'click', zmazVybrany);
 
     on(q('#btnClearCanvas'), 'click', () => {
       state.items = []; state.selectedItemIndex = -1; state.pattern = 'none';
@@ -689,8 +833,8 @@ export function initBuffkyEngine(root, opts = {}) {
     on(canvas, 'mousedown', onCanvasDown);
     on(window, 'mousemove', onCanvasMove);
     on(window, 'mouseup', onCanvasUp);
-    on(canvas, 'touchstart', (e) => { if (e.touches.length === 1) onCanvasDown(e); }, { passive: true });
-    on(canvas, 'touchmove', (e) => { if (e.touches.length === 1 && state.isDragging) { onCanvasMove(e); } }, { passive: true });
+    on(canvas, 'touchstart', (e) => { if (e.touches.length === 1 && onCanvasDown(e)) e.preventDefault(); }, { passive: false });
+    on(canvas, 'touchmove', (e) => { if (e.touches.length === 1 && state.isDragging) { e.preventDefault(); onCanvasMove(e); } }, { passive: false });
     on(canvas, 'touchend', onCanvasUp);
   }
 

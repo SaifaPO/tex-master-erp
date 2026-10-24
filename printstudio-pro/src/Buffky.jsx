@@ -291,17 +291,6 @@ export default function Buffky({ supabase, onSpat }) {
                   </div>
                 </>
               )}
-              <div className="h-10 w-px bg-slate-800 hidden sm:block"></div>
-              <div>
-                <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Športové ikony</label>
-                <div className="flex items-center gap-2">
-                  <button className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 flex items-center justify-center text-sm add-icon-btn" data-icon="mountain"><i className="fa-solid fa-mountain text-amber-400"></i></button>
-                  <button className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 flex items-center justify-center text-sm add-icon-btn" data-icon="person-running"><i className="fa-solid fa-person-running text-cyan-400"></i></button>
-                  <button className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 flex items-center justify-center text-sm add-icon-btn" data-icon="person-biking"><i className="fa-solid fa-person-biking text-emerald-400"></i></button>
-                  <button className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 flex items-center justify-center text-sm add-icon-btn" data-icon="compass"><i className="fa-solid fa-compass text-rose-400"></i></button>
-                  <button className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 flex items-center justify-center text-sm add-icon-btn" data-icon="snowflake"><i className="fa-solid fa-snowflake text-sky-300"></i></button>
-                </div>
-              </div>
             </div>
 
             <div id="tabContent-layers" className="tab-content hidden w-full space-y-2">
@@ -384,7 +373,7 @@ export default function Buffky({ supabase, onSpat }) {
               </div>
 
               <div className="w-full flex items-center justify-between text-[11px] text-slate-400 mt-2 px-1">
-                <span className="flex items-center gap-1"><i className="fa-solid fa-arrows-up-down-left-right text-cyan-400"></i> Kliknite a ťahajte prvky na plátne</span>
+                <span className="flex items-center gap-1"><i className="fa-solid fa-arrows-up-down-left-right text-cyan-400"></i> Ťahaj objekt = presun (magneticky zaskočí na stred) • rohy = veľkosť • krúžok hore = otočenie</span>
                 <span className="text-rose-400/90 font-medium">{typ === 'tubular_basic' ? 'Červené línie znázorňujú SPOJ šatky' : 'Červená línia = bočný šev, žlté pásy = obšitý lem'}</span>
               </div>
               <p className="text-[10px] text-amber-500 mt-2 text-center">ℹ️ Toto je len orientačný náhľad v nižšej kvalite — tlačový súbor sa pri odoslaní objednávky vygeneruje v plnej kvalite (300 DPI) a nie je možné ho stiahnuť.</p>
