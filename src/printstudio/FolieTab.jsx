@@ -9,7 +9,7 @@ export default function FolieTab({ supabase }) {
   const erp = useErpProdukty(supabase);
   const [druhy, setDruhy] = useState([]);
   const [farby, setFarby] = useState([]);
-  const [kalk, setKalk] = useState({ druh: '', farba: '', sirka: 150, vyska: 100, ks: 10, separacia: true });
+  const [kalk, setKalk] = useState({ druh: '', farba: '', sirka: 150, vyska: 100, ks: 10, uroven: 'vylupanie' });
 
   useEffect(() => {
     if (!nast) return;
@@ -68,12 +68,19 @@ export default function FolieTab({ supabase }) {
         <Pole label="Koeficient rizika" jednotka="%" step="1" value={nast.riziko_percent} onChange={(v) => zmen({ riziko_percent: v })} />
       </Karta>
 
+      <Karta nadpis="Nastrihanie (úroveň Full servis)" popis="Úrovne služby pre zákazníka: Len rezaná fólia (vylúpanie si robí sám) → Rezaná a vylúpaná → Full servis (vylúpané aj nastrihané). Nastrihanie sa účtuje ako samostatný príplatok: dĺžka rolky (bm) × minút na 1 bm × sadzba strihača, plus marža.">
+        <Pole label="Sadzba strihača" jednotka="€/hod" step="0.5" value={nast.strihanie_hod} onChange={(v) => zmen({ strihanie_hod: v })} />
+        <Pole label="Nastrihanie — malé motívy" jednotka="min / 1 bm" step="0.5" value={nast.strihanie_min_bm_maly} onChange={(v) => zmen({ strihanie_min_bm_maly: v })} />
+        <Pole label="Nastrihanie — veľké motívy" jednotka="min / 1 bm" step="0.5" value={nast.strihanie_min_bm_velky} onChange={(v) => zmen({ strihanie_min_bm_velky: v })} />
+        <Pole label="Marža na nastrihanie" jednotka="%" step="5" value={nast.strihanie_marza_percent} onChange={(v) => zmen({ strihanie_marza_percent: v })} />
+      </Karta>
+
       <ObchodneNastavenia nast={nast} zmen={zmen} supabase={supabase} {...erp} />
 
       <SkupinaMoznosti supabase={supabase} tabulka="folie_druhy" nadpis="Druhy fólií" popis="Nákupná cena materiálu v €/bm (rolka 50 cm) a technické údaje, ktoré vidí zákazník (nažehlenie, pranie, hrúbka). Foto je ukážka materiálu."
         riadky={druhy} setRiadky={setDruhy} priecinok="folie" novy={{ cena_bm: 0, popis: '' }}
         polia={[{ k: 'cena_bm', l: 'Nákupná cena', j: '€/bm' }]}
-        textovePolia={[{ k: 'teplota', l: 'Teplota (napr. 150°C)' }, { k: 'cas', l: 'Čas (napr. 15s)' }, { k: 'odtrhnutie', l: 'Odtrhnutie (za tepla / studena)' }, { k: 'tlak', l: 'Tlak' }, { k: 'pranie', l: 'Pranie (napr. do 60°C)' }, { k: 'hrubka', l: 'Hrúbka (napr. 90 μm)' }, { k: 'trieda', l: 'Vzhľad: flock / reflective / metallic / glitter' }]}
+        textovePolia={[{ k: 'interny_nazov', l: 'Interný názov (zákazník ho nevidí, napr. značka fólie)' }, { k: 'teplota', l: 'Teplota (napr. 150°C)' }, { k: 'cas', l: 'Čas (napr. 15s)' }, { k: 'odtrhnutie', l: 'Odtrhnutie (za tepla / studena)' }, { k: 'tlak', l: 'Tlak' }, { k: 'pranie', l: 'Pranie (napr. do 60°C)' }, { k: 'hrubka', l: 'Hrúbka (napr. 90 μm)' }, { k: 'trieda', l: 'Vzhľad: flock / reflective / metallic / glitter' }]}
         extra={(d) => (
           <div>
             <label className="block text-slate-500 mb-1.5 text-[11px]">Farby tohto druhu</label>
@@ -91,8 +98,8 @@ export default function FolieTab({ supabase }) {
         )} />
 
       <KalkulackaKarta supabase={supabase} funkcia="folie-create-draft-order" pred={async () => { if (!ulozene) await new Promise((r) => setTimeout(r, 1000)); }}
-        telo={{ druh: kalk.druh, farba: kalk.farba, sirkaMm: kalk.sirka, vyskaMm: kalk.vyska, pocetKs: kalk.ks, separacia: kalk.separacia }}
-        popisky={{ material: 'Materiál (fólia)', strojRezanie: 'Plotter (stroj)', praca: 'Pracovník (príprava, rezanie, separácia)', riziko: 'Riziko' }}>
+        telo={{ druh: kalk.druh, farba: kalk.farba, sirkaMm: kalk.sirka, vyskaMm: kalk.vyska, pocetKs: kalk.ks, uroven: kalk.uroven }}
+        popisky={{ material: 'Materiál (fólia)', strojRezanie: 'Plotter (stroj)', praca: 'Pracovník (príprava, rezanie, vylúpanie)', riziko: 'Riziko', nastrihanie: 'Nastrihanie (náklad, bez marže)' }}>
         <div><label className="block text-slate-400 mb-1 text-xs">Druh fólie</label>
           <select value={kalk.druh} onChange={(e) => setKalk({ ...kalk, druh: e.target.value, farba: farby.find((x) => x.druh_kod === e.target.value)?.kod || '' })} className="px-2 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs">{druhy.map((x) => <option key={x.kod} value={x.kod}>{x.nazov} — {eur(x.cena_bm)}/bm</option>)}</select></div>
         <div><label className="block text-slate-400 mb-1 text-xs">Farba</label>
@@ -100,11 +107,14 @@ export default function FolieTab({ supabase }) {
         <div className="w-24"><Pole label="Šírka" jednotka="mm" step="1" value={kalk.sirka} onChange={(v) => setKalk({ ...kalk, sirka: v })} /></div>
         <div className="w-24"><Pole label="Výška" jednotka="mm" step="1" value={kalk.vyska} onChange={(v) => setKalk({ ...kalk, vyska: v })} /></div>
         <div className="w-24"><Pole label="Počet ks" step="1" value={kalk.ks} onChange={(v) => setKalk({ ...kalk, ks: Math.max(1, Math.round(v)) })} /></div>
-        <label className="flex items-center gap-1.5 text-xs text-slate-300 pb-2"><input type="checkbox" checked={kalk.separacia} onChange={(e) => setKalk({ ...kalk, separacia: e.target.checked })} /> Separácia</label>
+        <div><label className="block text-slate-400 mb-1 text-xs">Úroveň služby</label>
+          <select value={kalk.uroven} onChange={(e) => setKalk({ ...kalk, uroven: e.target.value })} className="px-2 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs">
+            <option value="rez">Len rezaná fólia</option><option value="vylupanie">Rezaná a vylúpaná</option><option value="plny">Full servis (vylúpané + nastrihané)</option>
+          </select></div>
       </KalkulackaKarta>
 
       <ObjednavkyKarta supabase={supabase} tabulka="folie_objednavky" nadpis="Prijaté objednávky rezaných fólií"
-        popisRiadku={(o) => `${druhy.find((x) => x.kod === o.druh)?.nazov || o.druh} · ${farby.find((x) => x.kod === o.farba)?.nazov || o.farba} · ${o.sirka_mm}×${o.vyska_mm} mm · ${o.dlzka_bm} bm${o.separacia ? ' · separácia' : ''}`}
+        popisRiadku={(o) => `${druhy.find((x) => x.kod === o.druh)?.nazov || o.druh} · ${farby.find((x) => x.kod === o.farba)?.nazov || o.farba} · ${o.sirka_mm}×${o.vyska_mm} mm · ${o.dlzka_bm} bm${o.uroven === 'plny' ? ' · full servis (vylúpané + nastrihané)' : o.uroven === 'vylupanie' || o.separacia ? ' · vylúpané' : ' · len rezané'}`}
         subory={(o) => [{ cesta: o.subor_cesta, label: 'Vektorový súbor' }]} />
     </div>
   );

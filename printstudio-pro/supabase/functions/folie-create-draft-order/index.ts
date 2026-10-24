@@ -1,7 +1,9 @@
-// Edge Function: folie-create-draft-order — objednávka rezaných fólií (vektorový súbor, rezanie na plotri, voliteľná separácia).
+// Edge Function: folie-create-draft-order — objednávka rezaných fólií (vektorový súbor, rezanie na plotri). Tri úrovne služby (parameter uroven):
+//   'rez' = len rezaná fólia (vylúpanie si robí zákazník), 'vylupanie' = + vylúpame, 'plny' = full servis: vylúpané a nastrihané (jednotlivé motívy).
 //   { preview: true, ... } -> len vypočíta cenu + rozloženie na rolke (konfigurátor + ERP kalkulačka; admin dostane aj rozpis nákladov a maržu)
 //   { ... }                -> uloží objednávku (folie_objednavky), vytvorí Shopify draft order a vráti odkaz na platbu.
-// Náklad = materiál (bm × cena fólie × odpad) + rezanie (stroj + práca) + separácia (min/ks × sadzba) + príprava, × koeficient rizika.
+// Náklad = materiál (bm × cena fólie × odpad) + rezanie (stroj + práca) + vylúpanie (min/ks × sadzba) + príprava, × koeficient rizika.
+// Nastrihanie (úroveň 'plny') je samostatný príplatok: bm × minút na 1 bm × sadzba strihača × (1 + marža).
 // Secrets: SHOPIFY_STORE_DOMAIN, SHOPIFY_CLIENT_ID, SHOPIFY_CLIENT_SECRET.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
@@ -52,10 +54,10 @@ async function b2bZlava(supabase: ReturnType<typeof createClient>, kod: unknown)
 }
 
 // Predajná cena z celkového výrobného nákladu: marža podľa množstva, minimálna cena, B2B zľava, manipulácia, poštovné, DPH.
-async function spoluCena(supabase: ReturnType<typeof createClient>, nast: any, cfg: PricingConfig, nakladSpolu: number, ks: number, osobnyOdber: boolean, b2bKod: unknown) {
+async function spoluCena(supabase: ReturnType<typeof createClient>, nast: any, cfg: PricingConfig, nakladSpolu: number, ks: number, osobnyOdber: boolean, b2bKod: unknown, pridavokEur = 0) {
   const nakladKs = nakladSpolu / ks;
   const cenaKs = priceAt(nakladKs, ks, cfg);
-  const logaSpolu = Math.max(r2(cenaKs * ks), n(nast.minimalna_cena_eur));
+  const logaSpolu = Math.max(r2(cenaKs * ks), n(nast.minimalna_cena_eur)) + pridavokEur;
   const zlavaPercent = await b2bZlava(supabase, b2bKod);
   const zlavaEur = r2(logaSpolu * zlavaPercent / 100);
   const poZlave = logaSpolu - zlavaEur;
@@ -67,7 +69,7 @@ async function spoluCena(supabase: ReturnType<typeof createClient>, nast: any, c
   return {
     nakladKs, logaSpolu, poZlave, zlavaPercent, spolu: r2(spoluBezDph + dph),
     verejne: {
-      cenaKsBezDph: logaSpolu / ks, logaSpoluBezDph: logaSpolu, zlavaB2bPercent: zlavaPercent, zlavaB2bEur: zlavaEur, manipulaciaBezDph: manipulacia,
+      cenaKsBezDph: logaSpolu / ks, logaSpoluBezDph: logaSpolu, nastrihanieBezDph: pridavokEur, zlavaB2bPercent: zlavaPercent, zlavaB2bEur: zlavaEur, manipulaciaBezDph: manipulacia,
       postovneBezDph: postovne, spoluBezDph: r2(spoluBezDph), dphPercent: cfg.dphPercent, dph, spolu: r2(spoluBezDph + dph),
     } as Record<string, unknown>,
   };
@@ -155,7 +157,11 @@ Deno.serve(async (req) => {
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
   try {
     const body = await req.json();
-    const { preview = false, osobnyOdber = false, b2bKod = null, separacia = true } = body;
+    const { preview = false, osobnyOdber = false, b2bKod = null, separacia = true, uroven: urovenVstup = null } = body;
+    // úroveň služby: rez = len rezanie, vylupanie = + vylúpanie, plny = + vylúpanie a nastrihanie (staršie volania posielajú len separacia true/false)
+    const uroven: 'rez' | 'vylupanie' | 'plny' = urovenVstup === 'rez' || urovenVstup === 'vylupanie' || urovenVstup === 'plny' ? urovenVstup : (separacia ? 'vylupanie' : 'rez');
+    const vylupanie = uroven !== 'rez';
+    const nastrihane = uroven === 'plny';
     const w = n(body.sirkaMm), h = n(body.vyskaMm), ks = Math.max(1, Math.round(n(body.pocetKs, 1)));
     const [{ data: nast }, { data: druh }, { data: farba }, cfg] = await Promise.all([
       supabase.from('folie_nastavenia').select('*').eq('id', 1).maybeSingle(),
@@ -179,18 +185,24 @@ Deno.serve(async (req) => {
     const rezMin = dlzkaBm * n(nast.rez_min_bm);
     const strojRez = (rezMin / 60) * n(nast.stroj_rezanie_hod);
     const velky = Math.max(w, h) > n(nast.hranica_velky_mm, 100);
-    const weedMin = separacia ? ks * (velky ? n(nast.weeding_min_velky) : n(nast.weeding_min_maly)) : 0;
+    const weedMin = vylupanie ? ks * (velky ? n(nast.weeding_min_velky) : n(nast.weeding_min_maly)) : 0;
     const pracaMin = n(nast.priprava_min) + rezMin + weedMin;
     const praca = (pracaMin / 60) * n(nast.praca_hod);
     const zaklad = material + strojRez + praca;
     const nakladSpolu = zaklad * (1 + n(nast.riziko_percent) / 100);
 
-    const c = await spoluCena(supabase, nast, cfg, nakladSpolu, ks, !!osobnyOdber, b2bKod);
-    const vysledok: Record<string, unknown> = { ok: true, ...c.verejne, dlzkaBm: r2(dlzkaBm), cols: roz.cols, rows: roz.rows, otoceny: roz.otoceny };
+    // Nastrihanie: minút na 1 bm podľa veľkosti motívov × sadzba strihača, plus marža (nastaviteľné v ERP)
+    const strihMin = nastrihane ? dlzkaBm * (velky ? n(nast.strihanie_min_bm_velky, 5) : n(nast.strihanie_min_bm_maly, 10)) : 0;
+    const nakladStrihanie = (strihMin / 60) * n(nast.strihanie_hod, 7);
+    const nastrihanieEur = r2(nakladStrihanie * (1 + n(nast.strihanie_marza_percent, 100) / 100));
+
+    const c = await spoluCena(supabase, nast, cfg, nakladSpolu, ks, !!osobnyOdber, b2bKod, nastrihanieEur);
+    const vysledok: Record<string, unknown> = { ok: true, ...c.verejne, uroven, dlzkaBm: r2(dlzkaBm), cols: roz.cols, rows: roz.rows, otoceny: roz.otoceny };
     if (await jeAdmin(supabase, req)) {
       vysledok.admin = { nakladSpolu: r2(nakladSpolu), nakladKs: r2(nakladSpolu / ks), margaEur: r2(c.logaSpolu - nakladSpolu), margaPercent: nakladSpolu > 0 ? r2((c.logaSpolu / nakladSpolu - 1) * 100) : 0,
-        rozpis: { material: r2(material), strojRezanie: r2(strojRez), praca: r2(praca), riziko: r2(nakladSpolu - zaklad) },
-        spotreba: { dlzkaBm: r2(dlzkaBm), rezMin: r2(rezMin), separaciaMin: r2(weedMin), pracaMin: r2(pracaMin) } };
+        rozpis: { material: r2(material), strojRezanie: r2(strojRez), praca: r2(praca), riziko: r2(nakladSpolu - zaklad), nastrihanie: r2(nakladStrihanie) },
+        spotreba: { dlzkaBm: r2(dlzkaBm), rezMin: r2(rezMin), separaciaMin: r2(weedMin), pracaMin: r2(pracaMin), nastrihanieMin: r2(strihMin) },
+        nastrihanieCena: nastrihanieEur };
     }
     if (preview) return odpoved(vysledok);
 
@@ -198,17 +210,17 @@ Deno.serve(async (req) => {
     const cislo = await ziskajCisloObjednavky(supabase, 'FOL');
     const suborUrl = await podpisanyOdkaz(supabase, body.suborCesta);
     const { error: insErr } = await supabase.from('folie_objednavky').insert({
-      id: objednavkaId, cislo_objednavky: cislo, druh: druh.kod, farba: farba.kod, sirka_mm: w, vyska_mm: h, pocet_ks: ks, separacia: !!separacia, dlzka_bm: r2(dlzkaBm),
+      id: objednavkaId, cislo_objednavky: cislo, druh: druh.kod, farba: farba.kod, sirka_mm: w, vyska_mm: h, pocet_ks: ks, separacia: vylupanie, uroven, dlzka_bm: r2(dlzkaBm),
       cena_kus: r2(c.poZlave / ks), cena_spolu: c.spolu, naklad_spolu: r2(nakladSpolu), subor_nazov: body.suborNazov ?? null, subor_cesta: body.suborCesta ?? null, subor_url: suborUrl, osobny_odber: !!osobnyOdber,
     });
     if (insErr) throw insErr;
     const checkoutUrl = await vytvorDraft({
-      title: `Rezaná fólia — ${ks}× ${w}×${h} mm (${druh.nazov}, ${farba.nazov})${separacia ? ' + separácia' : ''}${osobnyOdber ? ' (osobný odber)' : ''}`,
+      title: `Rezaná fólia — ${ks}× ${w}×${h} mm (${druh.nazov}, ${farba.nazov})${uroven === 'plny' ? ' + vylúpanie a nastrihanie' : vylupanie ? ' + vylúpanie' : ''}${osobnyOdber ? ' (osobný odber)' : ''}`,
       price: c.spolu, requiresShipping: !osobnyOdber,
       properties: [
         { name: '_cislo_objednavky', value: cislo }, { name: '_objednavka_id', value: objednavkaId }, { name: '_folie', value: 'true' },
         { name: '_druh', value: druh.nazov }, { name: '_farba', value: farba.nazov }, { name: '_rozmer_mm', value: `${w}x${h}` }, { name: '_pocet_ks', value: String(ks) },
-        { name: '_dlzka_bm', value: dlzkaBm.toFixed(2) }, { name: '_separacia', value: separacia ? 'áno' : 'nie' }, { name: '_subor', value: body.suborNazov || '' }, { name: '_subor_link', value: suborUrl || '' },
+        { name: '_dlzka_bm', value: dlzkaBm.toFixed(2) }, { name: '_separacia', value: vylupanie ? 'áno' : 'nie' }, { name: '_uroven_sluzby', value: uroven === 'plny' ? 'Full servis (vylúpané a nastrihané)' : uroven === 'vylupanie' ? 'Rezané + vylúpané' : 'Len rezaná fólia' }, { name: '_subor', value: body.suborNazov || '' }, { name: '_subor_link', value: suborUrl || '' },
         { name: '_osobny_odber', value: osobnyOdber ? 'áno' : 'nie' }, { name: '_b2b_kod', value: c.zlavaPercent > 0 ? String(b2bKod).trim().toUpperCase() : '' },
       ],
     }, `${cislo} (rezané fólie)` + (suborUrl ? `\nSúbor na rezanie: ${suborUrl}` : ''), 'rezane-folie');

@@ -10,6 +10,13 @@ const BUCKET = 'print-designs';
 const POVOLENE = ['.pdf', '.eps', '.ai', '.svg', '.dxf'];
 const MAX_VYKRESLENYCH = 400;
 
+// Tri úrovne služby (cena sa počíta na serveri)
+const UROVNE = [
+  { kod: 'rez', nazov: 'Len rezaná fólia', popis: 'Fóliu vyrežeme podľa vášho súboru. Vylúpanie (odstránenie prebytočnej fólie okolo motívov) si urobíte sami.' },
+  { kod: 'vylupanie', nazov: 'Rezaná a vylúpaná', popis: 'Fóliu vyrežeme a prebytočnú fóliu okolo motívov za vás odstránime (vylúpime).' },
+  { kod: 'plny', nazov: 'Full servis', popis: 'Vyrežeme, vylúpime a motívy vám dodáme aj nastrihané — jednotlivé kusy pripravené na použitie.' },
+];
+
 // Rozloženie motívov na rolke (rovnaká logika ako na serveri): normálna / otočená orientácia, vyberie sa kratšia dĺžka
 function rozlozenie(w, h, ks, pracSirka, medzera) {
   const skus = (sirka, vyska) => {
@@ -45,7 +52,7 @@ export default function Folie({ supabase }) {
   const [sirka, setSirka] = useState(150);
   const [vyska, setVyska] = useState(100);
   const [pocetKs, setPocetKs] = useState(10);
-  const [separacia, setSeparacia] = useState(true);
+  const [uroven, setUroven] = useState('vylupanie'); // rez = len rezana folia, vylupanie = + vylupame, plny = full servis (vylupane a nastrihane)
   const [osobnyOdber, setOsobnyOdber] = useState(false);
   const [subor, setSubor] = useState(null);
   const [drag, setDrag] = useState(false);
@@ -95,7 +102,7 @@ export default function Folie({ supabase }) {
     if (!farby.find((x) => x.kod === farba && x.druh_kod === kod)) setFarba(prva?.kod || '');
   };
 
-  const { cena, chyba } = useCenaNahlad(supabase, 'folie-create-draft-order', { druh, farba, sirkaMm: sirka, vyskaMm: vyska, pocetKs, separacia, osobnyOdber, b2bKod: b2b.kod }, !!(druh && farba) && !rozmerChyba);
+  const { cena, chyba } = useCenaNahlad(supabase, 'folie-create-draft-order', { druh, farba, sirkaMm: sirka, vyskaMm: vyska, pocetKs, uroven, osobnyOdber, b2bKod: b2b.kod }, !!(druh && farba) && !rozmerChyba);
 
   const vyberSubor = (f) => {
     if (!f) return;
@@ -111,7 +118,7 @@ export default function Folie({ supabase }) {
       const { error: upErr } = await supabase.storage.from(BUCKET).upload(cesta, subor, { contentType: subor.type || undefined });
       if (upErr) throw new Error('Súbor sa nepodarilo nahrať: ' + upErr.message);
       const { data, error } = await supabase.functions.invoke('folie-create-draft-order', {
-        body: { druh, farba, sirkaMm: sirka, vyskaMm: vyska, pocetKs, separacia, osobnyOdber, b2bKod: b2b.kod, suborNazov: subor.name, suborCesta: cesta },
+        body: { druh, farba, sirkaMm: sirka, vyskaMm: vyska, pocetKs, uroven, osobnyOdber, b2bKod: b2b.kod, suborNazov: subor.name, suborCesta: cesta },
       });
       if (error) throw error;
       if (!data?.ok) throw new Error(data?.error || 'Server nevrátil odpoveď.');
@@ -206,12 +213,14 @@ export default function Folie({ supabase }) {
             </div>
           </section>
 
-          <section className="bg-white rounded-2xl border border-slate-200 p-4">
-            <h3 className="text-sm font-bold text-slate-800 mb-2">4. Doplnkové služby</h3>
-            <label className="flex items-start gap-3 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
-              <input type="checkbox" checked={separacia} onChange={(e) => setSeparacia(e.target.checked)} className="w-5 h-5 mt-0.5" />
-              <span><span className="block text-sm font-semibold text-slate-800">Separácia (weeding)</span><span className="block text-xs text-slate-500 mt-0.5">Grafiku ručne ošúpeme, odstránime prebytočnú fóliu a nalepíme na prenosnú fóliu. Dostanete hotový produkt pripravený na nažehlenie.</span></span>
-            </label>
+          <section className="bg-white rounded-2xl border border-slate-200 p-4 space-y-2">
+            <h3 className="text-sm font-bold text-slate-800 mb-1">4. Úroveň služby</h3>
+            {UROVNE.map((u) => (
+              <label key={u.kod} className={`flex items-start gap-3 p-3 border rounded-lg cursor-pointer transition ${uroven === u.kod ? 'border-indigo-500 bg-indigo-50/60' : 'border-slate-200 hover:bg-slate-50'}`}>
+                <input type="radio" name="uroven" checked={uroven === u.kod} onChange={() => setUroven(u.kod)} className="w-4 h-4 mt-1" />
+                <span><span className="block text-sm font-semibold text-slate-800">{u.nazov}</span><span className="block text-xs text-slate-500 mt-0.5">{u.popis}</span></span>
+              </label>
+            ))}
           </section>
         </aside>
 
@@ -242,7 +251,7 @@ export default function Folie({ supabase }) {
           <div className="max-w-xl">
             <CenaSuhrn cena={cena} chyba={chyba} osobnyOdber={osobnyOdber} onOsobnyOdber={setOsobnyOdber} onObjednat={objednat} bezi={bezi} chybaObjednavky={chybaObj} potvrdenie={potvrdenie}
               zakazane={!subor || !!rozmerChyba} poznamkaZakazane={!subor ? 'Najprv nahrajte vektorový súbor.' : ''}
-              riadky={[['Fólia', `${druhObj?.nazov || '—'}`], ['Farba', farbaObj?.nazov || '—'], ['Rozmer', `${sirka} × ${vyska} mm`], ['Počet kusov', `${pocetKs} ks`], ['Separácia', separacia ? 'áno' : 'nie']]}>
+              riadky={[['Fólia', `${druhObj?.nazov || '—'}`], ['Farba', farbaObj?.nazov || '—'], ['Rozmer', `${sirka} × ${vyska} mm`], ['Počet kusov', `${pocetKs} ks`], ['Služba', UROVNE.find((u) => u.kod === uroven)?.nazov || '—'], ...(cena?.nastrihanieBezDph > 0 ? [['Z toho nastrihanie', `${Number(cena.nastrihanieBezDph).toFixed(2)} € bez DPH`]] : [])]}>
               {cena?.dlzkaBm != null && <div className="flex items-center justify-between text-xs"><span className="text-slate-400">Spotreba materiálu</span><span className="font-mono text-slate-100">{cena.dlzkaBm} bm</span></div>}
             </CenaSuhrn>
           </div>
