@@ -1,0 +1,33 @@
+LASER - SPOTREBA METRAZE: AGENT NA PC PRI LASERI
+================================================
+
+Co to je: maly program, ktory na pozadi sleduje hotfolder s DXF suborami, z kazdeho noveho suboru precita rozmer
+a posle ho do TEX-MASTER ERP. ERP z nazvu suboru rozpozna zakazku, farbu, material a pocet rezov (cislo na konci: 1x, 2x, 3x;
+bez cisla = 1x), spocita spotrebu metraze a kazdy vecer o 18:00 posle suhrn e-mailom.
+
+INSTALACIA (asi 5 minut)
+------------------------
+1. Rozbal tento ZIP na PC pri laseri, napr. do C:\laser-spotreba-agent  (NIE na sietovy disk a nie priamo z ZIP-u).
+2. Dvojklikni na  INSTALOVAT.bat  a postupuj podla pokynov v cernom okne:
+   - ak nie je nainstalovany Python, skusi ho nainstalovat sam (alebo ti povie, odkial ho stiahnut -
+     pri instalacii zaskrtni "Add python.exe to PATH"); potom spusti INSTALOVAT.bat este raz,
+   - nainstaluje potrebne kniznice (treba internet),
+   - opyta sa na cestu k hotfolderu (napr. \SERVER\LASER alebo Z:\LASER - mozes ju skopirovat z adresneho riadku),
+   - spravi prvy prechod (existujuce subory sa len zapamataju, do spotreby sa nezapocitaju),
+   - nastavi spustanie po kazdom prihlaseni do Windows.
+3. V ERP (Laser - spotreba metraze) uvidis hore "agent na PC: online".
+
+DOLEZITE
+--------
+- PC musi byt zapnute a prihlasene do Windows, aby agent bezal (vypnute PC nevadi - po zapnuti dobehne, co pribudlo).
+- Hotfolder musi byt z tohto PC dostupny v sieti.
+- Subor config.json obsahuje TAJNY TOKEN. ZIP neposielaj nikomu inemu a nedavaj ho na verejne miesto.
+  Ak token unikne, v ERP (Nastavenia) vygeneruj novy a vloz ho do config.json.
+
+KONTROLA / PROBLEMY
+-------------------
+- Priebeh: subor agent.log v priecinku agenta (otvor v Poznamkovom bloku).
+- "Hotfolder nie je dostupny" - PC nie je v sieti alebo je zla cesta (spusti nastav.py: dvojklik alebo "python nastav.py").
+- "ERP odmietlo poziadavku (401)" - zly token v config.json.
+- Test rozmerov jedneho suboru (nic sa neposiela):  python agent.py --test "cesta\subor.dxf"
+- Odinstalovanie: odinstalovat_autostart.bat (potom mozes priecinok zmazat).
