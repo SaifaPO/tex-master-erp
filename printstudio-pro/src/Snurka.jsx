@@ -6,6 +6,9 @@ import B2bKod from './B2bKod';
 import PlochaEditor from './fabricEditor/PlochaEditor';
 import { useCenaNahlad, CenaSuhrn } from './cenaNahlad';
 
+// Predvolené fotky typov šnúrok (public/snurka). Ak je v administrácii nahraná vlastná fotka (foto_url), použije sa tá.
+const VYCHODZIE_FOTO = { klasicka: '/snurka/klasicka.webp', sponou: '/snurka/sponou.webp', spona_poistka: '/snurka/spona_poistka.webp', klucenka: '/snurka/klucenka.webp' };
+
 const BUCKET = 'print-designs';
 
 export default function Snurka({ supabase }) {
@@ -82,7 +85,7 @@ export default function Snurka({ supabase }) {
                 <div className="grid grid-cols-2 gap-2">
                   {d.modely.map((m) => (
                     <button key={m.kod} type="button" onClick={() => setModel(m.kod)} className={`border-2 rounded-xl p-2 text-center transition ${model === m.kod ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
-                      {m.foto_url ? <img src={m.foto_url} alt={m.nazov} className="w-full h-20 object-contain rounded-lg bg-white mb-1" /> : <div className="h-20 flex items-center justify-center text-3xl">🪢</div>}
+                      {(m.foto_url || VYCHODZIE_FOTO[m.kod]) ? <img src={m.foto_url || VYCHODZIE_FOTO[m.kod]} alt={m.nazov} className="w-full h-36 object-contain rounded-lg bg-white mb-1" /> : <div className="h-36 flex items-center justify-center text-3xl">🪢</div>}
                       <span className="text-xs font-semibold text-slate-800 block">{m.nazov}</span>
                       {m.popis && <span className="text-[10px] text-slate-500 block leading-tight">{m.popis}</span>}
                     </button>
