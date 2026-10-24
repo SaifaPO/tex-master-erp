@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { Upload, Download, RefreshCw, Eye, EyeOff, Wand2 } from 'lucide-react';
+import { Upload, Download, RefreshCw, Eye, EyeOff, Wand2, ZoomIn, ZoomOut, Maximize } from 'lucide-react';
 import ImageTracer from 'imagetracerjs';
 import { setPngDpi } from './dtfSeparator/lib/pngDpi.js';
 
@@ -10,7 +10,7 @@ const MIN_LONG_SIDE = 900;   // malé obrázky sa pred trasovaním zväčšia (h
 const MAX_LONG_SIDE = 1600;  // veľké sa zmenšia (rýchlosť)
 
 const PRESETY = [
-  { id: 'logo', label: 'Logo / ploché farby', colors: 8, ltres: 1, qtres: 1, pathomit: 8, blur: 0, popis: 'Čisté logá, nápisy, ploché ilustrácie.' },
+  { id: 'logo', label: 'Logo / ploché farby', auto: true, colors: 8, ltres: 1, qtres: 1, pathomit: 8, blur: 0, popis: 'Čisté logá, nápisy, ploché ilustrácie.' },
   { id: 'silueta', label: 'Silueta (1–2 farby)', colors: 2, ltres: 1, qtres: 1, pathomit: 16, blur: 1, popis: 'Čiernobiele logá, podklady na rezanie fólie a laser.' },
   { id: 'detail', label: 'Detailná kresba', colors: 16, ltres: 0.5, qtres: 0.5, pathomit: 2, blur: 0, popis: 'Viac farieb a jemnejšie krivky, väčší SVG súbor.' },
   { id: 'foto', label: 'Fotka (veľa farieb)', colors: 32, ltres: 0.5, qtres: 0.5, pathomit: 4, blur: 0, popis: 'Efekt „vektorovej maľby“. Výsledok je veľký a nie vždy čistý.' }
@@ -35,29 +35,30 @@ function pripravCanvas(img) {
 }
 
 // Vlastny vypocet palety (k-means so "vzdialenym" vyberom startovych farieb): na rozdiel od nahodneho/mriezkoveho vzorkovania
-// v knizniciach zachyti aj male, ale vyrazne farby (napr. maly zlty napis na velkej cervenej plohe).
-function vypocitajPaletu(imgd, n) {
+// v knizniciach zachyti aj male, ale vyrazne farby (napr. maly zlty napis na velkej cervenej plohe). Vracia aj pocet pixelov farby.
+function zhlukuj(imgd, n) {
   const { data } = imgd;
   const bins = new Map();
-  let maPriehladne = false;
+  let maPriehladne = false, total = 0;
   for (let i = 0; i < data.length; i += 4) {
     if (data[i + 3] < 128) { maPriehladne = true; continue; }
+    total++;
     const key = ((data[i] >> 3) << 10) | ((data[i + 1] >> 3) << 5) | (data[i + 2] >> 3);
     let b = bins.get(key);
     if (!b) { b = { r: 0, g: 0, b: 0, n: 0 }; bins.set(key, b); }
     b.r += data[i]; b.g += data[i + 1]; b.b += data[i + 2]; b.n++;
   }
   const pts = [...bins.values()].map(b => ({ r: b.r / b.n, g: b.g / b.n, b: b.b / b.n, n: b.n })).sort((x, y) => y.n - x.n);
-  const pal = [];
+  let cent = [];
   if (pts.length) {
     const k = Math.max(1, Math.min(n - (maPriehladne ? 1 : 0), pts.length));
     const d2 = (p, c) => (p.r - c.r) ** 2 + (p.g - c.g) ** 2 + (p.b - c.b) ** 2;
-    const cent = [{ r: pts[0].r, g: pts[0].g, b: pts[0].b }];
+    cent = [{ r: pts[0].r, g: pts[0].g, b: pts[0].b, n: 0 }];
     const minD = pts.map(p => d2(p, cent[0]));
     while (cent.length < k) {
       let best = 0, bestScore = -1;
       for (let i = 0; i < pts.length; i++) { const sc = minD[i] * Math.sqrt(pts[i].n); if (sc > bestScore) { bestScore = sc; best = i; } }
-      cent.push({ r: pts[best].r, g: pts[best].g, b: pts[best].b });
+      cent.push({ r: pts[best].r, g: pts[best].g, b: pts[best].b, n: 0 });
       for (let i = 0; i < pts.length; i++) minD[i] = Math.min(minD[i], d2(pts[i], cent[cent.length - 1]));
     }
     for (let it = 0; it < 6; it++) {
@@ -67,12 +68,88 @@ function vypocitajPaletu(imgd, n) {
         for (let c = 0; c < cent.length; c++) { const d = d2(p, cent[c]); if (d < cd) { cd = d; ci = c; } }
         const a = acc[ci]; a.r += p.r * p.n; a.g += p.g * p.n; a.b += p.b * p.n; a.n += p.n;
       }
-      acc.forEach((a, c) => { if (a.n > 0) cent[c] = { r: a.r / a.n, g: a.g / a.n, b: a.b / a.n }; });
+      cent = cent.map((c, i) => (acc[i].n > 0 ? { r: acc[i].r / acc[i].n, g: acc[i].g / acc[i].n, b: acc[i].b / acc[i].n, n: acc[i].n } : { ...c, n: 0 }));
     }
-    cent.forEach(c => pal.push({ r: Math.round(c.r), g: Math.round(c.g), b: Math.round(c.b), a: 255 }));
   }
+  return { cent, maPriehladne, total };
+}
+const naPaletu = (cent, maPriehladne) => {
+  const pal = cent.map(c => ({ r: Math.round(c.r), g: Math.round(c.g), b: Math.round(c.b), a: 255 }));
   if (maPriehladne || !pal.length) pal.push({ r: 0, g: 0, b: 0, a: 0 });
   return pal;
+};
+function vypocitajPaletu(imgd, n) {
+  const { cent, maPriehladne } = zhlukuj(imgd, n);
+  return naPaletu(cent, maPriehladne);
+}
+
+// --- AUTOMATICKY POCET FARIEB ---
+// Najde skutocne odlisne farby loga: 16 zhlukov sa zluci podla vnimanej vzdialenosti (Lab), "prechodove" farby po okrajoch tvarov
+// (zmes dvoch vacsich farieb, napr. ruzova medzi cervenou a bielou) sa zahodia a drobne odtiene sa pripoja k najblizsej hlavnej farbe.
+// Vyrazne, ale male farby (napr. maly zlaty napis) zostanu.
+function naLab(c) {
+  const f = (v) => { v /= 255; return v > 0.04045 ? ((v + 0.055) / 1.055) ** 2.4 : v / 12.92; };
+  const r = f(c.r), g = f(c.g), b = f(c.b);
+  const x = (0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047, y = 0.2126 * r + 0.7152 * g + 0.0722 * b, z = (0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883;
+  const h = (v) => (v > 0.008856 ? Math.cbrt(v) : 7.787 * v + 16 / 116);
+  return [116 * h(y) - 16, 500 * (h(x) - h(y)), 200 * (h(y) - h(z))];
+}
+const dE = (a, b) => Math.hypot(a.lab[0] - b.lab[0], a.lab[1] - b.lab[1], a.lab[2] - b.lab[2]);
+function vzdialenostOdUsecky(p, a, b) {
+  const ab = [b.lab[0] - a.lab[0], b.lab[1] - a.lab[1], b.lab[2] - a.lab[2]];
+  const ap = [p.lab[0] - a.lab[0], p.lab[1] - a.lab[1], p.lab[2] - a.lab[2]];
+  const dl = ab[0] ** 2 + ab[1] ** 2 + ab[2] ** 2 || 1;
+  const t = Math.max(0, Math.min(1, (ap[0] * ab[0] + ap[1] * ab[1] + ap[2] * ab[2]) / dl));
+  return Math.hypot(ap[0] - t * ab[0], ap[1] - t * ab[1], ap[2] - t * ab[2]);
+}
+function zluc(cl, i, j) {
+  const a = cl[i], b = cl[j], n = a.n + b.n || 1;
+  const m = { r: (a.r * a.n + b.r * b.n) / n, g: (a.g * a.n + b.g * b.n) / n, b: (a.b * a.n + b.b * b.n) / n, n: a.n + b.n };
+  m.lab = naLab(m);
+  cl.splice(j, 1); cl.splice(i, 1, m);
+}
+function automatickaPaleta(imgd) {
+  const { cent, maPriehladne, total } = zhlukuj(imgd, 16);
+  let cl = cent.filter(c => c.n > 0).map(c => ({ ...c, lab: naLab(c) }));
+  // 1) velmi podobne odtiene -> jedna farba
+  for (;;) {
+    let bi = -1, bj = -1, bd = Infinity;
+    for (let i = 0; i < cl.length; i++) for (let j = i + 1; j < cl.length; j++) { const d = dE(cl[i], cl[j]); if (d < bd) { bd = d; bi = i; bj = j; } }
+    if (bd < 18 && bi >= 0) zluc(cl, bi, bj); else break;
+  }
+  // 2) prechodove (anti-aliasing) farby: lezia na usecke medzi dvoma vacsimi farbami
+  for (;;) {
+    cl.sort((x, y) => y.n - x.n);
+    let odstran = -1;
+    for (let i = cl.length - 1; i >= 2 && odstran < 0; i--) {
+      const c = cl[i];
+      if (c.n > total * 0.3) continue;
+      for (let a = 0; a < cl.length && odstran < 0; a++) for (let b = a + 1; b < cl.length; b++) {
+        if (a === i || b === i || cl[a].n < c.n || cl[b].n < c.n) continue;
+        if (dE(cl[a], cl[b]) > 25 && vzdialenostOdUsecky(c, cl[a], cl[b]) < 14) { odstran = i; break; }
+      }
+    }
+    if (odstran < 0) break;
+    let najblizsia = -1, nd = Infinity;
+    cl.forEach((c, k) => { if (k === odstran) return; const d = dE(c, cl[odstran]); if (d < nd) { nd = d; najblizsia = k; } });
+    zluc(cl, najblizsia, odstran);
+  }
+  // 3) drobne farby (< 0,15 % plochy) sa pripoja k najblizsej, ak su si dost podobne; vyrazne male farby ostavaju
+  for (;;) {
+    cl.sort((x, y) => y.n - x.n);
+    let spoj = null;
+    for (let i = cl.length - 1; i >= 1 && !spoj; i--) {
+      if (cl[i].n >= total * 0.0015) continue;
+      let najblizsia = -1, nd = Infinity;
+      cl.forEach((c, k) => { if (k === i) return; const d = dE(c, cl[i]); if (d < nd) { nd = d; najblizsia = k; } });
+      if (nd < 40) spoj = [najblizsia, i];
+    }
+    if (!spoj) break;
+    zluc(cl, spoj[0], spoj[1]);
+  }
+  cl.sort((x, y) => y.n - x.n);
+  cl = cl.slice(0, 12);
+  return { pal: naPaletu(cl, maPriehladne), pocet: cl.length };
 }
 
 // Ktora farba palety je pozadie: priehladne polozky vzdy, pripadne farba najblizsia priemeru styroch rohov
@@ -94,11 +171,49 @@ function predvoleneSkryte(td, imgd, odstranitPozadie) {
   return skryte;
 }
 
+// Náhľad so zoomom a posunom (koliesko = priblíženie k ukazovateľu, ťahanie = posun). Oba náhľady (originál aj vektor) sa hýbu spolu,
+// aby sa dali porovnať detaily na rovnakom mieste.
+function ZoomNahlad({ zoom, setZoom, bg, children, vyska = 460 }) {
+  const ref = useRef(null);
+  const drag = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    const naKoliesko = (e) => {
+      e.preventDefault();
+      const r = el.getBoundingClientRect();
+      const sx = e.clientX - r.left - r.width / 2, sy = e.clientY - r.top - r.height / 2;
+      setZoom((p) => {
+        const z2 = Math.min(32, Math.max(1, p.z * (e.deltaY < 0 ? 1.2 : 1 / 1.2)));
+        if (z2 === 1) return { z: 1, x: 0, y: 0 };
+        const k = z2 / p.z;
+        return { z: z2, x: sx - k * (sx - p.x), y: sy - k * (sy - p.y) };
+      });
+    };
+    el.addEventListener('wheel', naKoliesko, { passive: false });
+    return () => el.removeEventListener('wheel', naKoliesko);
+  }, [setZoom]);
+  return (
+    <div ref={ref} className={`relative rounded-xl overflow-hidden border border-slate-800 select-none ${zoom.z > 1 ? 'cursor-grab active:cursor-grabbing' : ''}`} style={{ backgroundColor: bg, height: vyska, touchAction: 'none' }}
+      onPointerDown={(e) => { if (zoom.z <= 1) return; e.currentTarget.setPointerCapture(e.pointerId); drag.current = { x: e.clientX - zoom.x, y: e.clientY - zoom.y }; }}
+      onPointerMove={(e) => { if (drag.current) setZoom((p) => ({ ...p, x: e.clientX - drag.current.x, y: e.clientY - drag.current.y })); }}
+      onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }}
+      onDoubleClick={() => setZoom((p) => (p.z > 1 ? { z: 1, x: 0, y: 0 } : { z: 4, x: 0, y: 0 }))}>
+      <div className="absolute inset-0 flex items-center justify-center" style={{ transform: `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.z})`, transformOrigin: 'center center' }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export default function VektorizerTab() {
   const [img, setImg] = useState(null);           // povodny HTMLImageElement
   const [fileName, setFileName] = useState('');
   const [preset, setPreset] = useState('logo');
   const [colors, setColors] = useState(8);
+  const [autoFarby, setAutoFarby] = useState(true);   // počet farieb sa nájde automaticky (odlišné farby loga)
+  const [najdeneFarby, setNajdeneFarby] = useState(0);
+  const [zoom, setZoom] = useState({ z: 1, x: 0, y: 0 });  // spoločný zoom a posun oboch náhľadov
   const [ltres, setLtres] = useState(1);
   const [qtres, setQtres] = useState(1);
   const [pathomit, setPathomit] = useState(8);
@@ -118,7 +233,7 @@ export default function VektorizerTab() {
   const pouziPreset = (id) => {
     const p = PRESETY.find(x => x.id === id);
     if (!p) return;
-    setPreset(id); setColors(p.colors); setLtres(p.ltres); setQtres(p.qtres); setPathomit(p.pathomit); setBlur(p.blur);
+    setPreset(id); setAutoFarby(!!p.auto); setColors(p.colors); setLtres(p.ltres); setQtres(p.qtres); setPathomit(p.pathomit); setBlur(p.blur);
   };
 
   const nacitajSubor = (file) => {
@@ -150,7 +265,10 @@ export default function VektorizerTab() {
       try {
         const canvas = pripravCanvas(img);
         const imgd = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
-        const options = { pal: vypocitajPaletu(imgd, colors), numberofcolors: colors, colorquantcycles: 1, ltres, qtres, pathomit, blurradius: blur, blurdelta: 20, colorsampling: 2, strokewidth: 0, roundcoords: 1, layering: 0, viewbox: true };
+        const ap = autoFarby ? automatickaPaleta(imgd) : null;
+        const pal = ap ? ap.pal : vypocitajPaletu(imgd, colors);
+        setNajdeneFarby(ap ? ap.pocet : 0);
+        const options = { pal, numberofcolors: pal.length, colorquantcycles: 1, ltres, qtres, pathomit, blurradius: blur, blurdelta: 20, colorsampling: 2, strokewidth: 0, roundcoords: 1, layering: 0, viewbox: true };
         const td = ImageTracer.imagedataToTracedata(imgd, options);
         setVysledok({ td, imgd, options, w: canvas.width, h: canvas.height });
         setSkryte(predvoleneSkryte(td, imgd, odstranitPozadie));
@@ -161,7 +279,7 @@ export default function VektorizerTab() {
       setPocita(false);
     }, 350);
     return () => clearTimeout(t);
-  }, [img, colors, ltres, qtres, pathomit, blur, odstranitPozadie]);
+  }, [img, colors, autoFarby, ltres, qtres, pathomit, blur, odstranitPozadie]);
 
   const poctyTvarov = useMemo(() => (vysledok ? vysledok.td.layers.map(l => l.filter(p => !p.isholepath).length) : []), [vysledok]);
 
@@ -241,18 +359,25 @@ export default function VektorizerTab() {
                 {pocita && <span className="text-[10px] text-indigo-400 flex items-center gap-1 ml-auto pr-2"><RefreshCw className="h-3 w-3 animate-spin" /> vektorizujem…</span>}
               </div>
               {chyba && <p className="text-xs text-rose-400">{chyba}</p>}
+              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                <button onClick={() => setZoom((p) => ({ z: Math.max(1, p.z / 1.5), x: p.z / 1.5 <= 1 ? 0 : p.x, y: p.z / 1.5 <= 1 ? 0 : p.y }))} title="Oddialiť" className="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-white"><ZoomOut className="h-4 w-4" /></button>
+                <button onClick={() => setZoom((p) => ({ ...p, z: Math.min(32, p.z * 1.5) }))} title="Priblížiť" className="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-white"><ZoomIn className="h-4 w-4" /></button>
+                <button onClick={() => setZoom({ z: 1, x: 0, y: 0 })} title="Celý obrázok" className="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-white"><Maximize className="h-4 w-4" /></button>
+                <span className="font-mono text-white">{Math.round(zoom.z * 100)} %</span>
+                <span className="text-[10px] text-slate-500">koliesko = priblíženie · ťahanie = posun · dvojklik = 400 % / späť · originál a vektor sa hýbu spolu</span>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">Originál</p>
-                  <div className="rounded-xl overflow-hidden border border-slate-800 flex items-center justify-center" style={{ backgroundColor: previewBg }}>
-                    <img src={urlRef.current} alt="originál" className="max-w-full h-auto" />
-                  </div>
+                  <ZoomNahlad zoom={zoom} setZoom={setZoom} bg={previewBg}>
+                    <img src={urlRef.current} alt="originál" draggable={false} className="max-w-full max-h-full object-contain" />
+                  </ZoomNahlad>
                 </div>
                 <div>
                   <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">Vektor (SVG){velkostKb ? ` — ${velkostKb} kB` : ''}</p>
-                  <div className="rounded-xl overflow-hidden border border-slate-800 flex items-center justify-center min-h-[120px]" style={{ backgroundColor: previewBg }}>
-                    {svgUrl ? <img src={svgUrl} alt="vektor" className="max-w-full h-auto" /> : <span className="text-xs text-slate-500 p-6">…</span>}
-                  </div>
+                  <ZoomNahlad zoom={zoom} setZoom={setZoom} bg={previewBg}>
+                    {svgUrl ? <img src={svgUrl} alt="vektor" draggable={false} className="max-w-full max-h-full object-contain" /> : <span className="text-xs text-slate-500 p-6">…</span>}
+                  </ZoomNahlad>
                 </div>
               </div>
               <button onClick={() => fileRef.current?.click()} className="text-xs text-slate-500 hover:text-slate-300 underline">Nahrať iný obrázok</button>
@@ -273,8 +398,15 @@ export default function VektorizerTab() {
           </div>
 
           <div>
-            <label className="text-xs text-slate-400 flex justify-between mb-1"><span>Počet farieb</span><span className="text-white font-mono">{colors}</span></label>
-            <input type="range" min="2" max="64" value={colors} onChange={(e) => setColors(Number(e.target.value))} className="w-full" />
+            <label className="flex items-center gap-2 text-xs text-slate-300 font-bold cursor-pointer mb-1.5">
+              <input type="checkbox" checked={autoFarby} onChange={(e) => setAutoFarby(e.target.checked)} className="accent-indigo-600" /> Počet farieb nájsť automaticky
+              {autoFarby && najdeneFarby > 0 && <span className="ml-auto text-[10px] font-mono text-indigo-300">nájdených {najdeneFarby}</span>}
+            </label>
+            <div className={autoFarby ? 'opacity-40 pointer-events-none' : ''}>
+              <label className="text-xs text-slate-400 flex justify-between mb-1"><span>Počet farieb</span><span className="text-white font-mono">{colors}</span></label>
+              <input type="range" min="2" max="64" value={colors} onChange={(e) => setColors(Number(e.target.value))} className="w-full" />
+            </div>
+            <p className="text-[9px] text-slate-600">Automaticky = program nájde skutočne odlišné farby loga (bez prechodových odtieňov po okrajoch). Ak niečo chýba alebo prebýva, vypni a nastav počet ručne.</p>
           </div>
           <div>
             <label className="text-xs text-slate-400 flex justify-between mb-1"><span>Odstrániť drobné škvrny</span><span className="text-white font-mono">{pathomit}</span></label>
