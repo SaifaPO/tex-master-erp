@@ -1,4 +1,5 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import PbtLoader from '../PbtLoader';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -443,19 +444,7 @@ const ThreeViewport = forwardRef(function ThreeViewport({ configState, onDragLog
       <canvas ref={textureCanvasRef} width={2048} height={2048} className="hidden" />
       <div ref={containerRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
 
-      {!nacitanie.hotovo && (
-        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-slate-950/90 backdrop-blur-sm">
-          <div className="relative w-28 h-28">
-            <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-              <circle cx="50" cy="50" r="44" fill="none" stroke="rgba(148,163,184,0.2)" strokeWidth="7" />
-              <circle cx="50" cy="50" r="44" fill="none" stroke="#6366f1" strokeWidth="7" strokeLinecap="round" strokeDasharray={2 * Math.PI * 44} strokeDashoffset={2 * Math.PI * 44 * (1 - nacitanie.pct / 100)} style={{ transition: 'stroke-dashoffset 0.3s ease' }} />
-            </svg>
-            <span className="absolute inset-0 flex items-center justify-center text-2xl font-black text-white">{nacitanie.pct}%</span>
-          </div>
-          <p className="text-sm font-bold text-slate-200">Načítavam 3D model…</p>
-          <p className="text-[11px] text-slate-500 text-center px-6">Pri prvom otvorení to trvá o niečo dlhšie, nabudúce už bude rýchlejšie.</p>
-        </div>
-      )}
+      {!nacitanie.hotovo && <PbtLoader absolute progress={nacitanie.pct / 100} />}
 
       <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none z-10">
         <div className="bg-slate-900/80 backdrop-blur-sm px-2.5 py-1 rounded-lg border border-slate-800 text-[11px] text-slate-300 flex items-center gap-1.5 shadow-md">

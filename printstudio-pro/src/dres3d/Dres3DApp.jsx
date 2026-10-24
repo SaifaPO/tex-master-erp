@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { RotateCcw, Share2, Users, ShoppingCart, Grid3x3, Palette, Type, Image as ImageIcon, Shirt, Layers } from 'lucide-react';
+import PbtLoader from '../PbtLoader';
 import AskQuestion from '../AskQuestion';
 import { nacitajDresKatalog } from './dresData';
 import { DEFAULT_CONFIG_STATE, GOOGLE_FONTS_HREF } from './dresPresets';
@@ -197,7 +198,7 @@ export default function Dres3DApp({ supabase, produktId }) {
     setZobrazitSuhrn(true);
   };
 
-  if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500 text-sm">Načítavam 3D konfigurátor…</div>;
+  if (isLoading) return <PbtLoader />;
   if (loadError) return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-rose-600 text-sm px-4 text-center">{loadError}</div>;
   if (!katalog) return null;
 
