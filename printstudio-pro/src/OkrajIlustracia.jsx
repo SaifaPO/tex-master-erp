@@ -10,6 +10,14 @@ const TVARY = {
 };
 
 // kod okraja -> druh + farby
+// Otvorené dráhy okolo vlajky BEZ hornej hrany (strapce aj šnúrka dookola sa na hornú hranu nešijú)
+const BOKY = {
+  shield: 'M 36 4 L 36 38 Q 20 52 4 38 L 4 4',
+  pentagon: 'M 36 4 L 36 38 L 20 50 L 4 38 L 4 4',
+  rectangle: 'M 36 4 L 36 40 Q 20 56 4 40 L 4 4',
+  triangle: 'M 36 4 L 20 50 L 4 4',
+};
+
 const OKRAJE = {
   fringe_white: { druh: 'strapce', farby: ['#ffffff'] },
   fringe_gold: { druh: 'strapce', farby: ['#d9a521'] },
@@ -23,6 +31,7 @@ export default function OkrajIlustracia({ tvar, okraj, className = '' }) {
   const o = OKRAJE[okraj];
   if (!o) return null;
   const d = TVARY[tvar] || TVARY.rectangle;
+  const dBoky = BOKY[tvar] || BOKY.rectangle;
   const [hlavna, ...dalsie] = o.farby;
   const jeStrapce = o.druh === 'strapce';
   // šnúrka na zavesenie hore: slučka medzi hornými rohmi (rohy sú v súradniciach tvaru x=4 a x=36, y=4)
@@ -53,8 +62,8 @@ export default function OkrajIlustracia({ tvar, okraj, className = '' }) {
         {/* strapce = hustý prúžok „nitiek“ okolo vlajky */}
         {jeStrapce && (
           <g filter={`url(#tien${uid})`}>
-            <path d={d} {...sirkaCary(7, { stroke: '#64748b', strokeDasharray: '0.9 0.7', strokeLinecap: 'butt' })} />
-            <path d={d} {...sirkaCary(6.6, { stroke: hlavna, strokeDasharray: '0.6 1', strokeLinecap: 'butt' })} />
+            <path d={dBoky} {...sirkaCary(7, { stroke: '#64748b', strokeDasharray: '0.9 0.7', strokeLinecap: 'butt' })} />
+            <path d={dBoky} {...sirkaCary(6.6, { stroke: hlavna, strokeDasharray: '0.6 1', strokeLinecap: 'butt' })} />
           </g>
         )}
 
@@ -65,13 +74,13 @@ export default function OkrajIlustracia({ tvar, okraj, className = '' }) {
         {/* šnúrka dookola */}
         {!jeStrapce && (
           <g filter={`url(#tien${uid})`}>
-            <path d={d} {...sirkaCary(2.6, { stroke: '#64748b' })} />
-            <path d={d} {...sirkaCary(1.8, { stroke: hlavna })} />
-            {dalsie.map((f, i) => <path key={i} d={d} {...sirkaCary(1.8, { stroke: f, strokeLinecap: 'butt', strokeDasharray: '2.2 4.4', strokeDashoffset: i * -2.2 })} />)}
+            <path d={dBoky} {...sirkaCary(2.6, { stroke: '#64748b' })} />
+            <path d={dBoky} {...sirkaCary(1.8, { stroke: hlavna })} />
+            {dalsie.map((f, i) => <path key={i} d={dBoky} {...sirkaCary(1.8, { stroke: f, strokeLinecap: 'butt', strokeDasharray: '2.2 4.4', strokeDashoffset: i * -2.2 })} />)}
           </g>
         )}
       </svg>
-      <p className="text-[10px] text-slate-500 text-center leading-tight">Ilustračný náhľad: {jeStrapce ? 'strapce okolo dokola' : 'šnúrka dookola'} a šnúrka na zavesenie hore</p>
+      <p className="text-[10px] text-slate-500 text-center leading-tight">Ilustračný náhľad: {jeStrapce ? 'strapce po bokoch a dole' : 'šnúrka po bokoch a dole'} a šnúrka na zavesenie hore</p>
     </div>
   );
 }
