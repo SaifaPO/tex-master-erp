@@ -5,6 +5,7 @@ import NumberInput from './NumberInput';
 import AskQuestion from './AskQuestion';
 import { useB2bKod } from './b2b';
 import B2bKod from './B2bKod';
+import { CenaB2b } from './CenaB2b';
 
 const BUCKET = 'print-designs';
 const ROLL_WIDTH_CM = 56;
@@ -474,9 +475,10 @@ export default function DtfMetraz({ supabase, onSpat }) {
               <span className="text-[10px] font-normal text-indigo-300 bg-indigo-500/10 px-2 py-1 rounded-full">sadzba DPH {pricingConfig.dphPercent}%</span>
             </h3>
             <div className="space-y-2 text-xs text-slate-300">
-              <Row label="Sadzba pri tomto odbere (bez DPH)" value={`${baseRate.toFixed(2)} €/bm`} />
+              <Row label="Sadzba pri tomto odbere (bez DPH)" value={<CenaB2b v={baseRate} p={b2b.zlavaPercent} suffix=" €/bm" />} />
               <Row label="Potrebná dĺžka rolky" value={`${totalLengthBm.toFixed(2)} bm`} highlight />
               <Row label="Tlačová plocha" value={`${totalM2.toFixed(2)} m²`} />
+              {b2bZlavaEur > 0 && <Row label="Metráž spolu (bez DPH)" value={<CenaB2b v={subtotal + b2bZlavaEur} p={b2b.zlavaPercent} />} />}
               {b2bZlavaEur > 0 && <Row label={`B2B zľava ${Number(b2b.zlavaPercent)} %`} value={`−${b2bZlavaEur.toFixed(2)} €`} />}
               <Row label="Príplatok za expres" value={`${expressFee.toFixed(2)} €`} />
               {grafickaPriprava && <Row label="Príprava grafiky na tlač" value="10.00 €" />}

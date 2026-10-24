@@ -4,6 +4,7 @@ import PbtHeader from './PbtHeader';
 import NumberInput from './NumberInput';
 import { useB2bKod } from './b2b';
 import B2bKod from './B2bKod';
+import { CenaB2b } from './CenaB2b';
 
 const BUCKET = 'print-designs';
 
@@ -214,8 +215,8 @@ export default function Transfer3D({ supabase }) {
                 <div className="bg-rose-950/60 border border-rose-700 text-rose-200 p-3 rounded-lg text-xs flex gap-2"><AlertTriangle className="w-4 h-4 shrink-0" /> {cenaChyba}</div>
               ) : cena ? (
                 <div className="space-y-2 border-t border-slate-700 pt-3">
-                  <RowSum label="Cena za 1 ks (bez DPH)" value={`${cena.cenaKsBezDph.toFixed(2)} €`} />
-                  <RowSum label="Motívy spolu (bez DPH)" value={`${cena.logaSpoluBezDph.toFixed(2)} €`} />
+                  <RowSum label="Cena za 1 ks (bez DPH)" value={<CenaB2b v={cena.cenaKsBezDph} p={cena.zlavaB2bPercent} />} />
+                  <RowSum label="Motívy spolu (bez DPH)" value={<CenaB2b v={cena.logaSpoluBezDph} p={cena.zlavaB2bPercent} />} />
                   {cena.zlavaB2bEur > 0 && <RowSum label={`B2B zľava ${cena.zlavaB2bPercent} %`} value={`−${cena.zlavaB2bEur.toFixed(2)} €`} />}
                   {cena.manipulaciaBezDph > 0 && <RowSum label="Manipulačný poplatok" value={`${cena.manipulaciaBezDph.toFixed(2)} €`} />}
                   <RowSum label="Poštovné a balné" value={cena.postovneBezDph === 0 ? 'Zdarma' : `${cena.postovneBezDph.toFixed(2)} €`} />

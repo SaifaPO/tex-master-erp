@@ -15,7 +15,7 @@ function Stepper({ hodnota, onZmen, min = 0 }) {
 }
 
 export default function DoplnkyTab({
-  katalog, cenyVolieb, doplnkyMnozstva, onZmenMnozstvo,
+  katalog, cenyVolieb, cenyVoliebPov, doplnkyMnozstva, onZmenMnozstvo,
   tvarKod, velkostKod, stoziareMn, onStoziarMn, podstavceMn, onPodstavecMn,
   expresne, onExpresne, pocetKs, onPocetKs,
   osobnyOdber, onOsobnyOdber,
@@ -34,7 +34,9 @@ export default function DoplnkyTab({
       <Stepper hodnota={hodnota} onZmen={onZmen} />
     </div>
   );
-  const cenaKs = (c) => (c == null ? '…' : c > 0 ? `+${Number(c).toFixed(2)} € / ks` : 'V cene');
+  const cenaKsTxt = (c) => (c == null ? '…' : c > 0 ? `+${Number(c).toFixed(2)} € / ks` : 'V cene');
+  // B2B: pôvodná cena preškrtnutá + cena po zľave (pov = tá istá cena bez B2B zľavy)
+  const cenaKs = (c, pov) => (c != null && pov != null && Number(pov) > Number(c) ? <><s className="text-slate-400 font-normal mr-1">{cenaKsTxt(pov)}</s>{cenaKsTxt(c)}</> : cenaKsTxt(c));
 
   return (
     <div className="p-4 sm:p-6 space-y-6">
@@ -52,7 +54,7 @@ export default function DoplnkyTab({
         <div>
           <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5 mb-2"><GripVertical className="w-3.5 h-3.5 text-indigo-600" /> Prúty / konštrukcie</span>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {dostupnePruty.map(st => riadokMnozstva(st.kod, st.nazov, cenaKs(cenyVolieb?.stoziare?.[st.kod]), stoziareMn?.[st.kod] || 0, (v) => onStoziarMn(st.kod, v)))}
+            {dostupnePruty.map(st => riadokMnozstva(st.kod, st.nazov, cenaKs(cenyVolieb?.stoziare?.[st.kod], cenyVoliebPov?.stoziare?.[st.kod]), stoziareMn?.[st.kod] || 0, (v) => onStoziarMn(st.kod, v)))}
           </div>
         </div>
 
@@ -61,7 +63,7 @@ export default function DoplnkyTab({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {podstavce.map(p => {
               const nastavenie = p.ceny?.[velkostKod];
-              return riadokMnozstva(p.kod, p.nazov, cenaKs(cenyVolieb?.podstavce?.[p.kod]), podstavceMn?.[p.kod] || 0, (v) => onPodstavecMn(p.kod, v),
+              return riadokMnozstva(p.kod, p.nazov, cenaKs(cenyVolieb?.podstavce?.[p.kod], cenyVoliebPov?.podstavce?.[p.kod]), podstavceMn?.[p.kod] || 0, (v) => onPodstavecMn(p.kod, v),
                 nastavenie?.vhodny === false ? <span className="text-[10px] text-amber-600 font-semibold block">Neodporúča sa pre túto veľkosť</span> : null);
             })}
             {podstavce.length === 0 && <p className="text-xs text-slate-400 italic">Žiadne podstavce.</p>}
@@ -83,7 +85,7 @@ export default function DoplnkyTab({
               <div key={d.kod} className={`p-3 rounded-xl border flex items-center gap-3 ${qty > 0 ? 'border-indigo-600 bg-indigo-50/50 shadow-sm' : 'border-slate-200 bg-white'}`}>
                 <div className="flex-1 min-w-0">
                   <span className="font-bold text-xs text-slate-900 block truncate">{d.nazov}</span>
-                  <span className="text-xs font-semibold text-indigo-600 block">{cenyVolieb?.doplnky?.[d.kod] == null ? '…' : `+${Number(cenyVolieb.doplnky[d.kod]).toFixed(2)} € / ks`}</span>
+                  <span className="text-xs font-semibold text-indigo-600 block">{cenyVolieb?.doplnky?.[d.kod] == null ? '…' : cenaKs(cenyVolieb.doplnky[d.kod], cenyVoliebPov?.doplnky?.[d.kod])}</span>
                   {d.popis && <p className="text-[10px] text-slate-500 truncate">{d.popis}</p>}
                 </div>
                 <div className="flex items-center border border-slate-300 rounded-lg bg-white overflow-hidden shrink-0">

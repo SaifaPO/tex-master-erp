@@ -58,6 +58,8 @@ export default function BeachflagApp({ supabase }) {
   const [cena, setCena] = useState(null);
   const [cenyMatica, setCenyMatica] = useState(null); // { velkosti: {S: 123}, materialy: {kod: 123} } — celkova cena pri kazdej velkosti / materiali
   const [listaOtvorena, setListaOtvorena] = useState(false);
+  const [cenyMaticaPov, setCenyMaticaPov] = useState(null); // tie iste ceny BEZ B2B zlavy — zobrazia sa preskrtnute vedla zlavnenych
+  const [cenyVoliebPov, setCenyVoliebPov] = useState(null);
   const [cenyVolieb, setCenyVolieb] = useState(null); // predajne ceny opracovania/prutov/podstavcov/doplnkov (zo servera)
   const [cenaNacitava, setCenaNacitava] = useState(false);
   const [cenaChyba, setCenaChyba] = useState('');
@@ -273,9 +275,15 @@ export default function BeachflagApp({ supabase }) {
         body: { matica: true, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnky, pocetKs, expresne, osobnyOdber, obojstranna, stoziare: zoznamMnozstiev(stoziareMn), podstavce: zoznamMnozstiev(podstavceMn), b2bKod: b2b.kod },
       });
       if (!zrusene) setCenyMatica(!error && !data?.error ? data.matica : null);
+      if (b2b.zlavaPercent > 0) {
+        const { data: d2, error: e2 } = await supabase.functions.invoke('beachflag-price-preview', {
+          body: { matica: true, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnky, pocetKs, expresne, osobnyOdber, obojstranna, stoziare: zoznamMnozstiev(stoziareMn), podstavce: zoznamMnozstiev(podstavceMn), b2bKod: null },
+        });
+        if (!zrusene) setCenyMaticaPov(!e2 && !d2?.error ? d2.matica : null);
+      } else if (!zrusene) setCenyMaticaPov(null);
     }, 600);
     return () => { zrusene = true; clearTimeout(t); };
-  }, [supabase, katalog, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnkyMnozstva, pocetKs, expresne, osobnyOdber, obojstranna, stoziareMn, podstavceMn, b2b.kod]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [supabase, katalog, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnkyMnozstva, pocetKs, expresne, osobnyOdber, obojstranna, stoziareMn, podstavceMn, b2b.kod, b2b.zlavaPercent]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Predajne ceny jednotlivych volieb — v DB su NAKUPNE ceny (verejnost ich nevidi), predajna cena sa
   // dopocita na serveri z marze a poctu kusov (rezim 'cenovnik' v beachflag-price-preview).
@@ -285,9 +293,13 @@ export default function BeachflagApp({ supabase }) {
     const t = setTimeout(async () => {
       const { data, error } = await supabase.functions.invoke('beachflag-price-preview', { body: { cenovnik: true, velkostKod, pocetKs, b2bKod: b2b.kod } });
       if (!zrusene) setCenyVolieb(!error && !data?.error ? data.cenovnik : null);
+      if (b2b.zlavaPercent > 0) {
+        const { data: d2, error: e2 } = await supabase.functions.invoke('beachflag-price-preview', { body: { cenovnik: true, velkostKod, pocetKs, b2bKod: null } });
+        if (!zrusene) setCenyVoliebPov(!e2 && !d2?.error ? d2.cenovnik : null);
+      } else if (!zrusene) setCenyVoliebPov(null);
     }, 300);
     return () => { zrusene = true; clearTimeout(t); };
-  }, [supabase, katalog, velkostKod, pocetKs, b2b.kod]);
+  }, [supabase, katalog, velkostKod, pocetKs, b2b.kod, b2b.zlavaPercent]);
 
   // snapAngle/snapThreshold = vstavana fabric funkcia, otacanie tahanim za rohovy uchyt "zaskoci"
   // na najblizsi nasobok 45° (v okruhu 5°) — presne ako pytal Martin, bez vlastnej implementacie.
@@ -403,7 +415,7 @@ export default function BeachflagApp({ supabase }) {
         <div className="px-4 pt-3"><B2bKod b2b={b2b} /></div>
 
         {krok === 'parametre' && (
-          <ParametreTab katalog={katalog} cenyVolieb={cenyVolieb} cenyMatica={cenyMatica} tvarKod={tvarKod} velkostKod={velkostKod} materialKod={materialKod} dokoncenieKod={dokoncenieKod} stoziarKod={stoziarKod} podstavecKod={podstavecKod}
+          <ParametreTab katalog={katalog} cenyVolieb={cenyVolieb} cenyMatica={cenyMatica} cenyVoliebPov={b2b.zlavaPercent > 0 ? cenyVoliebPov : null} cenyMaticaPov={b2b.zlavaPercent > 0 ? cenyMaticaPov : null} tvarKod={tvarKod} velkostKod={velkostKod} materialKod={materialKod} dokoncenieKod={dokoncenieKod} stoziarKod={stoziarKod} podstavecKod={podstavecKod}
             onTvar={vyberTvar} onVelkost={vyberVelkost} onMaterial={setMaterialKod} onDokoncenie={setDokoncenieKod} onStoziar={vyberStoziar} onPodstavec={vyberPodstavec}
             obojstranna={obojstranna} onObojstranna={setObojstranna} sendvicInfo={cena?.obojstranna}
             onDalej={() => setKrok('grafika')} />
@@ -416,7 +428,7 @@ export default function BeachflagApp({ supabase }) {
             onSpat={() => setKrok('parametre')} onDalej={() => setKrok('doplnky')} />
         )}
         {krok === 'doplnky' && (
-          <DoplnkyTab katalog={katalog} cenyVolieb={cenyVolieb} doplnkyMnozstva={doplnkyMnozstva} onZmenMnozstvo={zmenMnozstvoDoplnku}
+          <DoplnkyTab katalog={katalog} cenyVolieb={cenyVolieb} cenyVoliebPov={b2b.zlavaPercent > 0 ? cenyVoliebPov : null} doplnkyMnozstva={doplnkyMnozstva} onZmenMnozstvo={zmenMnozstvoDoplnku}
             tvarKod={tvarKod} velkostKod={velkostKod}
             stoziareMn={stoziareMn} onStoziarMn={nastavStoziarMn} podstavceMn={podstavceMn} onPodstavecMn={nastavPodstavecMn}
             expresne={expresne} onExpresne={setExpresne} pocetKs={pocetKs} onPocetKs={setPocetKs}

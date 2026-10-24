@@ -5,6 +5,7 @@ import NumberInput from './NumberInput';
 import AskQuestion from './AskQuestion';
 import { useB2bKod } from './b2b';
 import B2bKod from './B2bKod';
+import { CenaB2b } from './CenaB2b';
 
 // Bonusove percentualne body navyse k zakladnej marzi z Cenotvorby — pouzite pre urovne sluzby,
 // kde nepredavame latku ani nazehlenie (tenky obrat musi mat vyssiu maržu, inak sa neoplati).
@@ -631,10 +632,11 @@ export default function TextilMetraz({ supabase, onSpat }) {
             <div className="space-y-2 text-xs text-slate-300">
               <Row label="Technológia" value={technologia === 'sublimacia' ? 'Sublimácia' : 'Digitálna bavlna'} />
               <Row label="Úroveň služby" value={sluzbaRezim === 'len_zrazanie' ? 'Len zrážanie materiálu' : sluzbaRezim === 'len_papier' ? 'Len sublimačný papier' : sluzbaRezim === 'na_nas_material' ? 'Potlač aj látka od nás' : 'Potlač na tvoj materiál'} small />
-              <Row label={jeZrazanie ? 'Sadzba zrážania (bez DPH)' : 'Sadzba potlače (bez DPH)'} value={`${baseRate.toFixed(2)} €/bm`} />
-              {vybranyMaterial && <Row label={`Látka: ${vybranyMaterial.nazov} (bez DPH)`} value={`${fabricRate.toFixed(2)} €/bm`} />}
+              <Row label={jeZrazanie ? 'Sadzba zrážania (bez DPH)' : 'Sadzba potlače (bez DPH)'} value={<CenaB2b v={baseRate} p={b2b.zlavaPercent} suffix=" €/bm" />} />
+              {vybranyMaterial && <Row label={`Látka: ${vybranyMaterial.nazov} (bez DPH)`} value={<CenaB2b v={fabricRate} p={b2b.zlavaPercent} suffix=" €/bm" />} />}
               <Row label="Objednaná dĺžka metráže" value={`${totalLengthBm.toFixed(2)} bm`} highlight />
               <Row label={jeZrazanie ? 'Plocha materiálu' : 'Tlačová plocha'} value={`${totalM2.toFixed(2)} m²`} />
+              {b2bZlavaEur > 0 && <Row label="Metráž spolu (bez DPH)" value={<CenaB2b v={subtotal + b2bZlavaEur} p={b2b.zlavaPercent} />} />}
               {b2bZlavaEur > 0 && <Row label={`B2B zľava ${Number(b2b.zlavaPercent)} %`} value={`−${b2bZlavaEur.toFixed(2)} €`} />}
               <Row label="Príplatok za expres" value={`${expressFee.toFixed(2)} €`} />
               <Row label="Doprava (DPD kuriér)" value={shippingFee === 0 ? 'Zdarma' : `${shippingFee.toFixed(2)} €`} />

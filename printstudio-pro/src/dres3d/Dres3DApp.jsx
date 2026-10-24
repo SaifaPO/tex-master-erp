@@ -111,16 +111,22 @@ export default function Dres3DApp({ supabase, produktId }) {
   // Skutocna cena (marza x pocet hracov z nakupnej ceny) sa pocita na serveri — klient nakupne ceny
   // nikdy nevidi. Kym odpoved nepride (alebo ak funkcia este nie je nasadena), ukaze sa lokalny odhad.
   const [cenaServer, setCenaServer] = useState(null);
+  const [cenaServerPov, setCenaServerPov] = useState(null); // tá istá cena BEZ B2B zľavy — ukáže sa preškrtnutá vedľa zľavnenej
   useEffect(() => {
     if (!katalog?.produkt?.id) return;
     let zrusene = false;
     const t = setTimeout(async () => {
       const { data, error } = await supabase.functions.invoke('dres-price-preview', { body: { produktId: katalog.produkt.id, materialKod: configState.materialKod, pocetHracov: kusy.dresov, pocetTrenirok: kusy.trenirok, osobnyOdber, b2bKod: b2b.kod } });
       if (!zrusene) setCenaServer(!error && !data?.error && data?.cena ? data.cena : null);
+      if (b2b.zlavaPercent > 0) {
+        const { data: d2, error: e2 } = await supabase.functions.invoke('dres-price-preview', { body: { produktId: katalog.produkt.id, materialKod: configState.materialKod, pocetHracov: kusy.dresov, pocetTrenirok: kusy.trenirok, osobnyOdber, b2bKod: null } });
+        if (!zrusene) setCenaServerPov(!e2 && !d2?.error && d2?.cena ? d2.cena : null);
+      } else if (!zrusene) setCenaServerPov(null);
     }, 300);
     return () => { zrusene = true; clearTimeout(t); };
-  }, [supabase, katalog, configState.materialKod, kusy.dresov, kusy.trenirok, osobnyOdber, b2b.kod]);
+  }, [supabase, katalog, configState.materialKod, kusy.dresov, kusy.trenirok, osobnyOdber, b2b.kod, b2b.zlavaPercent]);
   const cena = cenaServer ?? cenaLokalna;
+  const cenaPov = b2b.zlavaPercent > 0 && cenaServer && cenaServerPov ? cenaServerPov : null; // ceny pred B2B zľavou
 
   const handleZmenText = (patch) => {
     setConfigState(prev => ({ ...prev, text: { ...prev.text, ...patch } }));
@@ -220,7 +226,7 @@ export default function Dres3DApp({ supabase, produktId }) {
           </button>
           <button onClick={otvorSuhrn} className="px-3.5 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-slate-950 font-bold text-xs sm:text-sm transition flex items-center gap-1.5 shadow-lg shadow-indigo-500/20">
             <ShoppingCart className="w-4 h-4" />
-            <span className="bg-slate-950/20 px-1.5 sm:px-2 py-0.5 rounded text-[11px] sm:text-xs font-extrabold">{cena.cenaSpolu.toFixed(2)} €</span>
+            <span className="bg-slate-950/20 px-1.5 sm:px-2 py-0.5 rounded text-[11px] sm:text-xs font-extrabold">{cenaPov && cenaPov.cenaSpolu > cena.cenaSpolu && <s className="font-normal opacity-60 mr-1">{cenaPov.cenaSpolu.toFixed(2)} €</s>}{cena.cenaSpolu.toFixed(2)} €</span>
           </button>
         </div>
       </div>
@@ -288,7 +294,7 @@ export default function Dres3DApp({ supabase, produktId }) {
             <div>
               <span className="text-[10px] sm:text-[11px] text-slate-400 uppercase tracking-wider block">Kalkulácia</span>
               <div className="flex items-baseline gap-1.5">
-                <span className="text-lg sm:text-xl font-extrabold text-white">{cena.jednotkovaCena.toFixed(2)} €</span>
+                <span className="text-lg sm:text-xl font-extrabold text-white">{cenaPov && cenaPov.jednotkovaCena > cena.jednotkovaCena && <s className="text-sm font-normal text-slate-500 mr-1.5">{cenaPov.jednotkovaCena.toFixed(2)} €</s>}{cena.jednotkovaCena.toFixed(2)} €</span>
                 <span className="text-[11px] text-slate-400">/ ks s DPH</span>
               </div>
               <span className="text-[10px] text-indigo-400 font-semibold block">
@@ -303,7 +309,7 @@ export default function Dres3DApp({ supabase, produktId }) {
       </div>
 
       {zobrazitRoster && (
-        <RosterModal roster={roster} velkosti={katalog.velkosti} cena={cena} zostava={zostavaEf} onZmenRoster={handleZmenRoster} onClose={() => setZobrazitRoster(false)} />
+        <RosterModal roster={roster} velkosti={katalog.velkosti} cena={cena} cenaPov={cenaPov} zostava={zostavaEf} onZmenRoster={handleZmenRoster} onClose={() => setZobrazitRoster(false)} />
       )}
       {zobrazitSuhrn && (
         <SuhrnModal
@@ -314,6 +320,7 @@ export default function Dres3DApp({ supabase, produktId }) {
           materialy={katalog.materialy}
           cena={cena}
           b2bKod={b2b.kod}
+          cenaPov={cenaPov}
           zostava={zostavaEf}
           trenirkyFarby={{ ...farbyTrenirok(configState), ...popisLogaTrenirok(configState.trenirky) }}
           osobnyOdber={osobnyOdber}

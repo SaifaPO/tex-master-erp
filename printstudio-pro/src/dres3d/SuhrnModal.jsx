@@ -3,7 +3,7 @@ import { X, Download } from 'lucide-react';
 
 const BUCKET = 'print-designs';
 
-export default function SuhrnModal({ supabase, produkt, configState, roster, materialy, cena, b2bKod, zostava = 'dres', trenirkyFarby = null, osobnyOdber, onOsobnyOdber, snapshotUrl, onClose, onBackToEdit }) {
+export default function SuhrnModal({ supabase, produkt, configState, roster, materialy, cena, cenaPov, b2bKod, zostava = 'dres', trenirkyFarby = null, osobnyOdber, onOsobnyOdber, snapshotUrl, onClose, onBackToEdit }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [techPanel, setTechPanel] = useState('');
@@ -134,7 +134,7 @@ export default function SuhrnModal({ supabase, produkt, configState, roster, mat
               {cena.b2bZlavaPercent > 0 && (
                 <div className="flex justify-between py-1 border-b border-slate-800">
                   <span className="text-slate-400">B2B zľava:</span>
-                  <span className="font-bold text-emerald-400">{cena.b2bZlavaPercent} % (už v cene)</span>
+                  <span className="font-bold text-emerald-400">{cena.b2bZlavaPercent} % (už v cene){cenaPov && cenaPov.cenaSpolu > cena.cenaSpolu ? ` — ušetríte ${(cenaPov.cenaSpolu - cena.cenaSpolu).toFixed(2)} €` : ''}</span>
                 </div>
               )}
               <div className="flex justify-between py-1 border-b border-slate-800">
@@ -143,7 +143,7 @@ export default function SuhrnModal({ supabase, produkt, configState, roster, mat
               </div>
               <div className="flex justify-between py-1 pt-2">
                 <span className="text-slate-300 font-bold">Celková cena:</span>
-                <span className="font-extrabold text-base text-indigo-400">{cena.cenaSpolu.toFixed(2)} €</span>
+                <span className="font-extrabold text-base text-indigo-400">{cenaPov && cenaPov.cenaSpolu > cena.cenaSpolu && <s className="text-xs font-normal text-slate-500 mr-1.5">{cenaPov.cenaSpolu.toFixed(2)} €</s>}{cena.cenaSpolu.toFixed(2)} €</span>
               </div>
             </div>
           </div>

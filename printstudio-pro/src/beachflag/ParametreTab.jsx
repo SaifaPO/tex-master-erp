@@ -7,11 +7,19 @@ const eur = (c) => (c == null ? null : Number(c).toFixed(2) + ' €');
 
 // undefined = cenovnik sa este nacitava (alebo zlyhal) — radsej nic nez zavadzajuce 'V cene'.
 const cenaText = (c) => (c == null ? '…' : c > 0 ? `+${Number(c).toFixed(2)} €` : 'V cene');
+// B2B: pôvodná cena preškrtnutá + cena po zľave (pov = tá istá cena bez B2B zľavy)
+const cenaTextB2b = (c, pov) => (c != null && pov != null && Number(pov) > Number(c) ? <><s className="text-slate-400 font-normal mr-1">{cenaText(pov)}</s>{cenaText(c)}</> : cenaText(c));
 
-export default function ParametreTab({ katalog, cenyVolieb, cenyMatica, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, onTvar, onVelkost, onMaterial, onDokoncenie, onStoziar, onPodstavec, onDalej, obojstranna, onObojstranna, sendvicInfo }) {
+export default function ParametreTab({ katalog, cenyVolieb, cenyMatica, cenyVoliebPov, cenyMaticaPov, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, onTvar, onVelkost, onMaterial, onDokoncenie, onStoziar, onPodstavec, onDalej, obojstranna, onObojstranna, sendvicInfo }) {
   // Pri materiáloch sa ukazuje len rozdiel oproti práve zvolenému materiálu (cena vlajky bez DPH).
   const rozdielMaterialu = (kod) => {
     const m = cenyMatica?.materialy;
+    if (m?.[kod] == null || m?.[materialKod] == null) return null;
+    return Math.round((m[kod] - m[materialKod]) * 100) / 100;
+  };
+  // To iste bez B2B zľavy (na preškrtnutie pri zapnutom B2B kóde)
+  const rozdielMaterialuPov = (kod) => {
+    const m = cenyMaticaPov?.materialy;
     if (m?.[kod] == null || m?.[materialKod] == null) return null;
     return Math.round((m[kod] - m[materialKod]) * 100) / 100;
   };
@@ -45,7 +53,7 @@ export default function ParametreTab({ katalog, cenyVolieb, cenyMatica, tvarKod,
                 </div>
                 <div className="text-[11px] font-semibold text-slate-700">{vyskaPreTvar} cm od zeme</div>
                 <div className="text-[10px] text-slate-500 mt-0.5">{vybranyTvar?.rozmery?.[v.kod]?.rozmer_popis || v.rozmer_popis}</div>
-                {eur(cenyMatica?.velkosti?.[v.kod]) && <div className="text-xs font-black text-indigo-600 mt-1">{eur(cenyMatica.velkosti[v.kod])} <span className="font-semibold text-slate-400">bez DPH</span></div>}
+                {eur(cenyMatica?.velkosti?.[v.kod]) && <div className="text-xs font-black text-indigo-600 mt-1">{cenyMaticaPov?.velkosti?.[v.kod] != null && Number(cenyMaticaPov.velkosti[v.kod]) > Number(cenyMatica.velkosti[v.kod]) && <s className="text-slate-400 font-semibold mr-1">{eur(cenyMaticaPov.velkosti[v.kod])}</s>}{eur(cenyMatica.velkosti[v.kod])} <span className="font-semibold text-slate-400">bez DPH</span></div>}
               </button>
             );
           })}
@@ -81,7 +89,7 @@ export default function ParametreTab({ katalog, cenyVolieb, cenyMatica, tvarKod,
                 {m.obrazok_url && <img src={m.obrazok_url} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />}
                 <div className="min-w-0">
                   <span className="font-bold text-xs block">{m.nazov}{obojstranna && m.je_mesh && <span className="ml-1.5 text-[10px] font-semibold text-rose-600">(na sendvič sa nepoužíva)</span>}</span>
-                  {rozdielMaterialu(m.kod) != null && <span className={`text-xs font-black block ${rozdielMaterialu(m.kod) === 0 ? 'text-slate-400' : rozdielMaterialu(m.kod) > 0 ? 'text-indigo-600' : 'text-emerald-600'}`}>{rozdielMaterialu(m.kod) === 0 ? 'V cene' : `${rozdielMaterialu(m.kod) > 0 ? '+' : '−'}${Math.abs(rozdielMaterialu(m.kod)).toFixed(2)} € bez DPH`}</span>}
+                  {rozdielMaterialu(m.kod) != null && <span className={`text-xs font-black block ${rozdielMaterialu(m.kod) === 0 ? 'text-slate-400' : rozdielMaterialu(m.kod) > 0 ? 'text-indigo-600' : 'text-emerald-600'}`}>{rozdielMaterialuPov(m.kod) != null && rozdielMaterialuPov(m.kod) !== rozdielMaterialu(m.kod) && rozdielMaterialuPov(m.kod) !== 0 && <s className="text-slate-400 font-semibold mr-1">{`${rozdielMaterialuPov(m.kod) > 0 ? '+' : '−'}${Math.abs(rozdielMaterialuPov(m.kod)).toFixed(2)} €`}</s>}{rozdielMaterialu(m.kod) === 0 ? 'V cene' : `${rozdielMaterialu(m.kod) > 0 ? '+' : '−'}${Math.abs(rozdielMaterialu(m.kod)).toFixed(2)} € bez DPH`}</span>}
                   {m.popis && <p className="text-[11px] text-slate-500 mt-0.5">{m.popis}</p>}
                   {m.pouzitie && <p className="text-[10px] text-slate-400 mt-0.5">{m.pouzitie}</p>}
                 </div>
@@ -131,7 +139,7 @@ export default function ParametreTab({ katalog, cenyVolieb, cenyMatica, tvarKod,
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-xs truncate">{d.nazov}</span>
-                    <span className="text-xs font-bold text-indigo-600">{cenaText(cenyVolieb?.dokoncenie?.[d.kod])}</span>
+                    <span className="text-xs font-bold text-indigo-600">{cenaTextB2b(cenyVolieb?.dokoncenie?.[d.kod], cenyVoliebPov?.dokoncenie?.[d.kod])}</span>
                   </div>
                   {d.popis && <p className="text-[11px] text-slate-500 mt-0.5">{d.popis}</p>}
                 </div>
@@ -152,7 +160,7 @@ export default function ParametreTab({ katalog, cenyVolieb, cenyMatica, tvarKod,
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-xs">{s.nazov}</span>
                 </div>
-                <span className="text-xs font-bold text-indigo-600 block">{cenaText(cenyVolieb?.stoziare?.[s.kod])}</span>
+                <span className="text-xs font-bold text-indigo-600 block">{cenaTextB2b(cenyVolieb?.stoziare?.[s.kod], cenyVoliebPov?.stoziare?.[s.kod])}</span>
                 {s.popis && <p className="text-[10px] text-slate-500 mt-0.5">{s.popis}</p>}
               </div>
             );
@@ -175,7 +183,7 @@ export default function ParametreTab({ katalog, cenyVolieb, cenyMatica, tvarKod,
               <div key={p.kod} onClick={() => onPodstavec(p.kod)} className={`p-3 rounded-xl border cursor-pointer transition-all ${active ? 'border-indigo-600 bg-indigo-50/80 ring-2 ring-indigo-500 text-indigo-900 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'}`}>
                 {p.obrazok_url && <img src={p.obrazok_url} alt="" className="w-full h-16 rounded-lg object-cover mb-1.5" />}
                 <span className="font-bold text-xs">{p.nazov}</span>
-                <span className="text-xs font-bold text-indigo-600 block">{cenaText(cenyVolieb?.podstavce?.[p.kod])}</span>
+                <span className="text-xs font-bold text-indigo-600 block">{cenaTextB2b(cenyVolieb?.podstavce?.[p.kod], cenyVoliebPov?.podstavce?.[p.kod])}</span>
                 {p.popis && <p className="text-[10px] text-slate-500 mt-0.5">{p.popis}</p>}
                 {!vhodny && (
                   <p className="text-[10px] text-amber-600 font-semibold mt-1 flex items-start gap-1"><TriangleAlert className="w-3 h-3 shrink-0 mt-0.5" /> Neodporúča sa pre túto veľkosť</p>

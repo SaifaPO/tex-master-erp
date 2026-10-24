@@ -7,6 +7,7 @@ import { priceAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG, QUANTITY_LEVELS } fro
 import NumberInput from './NumberInput';
 import { useB2bKod } from './b2b';
 import B2bKod from './B2bKod';
+import { CenaB2b } from './CenaB2b';
 import { initCelenkyEngine } from './celenky/celenkyEngine';
 
 const BUCKET = 'print-designs';
@@ -540,7 +541,8 @@ export default function Celenky({ supabase, onSpat }) {
                 <span className="text-xs font-bold">Cena</span>
                 <span className="text-[10px] font-normal text-indigo-300 bg-indigo-500/10 px-2 py-1 rounded-full">sadzba DPH {dphPercent}%</span>
               </div>
-              <RowSum label="Cena za kus (bez DPH)" value={`${cenaKus.toFixed(2)} €`} />
+              <RowSum label="Cena za kus (bez DPH)" value={<CenaB2b v={cenaKus} p={b2b.zlavaPercent} />} />
+              {b2bZlavaEur > 0 && <RowSum label={`Tovar spolu (${pocetKs} ks, bez DPH)`} value={<CenaB2b v={subtotalPredZlavou} p={b2b.zlavaPercent} />} />}
               <RowSum label="Doprava" value={shippingFee === 0 ? 'Zdarma' : `${shippingFee.toFixed(2)} €`} />
               {b2bZlavaEur > 0 && <RowSum label={`B2B zľava ${Number(b2b.zlavaPercent)} %`} value={`−${b2bZlavaEur.toFixed(2)} €`} />}
               {expressFee > 0 && <RowSum label="Príplatok expres" value={`${expressFee.toFixed(2)} €`} />}

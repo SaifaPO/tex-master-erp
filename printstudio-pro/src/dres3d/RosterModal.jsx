@@ -2,7 +2,7 @@ import React from 'react';
 import { X, Plus, Trash2 } from 'lucide-react';
 import { VELKOSTI_FALLBACK } from './dresPresets';
 
-export default function RosterModal({ roster, velkosti, cena, onZmenRoster, onClose, zostava = 'dres' }) {
+export default function RosterModal({ roster, velkosti, cena, cenaPov, onZmenRoster, onClose, zostava = 'dres' }) {
   const komplet = zostava === 'komplet';
   const ukazDres = zostava !== 'trenky';
   const ukazTrenirky = zostava !== 'dres';
@@ -129,7 +129,7 @@ export default function RosterModal({ roster, velkosti, cena, onZmenRoster, onCl
             </div>
             <div className="bg-slate-950 p-2.5 sm:p-3 rounded-xl border border-slate-800 text-center sm:text-left">
               <span className="text-[10px] text-slate-400 block">Cena spolu</span>
-              <span className="text-sm sm:text-base font-bold text-white">{cena.cenaSpolu.toFixed(2)} €</span>
+              <span className="text-sm sm:text-base font-bold text-white">{cenaPov && cenaPov.cenaSpolu > cena.cenaSpolu && <s className="text-xs font-normal text-slate-500 mr-1.5">{cenaPov.cenaSpolu.toFixed(2)} €</s>}{cena.cenaSpolu.toFixed(2)} €</span>
             </div>
           </div>
         </div>

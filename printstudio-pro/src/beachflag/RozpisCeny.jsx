@@ -1,8 +1,12 @@
 import React from 'react';
+import { CenaB2b } from '../CenaB2b';
 
 // Rozpis ceny po polozkach — pouziva sa v poslednom kroku aj v lište dole (viditelnom pocas celeho objednavania).
 export default function RozpisCeny({ cena, pocetKs, osobnyOdber, kompaktny = false }) {
   if (!cena) return null;
+  // Pri zapnutom B2B kóde sa každá cena ukáže pôvodná (preškrtnutá) aj po zľave
+  const p = Number(cena.b2bZlavaPercent) || 0;
+  const C = (v) => <CenaB2b v={v} p={p} staraCls="text-slate-400" novaCls="text-emerald-700" />;
   return (
     <div className="pt-2 border-t border-slate-100 space-y-1 text-xs text-slate-600">
       <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-1">Rozpis ceny</h4>
@@ -10,30 +14,31 @@ export default function RozpisCeny({ cena, pocetKs, osobnyOdber, kompaktny = fal
         <div className="space-y-2">
           <div>
             <div className="font-semibold text-slate-800">Vlajka</div>
-            <div className="flex justify-between pl-3"><span>{cena.rozpis.vlajka.mnozstvo} ks × {cena.rozpis.vlajka.cenaZaKus.toFixed(2)} € (materiál + opracovanie{cena.obojstranna ? ', obojstranná sendvičová' : ''})</span><span className="font-semibold">{cena.rozpis.vlajka.spolu.toFixed(2)} €</span></div>
+            <div className="flex justify-between pl-3"><span>{cena.rozpis.vlajka.mnozstvo} ks × {C(cena.rozpis.vlajka.cenaZaKus)} (materiál + opracovanie{cena.obojstranna ? ', obojstranná sendvičová' : ''})</span><span className="font-semibold text-right">{C(cena.rozpis.vlajka.spolu)}</span></div>
           </div>
           {cena.rozpis.stoziare.length > 0 && (
             <div>
               <div className="font-semibold text-slate-800">Konštrukcia / prút</div>
-              {cena.rozpis.stoziare.map((x, i) => <div key={i} className="flex justify-between pl-3"><span>{x.nazov} · {x.mnozstvo} ks × {x.cenaZaKus.toFixed(2)} €</span><span className="font-semibold">{x.spolu.toFixed(2)} €</span></div>)}
+              {cena.rozpis.stoziare.map((x, i) => <div key={i} className="flex justify-between pl-3"><span>{x.nazov} · {x.mnozstvo} ks × {C(x.cenaZaKus)}</span><span className="font-semibold text-right">{C(x.spolu)}</span></div>)}
             </div>
           )}
           {cena.rozpis.podstavce.length > 0 && (
             <div>
               <div className="font-semibold text-slate-800">Podstavec</div>
-              {cena.rozpis.podstavce.map((x, i) => <div key={i} className="flex justify-between pl-3"><span>{x.nazov} · {x.mnozstvo} ks × {x.cenaZaKus.toFixed(2)} €</span><span className="font-semibold">{x.spolu.toFixed(2)} €</span></div>)}
+              {cena.rozpis.podstavce.map((x, i) => <div key={i} className="flex justify-between pl-3"><span>{x.nazov} · {x.mnozstvo} ks × {C(x.cenaZaKus)}</span><span className="font-semibold text-right">{C(x.spolu)}</span></div>)}
             </div>
           )}
           {cena.rozpis.doplnky.length > 0 && (
             <div>
               <div className="font-semibold text-slate-800">Príslušenstvo / doplnky</div>
-              {cena.rozpis.doplnky.map((x, i) => <div key={i} className="flex justify-between pl-3"><span>{x.nazov} · {x.mnozstvo} ks × {x.cenaZaKus.toFixed(2)} €</span><span className="font-semibold">{x.spolu.toFixed(2)} €</span></div>)}
+              {cena.rozpis.doplnky.map((x, i) => <div key={i} className="flex justify-between pl-3"><span>{x.nazov} · {x.mnozstvo} ks × {C(x.cenaZaKus)}</span><span className="font-semibold text-right">{C(x.spolu)}</span></div>)}
             </div>
           )}
         </div>
       ) : (
-        <div className="flex justify-between"><span>Vlajky ({pocetKs}× materiál + opracovanie)</span><span className="font-semibold">{Number(cena.vlajkySpolu ?? cena.zaklad * pocetKs).toFixed(2)} €</span></div>
+        <div className="flex justify-between"><span>Vlajky ({pocetKs}× materiál + opracovanie)</span><span className="font-semibold text-right">{C(Number(cena.vlajkySpolu ?? cena.zaklad * pocetKs))}</span></div>
       )}
+      {cena.b2bZlavaEur > 0 && <div className="flex justify-between pt-1 border-t border-slate-100"><span>Tovar spolu (bez DPH)</span><span className="font-semibold text-right">{C(Number(cena.subtotal))}</span></div>}
       {cena.b2bZlavaEur > 0 && <div className="flex justify-between text-emerald-700 font-semibold"><span>B2B zľava {Number(cena.b2bZlavaPercent)} %</span><span>−{Number(cena.b2bZlavaEur).toFixed(2)} €</span></div>}
       {cena.expresnyPriplatok > 0 && <div className="flex justify-between text-amber-700 font-semibold"><span>Expresný príplatok</span><span>{cena.expresnyPriplatok.toFixed(2)} €</span></div>}
       <div className="flex justify-between"><span>Doprava</span><span className="font-semibold">{!cena.doprava ? 'Zdarma' : `${Number(cena.doprava).toFixed(2)} €`}</span></div>
