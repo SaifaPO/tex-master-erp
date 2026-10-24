@@ -43,14 +43,19 @@ function parseNazov(nazovSuboru: string, slovnik: Slovnik) {
   const poznamky: string[] = [];
   let zvysok = nazovSuboru.replace(/\.dxf$/i, '').replace(/_+/g, ' ').replace(/\s+/g, ' ').trim();
 
-  // 1) velkost + pocet kusov na konci: "... XL 10X", "... L-5cm 1x", "... M+5 cm 2x", "... 2XL 1x"
+  // 1) pocet rezov na konci: "... 1x", "... 3X" = kolkokrat sa subor reze; ak na konci nic nie je, reze sa raz.
+  //    Pred nim moze byt velkost (volitelne): "... XL 10X", "... L-5cm 1x", "... M+5 cm 2x", "... 2XL 1x", "... M"
   let velkost: string | null = null;
-  let pocet: number | null = null;
-  const mk = zvysok.match(/(?:^|\s)((?:xxs|xxl|xs|xl|[2-6]\s?xl|s|m|l)(?:\s*[+-]\s*\d+(?:\s*cm)?)?)\s+(\d+)\s*x\s*$/i);
-  if (mk) {
-    velkost = mk[1].replace(/\s+/g, ' ').toUpperCase();
-    pocet = parseInt(mk[2], 10);
-    zvysok = zvysok.slice(0, mk.index).trim();
+  let pocet = 1;
+  const mp = zvysok.match(/(?:^|\s)(\d+)\s*x\s*$/i);
+  if (mp) {
+    pocet = Math.max(1, parseInt(mp[1], 10));
+    zvysok = zvysok.slice(0, mp.index).trim();
+  }
+  const mv = zvysok.match(/(?:^|\s)((?:xxs|xxl|xs|xl|[2-6]\s?xl|s|m|l)(?:\s*[+-]\s*\d+(?:\s*cm)?)?)\s*$/i);
+  if (mv) {
+    velkost = mv[1].replace(/\s+/g, ' ').toUpperCase();
+    zvysok = zvysok.slice(0, mv.index).trim();
   }
 
   // 2) cislo zakazky = prve cislo (3–6 cifier) na zaciatku
@@ -76,13 +81,12 @@ function parseNazov(nazovSuboru: string, slovnik: Slovnik) {
   const zakaznik = slova.length ? slova.join(' ') : null;
 
   if (!zakazka) poznamky.push('V názve chýba číslo zákazky');
-  if (!velkost || pocet == null) poznamky.push('V názve chýba veľkosť a počet kusov na konci (napr. „M 3X")');
   if (!f.hodnota) poznamky.push('Farba nerozpoznaná (doplň do slovníka)');
   if (!m.hodnota) poznamky.push('Materiál nerozpoznaný (doplň do slovníka)');
 
   return {
     zakazka, zakaznik, material: m.hodnota, farba: f.hodnota, strih, velkost, pocet,
-    chybaNazvu: !zakazka || !velkost || pocet == null, poznamky,
+    chybaNazvu: !zakazka, poznamky,
   };
 }
 

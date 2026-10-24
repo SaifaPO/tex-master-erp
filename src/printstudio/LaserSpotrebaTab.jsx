@@ -99,12 +99,12 @@ export default function LaserSpotrebaTab({ supabase }) {
   // ---- úpravy riadkov
   const novyStav = (r) => {
     if (r.stav === 'chyba_suboru') return r.stav;
-    if (!r.zakazka || !r.velkost || r.pocet_ks == null) return 'chyba_v_nazve';
+    if (!r.zakazka) return 'chyba_v_nazve';
     return (Number(r.sirka_cm) || 0) > (Number(nast?.max_sirka_cm) || 160) ? 'nezmesti_sa' : 'ok';
   };
   const uloz = async (r, patch) => {
     const upravene = { ...r, ...patch };
-    if ('zakazka' in patch || 'velkost' in patch || 'pocet_ks' in patch) patch = { ...patch, stav: novyStav(upravene) };
+    if ('zakazka' in patch) patch = { ...patch, stav: novyStav(upravene) };
     setRiadky((rr) => rr.map((x) => (x.id === r.id ? { ...x, ...patch } : x)));
     const { error } = await supabase.from('laser_spotreba').update(patch).eq('id', r.id);
     if (error) { setSprava('Uloženie zlyhalo: ' + error.message); nacitaj(); }
@@ -231,7 +231,7 @@ export default function LaserSpotrebaTab({ supabase }) {
               <button onClick={() => setLen('vsetko')} className={`px-2.5 py-1 rounded font-bold ${len === 'vsetko' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Všetky</button>
               <button onClick={() => setLen('problemy')} className={`px-2.5 py-1 rounded font-bold ${len === 'problemy' ? 'bg-amber-600 text-white' : 'text-slate-400'}`}>Len na kontrolu</button>
             </div>
-            <span className="text-slate-500">Úprava políčka sa uloží po opustení. Po doplnení zákazky, veľkosti a počtu sa stav prepočíta.</span>
+            <span className="text-slate-500">Úprava políčka sa uloží po opustení. Po doplnení čísla zákazky sa stav prepočíta.</span>
           </div>
           <div className="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-x-auto">
             <table className="w-full text-xs min-w-[1100px]">
@@ -287,7 +287,7 @@ export default function LaserSpotrebaTab({ supabase }) {
               <div><label className={labelCls}>Najširšia metráž (cm) — širší strih sa označí „nezmestí sa"</label><input type="number" min="50" step="5" defaultValue={nast.max_sirka_cm} onBlur={(e) => ulozNast({ max_sirka_cm: Number(e.target.value) || 160 })} className={inputCls} /></div>
               <div><label className={labelCls}>Ktorá strana rozloženia je dĺžka rolky</label>
                 <select value={nast.osa_dlzky} onChange={(e) => ulozNast({ osa_dlzky: e.target.value })} className={inputCls}><option value="dlhsia">Dlhšia strana (odporúčané)</option><option value="x">Os X (šírka výkresu)</option><option value="y">Os Y (výška výkresu)</option></select></div>
-              <label className="flex items-center gap-2 text-slate-300 mt-5 cursor-pointer"><input type="checkbox" checked={nast.nasobit_poctom !== false} onChange={(e) => ulozNast({ nasobit_poctom: e.target.checked })} className="accent-indigo-600" /> Násobiť dĺžku počtom kusov z názvu (napr. „M 3X" = 3 sady)</label>
+              <label className="flex items-center gap-2 text-slate-300 mt-5 cursor-pointer"><input type="checkbox" checked={nast.nasobit_poctom !== false} onChange={(e) => ulozNast({ nasobit_poctom: e.target.checked })} className="accent-indigo-600" /> Násobiť dĺžku počtom rezov z konca názvu („… 3x" = 3 sady, bez čísla = 1×)</label>
             </div>
             <p className="text-[11px] text-slate-500">Zmena platí pre zobrazenie a e-mail hneď; stav „nezmestí sa" sa pri už uložených súboroch nepočíta spätne (zmení sa po úprave riadka).</p>
           </div>

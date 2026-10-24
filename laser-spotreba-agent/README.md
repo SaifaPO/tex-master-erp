@@ -48,8 +48,8 @@ PC musí byť po zapnutí prihlásené (alebo si nastav automatické prihláseni
 
 ## Ako sa počíta spotreba
 - **Dĺžka** = dlhšia strana rozloženia v DXF (osa dĺžky sa dá v ERP prepnúť na X alebo Y), **šírka** = kratšia strana. Šírka slúži len na kontrolu, či sa strih zmestí na metráž (max. šírka v nastaveniach, predvolene 160 cm).
-- Ak názov obsahuje počet kusov (napr. `M 3X`), spotreba = dĺžka rozloženia × počet. Dá sa vypnúť v nastaveniach.
-- Riadok má stav: **OK**, **chyba v názve** (chýba číslo zákazky alebo veľkosť/počet na konci), **nezmestí sa na šírku**, **súbor sa nedal prečítať**.
+- Číslo na konci názvu (`1x`, `2x`, `3x`…) = koľkokrát sa súbor reže, spotreba = dĺžka rozloženia × počet. Ak na konci nič nie je, reže sa raz. Dá sa vypnúť v nastaveniach.
+- Riadok má stav: **OK**, **chyba v názve** (chýba číslo zákazky na začiatku názvu), **nezmestí sa na šírku**, **súbor sa nedal prečítať**.
   Chybné riadky sa dajú v ERP opraviť alebo ignorovať.
 
 ## Čo ak niečo nejde
