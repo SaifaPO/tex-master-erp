@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Trash2, BadgePercent, Copy, Check } from 'lucide-react';
+import { Plus, Trash2, BadgePercent, Copy, Check, Download } from 'lucide-react';
 import NumberInput from '../NumberInput';
 import B2bPrehladCien from './B2bPrehladCien';
 
@@ -15,6 +15,7 @@ export default function B2bKodyTab({ supabase }) {
   const [skopirovane, setSkopirovane] = useState('');
   const [dopytEmail, setDopytEmail] = useState('');
   const [dopytEmailChyba, setDopytEmailChyba] = useState('');
+  const [dopyty, setDopyty] = useState([]);
 
   const nacitaj = async () => {
     setIsLoading(true);
@@ -24,7 +25,19 @@ export default function B2bKodyTab({ supabase }) {
     const { data: n, error: nErr } = await supabase.from('b2b_dopyt_nastavenia').select('email').eq('id', 1).maybeSingle();
     if (nErr) setDopytEmailChyba('Dopyty e-mailom ešte nie sú zapnuté — spusti migráciu migration_b2b_dopyty.sql v Supabase.');
     else { setDopytEmailChyba(''); setDopytEmail(n?.email || ''); }
+    const { data: dp } = await supabase.from('b2b_dopyty').select('*').order('created_at', { ascending: false }).limit(100);
+    setDopyty(dp || []);
     setIsLoading(false);
+  };
+  // Návrh z dopytu je v súkromnom úložisku — vygeneruje sa dočasný odkaz na stiahnutie
+  const stiahniNavrh = async (d) => {
+    const { data, error } = await supabase.storage.from('print-designs').createSignedUrl(d.subor_cesta, 600);
+    if (error || !data?.signedUrl) { window.alert('Návrh sa nepodarilo otvoriť: ' + (error?.message || 'chýba súbor')); return; }
+    window.open(data.signedUrl, '_blank', 'noopener');
+  };
+  const zmenStavDopytu = async (d, stav) => {
+    setDopyty((l) => l.map((x) => (x.id === d.id ? { ...x, stav } : x)));
+    await supabase.from('b2b_dopyty').update({ stav }).eq('id', d.id);
   };
   const ulozDopytEmail = async () => {
     const { error } = await supabase.from('b2b_dopyt_nastavenia').upsert({ id: 1, email: dopytEmail.trim() });
@@ -75,6 +88,34 @@ export default function B2bKodyTab({ supabase }) {
           </div>
           {/example\.sk$/i.test(dopytEmail) && <span className="text-[11px] text-amber-300 pb-1.5">Adresa je zatiaľ fiktívna — nahraď ju skutočnou.</span>}
         </div>
+      </div>
+
+      <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4 space-y-2">
+        <h3 className="font-bold text-sm text-white">Prijaté dopyty ({dopyty.length})</h3>
+        <p className="text-xs text-slate-400 max-w-3xl">Každý dopyt z konfigurátora sa uloží sem pod číslom DOPYT-XXXXXXXX (rovnaké číslo je v e-maile od zákazníka) aj s návrhom. Pošli mu ponuku a potom text jeho e-mailu prilep do <strong className="text-slate-200">AI zadanie zákazky</strong>, alebo si tu návrh stiahni.</p>
+        {dopyty.length === 0 ? <p className="text-xs text-slate-500">Zatiaľ žiadne dopyty.</p> : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="text-slate-500 uppercase tracking-wide"><tr>
+                <th className="text-left py-1.5 pr-3">Číslo dopytu</th><th className="text-left pr-3">Dátum</th><th className="text-left pr-3">Produkt</th><th className="text-right pr-3">Ks</th><th className="text-right pr-3">Spolu bez DPH</th><th className="text-left pr-3">Agentúra</th><th className="text-left pr-3">Stav</th><th></th>
+              </tr></thead>
+              <tbody>
+                {dopyty.map((d) => (
+                  <tr key={d.id} className="border-t border-slate-800 text-slate-200">
+                    <td className="py-1.5 pr-3 whitespace-nowrap"><button onClick={() => kopiruj('DOPYT-' + d.kod, 'd' + d.id)} className="font-mono font-bold text-indigo-300 hover:text-indigo-200 flex items-center gap-1" title="Kopírovať číslo">{skopirovane === 'd' + d.id ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />} DOPYT-{d.kod}</button></td>
+                    <td className="pr-3 whitespace-nowrap text-slate-400">{new Date(d.created_at).toLocaleString('sk-SK', { dateStyle: 'short', timeStyle: 'short' })}</td>
+                    <td className="pr-3">{d.produkt_nazov}{d.popis_varianty ? <span className="text-slate-500"> — {d.popis_varianty}</span> : null}</td>
+                    <td className="pr-3 text-right">{d.pocet_ks}</td>
+                    <td className="pr-3 text-right font-mono">{d.cena_spolu_bez_dph != null ? Number(d.cena_spolu_bez_dph).toFixed(2) + ' €' : '—'}</td>
+                    <td className="pr-3">{d.agentura || d.b2b_kod || '—'}</td>
+                    <td className="pr-3"><select value={d.stav} onChange={(e) => zmenStavDopytu(d, e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-1 py-0.5 text-[11px]"><option value="novy">Nový</option><option value="importovany">Zadaný do zákaziek</option><option value="zrusene">Zrušený</option></select></td>
+                    <td className="whitespace-nowrap">{d.subor_cesta && <button onClick={() => stiahniNavrh(d)} className="text-[11px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1"><Download className="w-3 h-3" /> Návrh</button>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {chyba && <p className="text-xs text-rose-400 bg-rose-950/30 border border-rose-900/40 rounded-lg p-3">{chyba}</p>}
