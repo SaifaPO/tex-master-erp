@@ -18,6 +18,7 @@ const NASTAVENIA_DEFAULT = {
   priplatok_expres_percent: 10, limit_expres_bm: 40, limit_standard_bm: 100, minimalna_cena_objednavky: 3,
   postovne_zdarma_od_bm: 2, priplatok_expres_min_eur: 5, expres_cutoff_hodina: 12,
   dph_percent: 23,
+  strihanie_zapnute: true, strihanie_hod: 7, strihanie_min_bm_male: 10, strihanie_min_bm_velke: 5, strihanie_marza_percent: 100,
 };
 
 export default function DtfMetrazTab({ supabase }) {
@@ -124,6 +125,24 @@ export default function DtfMetrazTab({ supabase }) {
           </div>
         </div>
         <p className="text-[10px] text-slate-500 mt-3">"Expres platí do" = do koľkej hodiny (slovenský čas) si zákazník ešte môže vybrať expresné spracovanie v deň objednávky — po tomto čase appka expres ponuku automaticky skryje.</p>
+      </div>
+
+      {/* NASTRIHANÉ TRANSFERY */}
+      <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-bold text-sm text-white">Nastrihané transfery (voliteľná služba)</h3>
+          <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+            <input type="checkbox" checked={nastavenia.strihanie_zapnute !== false} onChange={(e) => ulozNastavenia({ strihanie_zapnute: e.target.checked })} />
+            Ponúkať zákazníkom
+          </label>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-3xl">
+          <Field label="Sadzba strihača (€/hod)" value={nastavenia.strihanie_hod} step="0.5" onChange={(v) => ulozNastavenia({ strihanie_hod: v })} />
+          <Field label="Min. na 1 bm – malé logá" value={nastavenia.strihanie_min_bm_male} step="1" onChange={(v) => ulozNastavenia({ strihanie_min_bm_male: v })} />
+          <Field label="Min. na 1 bm – veľké logá" value={nastavenia.strihanie_min_bm_velke} step="1" onChange={(v) => ulozNastavenia({ strihanie_min_bm_velke: v })} />
+          <Field label="Marža na nastrihanie (%)" value={nastavenia.strihanie_marza_percent} step="5" onChange={(v) => ulozNastavenia({ strihanie_marza_percent: v })} />
+        </div>
+        <p className="text-[10px] text-slate-500 mt-3">Cena za 1 bm = minúty na 1 bm ÷ 60 × sadzba strihača × (1 + marža). Logá do 10 cm sa strihajú podľa "malé", od 30 cm podľa "veľké", medzi tým sa počíta plynulo; pri hotovej rolke sa berie stred. Zákazník službu zaškrtne v objednávke a cena sa pripočíta k metráži (B2B zľava sa uplatní aj na ňu).</p>
       </div>
 
       {/* VÝROBNÉ NÁKLADY + CENOVÉ HLADINY */}

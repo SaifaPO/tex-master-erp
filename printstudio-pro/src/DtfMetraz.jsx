@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Scroll, UploadCloud, Truck, Eye, ShoppingCart, TriangleAlert, CreditCard, Gift, Palette, Wand2 } from 'lucide-react';
+import { Scroll, UploadCloud, Truck, Eye, ShoppingCart, TriangleAlert, CreditCard, Gift, Palette, Wand2, Scissors } from 'lucide-react';
 import { priceAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 import NumberInput from './NumberInput';
 import AskQuestion from './AskQuestion';
@@ -21,6 +21,15 @@ function vypocitajJednuOrientaciu(itemWidthCm, itemHeightCm, qty) {
   const rowHeightCm = itemHeightCm + MARGIN_CM;
   const totalHeightCm = totalRows * rowHeightCm;
   return { itemsPerRow, totalRows, dlzkaBm: Math.max(0.1, totalHeightCm / 100) };
+}
+
+// Minút strihania na 1 bm podľa veľkosti motívu (≤10 cm = 'malé', ≥30 cm = 'veľké', medzi tým lineárne; hotová rolka = stred). Rovnaké ako na serveri.
+function strihanieMinNaBm(nast, maxRozmerCm) {
+  const male = Number(nast.strihanie_min_bm_male ?? 10);
+  const velke = Number(nast.strihanie_min_bm_velke ?? 5);
+  if (maxRozmerCm == null) return (male + velke) / 2;
+  const t = Math.min(1, Math.max(0, (maxRozmerCm - 10) / 20));
+  return male + (velke - male) * t;
 }
 
 // Vyskusa obe orientacie motivu (tak ako zadal zakaznik, aj otocenu o 90°) a vyberie tu, ktora
@@ -59,6 +68,7 @@ export default function DtfMetraz({ supabase, onSpat }) {
   const [deliverySpeed, setDeliverySpeed] = useState('standard');
   const [scheduleOption, setScheduleOption] = useState(null);
   const [grafickaPriprava, setGrafickaPriprava] = useState(false);
+  const [nastrihane, setNastrihane] = useState(false);
   const [osobnyOdber, setOsobnyOdber] = useState(false);
   const b2b = useB2bKod(supabase);
 
@@ -88,6 +98,7 @@ export default function DtfMetraz({ supabase, onSpat }) {
 
   // ---- Výpočet ceny a metráže ----
   let b2bZlavaEur = 0;
+  let nastrihanieEur = 0, nastrihanieCenaNaBm = 0;
   let totalLengthBm = 0, totalM2 = 0, totalCm2 = 0, baseRate = 0, subtotal = 0, expressFee = 0, shippingFee = 0, grandTotalBezDph = 0, dphSuma = 0, grandTotal = 0, capacityIssue = null;
   const rozlozenieAuto = mode === 'auto' ? vypocitajRozlozenie(widthCm, heightCm, qty) : null;
   // Expres = "v deň objednávky" — po tomto čase to už tlačiareň fyzicky nestihne, preto sa ponuka vypne.
@@ -108,7 +119,15 @@ export default function DtfMetraz({ supabase, onSpat }) {
     // Sadzba (€/bm) sa dopocitava z vyrobnej ceny na meter + jednotneho marzoveho vzorca
     // (rovnaky ako v celom PrintStudio Pro) — vacsi odber = nizsia marza = nizsia sadzba.
     baseRate = priceAt(nakladBm, totalLengthBm, pricingConfig);
-    subtotal = Math.max(totalLengthBm * baseRate, Number(nastavenia.minimalna_cena_objednavky));
+    // Nastrihané transfery (voliteľné): bm × minút/bm × sadzba strihača × (1 + marža) — rovnaký vzorec ako na serveri.
+    // Cena za 1 bm sa počíta zvlášť, aby sa dala ukázať už pri zaškrtávacom políčku.
+    const strihanieZapnute = nastavenia.strihanie_zapnute !== false && Number(nastavenia.strihanie_hod) > 0;
+    if (strihanieZapnute) {
+      const maxRozmer = mode === 'auto' ? Math.max(Number(widthCm) || 0, Number(heightCm) || 0) : null;
+      nastrihanieCenaNaBm = (strihanieMinNaBm(nastavenia, maxRozmer) / 60) * Number(nastavenia.strihanie_hod) * (1 + (Number(nastavenia.strihanie_marza_percent) || 0) / 100);
+      if (nastrihane) nastrihanieEur = Math.round(totalLengthBm * nastrihanieCenaNaBm * 100) / 100;
+    }
+    subtotal = Math.max(totalLengthBm * baseRate, Number(nastavenia.minimalna_cena_objednavky)) + nastrihanieEur;
     // B2B zľava (kód agentúry) sa odpočíta z ceny metráže — rovnako ako na serveri.
     b2bZlavaEur = Math.round(subtotal * (Number(b2b.zlavaPercent) || 0)) / 100;
     subtotal -= b2bZlavaEur;
@@ -254,6 +273,7 @@ export default function DtfMetraz({ supabase, onSpat }) {
           deliverySpeed, harmonogram: aktualnyHarmonogram,
           suborNazov: rawFile?.name || null, suborCesta,
           grafickaPriprava: mode === 'auto' || mode === 'subor' ? grafickaPriprava : false,
+          nastrihane: mode === 'auto' || mode === 'subor' ? nastrihane : false,
           osobnyOdber: mode === 'auto' || mode === 'subor' ? osobnyOdber : false,
           b2bKod: b2b.kod,
         },
@@ -405,6 +425,16 @@ export default function DtfMetraz({ supabase, onSpat }) {
             </div>
           </label>
 
+          {nastavenia.strihanie_zapnute !== false && Number(nastavenia.strihanie_hod) > 0 && (mode === 'auto' || mode === 'subor') && (
+            <label className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-start gap-3 cursor-pointer">
+              <input type="checkbox" checked={nastrihane} onChange={(e) => setNastrihane(e.target.checked)} className="mt-0.5" />
+              <div>
+                <span className="text-sm font-bold text-slate-900 flex items-center gap-1.5"><Scissors className="w-4 h-4 text-indigo-500" /> Dodajte mi transfery nastrihané (+{nastrihanieCenaNaBm.toFixed(2)} € / bm)</span>
+                <p className="text-xs text-slate-500 mt-0.5">Transfery vám rozstrihneme na jednotlivé kusy, takže ich dostanete pripravené na aplikáciu. Cena sa pripočíta k metráži{nastrihane && nastrihanieEur > 0 ? ` (spolu ${nastrihanieEur.toFixed(2)} € bez DPH)` : ''}.</p>
+              </div>
+            </label>
+          )}
+
           <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-3">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-2"><Truck className="w-4 h-4 text-indigo-500" /> Rýchlosť odoslania</h3>
             <div className="grid grid-cols-2 gap-3">
@@ -479,6 +509,7 @@ export default function DtfMetraz({ supabase, onSpat }) {
               <Row label="Potrebná dĺžka rolky" value={`${totalLengthBm.toFixed(2)} bm`} highlight />
               <Row label="Tlačová plocha" value={`${totalM2.toFixed(2)} m²`} />
               {b2bZlavaEur > 0 && <Row label="Metráž spolu (bez DPH)" value={<CenaB2b v={subtotal + b2bZlavaEur} p={b2b.zlavaPercent} />} />}
+              {nastrihanieEur > 0 && <Row label="z toho nastrihanie transferov (bez DPH)" value={`${nastrihanieEur.toFixed(2)} €`} />}
               {b2bZlavaEur > 0 && <Row label={`B2B zľava ${Number(b2b.zlavaPercent)} %`} value={`−${b2bZlavaEur.toFixed(2)} €`} />}
               <Row label="Príplatok za expres" value={`${expressFee.toFixed(2)} €`} />
               {grafickaPriprava && <Row label="Príprava grafiky na tlač" value="10.00 €" />}

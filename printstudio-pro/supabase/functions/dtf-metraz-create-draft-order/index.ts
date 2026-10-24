@@ -45,6 +45,16 @@ function vypocitajJednuOrientaciu(itemWidthCm: number, itemHeightCm: number, qty
   return Math.max(0.1, totalHeightCm / 100);
 }
 
+// Nastrihanie transferov: minut na 1 bm rolky podla velkosti motivov (male logo trva dlhsie nez velke). Do 10 cm = 'male', od 30 cm = 'velke', medzi tym linearne;
+// pri hotovej rolke (rozmer motivu nie je znamy) sa berie stred. Rovnaky vzorec je aj v DtfMetraz.jsx.
+function strihanieMinNaBm(nast: any, maxRozmerCm: number | null) {
+  const male = Number(nast.strihanie_min_bm_male ?? 10);
+  const velke = Number(nast.strihanie_min_bm_velke ?? 5);
+  if (maxRozmerCm == null) return (male + velke) / 2;
+  const t = Math.min(1, Math.max(0, (maxRozmerCm - 10) / 20));
+  return male + (velke - male) * t;
+}
+
 // Vyskusa obe orientacie motivu (tak ako zadal zakaznik, aj otocenu o 90°) a vyberie tu, ktora
 // vyjde na kratsiu dlzku metraze — AUTORITATIVNY vypocet ceny aj pre production (efektivnaSirkaCm/
 // efektivnaVyskaCm sa uklada do objednavky, aby vyroba vedela, v akej orientacii ma motiv polozit).
@@ -148,7 +158,7 @@ Deno.serve(async (req) => {
       mode, widthCm, heightCm, qty, directLengthBm,
       deliverySpeed = 'standard', harmonogram = '',
       suborNazov = null, suborCesta = null,
-      grafickaPriprava = false,
+      grafickaPriprava = false, nastrihane = false,
       osobnyOdber = false, b2bKod = null,
     } = body;
 
@@ -175,6 +185,7 @@ Deno.serve(async (req) => {
     const PRIPRAVA_GRAFIKY_EUR = 10;
 
     let b2bZlavaPercent = 0;
+    let nastrihanieEur = 0;
     let totalLengthBm = 0, totalM2 = 0, baseRate = 0, grandTotal = mode === 'paleta' ? PALETA_CENA_S_DPH : VZORKA_CENA_S_DPH;
     let rozlozenie: { dlzkaBm: number; jeOtoceny: boolean; efektivnaSirkaCm: number; efektivnaVyskaCm: number } | null = null;
     if (mode === 'auto' || mode === 'subor') {
@@ -190,7 +201,14 @@ Deno.serve(async (req) => {
 
       const nakladBm = Number(nak.naklad_bm) || 0;
       baseRate = priceAt(nakladBm, totalLengthBm, pricingConfig);
-      const subtotalPredZlavou = Math.max(totalLengthBm * baseRate, Number(nastavenia.minimalna_cena_objednavky) || 0);
+      // Nastrihane transfery (volitelne): bm x minut/bm x sadzba strihaca x (1 + marza) — pripocita sa k cene metraze, B2B zlava sa uplatni aj na nu
+      nastrihanieEur = 0;
+      if (nastrihane && nastavenia.strihanie_zapnute !== false) {
+        const maxRozmer = mode === 'auto' ? Math.max(Number(widthCm) || 0, Number(heightCm) || 0) : null;
+        const nakladStrihanie = (totalLengthBm * strihanieMinNaBm(nastavenia, maxRozmer) / 60) * (Number(nastavenia.strihanie_hod) || 0);
+        nastrihanieEur = Math.round(nakladStrihanie * (1 + (Number(nastavenia.strihanie_marza_percent) || 0) / 100) * 100) / 100;
+      }
+      const subtotalPredZlavou = Math.max(totalLengthBm * baseRate, Number(nastavenia.minimalna_cena_objednavky) || 0) + nastrihanieEur;
       // B2B zlava sa odpocita z ceny metraze (pred expresom, dopravou a DPH)
       b2bZlavaPercent = await b2bZlava(supabase, b2bKod);
       const subtotal = subtotalPredZlavou - Math.round(subtotalPredZlavou * b2bZlavaPercent) / 100;
@@ -235,6 +253,8 @@ Deno.serve(async (req) => {
       subor_cesta: suborCesta,
       subor_url: suborUrl,
       graficka_priprava: (mode === 'auto' || mode === 'subor') && !!grafickaPriprava,
+      nastrihane: (mode === 'auto' || mode === 'subor') && nastrihanieEur > 0,
+      nastrihanie_eur: nastrihanieEur > 0 ? nastrihanieEur : null,
       osobny_odber: (mode === 'auto' || mode === 'subor') && !!osobnyOdber,
     });
     if (insertErr) throw insertErr;
@@ -247,7 +267,7 @@ Deno.serve(async (req) => {
 
     const osobnyOdberSufix = (mode === 'auto' || mode === 'subor') && osobnyOdber ? ' (osobný odber)' : '';
     const nazovPolozky = mode === 'auto'
-      ? `DTF transfer — metráž ${totalLengthBm.toFixed(2)}bm (${qty}× ${widthCm}×${heightCm}cm)` + (grafickaPriprava ? ' + príprava grafiky' : '') + osobnyOdberSufix
+      ? `DTF transfer — metráž ${totalLengthBm.toFixed(2)}bm (${qty}× ${widthCm}×${heightCm}cm)` + (grafickaPriprava ? ' + príprava grafiky' : '') + (nastrihanieEur > 0 ? ' + nastrihané' : '') + osobnyOdberSufix
       : mode === 'vzorky'
       ? 'DTF transfer — vzorka vlastnej grafiky (A4, 1 ks)'
       : mode === 'paleta'
@@ -272,6 +292,7 @@ Deno.serve(async (req) => {
               { name: '_subor', value: suborNazov || '' },
               { name: '_subor_link', value: suborUrl || '' },
               { name: '_priprava_grafiky', value: grafickaPriprava ? 'áno (+10€)' : 'nie' },
+              { name: '_nastrihane', value: nastrihanieEur > 0 ? `áno (+${nastrihanieEur.toFixed(2)} € bez DPH)` : 'nie' },
               { name: '_osobny_odber', value: (mode === 'auto' || mode === 'subor') && osobnyOdber ? 'áno' : 'nie' },
               { name: '_b2b_kod', value: b2bZlavaPercent > 0 ? String(b2bKod).trim().toUpperCase() : '' },
               { name: '_b2b_zlava_percent', value: b2bZlavaPercent > 0 ? String(b2bZlavaPercent) : '' },
