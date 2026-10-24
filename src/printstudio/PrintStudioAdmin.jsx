@@ -23,6 +23,7 @@ import Transfer3dTab from './Transfer3dTab';
 import StolovaTab from './StolovaTab';
 import PonukaDresovTab from './PonukaDresovTab';
 import VysivkaModul from '../VysivkaModul';
+import VysivkaKalkTab from './VysivkaKalkTab';
 import SosTlacidlaTab from './SosTlacidlaTab';
 import SnurkyTab from './SnurkyTab';
 import FolieTab from './FolieTab';
@@ -73,6 +74,7 @@ const SUBTABS = [
   { id: 'dtf-separator', label: 'DTF/DTG Separátor', icon: Grid3x3 },
   { id: 'vektorizer', label: 'Vektorizér obrázkov', icon: Wand2 },
   { id: 'vysivka', label: 'Výšivka (editor)', icon: Shirt },
+  { id: 'vysivka-kalk', label: 'Výšivka — kalkulácia', icon: Calculator },
   { id: 'sos', label: 'SOS tlačidlá (stanice)', icon: Siren },
   { id: 'ulozisko', label: 'Úložisko', icon: HardDrive },
 ];
@@ -81,7 +83,7 @@ const SKUPINY = [
   { id: 'objednavky', label: 'Objednávky', icon: Inbox, tabs: ['objednavky'] },
   { id: 'aplikacie', label: 'Aplikácie', icon: LayoutGrid, tabs: ['dresy', 'buffky', 'celenky', 'transfer3d', 'stolova', 'snurky', 'folie', 'ponuka', 'vlajky', 'beachvlajky', 'metraze'] },
   { id: 'kniznica', label: 'Knižnica', icon: Library, tabs: ['produkty', 'kategorie', 'farby', 'fonty', 'grafiky', 'mockupy'] },
-  { id: 'ceny', label: 'Ceny a tlač', icon: Coins, tabs: ['cenotvorba', 'kostra-cien', 'laser-spotreba', 'potlace', 'kalkulacka-tlace', 'predajny-cennik'] },
+  { id: 'ceny', label: 'Ceny a tlač', icon: Coins, tabs: ['cenotvorba', 'kostra-cien', 'laser-spotreba', 'potlace', 'vysivka-kalk', 'kalkulacka-tlace', 'predajny-cennik'] },
   { id: 'nastavenia', label: 'Nastavenia', icon: Settings2, tabs: ['shopify', 'b2b-kody', 'manualy', 'dtf-separator', 'vektorizer', 'vysivka', 'sos', 'ulozisko'] },
 ];
 
@@ -177,7 +179,8 @@ export default function PrintStudioAdmin({ supabase, initialSubtab, fokus = null
         {subtab === 'vektorizer' && <VektorizerTab />}
         {subtab === 'laser-spotreba' && <LaserSpotrebaTab supabase={supabase} />}
         {subtab === 'sos' && <SosTlacidlaTab supabase={supabase} />}
-        {subtab === 'vysivka' && <VysivkaModul supabase={supabase} vyska="calc(100vh - 260px)" />}
+        {subtab === 'vysivka' && <VysivkaModul supabase={supabase} vyska="auto" />}
+        {subtab === 'vysivka-kalk' && <VysivkaKalkTab supabase={supabase} />}
         {subtab === 'ulozisko' && <UloziskoTab supabase={supabase} />}
       </div>
     </div>

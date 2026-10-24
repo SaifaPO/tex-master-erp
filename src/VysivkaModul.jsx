@@ -24,6 +24,7 @@ const asBlob = (data, type) => (data instanceof Blob ? data : new Blob([data], {
 
 export default function VysivkaModul({ supabase, zakazka = null, onUlozene, vyska = 'calc(100vh - 120px)' }) {
   const frameRef = useRef(null);
+  const [autoVyska, setAutoVyska] = useState(640);
   const [stav, setStav] = useState('');
   const [historia, setHistoria] = useState([]);
 
@@ -110,6 +111,23 @@ export default function VysivkaModul({ supabase, zakazka = null, onUlozene, vysk
 
   useEffect(() => { nacitajHistoriu(); }, [nacitajHistoriu]);
 
+  // vyska="auto": editor vyplní presne zvyšok okna a stránka okolo sa nescrolluje (žiadny vonkajší posuvník, scrolluje sa len v editore)
+  useEffect(() => {
+    if (vyska !== 'auto') return undefined;
+    const prev = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = 'hidden';
+    window.scrollTo(0, 0);
+    const prepocitaj = () => {
+      const r = frameRef.current?.getBoundingClientRect();
+      if (!r) return;
+      setAutoVyska(Math.max(420, Math.floor(window.innerHeight - (r.top + window.scrollY) - 56)));
+    };
+    prepocitaj();
+    const t = setTimeout(prepocitaj, 400);
+    window.addEventListener('resize', prepocitaj);
+    return () => { clearTimeout(t); window.removeEventListener('resize', prepocitaj); document.documentElement.style.overflow = prev; };
+  }, [vyska, historia.length, stav]);
+
   useEffect(() => {
     const onMsg = async e => {
       if (e.origin !== window.location.origin || e.source !== frameRef.current?.contentWindow) return;
@@ -162,7 +180,7 @@ export default function VysivkaModul({ supabase, zakazka = null, onUlozene, vysk
         ref={frameRef}
         src={src}
         title="Výšivka – Stitch Editor"
-        style={{ width: '100%', height: vyska, border: 0, borderRadius: 12, background: '#e9e7e3' }}
+        style={{ width: '100%', height: vyska === 'auto' ? autoVyska : vyska, border: 0, borderRadius: 12, background: '#e9e7e3', display: 'block' }}
       />
     </div>
   );
