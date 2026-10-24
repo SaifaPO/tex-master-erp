@@ -226,6 +226,18 @@ export default function PotlaceTab({ supabase }) {
 
   if (isLoading) return <p className="text-sm text-slate-500">Načítavam…</p>;
 
+  // Prepinac VIP / klientskej zlavy (napr. 15 % pre reklamky) — pouziva sa hore aj v testovacej kalkulacke dole (jeden spolocny stav)
+  const klientPrepinac = () => (
+    <div className={`mt-3 rounded-xl border px-3 py-2 flex flex-wrap items-center gap-3 ${klientRezim ? 'border-amber-500/60 bg-amber-950/25' : 'border-slate-800 bg-slate-950'}`}>
+          <button type="button" onClick={() => setKlientRezim(v => !v)} className={`px-3 py-1.5 rounded-lg text-xs font-bold border-2 transition ${klientRezim ? 'border-amber-500 bg-amber-600/20 text-amber-300' : 'border-slate-700 text-slate-400 hover:text-slate-200'}`}>Režim klienta: {klientRezim ? 'ZAP' : 'VYP'}</button>
+          <label className="text-xs text-slate-400 flex items-center gap-1.5">Zľava klienta
+            <NumberInput step="1" min="0" max="90" value={klientPercent} onChange={setKlientPercent} fallback={0} className="w-16 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /> %
+          </label>
+          {[10, 15, 20].map(p => <button key={p} type="button" onClick={() => { setKlientPercent(p); setKlientRezim(true); }} className="px-2 py-1 rounded-md text-[11px] font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700">{p} %</button>)}
+          <span className="text-[11px] text-slate-500">V kalkulačkách nižšie pribudne oranžový riadok s cenou po zľave a rozdielom. Uložená predajná sadzba ostáva bez zľavy.</span>
+        </div>
+  );
+
   return (
     <div className="space-y-6">
       <div>
@@ -242,14 +254,7 @@ export default function PotlaceTab({ supabase }) {
           <div><label className={labelCls}>Výška (cm)</label><input type="number" value={testH} onChange={(e) => setTestH(e.target.value)} className={inputCls} /></div>
           <div><label className={labelCls}>Počet ks</label><input type="number" min="1" value={testKs} onChange={(e) => setTestKs(e.target.value)} className={inputCls} /></div>
         </div>
-        <div className={`mt-3 rounded-xl border px-3 py-2 flex flex-wrap items-center gap-3 ${klientRezim ? 'border-amber-500/60 bg-amber-950/25' : 'border-slate-800 bg-slate-950'}`}>
-          <button type="button" onClick={() => setKlientRezim(v => !v)} className={`px-3 py-1.5 rounded-lg text-xs font-bold border-2 transition ${klientRezim ? 'border-amber-500 bg-amber-600/20 text-amber-300' : 'border-slate-700 text-slate-400 hover:text-slate-200'}`}>Režim klienta: {klientRezim ? 'ZAP' : 'VYP'}</button>
-          <label className="text-xs text-slate-400 flex items-center gap-1.5">Zľava klienta
-            <NumberInput step="1" min="0" max="90" value={klientPercent} onChange={setKlientPercent} fallback={0} className="w-16 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white" /> %
-          </label>
-          {[10, 15, 20].map(p => <button key={p} type="button" onClick={() => { setKlientPercent(p); setKlientRezim(true); }} className="px-2 py-1 rounded-md text-[11px] font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700">{p} %</button>)}
-          <span className="text-[11px] text-slate-500">V kalkulačkách nižšie pribudne oranžový riadok s cenou po zľave a rozdielom. Uložená predajná sadzba ostáva bez zľavy.</span>
-        </div>
+        {klientPrepinac()}
         <p className="text-[11px] text-slate-500 mt-2">Plocha: <strong className="text-white">{plocha} cm²</strong> • Marža sa nastavuje v záložke <strong className="text-white">Cenotvorba</strong>.</p>
       </div>
 
@@ -442,6 +447,7 @@ export default function PotlaceTab({ supabase }) {
           <button onClick={() => setTestTmavyTextil(false)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold border-2 transition ${!testTmavyTextil ? 'border-indigo-500 bg-indigo-950/40 text-indigo-300' : 'border-slate-700 text-slate-400'}`}>Svetlý</button>
           <button onClick={() => setTestTmavyTextil(true)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold border-2 transition ${testTmavyTextil ? 'border-indigo-500 bg-indigo-950/40 text-indigo-300' : 'border-slate-700 text-slate-400'}`}>Tmavý</button>
         </div>
+        <div className="mb-3">{klientPrepinac()}</div>
         <p className="text-xs text-slate-400 mb-2">Plocha motívu: <span className="text-white font-semibold">{plocha} cm²</span> × {ks} ks</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
           {[
@@ -460,8 +466,19 @@ export default function PotlaceTab({ supabase }) {
             return (
               <div key={key} className="bg-slate-900 rounded-xl border border-slate-800 p-3">
                 <p className="text-xs font-bold text-slate-300 mb-1">{label}</p>
+                {klientZlava > 0 && <p className="text-[10px] text-slate-500">Klasická cena</p>}
                 <p className="text-xl font-black text-emerald-400">{cena.toFixed(2)} €<span className="text-xs text-slate-500 font-normal"> /ks</span></p>
                 <p className="text-sm text-slate-400">{(cena * ks).toFixed(2)} € spolu za {ks}ks</p>
+                {klientZlava > 0 && (() => {
+                  const cenaVip = Math.round(cena * (1 - klientZlava / 100) * 100) / 100;
+                  return (
+                    <div className="mt-2 pt-2 border-t border-amber-500/30">
+                      <p className="text-[10px] font-bold text-amber-400">VIP cena (−{klientZlava} %)</p>
+                      <p className="text-xl font-black text-amber-300">{cenaVip.toFixed(2)} €<span className="text-xs text-amber-200/60 font-normal"> /ks</span></p>
+                      <p className="text-sm text-amber-200/70">{(cenaVip * ks).toFixed(2)} € spolu · ušetrí {((cena - cenaVip) * ks).toFixed(2)} €</p>
+                    </div>
+                  );
+                })()}
                 <p className="text-[10px] text-slate-600 mt-1">VC {vc.toFixed(3)}€ × marža {marza.toFixed(0)}%{plochaZaklad ? ` · ${plochaZaklad} cm²` : ''}</p>
               </div>
             );
