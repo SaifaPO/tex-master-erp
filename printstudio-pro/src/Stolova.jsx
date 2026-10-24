@@ -8,6 +8,8 @@ import OkrajIlustracia from './OkrajIlustracia';
 import { useCenaNahlad, CenaSuhrn } from './cenaNahlad';
 
 const BUCKET = 'print-designs';
+// Predvolené fotky ukončenia okrajov (public/stolova); kým nie je k okraju nahraná fotka v administrácii, ostatné sa kreslia ilustráciou.
+const OKRAJ_FOTO = { fringe_white: '/stolova/fringe_white.webp', cord_tri: '/stolova/cord_tri.webp' };
 
 // Malá ikonka tvaru vlajky (kým admin nenahrá vlastnú fotku)
 function TvarIkona({ kod }) {
@@ -125,8 +127,8 @@ export default function Stolova({ supabase }) {
                   <select value={okraj} onChange={(e) => setOkraj(e.target.value)} className="w-full text-sm border border-slate-300 rounded-lg p-2 bg-white">
                     {okrajeSkupiny.map(([sk, n]) => <optgroup key={sk} label={n}>{d.okraje.filter((o) => o.skupina === sk).map((o) => <option key={o.kod} value={o.kod}>{o.nazov}</option>)}</optgroup>)}
                   </select>
-                  {d.okraje.find((o) => o.kod === okraj)?.foto_url
-                    ? <img src={d.okraje.find((o) => o.kod === okraj).foto_url} alt="" className="mt-2 w-full h-24 object-cover rounded-lg" />
+                  {(d.okraje.find((o) => o.kod === okraj)?.foto_url || OKRAJ_FOTO[okraj])
+                    ? <img src={d.okraje.find((o) => o.kod === okraj)?.foto_url || OKRAJ_FOTO[okraj]} alt={nazov(d.okraje, okraj)} className="mt-2 w-full h-56 object-contain rounded-lg bg-slate-100 border border-slate-200" />
                     : <OkrajIlustracia tvar={tvar} okraj={okraj} className="mt-2" />}
                 </div>
                 <div>

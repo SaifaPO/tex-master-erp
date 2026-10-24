@@ -26,7 +26,7 @@ export default function OkrajIlustracia({ tvar, okraj, className = '' }) {
   const [hlavna, ...dalsie] = o.farby;
   const jeStrapce = o.druh === 'strapce';
   // šnúrka na zavesenie hore: slučka medzi hornými rohmi (rohy sú v súradniciach tvaru x=4 a x=36, y=4)
-  const sluckaD = 'M 4 4 C 4 -14 36 -14 36 4';
+  const sluckaD = 'M 4 4 L 20 -10 L 36 4';
 
   const sirkaCary = (w, extra) => ({ strokeWidth: w, fill: 'none', strokeLinecap: 'round', strokeLinejoin: 'round', ...extra });
 
@@ -53,8 +53,8 @@ export default function OkrajIlustracia({ tvar, okraj, className = '' }) {
         {/* strapce = hustý prúžok „nitiek“ okolo vlajky */}
         {jeStrapce && (
           <g filter={`url(#tien${uid})`}>
-            <path d={d} {...sirkaCary(6, { stroke: '#64748b', strokeDasharray: '0.9 0.7', strokeLinecap: 'butt' })} />
-            <path d={d} {...sirkaCary(5.6, { stroke: hlavna, strokeDasharray: '0.6 1', strokeLinecap: 'butt' })} />
+            <path d={d} {...sirkaCary(7, { stroke: '#64748b', strokeDasharray: '0.9 0.7', strokeLinecap: 'butt' })} />
+            <path d={d} {...sirkaCary(6.6, { stroke: hlavna, strokeDasharray: '0.6 1', strokeLinecap: 'butt' })} />
           </g>
         )}
 
