@@ -4,6 +4,7 @@ import NumberInput from './NumberInput';
 import { useB2bKod } from './b2b';
 import B2bKod from './B2bKod';
 import PlochaEditor from './fabricEditor/PlochaEditor';
+import OkrajIlustracia from './OkrajIlustracia';
 import { useCenaNahlad, CenaSuhrn } from './cenaNahlad';
 
 const BUCKET = 'print-designs';
@@ -124,7 +125,9 @@ export default function Stolova({ supabase }) {
                   <select value={okraj} onChange={(e) => setOkraj(e.target.value)} className="w-full text-sm border border-slate-300 rounded-lg p-2 bg-white">
                     {okrajeSkupiny.map(([sk, n]) => <optgroup key={sk} label={n}>{d.okraje.filter((o) => o.skupina === sk).map((o) => <option key={o.kod} value={o.kod}>{o.nazov}</option>)}</optgroup>)}
                   </select>
-                  {d.okraje.find((o) => o.kod === okraj)?.foto_url && <img src={d.okraje.find((o) => o.kod === okraj).foto_url} alt="" className="mt-2 w-full h-24 object-cover rounded-lg" />}
+                  {d.okraje.find((o) => o.kod === okraj)?.foto_url
+                    ? <img src={d.okraje.find((o) => o.kod === okraj).foto_url} alt="" className="mt-2 w-full h-24 object-cover rounded-lg" />
+                    : <OkrajIlustracia tvar={tvar} okraj={okraj} className="mt-2" />}
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1">Podstavec / stojanček</label>
