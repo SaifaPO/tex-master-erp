@@ -41,6 +41,12 @@ function stylFarby(trieda, hex) {
   return zaklad;
 }
 
+// Fotky vzoriek fólií (Siser) uložené v public/folie — názov súboru = kód farby, resp. druh_<kód druhu>. Vlastná fotka z administrácie (foto_url) má prednosť.
+const FOTO_FARBY = new Set(['ps_white', 'ps_black', 'ps_red', 'ps_royal', 'ps_green', 'ps_yellow', 'ps_orange', 'ps_grey', 'ps_gold', 'ps_silver', 'g_silver', 'g_gold', 'g_black', 'g_red', 'g_blue', 'g_pink', 'm_gold', 'm_silver', 'm_red', 'm_blue', 'r_silver', 'sb_white', 'sb_yellow', 'f_white', 'f_black', 'f_red', 'f_blue', 'f_yellow', 'f_green']);
+const FOTO_DRUHY = new Set(['psfilm', 'glitter', 'metal', 'reflex', 'subli', 'flock']);
+const fotoFarby = (c) => (c ? (c.foto_url || (FOTO_FARBY.has(c.kod) ? `/folie/${c.kod}.webp` : null)) : null);
+const fotoDruhu = (d) => (d ? (d.foto_url || (FOTO_DRUHY.has(d.kod) ? `/folie/druh_${d.kod}.webp` : null)) : null);
+
 export default function Folie({ supabase }) {
   const [nacitava, setNacitava] = useState(true);
   const [chybaNacitania, setChybaNacitania] = useState('');
@@ -186,7 +192,7 @@ export default function Folie({ supabase }) {
             {druhObj && (
               <div className="bg-slate-50 border border-slate-200 rounded-lg overflow-hidden">
                 <div className="flex">
-                  {druhObj.foto_url && <img src={druhObj.foto_url} alt={druhObj.nazov} className="w-24 object-cover shrink-0" />}
+                  {fotoDruhu(druhObj) && <img src={fotoDruhu(druhObj)} alt={druhObj.nazov} className="w-32 object-cover shrink-0" />}
                   <div className="p-2.5 text-[11px] text-slate-600 space-y-1.5">
                     <p className="italic text-slate-800 leading-tight">{druhObj.popis}</p>
                     <div className="flex flex-wrap gap-1.5">
@@ -206,10 +212,16 @@ export default function Folie({ supabase }) {
               <label className="text-xs font-medium text-slate-500 mb-2 flex justify-between"><span>Výber farby</span><span className="font-bold text-indigo-700">{farbaObj?.nazov}</span></label>
               <div className="flex flex-wrap gap-2 p-2 bg-slate-50 rounded-lg border border-slate-200 min-h-[56px]">
                 {farbyDruhu.map((c) => (
-                  <button key={c.kod} type="button" title={c.nazov} onClick={() => setFarba(c.kod)} className="w-8 h-8 rounded-full cursor-pointer transition hover:scale-110"
-                    style={{ ...stylFarby(druhObj?.trieda, c.hex), border: farba === c.kod ? '2px solid #4f46e5' : (c.hex.toUpperCase() === '#FFFFFF' ? '1px solid #e5e7eb' : '2px solid transparent'), boxShadow: farba === c.kod ? '0 0 0 3px rgba(79,70,229,0.3)' : '0 1px 3px rgba(0,0,0,0.1)' }} />
+                  <button key={c.kod} type="button" title={c.nazov} onClick={() => setFarba(c.kod)} className={`${fotoFarby(c) ? 'w-11 h-11 rounded-lg' : 'w-8 h-8 rounded-full'} cursor-pointer transition hover:scale-110`}
+                    style={{ ...(fotoFarby(c) ? { backgroundColor: c.hex, backgroundImage: `url(${fotoFarby(c)})`, backgroundSize: 'cover', backgroundPosition: 'center' } : stylFarby(druhObj?.trieda, c.hex)), border: farba === c.kod ? '2px solid #4f46e5' : (c.hex.toUpperCase() === '#FFFFFF' ? '1px solid #e5e7eb' : '2px solid transparent'), boxShadow: farba === c.kod ? '0 0 0 3px rgba(79,70,229,0.3)' : '0 1px 3px rgba(0,0,0,0.1)' }} />
                 ))}
               </div>
+              {fotoFarby(farbaObj) && (
+                <div className="mt-2 relative rounded-lg overflow-hidden border border-slate-200">
+                  <img src={fotoFarby(farbaObj)} alt={farbaObj.nazov} className="w-full h-28 object-cover" />
+                  <span className="absolute left-2 bottom-2 text-[11px] font-bold bg-white/90 text-slate-800 px-2 py-0.5 rounded">{druhObj?.nazov} · {farbaObj.nazov}</span>
+                </div>
+              )}
             </div>
           </section>
 
@@ -238,7 +250,7 @@ export default function Folie({ supabase }) {
                   <div className="absolute right-0 top-0 bottom-0 bg-slate-100 border-l border-dashed border-slate-300" style={{ width: 10 * mierka }} />
                   <div className="absolute" style={{ left: 10 * mierka, top: 0 }}>
                     {polozky.map((p) => (
-                      <div key={p.k} className="absolute rounded-sm" style={{ left: p.x * mierka, top: p.y * mierka, width: roz.itemW * mierka, height: roz.itemH * mierka, ...stylFarby(druhObj?.trieda, farbaObj?.hex || '#3b82f6'), opacity: 0.9, border: '1px solid rgba(0,0,0,0.25)' }} />
+                      <div key={p.k} className="absolute rounded-sm" style={{ left: p.x * mierka, top: p.y * mierka, width: roz.itemW * mierka, height: roz.itemH * mierka, ...(fotoFarby(farbaObj) ? { backgroundColor: farbaObj.hex, backgroundImage: `url(${fotoFarby(farbaObj)})`, backgroundSize: 'cover', backgroundPosition: 'center' } : stylFarby(druhObj?.trieda, farbaObj?.hex || '#3b82f6')), opacity: 0.9, border: '1px solid rgba(0,0,0,0.25)' }} />
                     ))}
                   </div>
                   {pocetKs > MAX_VYKRESLENYCH && <p className="absolute bottom-1 left-2 text-[10px] text-slate-500">Zobrazených prvých {MAX_VYKRESLENYCH} kusov.</p>}
