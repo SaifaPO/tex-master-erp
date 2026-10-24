@@ -183,18 +183,10 @@ export default function ZastavaApp({ supabase }) {
     // Kovove priechodky (ocka) — vacsie kruhy pozdlz strany/strán
     const ockoR = Math.max(8, Math.min(w, h) * 0.016);
     const kruh = (x, y) => pridaj(new fabric.Circle({ left: x - ockoR, top: y - ockoR, radius: ockoR, fill: '#334155', stroke: '#e2e8f0', strokeWidth: 3 }));
-    ocka.forEach((g) => {
-      const cnt = Math.max(1, g.count || 1);
-      const okraj = ockoR + 10;
-      const strany = g.side === 'all' ? ['top', 'bottom', 'left', 'right'] : g.side === 'corners' ? ['corners'] : [g.side];
-      strany.forEach((s) => {
-        if (s === 'left') for (let i = 0; i < cnt; i++) kruh(okraj, (h / (cnt + 1)) * (i + 1));
-        if (s === 'right') for (let i = 0; i < cnt; i++) kruh(w - okraj, (h / (cnt + 1)) * (i + 1));
-        if (s === 'top') for (let i = 0; i < cnt; i++) kruh((w / (cnt + 1)) * (i + 1), okraj);
-        if (s === 'bottom') for (let i = 0; i < cnt; i++) kruh((w / (cnt + 1)) * (i + 1), h - okraj);
-        if (s === 'corners') { kruh(okraj, okraj); kruh(w - okraj, okraj); kruh(okraj, h - okraj); kruh(w - okraj, h - okraj); }
-      });
-    });
+    // Rozmiestnenie podla pravidiel (okaLayout.ts): od rohov, nie na strane s tunelom (pri tuneli hned vedla), cez popruh, jedno ocko podla zvolenej polohy
+    const tunelStrany = new Set(tunely.map(t => t.side));
+    const ockoOkraj = ockoR + 10;
+    rozlozBody(ocka, { w, h, tunelSides: tunelStrany, popruhy, okraj: ockoOkraj, tunelT: tunnelT, strapT, medzera: ockoR + 4 }).forEach(b => kruh(b.x, b.y));
 
     // Kovove karabinky — vacsie obdlzniky pozdlz strany/strán
     const karW = Math.max(18, Math.min(w, h) * 0.035);
@@ -203,17 +195,8 @@ export default function ZastavaApp({ supabase }) {
       ...(horiz ? { left: x - karW / 2, top: y - karH / 2, width: karW, height: karH } : { left: x - karH / 2, top: y - karW / 2, width: karH, height: karW }),
       fill: '#dc2626', stroke: '#7f1d1d', strokeWidth: 2, rx: 3, ry: 3,
     }));
-    karabinky.forEach((c) => {
-      const cnt = Math.max(1, c.count || 1);
-      const okraj = karW / 2 + 8;
-      const strany = c.side === 'all' ? ['left', 'right', 'top', 'bottom'] : [c.side];
-      strany.forEach((s) => {
-        if (s === 'left') for (let i = 0; i < cnt; i++) karabina(okraj, (h / (cnt + 1)) * (i + 1), false);
-        if (s === 'right') for (let i = 0; i < cnt; i++) karabina(w - okraj, (h / (cnt + 1)) * (i + 1), false);
-        if (s === 'top') for (let i = 0; i < cnt; i++) karabina((w / (cnt + 1)) * (i + 1), okraj, true);
-        if (s === 'bottom') for (let i = 0; i < cnt; i++) karabina((w / (cnt + 1)) * (i + 1), h - okraj, true);
-      });
-    });
+    rozlozBody(karabinky, { w, h, tunelSides: tunelStrany, popruhy, okraj: karW / 2 + 8, tunelT: tunnelT, strapT, medzera: karW / 2 + 4 })
+      .forEach(b => karabina(b.x, b.y, b.side === 'top' || b.side === 'bottom'));
 
     // Strapce — rad malych trojuholnikov ("zubov") pozdlz zvolenej strany/strán, farba podla
     // strapceFarba (len ilustracne, presny odtien materialu sa potvrdzuje pri objednavke).

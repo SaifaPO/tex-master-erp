@@ -2,11 +2,17 @@ import React from 'react';
 import { Scroll, CircleDot, Link as LinkIcon, Ribbon, Sparkle, Plus, Zap, ShoppingBag, Loader2 } from 'lucide-react';
 import NumberInput from '../NumberInput';
 import { CenaB2b } from '../CenaB2b';
+import { rozlozBody } from './okaLayout';
 
 const STRANY = [
   { value: 'top', label: 'Hore' }, { value: 'bottom', label: 'Dole' },
   { value: 'left', label: 'Vľavo' }, { value: 'right', label: 'Vpravo' },
 ];
+
+// Popis konca strany pri jednom kuse: horné/dolné strany idú zľava doprava, bočné zhora nadol
+const POZ_LABEL = {
+  top: ['Vľavo', 'Vpravo'], bottom: ['Vľavo', 'Vpravo'], left: ['Hore', 'Dole'], right: ['Hore', 'Dole'],
+};
 
 const FARBY_STRAPCOV = [
   { value: 'biela', label: 'Biele' },
@@ -26,6 +32,11 @@ export default function DoplnkyTab({
   const pridajTunel = () => onTunely([...tunely, { side: 'bottom' }]);
   const zmazTunel = (i) => onTunely(tunely.filter((_, idx) => idx !== i));
   const upravTunel = (i, patch) => onTunely(tunely.map((t, idx) => idx === i ? { ...t, ...patch } : t));
+
+  // strany s tunelom: očká ani karabínky tam nejdú (na susedných stranách začínajú hneď vedľa tunela)
+  const tunelStrany = new Set(tunely.map(t => t.side));
+  const jeTunel = (s) => tunelStrany.has(s);
+  const skutocnyPocet = (skupiny) => rozlozBody(skupiny, { tunelSides: tunelStrany, popruhy }).length;
 
   const pridajOcko = () => onOcka([...ocka, { side: 'all', count: 10 }]);
   const zmazOcko = (i) => onOcka(ocka.filter((_, idx) => idx !== i));
@@ -63,10 +74,10 @@ export default function DoplnkyTab({
           <button onClick={pridajOcko} className="text-xs bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-medium px-2 py-1 rounded flex items-center gap-1"><Plus className="w-3 h-3" /> Pridať očká</button>
         </div>
         {ocka.map((o, i) => (
-          <div key={i} className="flex items-center gap-2 bg-white p-2 rounded border border-slate-200 text-xs">
+          <div key={i} className="flex flex-wrap items-center gap-2 bg-white p-2 rounded border border-slate-200 text-xs">
             <select value={o.side} onChange={(e) => upravOcko(i, { side: e.target.value })} className="border rounded p-1">
-              <option value="all">Všetky strany</option>
-              {STRANY.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+              <option value="all">Všetky strany (bez tunela)</option>
+              {STRANY.map(s => <option key={s.value} value={s.value} disabled={jeTunel(s.value)}>{s.label}{jeTunel(s.value) ? ' — tunel' : ''}</option>)}
               <option value="corners">4 rohy</option>
             </select>
             {o.side !== 'corners' && (
@@ -75,10 +86,18 @@ export default function DoplnkyTab({
                 <NumberInput min="1" value={o.count} onChange={(v) => upravOcko(i, { count: v })} fallback={1} className="w-14 border rounded p-1 text-center" />
               </>
             )}
+            {o.side !== 'corners' && Number(o.count) === 1 && POZ_LABEL[o.side] && (
+              <select value={o.poz || 'start'} onChange={(e) => upravOcko(i, { poz: e.target.value })} className="border rounded p-1" title="Na ktorom konci strany bude jedno očko">
+                <option value="start">na konci: {POZ_LABEL[o.side][0]}</option>
+                <option value="end">na konci: {POZ_LABEL[o.side][1]}</option>
+              </select>
+            )}
             <button onClick={() => zmazOcko(i)} className="text-red-500 hover:text-red-700 ml-auto font-bold px-1">×</button>
+            {jeTunel(o.side) && <p className="w-full basis-full text-[11px] text-amber-700">Na tejto strane je tunel — očká tam nejdú. Vyber inú stranu.</p>}
           </div>
         ))}
         {ocka.length === 0 && <p className="text-[11px] text-slate-400">Zatiaľ žiadne očká.</p>}
+        {ocka.length > 0 && <p className="text-[11px] text-slate-500">Očká idú rovnomerne od rohov (prvé a posledné v rohu). Pri tuneli začínajú hneď vedľa neho, pri spevňujúcom popruhu idú cez popruh. Spolu: <strong>{skutocnyPocet(ocka)} ks</strong> (roh, kde sa stretávajú dve strany, je jedno očko).</p>}
       </div>
 
       <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-3">
@@ -99,17 +118,25 @@ export default function DoplnkyTab({
           <button onClick={pridajKarabinku} className="text-xs bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-medium px-2 py-1 rounded flex items-center gap-1"><Plus className="w-3 h-3" /> Pridať karabínky</button>
         </div>
         {karabinky.map((c, i) => (
-          <div key={i} className="flex items-center gap-2 bg-white p-2 rounded border border-slate-200 text-xs">
+          <div key={i} className="flex flex-wrap items-center gap-2 bg-white p-2 rounded border border-slate-200 text-xs">
             <select value={c.side} onChange={(e) => upravKarabinku(i, { side: e.target.value })} className="border rounded p-1">
-              {STRANY.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-              <option value="all">Všetky strany</option>
+              {STRANY.map(s => <option key={s.value} value={s.value} disabled={jeTunel(s.value)}>{s.label}{jeTunel(s.value) ? ' — tunel' : ''}</option>)}
+              <option value="all">Všetky strany (bez tunela)</option>
             </select>
             <span className="text-slate-500">Počet:</span>
             <NumberInput min="1" value={c.count} onChange={(v) => upravKarabinku(i, { count: v })} fallback={1} className="w-14 border rounded p-1 text-center" />
+            {Number(c.count) === 1 && POZ_LABEL[c.side] && (
+              <select value={c.poz || 'start'} onChange={(e) => upravKarabinku(i, { poz: e.target.value })} className="border rounded p-1" title="Na ktorom konci strany bude jedna karabínka">
+                <option value="start">na konci: {POZ_LABEL[c.side][0]}</option>
+                <option value="end">na konci: {POZ_LABEL[c.side][1]}</option>
+              </select>
+            )}
             <button onClick={() => zmazKarabinku(i)} className="text-red-500 hover:text-red-700 ml-auto font-bold px-1">×</button>
+            {jeTunel(c.side) && <p className="w-full basis-full text-[11px] text-amber-700">Na tejto strane je tunel — karabínky tam nejdú. Vyber inú stranu.</p>}
           </div>
         ))}
         {karabinky.length === 0 && <p className="text-[11px] text-slate-400">Zatiaľ žiadne karabínky.</p>}
+        {karabinky.length > 0 && <p className="text-[11px] text-slate-500">Karabínky idú rovnomerne od rohov, nie na strane s tunelom (pri tuneli začínajú hneď vedľa neho), cez spevňujúci popruh, ak tam je. Spolu: <strong>{skutocnyPocet(karabinky)} ks</strong>.</p>}
       </div>
 
       <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-3">
