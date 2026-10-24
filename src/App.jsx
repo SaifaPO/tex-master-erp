@@ -13,6 +13,7 @@ import CashFlowTab from './CashFlowTab';
 import MesacnyReportTab from './MesacnyReportTab';
 import OdovzdanieZakazky from './OdovzdanieZakazky';
 import PrintStudioAdmin from './printstudio/PrintStudioAdmin';
+import NotifikacieZvonec from './NotifikacieZvonec';
 import GlobalSearchPalette from './GlobalSearchPalette';
 import FakturaEmail from './FakturaEmail';
 import FakturaDokument from './FakturaDokument';
@@ -1378,6 +1379,16 @@ export default function App() {
 
   const [isSearchPaletteOpen, setIsSearchPaletteOpen] = useState(false);
   const [printstudioJumpTarget, setPrintstudioJumpTarget] = useState(null);
+  const [printstudioFokus, setPrintstudioFokus] = useState(null); // konkrétny dopyt / objednávka, na ktorú sa prekliklo z notifikácie
+  // Zvonček: prekliknutie z notifikácie priamo na dopyt / objednávku (PrintStudio → Objednávky a dopyty) alebo na zákazky
+  const otvorZNotifikacie = (odkaz) => {
+    if (!odkaz?.tab) return;
+    setActiveTab(odkaz.tab);
+    if (odkaz.tab === 'printstudio') {
+      setPrintstudioJumpTarget(odkaz.subtab || 'objednavky');
+      setPrintstudioFokus({ typ: odkaz.typ, id: odkaz.id, nonce: Date.now() });
+    }
+  };
 
   const [currentUser, setCurrentUser] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -2189,7 +2200,7 @@ export default function App() {
     const psVisible = role === 'master';
     push(entries, 'PrintStudio Pro', null, psVisible, () => { setActiveTab('printstudio'); setPrintstudioJumpTarget('produkty'); });
     const psSub = [
-      ['objednavky', 'Všetky objednávky (aplikácie)'], ['kategorie', 'Kategórie'], ['produkty', 'Produkty (Blanks)'], ['farby', 'Farby'], ['fonty', 'Fonty'],
+      ['objednavky', 'Objednávky a dopyty (aplikácie)'], ['kategorie', 'Kategórie'], ['produkty', 'Produkty (Blanks)'], ['farby', 'Farby'], ['fonty', 'Fonty'],
       ['grafiky', 'Grafiky (Design)'], ['mockupy', 'Fotky produktov'], ['cenotvorba', 'Cenotvorba (marže)'],
       ['kostra-cien', 'Kostra cien'], ['metraze', 'Metráže'], ['potlace', 'Potlače'],
       ['kalkulacka-tlace', 'Kalkulačka tlače (Cen. ponuky)'], ['predajny-cennik', 'Predajný cenník (tlač A4)'],
@@ -6709,6 +6720,7 @@ export default function App() {
               <span className="font-extrabold text-md tracking-wider text-white block">TEX-MASTER ERP v7.0</span>
               <span className="text-[10px] text-indigo-400 block -mt-1 font-semibold">Živé dáta • Supabase</span>
             </div>
+            <div className="flex items-center gap-2 w-full lg:w-auto">
             <nav className="flex flex-wrap items-center justify-center gap-1 bg-slate-900/60 p-1 rounded-xl border border-slate-800 w-full lg:w-auto">
               {canSeeTab(currentUser.role, 'planner') && (
                 <button onClick={() => setActiveTab('planner')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'planner' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Calendar className="h-3.5 w-3.5" /> Plánovacia Matica</button>
@@ -6762,6 +6774,8 @@ export default function App() {
                 <button onClick={() => setActiveTab('manual')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'manual' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><BookOpen className="h-3.5 w-3.5" /> Manuál</button>
               )}
             </nav>
+            {currentUser.role === 'master' && <NotifikacieZvonec supabase={supabase} onOtvor={otvorZNotifikacie} />}
+            </div>
           </div>
         </div>
       </header>
@@ -8494,7 +8508,7 @@ export default function App() {
         )}
 
         {activeTab === 'printstudio' && currentUser.role === 'master' && (
-          <PrintStudioAdmin supabase={supabase} initialSubtab={printstudioJumpTarget} />
+          <PrintStudioAdmin supabase={supabase} initialSubtab={printstudioJumpTarget} fokus={printstudioFokus} />
         )}
 
         {activeTab === 'isolated-station' && (

@@ -43,7 +43,7 @@ const PRINTSTUDIO_BASE_URL = 'https://printstudio-pro.vercel.app';
 // Všetko pod jednou kartou, v piatich skupinách: Objednávky (spoločné pre všetky aplikácie), Aplikácie (dresy, buffky, čelenky, vlajky,
 // beachvlajky), Knižnica (blanks ako sprostredkovateľ medzi Katalógom produktov v ERP a aplikáciami + farby/fonty/grafiky), Ceny a tlač, Nastavenia.
 const SUBTABS = [
-  { id: 'objednavky', label: 'Všetky objednávky', icon: Inbox },
+  { id: 'objednavky', label: 'Objednávky a dopyty', icon: Inbox },
   { id: 'dresy', label: 'Dresy', icon: Shirt, appUrl: PRINTSTUDIO_BASE_URL },
   { id: 'buffky', label: 'Buffky', icon: Wind, appUrl: `${PRINTSTUDIO_BASE_URL}/?typ=buffka` },
   { id: 'ponuka', label: 'Ponuka dresov (kluby)', icon: Shirt, appUrl: `${PRINTSTUDIO_BASE_URL}/?typ=ponuka` },
@@ -85,7 +85,7 @@ const SKUPINY = [
   { id: 'nastavenia', label: 'Nastavenia', icon: Settings2, tabs: ['shopify', 'b2b-kody', 'manualy', 'dtf-separator', 'vektorizer', 'vysivka', 'sos', 'ulozisko'] },
 ];
 
-export default function PrintStudioAdmin({ supabase, initialSubtab }) {
+export default function PrintStudioAdmin({ supabase, initialSubtab, fokus = null }) {
   const [subtab, setSubtab] = useState('objednavky');
   const skupina = SKUPINY.find(g => g.tabs.includes(subtab)) || SKUPINY[0];
   const activeAppUrl = SUBTABS.find(t => t.id === subtab)?.appUrl;
@@ -95,6 +95,10 @@ export default function PrintStudioAdmin({ supabase, initialSubtab }) {
   useEffect(() => {
     if (initialSubtab) setSubtab(initialSubtab);
   }, [initialSubtab]);
+  // preklik z notifikácie (zvonček) na konkrétny dopyt / objednávku
+  useEffect(() => {
+    if (fokus) setSubtab('objednavky');
+  }, [fokus]);
 
   if (!supabase) {
     return <p className="text-sm text-rose-400">Supabase klient nie je nakonfigurovaný (chýbajú VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).</p>;
@@ -143,7 +147,7 @@ export default function PrintStudioAdmin({ supabase, initialSubtab }) {
       </div>
 
       <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 shadow-xl">
-        {subtab === 'objednavky' && <ObjednavkyVsetkyTab supabase={supabase} onOtvor={setSubtab} />}
+        {subtab === 'objednavky' && <ObjednavkyVsetkyTab supabase={supabase} onOtvor={setSubtab} fokus={fokus} />}
         {subtab === 'kategorie' && <KategorieTab supabase={supabase} />}
         {subtab === 'produkty' && <ProduktyTab supabase={supabase} />}
         {subtab === 'farby' && <FarbyTab supabase={supabase} />}
