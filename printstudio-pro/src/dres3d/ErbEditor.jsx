@@ -191,15 +191,7 @@ export default function ErbEditor({ configState, grafiky, fonty, onZmenLoga }) {
       </Sekcia>
 
       <Sekcia nadpis="Hotové logo (nahradí celý znak)">
-        {grafiky && grafiky.length > 0 && (
-          <div className="grid grid-cols-5 gap-2">
-            {grafiky.map((g) => (
-              <button key={g.id} type="button" title={g.nazov} onClick={() => vyberZKniznice(g.url)} className="aspect-square rounded-lg bg-slate-800 border-2 border-slate-700 hover:border-slate-500 overflow-hidden">
-                <img src={g.url} alt={g.nazov} className="w-full h-full object-contain" />
-              </button>
-            ))}
-          </div>
-        )}
+        {/* knižnica hotových log (športové ikony pre čelenky a buffky) sa v 3D dresoch nepoužíva — dres má vlastný editor erbu a nahranie vlastného loga */}
         <label className="block text-[11px] text-slate-400">Nahrať vlastné hotové logo (.PNG, .JPG, .SVG):</label>
         <input type="file" accept="image/*" onChange={naUploadHotove} className="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-semibold file:bg-slate-800 file:text-slate-200" />
       </Sekcia>

@@ -13,8 +13,9 @@ const POLOZKY = { dres: 'Dres', trenirky: 'Trenírky', stulpne: 'Štulpne' };
 const UROVNE = ['Základ', 'Premium', 'Pro'];
 const STULP = ['Simple', 'Pletené', 'Profesionálne'];
 const STAVY = { novy: 'Nový', spracovany: 'Spracovaný', ponuka: 'Ponuka poslaná', objednavka: 'Objednávka', zrusene: 'Zrušený' };
-const RUKAVY = ['bez', 'kratky', 'dlhy'], GOLIERE = ['okruhly', 'v', 'polo', 'snur'];
-const ROZ_ZAKLAD = ['dotlac', 'strih', 'rukav', 'golier', 'aplikacie', 'brankari'];
+const RUKAVY = ['bez', 'kratky', 'dlhy'], GOLIERE = ['okruhly', 'v', 'polo', 'snur', 'v_vsuvka', 'snur_retro', 'snur_hexa', 'hexa'];
+const STRIHY = ['standard', 'raglan', 'klasik', 'sedlo', 'lacrosse', 'box'];
+const ROZ_ZAKLAD = ['dotlac', 'strih', 'rukav', 'golier', 'aplikacie', 'vysivka', 'stulpne', 'brankari'];
 
 const nazovUrovne = (r) => (r.rezim === 'stock' ? 'sklad' : r.polozka === 'stulpne' && r.sport_kod === 'hokej' ? STULP[r.uroven] : UROVNE[r.uroven]);
 
@@ -180,7 +181,7 @@ export default function PonukaDresovTab({ supabase }) {
       const stanice = stock ? ['grafik', 'transfer', 'balenie'] : ['grafik', 'sublimacia', 'strihanie', 'sitie', 'balenie'];
       const stat = {}, dat = {}; stanice.forEach((s) => { stat[s] = 'caka'; dat[s] = termin; });
       const supText = (d.supiska || []).map((x, i) => `${i + 1}. ${x.m || '–'} #${x.c || '–'} ${x.s}${x.g ? ' BRANKÁR' : ''}`).join('\n');
-      const popisCfg = [S.sport, stock ? 'sklad + dotlač' : `celopotlač ${UROVNE[Number(S.tier) || 0]}`, !stock ? `strih ${S.fit}, rukáv ${S.sleeve}, golier ${S.collar}` : '', Object.keys(S.apps || {}).filter((k) => S.apps[k]).join(', '), S.nn && !stock ? 'meno+číslo' : ''].filter(Boolean).join(' · ');
+      const popisCfg = [S.sport, stock ? 'sklad + dotlač' : `celopotlač ${UROVNE[Number(S.tier) || 0]}`, !stock ? `strih ${S.fit}, rukáv ${S.sleeve}, golier ${S.collar}` : '', Object.keys(S.apps || {}).filter((k) => S.apps[k]).join(', '), Object.keys(S.vys || {}).filter((k) => S.vys[k]).map((k) => 'vyšívané ' + k).join(', '), S.vysSponzorov ? `${S.vysSponzorov}× vyšívané logo sponzora` : '', S.comps?.stulpne ? `štulpne ${S.stulpTyp === 'bezponozkove' ? 'bezponožkové' : 'ponožkové'}` : '', (S.doplnky || []).length || S.doplnkyIne ? 'DOPYT NA DOPLNKY: ' + [...(S.doplnky || []), S.doplnkyIne].filter(Boolean).join(', ') : '', S.nn && !stock ? 'meno+číslo' : ''].filter(Boolean).join(' · ');
       const poznamka = [`Dopyt ${d.cislo} z ponuky dresov`, popisCfg, `Termín: ${S.del}`, d.poznamka ? `Poznámka zákazníka: ${d.poznamka}` : '', `Kontakt: ${[d.kontakt, d.telefon, d.email].filter(Boolean).join(', ')}`, d.b2b_kod ? `B2B kód ${d.b2b_kod} (${d.agentura})` : ''].filter(Boolean).join(' | ');
       const orderId = `ZAK-${Date.now()}`;
       const { count } = await supabase.from('orders').select('id', { count: 'exact', head: true });
@@ -293,7 +294,7 @@ export default function PonukaDresovTab({ supabase }) {
             if (!rows.length) return null;
             return (
               <div key={sk} className="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-x-auto">
-                <div className="px-4 py-2.5 font-bold text-sm text-white capitalize">{{ dotlac: 'Dotlač a meno + číslo', strih: 'Strih postavy', rukav: 'Rukáv', golier: 'Golier', aplikacie: 'Doplnkové aplikácie', brankari: 'Brankári' }[sk]}</div>
+                <div className="px-4 py-2.5 font-bold text-sm text-white capitalize">{{ dotlac: 'Dotlač a meno + číslo', strih: 'Strih (štandardný, raglan, sedlo, lacrosse…)', rukav: 'Rukáv', golier: 'Golier', aplikacie: 'Doplnkové aplikácie', vysivka: 'Vyšívané aplikácie (hokej)', stulpne: 'Štulpne — ponožkové / bezponožkové', brankari: 'Brankári' }[sk]}</div>
                 <table className="w-full text-xs">
                   <Hlavicka extra={<th className="px-2 py-2 text-left">Príplatok</th>} />
                   <tbody>
@@ -347,15 +348,17 @@ export default function PonukaDresovTab({ supabase }) {
       {sekcia === 'sporty' && (
         <div className="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-x-auto">
           <table className="w-full text-xs">
-            <thead className="bg-slate-950 text-slate-500 uppercase text-[10px]"><tr><th className="px-3 py-2 text-left">Šport</th><th className="px-3 py-2">Aktívny</th><th className="px-3 py-2 text-left">Rukávy</th><th className="px-3 py-2 text-left">Goliere</th><th className="px-3 py-2 text-left">Brankári</th><th className="px-3 py-2 text-left">Poznámka k skladu</th></tr></thead>
+            <thead className="bg-slate-950 text-slate-500 uppercase text-[10px]"><tr><th className="px-3 py-2 text-left">Šport</th><th className="px-3 py-2">Aktívny</th><th className="px-3 py-2 text-left">Strihy</th><th className="px-3 py-2 text-left">Rukávy</th><th className="px-3 py-2 text-left">Goliere</th><th className="px-3 py-2 text-left">Materiály</th><th className="px-3 py-2 text-left">Brankári</th><th className="px-3 py-2 text-left">Poznámka k skladu</th></tr></thead>
             <tbody>
               {sporty.map((s) => (
                 <tr key={s.kod} className="border-t border-slate-800 align-top">
                   <td className="px-3 py-2"><input type="text" value={s.nazov} onChange={(e) => zmenSport(s.kod, { nazov: e.target.value })} className="w-28 px-1.5 py-1 bg-slate-900 border border-slate-700 rounded text-white font-bold" /></td>
                   <td className="px-3 py-2 text-center"><input type="checkbox" checked={s.aktivny} onChange={(e) => zmenSport(s.kod, { aktivny: e.target.checked })} /></td>
+                  <td className="px-3 py-2">{STRIHY.map((x) => <label key={x} className="mr-2 text-slate-300 whitespace-nowrap"><input type="checkbox" checked={(s.strihy || []).includes(x)} onChange={(e) => zmenSport(s.kod, { strihy: e.target.checked ? [...(s.strihy || []), x] : (s.strihy || []).filter((y) => y !== x) })} /> {x}</label>)}</td>
                   <td className="px-3 py-2">{RUKAVY.map((x) => <label key={x} className="mr-2 text-slate-300"><input type="checkbox" checked={s.rukavy.includes(x)} onChange={(e) => zmenSport(s.kod, { rukavy: e.target.checked ? [...s.rukavy, x] : s.rukavy.filter((y) => y !== x) })} /> {x}</label>)}</td>
                   <td className="px-3 py-2">{GOLIERE.map((x) => <label key={x} className="mr-2 text-slate-300"><input type="checkbox" checked={s.goliere.includes(x)} onChange={(e) => zmenSport(s.kod, { goliere: e.target.checked ? [...s.goliere, x] : s.goliere.filter((y) => y !== x) })} /> {x}</label>)}</td>
-                  <td className="px-3 py-2"><select value={s.brankari} onChange={(e) => zmenSport(s.kod, { brankari: e.target.value })} className="px-1.5 py-1 bg-slate-900 border border-slate-700 rounded text-white"><option value="none">bez brankárov</option><option value="futbal">futbal</option><option value="hokej">hokej</option></select></td>
+                  <td className="px-3 py-2"><select value={s.brankari} onChange={(e) => zmenSport(s.kod, { brankari: e.target.value })} className="px-1.5 py-1 bg-slate-900 border border-slate-700 rounded text-white"><option value="none">bez brankárov</option><option value="futbal">futbal</option><option value="hokej">hokej</option><option value="hadzana">hádzaná (mikina)</option></select></td>
+                  <td className="px-3 py-2"><select value={s.kvality ?? 3} onChange={(e) => zmenSport(s.kod, { kvality: Number(e.target.value) })} className="px-1.5 py-1 bg-slate-900 border border-slate-700 rounded text-white"><option value={3}>3 úrovne</option><option value={1}>1 štandardný</option></select></td>
                   <td className="px-3 py-2"><input type="text" value={s.sklad_poznamka || ''} onChange={(e) => zmenSport(s.kod, { sklad_poznamka: e.target.value })} placeholder="napr. len tréningové dresy" className="w-48 px-1.5 py-1 bg-slate-900 border border-slate-700 rounded text-white" /></td>
                 </tr>
               ))}

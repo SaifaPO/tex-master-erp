@@ -13,15 +13,29 @@ const IKONY = {
   motokros: 'M7 22a4 4 0 1 0 0.01 0M23 22a4 4 0 1 0 0.01 0M7 22l6-9h7l3 9M13 13l-2-4h-3',
 };
 const FITS = { klasik: { n: 'Klasický', d: 'voľný, pohodlný', w: 15 }, slim: { n: 'Slim fit', d: 'užší v páse', w: 12 }, obtiahnuty: { n: 'Obtiahnutý', d: 'atletický, priliehavý', w: 9.5 } };
+// Strihy podľa športu (cfg.sporty[šport].strihy): futbal, hádzaná, volejbal, florbal, motokros = štandardný hlavičový + raglan; hokej = klasik / sedlo / raglan; lacrosse = lacrosse / box lacrosse (dlhý rukáv)
+const STRIHY = {
+  standard: { n: 'Štandardný', d: 'klasický hlavičový strih', w: 15 }, raglan: { n: 'Raglan', d: 'rukáv so šikmým švom od krku', w: 13 },
+  klasik: { n: 'Klasický', d: 'voľný, pohodlný', w: 15 }, sedlo: { n: 'Sedlo', d: 'sedlový strih ramien', w: 14 },
+  lacrosse: { n: 'Lacrosse', d: 'strih na lacrosse', w: 13 }, box: { n: 'Box lacrosse', d: 'strih s dlhým rukávom', w: 15 },
+};
 const SLEEVES = { bez: { n: 'Bez rukávov', d: 'tielko' }, kratky: { n: 'Krátky', d: 'klasika' }, dlhy: { n: 'Dlhý', d: 'aj na chladné dni' } };
-const COLLARS = { okruhly: { n: 'Okrúhly' }, v: { n: 'V-výstrih' }, polo: { n: 'Polo s gombíkmi' }, snur: { n: 'Šnurovací' } };
+const COLLARS = { okruhly: { n: 'Okrúhly' }, v: { n: 'V-výstrih' }, polo: { n: 'Polo s gombíkmi' }, snur: { n: 'Šnurovací' }, v_vsuvka: { n: 'V-výstrih so vsuvkou' }, snur_retro: { n: 'Šnúrovací retro' }, snur_hexa: { n: 'Šnúrovací hexa' }, hexa: { n: 'Hexa' } };
 const TIERS = [
   { n: 'Základ', d: 'DryCool', pts: ['rýchloschnúci funkčný polyester', 'na tréning a rekreačný šport'] },
   { n: 'Premium', d: 'ELCool', pts: ['jemnejší materiál, lepší odvod potu', 'pre súťažné tímy'] },
   { n: 'Pro', d: 'ELCool Pro', pts: ['vetracie zóny, zosilnené švy', 'pre profesionálov'] },
 ];
+const TIERS_FUTBAL = [{ ...TIERS[0], pts: ['rýchloschnúci funkčný polyester', 'na tréning aj pre súťažné tímy'] }, TIERS[1], TIERS[2]];
+const TIERS_HOKEJ = [
+  { n: 'Light', d: 'ľahký materiál', pts: ['ľahší, vzdušný materiál', 'na tréningy a rekreačný hokej'] },
+  { n: 'Heavy', d: 'hrubší materiál', pts: ['hrubší, odolnejší materiál', 'na zápasy a náročné používanie'] },
+  { n: 'Pro', d: 'najvyššia kvalita', pts: ['profesionálne spracovanie', 'pre profesionálov'] },
+];
+const tiersFor = (sport) => (sport === 'hokej' ? TIERS_HOKEJ : sport === 'futbal' ? TIERS_FUTBAL : TIERS);
+const DOPLNKY = ['Futbalové lopty', 'Chrániče holení', 'Kopačky', 'Tričká', 'Tepláky', 'Tréningové výpravy', 'Vychádzkové výpravy', 'Fľaše', 'Rohové zástavky'];
 const PRINTS = { meno: { n: 'Meno', d: 'na chrbát' }, cislo: { n: 'Číslo', d: 'chrbát a hruď' }, logo: { n: 'Logo klubu', d: 'na hruď' }, cisloTren: { n: 'Číslo na trenírky', d: 'na nohavicu' } };
-const APPS = { logo3d: { n: '3D logo', d: 'vystúpené silikónové logo' }, flexRefl: { n: 'Reflexný flex', d: 'svieti pri osvetlení' }, flexMetal: { n: 'Metalický flex', d: 'zlatý alebo strieborný' }, flexGlitter: { n: 'Glitter flex', d: 'trblietavý efekt' } };
+const APPS = { logo3d: { n: '3D logo', d: 'vystúpené 3D logo' }, flexRefl: { n: 'Reflexný flex', d: 'svieti pri osvetlení' }, flexMetal: { n: 'Metalický flex', d: 'zlatý alebo strieborný' }, flexGlitter: { n: 'Glitter flex', d: 'trblietavý efekt' } };
 const MODES = {
   stock: { n: 'Zo skladu + dotlač', d: 'Hotové ušité dresy, dotlačíme meno, číslo a logo.', pts: ['najlacnejšie a najrýchlejšie', 'jednofarebné skladové farby'] },
   custom: { n: 'Zákazková celopotlač', d: 'Celý dres vo vašom dizajne, sublimáciou.', pts: ['ľubovoľné farby, vzory a logá', 'výber strihu, goliera a materiálu'] },
@@ -31,7 +45,7 @@ const znamienko = (p) => (p > 0 ? `+${eur(p)}` : p < 0 ? `−${eur(-p)}` : 'bez 
 const tricko = (w) => `M22 8 L12 12 L4 22 L10 27 L15 22 L${30 - w} 54 L${30 + w} 54 L45 22 L50 27 L56 22 L48 12 L38 8 Q30 14 22 8Z`;
 
 const SIvyber = { sport: 'futbal', mode: 'custom', comps: { dres: true, trenirky: true, stulpne: false }, nn: true, prints: { meno: true, cislo: true, logo: true, cisloTren: false },
-  fit: 'klasik', sleeve: 'kratky', collar: 'okruhly', tier: 1, stulpVer: 1, apps: {}, gkElbow: false, gkHip: false, pmode: 'count', players: 18, gk: 2, del: 'std', b2b: null };
+  fit: 'standard', sleeve: 'kratky', collar: 'okruhly', tier: 1, stulpVer: 1, stulpTyp: 'ponozkove', apps: {}, vys: {}, vysSponzorov: 0, doplnky: [], doplnkyIne: '', gkElbow: false, gkHip: false, pmode: 'count', players: 18, gk: 2, del: 'std', b2b: null };
 
 function Tile({ aktivna, disabled, onClick, children, className = '' }) {
   return (
@@ -140,7 +154,7 @@ export default function PonukaDresov({ supabase }) {
   };
 
   const popis = [sp.n, stock ? 'sklad + dotlač' : 'celopotlač', r.chosen.map((k) => POLOZKY[k]).join(' + ')];
-  if (!stock) { popis.push(TIERS[V.tier].n, FITS[V.fit].n.toLowerCase() + ' strih'); if (sp.rukavy.length > 1) popis.push(SLEEVES[V.sleeve].n.toLowerCase() + ' rukáv'); if (sp.goliere.length > 1) popis.push('golier ' + COLLARS[V.collar].n.toLowerCase()); }
+  if (!stock) { popis.push(tiersFor(V.sport)[V.tier]?.n, (STRIHY[V.fit]?.n || V.fit).toLowerCase() + ' strih'); if (sp.rukavy.length > 1) popis.push(SLEEVES[V.sleeve].n.toLowerCase() + ' rukáv'); if (sp.goliere.length > 1) popis.push('golier ' + (COLLARS[V.collar]?.n || V.collar).toLowerCase()); }
   const ap = Object.keys(APPS).filter((k) => V.apps[k]).map((k) => APPS[k].n); if (ap.length) popis.push(ap.join(', '));
 
   if (hotovo) {
@@ -175,7 +189,7 @@ export default function PonukaDresov({ supabase }) {
       </div>
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-6xl mx-auto grid grid-cols-2 lg:grid-cols-4">
-          {[['Od 1 kusu', 'Bez minimálneho odberu, doobjednanie kedykoľvek'], ['Grafika zadarmo', 'Návrh dizajnu podľa vašich farieb a loga'], ['Zo skladu rýchlo', 'Hotové dresy s dotlačou už do 7 dní'], ['SK · CZ · AT', 'Výroba na Slovensku, doručenie do troch krajín']].map(([a, b]) => (
+          {[['Od 1 kusu', 'Bez minimálneho odberu, doobjednanie kedykoľvek'], ['Grafika zadarmo', 'Návrh dizajnu podľa vašich farieb a loga'], ['Zo skladu rýchlo', 'Hotové dresy s dotlačou už do 7 dní'], ['Doručenie všade', 'Výroba na Slovensku, posielame kamkoľvek — aj do Japonska či Fínska']].map(([a, b]) => (
             <div key={a} className="p-4 border-r border-slate-200 last:border-r-0"><b className="block text-xl font-extrabold uppercase text-blue-700 leading-tight" style={{ fontFamily: '"Barlow Condensed", Arial, sans-serif' }}>{a}</b><span className="text-sm text-slate-500">{b}</span></div>
           ))}
         </div>
@@ -225,6 +239,12 @@ export default function PonukaDresov({ supabase }) {
                         {STULP_HOKEJ.map((nn, i) => <option key={nn} value={i}>{nn} · {eur(src.stulpne[i])}</option>)}
                       </select>
                     ) : <D>{eur(src[kk][V.tier])} / ks</D>}
+                    {kk === 'stulpne' && (
+                      <select value={V.stulpTyp} onClick={(e) => e.stopPropagation()} onChange={(e) => set({ stulpTyp: e.target.value })} className="mt-1.5 block border border-slate-300 rounded px-2 py-1 text-sm bg-white">
+                        <option value="ponozkove">Ponožkové{cfg.stulp?.ponozkove ? ` (+${eur(cfg.stulp.ponozkove)})` : ''}</option>
+                        <option value="bezponozkove">Bezponožkové{cfg.stulp?.bezponozkove ? ` (+${eur(cfg.stulp.bezponozkove)})` : ''}</option>
+                      </select>
+                    )}
                   </span>
                 </label>
               ))}
@@ -233,7 +253,7 @@ export default function PonukaDresov({ supabase }) {
             {r.gkOn && (
               <div className="mt-3 border border-dashed border-slate-300 rounded-lg p-3.5 bg-white">
                 <h3 className="text-xl font-bold uppercase" style={{ fontFamily: '"Barlow Condensed", Arial, sans-serif' }}>Brankári</h3>
-                <p className="text-[13px] text-slate-500">Brankársky strih +{eur(cfg.gk.cut)}/ks{sp.brankari === 'futbal' ? ', vždy s dlhým rukávom.' : '.'} Počet brankárov zadáte v kroku Hráči.</p>
+                <p className="text-[13px] text-slate-500">{sp.brankari === 'hadzana' ? <>Brankársky dres je mikina s dlhým rukávom z iného materiálu +{eur(cfg.gk.mikina)}/ks.</> : <>Brankársky strih +{eur(cfg.gk.cut)}/ks{sp.brankari === 'futbal' ? ', vždy s dlhým rukávom.' : '.'}</>} Počet brankárov zadáte v kroku Hráči.</p>
                 {sp.brankari === 'futbal' && <label className="flex gap-2 items-center cursor-pointer mt-2 text-sm"><input type="checkbox" className="w-[18px] h-[18px] accent-blue-700" checked={V.gkElbow} onChange={(e) => set({ gkElbow: e.target.checked })} /> Spevnené lakte molitanom na drese <span className="text-slate-500 text-[13px]">(+{eur(cfg.gk.lakte)}/ks)</span></label>}
                 {sp.brankari === 'futbal' && av.includes('trenirky') && <label className="flex gap-2 items-center cursor-pointer mt-2 text-sm"><input type="checkbox" className="w-[18px] h-[18px] accent-blue-700" checked={V.gkHip} onChange={(e) => set({ gkHip: e.target.checked })} /> Spevnené boky molitanom na trenírkach <span className="text-slate-500 text-[13px]">(+{eur(cfg.gk.boky)}/ks)</span></label>}
               </div>
@@ -243,29 +263,36 @@ export default function PonukaDresov({ supabase }) {
           <Krok cislo={k()} nadpis="Strih" vpravo={<button type="button" onClick={() => setTabulka(true)} className="text-blue-700 underline underline-offset-2">Rozmerová tabuľka</button>}>
             {stock ? <p className="text-sm text-slate-500">Skladové dresy majú klasický voľný strih. Veľkosť si overte v rozmerovej tabuľke.</p> : (
               <>
-                <div className="grid grid-cols-3 gap-2">
-                  {Object.entries(FITS).map(([kk, f]) => (
-                    <Tile key={kk} aktivna={kk === V.fit} onClick={() => set({ fit: kk })}>
-                      <svg viewBox="0 0 60 60" className={`w-12 h-12 mb-1 stroke-blue-700 ${kk === V.fit ? 'fill-blue-700' : 'fill-blue-100'}`} strokeWidth="1.6" strokeLinejoin="round"><path d={tricko(f.w)} /></svg>
-                      <T>{f.n}</T><D>{f.d}</D><P>{znamienko(cfg.fit[kk] || 0)}</P>
-                    </Tile>
-                  ))}
+                <div className={`grid gap-2 ${(sp.strihy || []).length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                  {(sp.strihy || ['standard']).map((kk) => {
+                    const f = STRIHY[kk] || { n: kk, d: '', w: 15 };
+                    return (
+                      <Tile key={kk} aktivna={kk === V.fit} onClick={() => set({ fit: kk })}>
+                        <svg viewBox="0 0 60 60" className={`w-12 h-12 mb-1 stroke-blue-700 ${kk === V.fit ? 'fill-blue-700' : 'fill-blue-100'}`} strokeWidth="1.6" strokeLinejoin="round"><path d={tricko(f.w)} /></svg>
+                        <T>{f.n}</T><D>{f.d}</D><P>{znamienko(cfg.fit[kk] || 0)}</P>
+                      </Tile>
+                    );
+                  })}
                 </div>
-                {sp.rukavy.length > 1 && <><div className="text-sm font-bold uppercase tracking-wider text-slate-500 mt-4">Rukáv</div><div className="grid grid-cols-3 gap-2">{sp.rukavy.map((kk) => <Tile key={kk} aktivna={kk === V.sleeve} onClick={() => set({ sleeve: kk })}><T>{SLEEVES[kk].n}</T><D>{SLEEVES[kk].d}</D><P>{znamienko(cfg.sleeve[kk] || 0)}</P></Tile>)}</div></>}
-                {sp.goliere.length > 1 && <><div className="text-sm font-bold uppercase tracking-wider text-slate-500 mt-4">Golier</div><div className="grid grid-cols-2 sm:grid-cols-4 gap-2">{sp.goliere.map((kk) => <Tile key={kk} aktivna={kk === V.collar} onClick={() => set({ collar: kk })}><T>{COLLARS[kk].n}</T><P>{znamienko(cfg.collar[kk] || 0)}</P></Tile>)}</div></>}
+                {V.fit === 'box' ? <p className="text-sm text-slate-500 mt-3">Box lacrosse má vždy dlhý rukáv ({znamienko(cfg.sleeve.dlhy || 0)}).</p> : sp.rukavy.length > 1 && <><div className="text-sm font-bold uppercase tracking-wider text-slate-500 mt-4">Rukáv</div><div className="grid grid-cols-3 gap-2">{sp.rukavy.map((kk) => <Tile key={kk} aktivna={kk === V.sleeve} onClick={() => set({ sleeve: kk })}><T>{SLEEVES[kk].n}</T><D>{SLEEVES[kk].d}</D><P>{znamienko(cfg.sleeve[kk] || 0)}</P></Tile>)}</div></>}
+                {sp.goliere.length > 1 && <><div className="text-sm font-bold uppercase tracking-wider text-slate-500 mt-4">Golier</div><div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{sp.goliere.map((kk) => <Tile key={kk} aktivna={kk === V.collar} onClick={() => set({ collar: kk })}><T>{COLLARS[kk]?.n || kk}</T><P>{znamienko(cfg.collar[kk] || 0)}</P></Tile>)}</div></>}
               </>
             )}
           </Krok>
 
           {!stock && (
-            <Krok cislo={k()} nadpis="Vyhotovenie">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                {TIERS.map((t, i) => (
-                  <Tile key={t.n} aktivna={i === V.tier} onClick={() => set({ tier: i })}>
-                    <T big>{t.n}</T><D>{t.d}</D><ul className="mt-1.5 pl-4 list-disc text-[13px] text-slate-500">{t.pts.map((x) => <li key={x}>{x}</li>)}</ul><P>dres {eur(cfg.items[V.sport].dres?.[i] || 0)}</P>
-                  </Tile>
-                ))}
-              </div>
+            <Krok cislo={k()} nadpis={V.sport === 'hokej' ? 'Materiál' : 'Vyhotovenie'}>
+              {Number(sp.kvality) === 1 ? (
+                <p className="text-sm text-slate-600 bg-white border border-slate-200 rounded-lg p-3">Pre tento šport používame jeden štandardný materiál (rýchloschnúci funkčný polyester) — dres od <b>{eur(cfg.items[V.sport].dres?.[0] || 0)}</b>.</p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {tiersFor(V.sport).map((tr, i) => (
+                    <Tile key={tr.n} aktivna={i === V.tier} onClick={() => set({ tier: i })}>
+                      <T big>{tr.n}</T><D>{tr.d}</D><ul className="mt-1.5 pl-4 list-disc text-[13px] text-slate-500">{tr.pts.map((x) => <li key={x}>{x}</li>)}</ul><P>dres {eur(cfg.items[V.sport].dres?.[i] || 0)}</P>
+                    </Tile>
+                  ))}
+                </div>
+              )}
             </Krok>
           )}
 
@@ -279,6 +306,30 @@ export default function PonukaDresov({ supabase }) {
                   </label>
                 ))}
               </div>
+            </Krok>
+          )}
+
+          {V.sport === 'hokej' && Object.keys(cfg.vys || {}).length > 0 && (
+            <Krok cislo={k()} nadpis="Vyšívané aplikácie">
+              <p className="text-sm text-slate-500">Vyšívané logá a čísla na hokejový dres, cena za kus dresu.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {[['hrud', 'Vyšívané logo na hrudi', 'logo klubu vyšité na hrudi'], ['rukav', 'Vyšívané malé čísla na rukávoch', 'číslo na oboch rukávoch'], ['chrbat', 'Vyšívané veľké číslo na chrbte', 'číslo hráča na chrbte']].filter(([kk]) => kk in cfg.vys).map(([kk, nn, dd]) => (
+                  <label key={kk} className={`flex gap-3 items-start rounded-lg border p-3 cursor-pointer ${V.vys[kk] ? 'border-blue-600 bg-blue-50' : 'border-slate-200 bg-white'}`}>
+                    <input type="checkbox" className="w-[18px] h-[18px] mt-1 accent-blue-700" checked={!!V.vys[kk]} onChange={(e) => set({ vys: { ...V.vys, [kk]: e.target.checked } })} />
+                    <span><T>{nn}</T><D>{dd} · +{eur(cfg.vys[kk])}/ks</D></span>
+                  </label>
+                ))}
+              </div>
+              {'sponzor' in cfg.vys && (
+                <div className="mt-2 flex items-center gap-3 flex-wrap rounded-lg border border-slate-200 bg-white p-3">
+                  <span><T>Vyšívané logá sponzorov</T><D>+{eur(cfg.vys.sponzor)} za každé logo na kus dresu</D></span>
+                  <span className="ml-auto flex items-center gap-2">
+                    <button type="button" aria-label="Menej log" onClick={() => set({ vysSponzorov: Math.max(0, (V.vysSponzorov || 0) - 1) })} className="w-9 h-9 text-xl font-bold border border-slate-300 bg-white rounded-lg">−</button>
+                    <b className="w-8 text-center text-xl">{V.vysSponzorov || 0}</b>
+                    <button type="button" aria-label="Viac log" onClick={() => set({ vysSponzorov: Math.min(20, (V.vysSponzorov || 0) + 1) })} className="w-9 h-9 text-xl font-bold border border-slate-300 bg-white rounded-lg">+</button>
+                  </span>
+                </div>
+              )}
             </Krok>
           )}
 
@@ -349,6 +400,19 @@ export default function PonukaDresov({ supabase }) {
             </div>
           </Krok>
 
+          <Krok cislo={k()} nadpis="Doplnky na dopyt">
+            <p className="text-sm text-slate-500">Okrem dresov vieme zabezpečiť aj ďalší tímový výstroj. Pri týchto položkách cenu neuvádzame — vyberte, čo vás zaujíma, a po odoslaní dopytu vám pošleme aktuálnu ponuku.</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {DOPLNKY.map((x) => (
+                <label key={x} className={`flex gap-3 items-center rounded-lg border p-3 cursor-pointer ${V.doplnky.includes(x) ? 'border-blue-600 bg-blue-50' : 'border-slate-200 bg-white'}`}>
+                  <input type="checkbox" className="w-[18px] h-[18px] accent-blue-700" checked={V.doplnky.includes(x)} onChange={(e) => set({ doplnky: e.target.checked ? [...V.doplnky, x] : V.doplnky.filter((y) => y !== x) })} />
+                  <span className="text-[15px] font-semibold">{x}</span>
+                </label>
+              ))}
+            </div>
+            <input type="text" value={V.doplnkyIne} maxLength={500} onChange={(e) => set({ doplnkyIne: e.target.value })} placeholder="Iné doplnky, ktoré potrebujete (napr. tašky, šály, vlajky…)" className="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white" />
+          </Krok>
+
           <Krok cislo={k()} nadpis="Odoslať dopyt">
             <div ref={dopytRef} id="dopyt" />
             <div className="text-sm font-bold uppercase tracking-wider text-slate-500">B2B kód pre reklamné agentúry</div>
@@ -367,7 +431,7 @@ export default function PonukaDresov({ supabase }) {
               <input type="text" tabIndex={-1} autoComplete="off" value={kontakt.hp} onChange={(e) => setKontakt({ ...kontakt, hp: e.target.value })} aria-hidden="true" className="hidden" />
               <div className="sm:col-span-2">
                 {chybaOdoslania && <p className="text-sm text-rose-600 mb-2">{chybaOdoslania}</p>}
-                <button type="submit" disabled={odosiela || r.players < 1} className="px-6 py-3.5 rounded-lg bg-blue-700 hover:bg-blue-800 disabled:opacity-45 text-white text-lg font-extrabold uppercase tracking-wider" style={{ fontFamily: '"Barlow Condensed", Arial, sans-serif' }}>{odosiela ? 'Odosielam…' : 'Odoslať dopyt'}</button>
+                <button type="submit" disabled={odosiela || (r.players < 1 && !(V.doplnky.length || V.doplnkyIne.trim()))} className="px-6 py-3.5 rounded-lg bg-blue-700 hover:bg-blue-800 disabled:opacity-45 text-white text-lg font-extrabold uppercase tracking-wider" style={{ fontFamily: '"Barlow Condensed", Arial, sans-serif' }}>{odosiela ? 'Odosielam…' : 'Odoslať dopyt'}</button>
                 <p className="text-xs text-slate-500 mt-2">Odoslaním dopytu sa nezaväzujete k objednávke. Presnú ponuku pošleme do 1 pracovného dňa.</p>
               </div>
             </form>
@@ -386,6 +450,7 @@ export default function PonukaDresov({ supabase }) {
           ))}
           {b2bInfo && <div className="flex justify-between gap-2 text-[15px] py-1.5 border-b border-slate-700"><span className="text-slate-400">B2B zľava</span><span className="text-emerald-300">− {eur(pole(r.b2bAmt))} ({b2bInfo.p} %)</span></div>}
           <div className="flex justify-between gap-2 text-[15px] py-1.5 border-b border-slate-700"><span className="text-slate-400">Termín · {cfg.terminy[V.del]?.n}</span><span>{r.delAmt ? <span className={r.delAmt < 0 ? 'text-emerald-300' : 'text-orange-300'}>{r.delAmt < 0 ? '− ' : '+ '}{eur(Math.abs(pole(r.delAmt)))}</span> : delText(V.del)}</span></div>
+          {(V.doplnky.length > 0 || V.doplnkyIne) && <p className="text-[13px] text-slate-300 py-1.5 border-b border-slate-700">Doplnky na dopyt: {[...V.doplnky, V.doplnkyIne].filter(Boolean).join(', ')} <span className="text-slate-500">(cenu pošleme v ponuke)</span></p>}
           {r.capped && <p className="text-[12px] text-amber-300 py-1.5">Celková zľava je obmedzená na {cfg.maxZlavaPercent} %.</p>}
           {b2bInfo && <div className="flex justify-between gap-2 text-[15px] py-1.5"><span className="text-slate-400">S DPH</span><span>{eur(r.total)}</span></div>}
           <p className="text-[13px] text-slate-400 mt-2.5 leading-snug">{popis.join(' · ')}</p>

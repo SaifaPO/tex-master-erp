@@ -53,8 +53,21 @@ function normalizujVyber(cfg, S) {
   const sp = cfg.sporty?.[S.sport];
   if (!sp) return S;
   if (S.mode === 'stock' && !maSklad(cfg, S.sport)) S.mode = 'custom';
-  if (!sp.rukavy.includes(S.sleeve)) S.sleeve = sp.rukavy.includes('kratky') ? 'kratky' : sp.rukavy[0];
+  // strih: každý šport má svoje strihy (futbal/hádzaná/volejbal/florbal/motokros: štandardný hlavičový + raglan; hokej: klasik/sedlo/raglan; lacrosse: lacrosse/box)
+  if (sp.strihy?.length && !sp.strihy.includes(S.fit)) S.fit = sp.strihy[0];
+  // box lacrosse = vždy dlhý rukáv
+  if (S.fit === 'box') S.sleeve = 'dlhy';
+  else if (!sp.rukavy.includes(S.sleeve)) S.sleeve = sp.rukavy.includes('kratky') ? 'kratky' : sp.rukavy[0];
   if (!sp.goliere.includes(S.collar)) S.collar = sp.goliere[0];
+  // šport s jedným štandardným materiálom (napr. lacrosse) nemá výber kvality
+  if (num(sp.kvality) === 1) { S.tier = 0; S.stulpVer = 0; }
+  if (!['ponozkove', 'bezponozkove'].includes(S.stulpTyp)) S.stulpTyp = 'ponozkove';
+  // vyšívané aplikácie sú len pre hokej
+  if (S.sport !== 'hokej') { S.vys = {}; S.vysSponzorov = 0; }
+  S.vys = S.vys || {};
+  S.vysSponzorov = Math.min(20, Math.max(0, Math.floor(num(S.vysSponzorov))));
+  S.doplnky = Array.isArray(S.doplnky) ? S.doplnky.map((x) => String(x).slice(0, 60)).slice(0, 30) : [];
+  S.doplnkyIne = String(S.doplnkyIne || '').slice(0, 500);
   const av = dostupnePolozky(cfg, S);
   S.comps = S.comps || {};
   Object.keys(S.comps).forEach((k) => { if (!av.includes(k)) S.comps[k] = false; });
@@ -67,6 +80,8 @@ function spocitaj(cfg, S, roster = []) {
   const stock = S.mode === 'stock';
   const chosen = dostupnePolozky(cfg, S).filter((k) => S.comps?.[k]);
   const appsSum = Object.keys(cfg.apps || {}).filter((k) => S.apps?.[k]).reduce((a, k) => a + num(cfg.apps[k]), 0);
+  // vyšívané aplikácie (hokej): hrudník, rukávy, chrbát + sponzori (cena za logo)
+  const vysSum = S.sport !== 'hokej' ? 0 : ['hrud', 'rukav', 'chrbat'].filter((k) => S.vys?.[k]).reduce((a, k) => a + num(cfg.vys?.[k]), 0) + num(cfg.vys?.sponzor) * Math.min(20, Math.max(0, Math.floor(num(S.vysSponzorov))));
   const gkOn = brankariZapnuty(cfg, S);
   let players, gk;
   if (S.pmode === 'roster') { players = roster.length; gk = gkOn ? roster.filter((r) => r.g).length : 0; }
@@ -77,19 +92,22 @@ function spocitaj(cfg, S, roster = []) {
     let p;
     if (stock) {
       p = num(cfg.stock[S.sport][k]);
-      if (k === 'dres') p += ['meno', 'cislo', 'logo'].reduce((a, x) => a + (S.prints?.[x] ? num(cfg.dotlac[x]) : 0), 0) + appsSum;
+      if (k === 'dres') p += ['meno', 'cislo', 'logo'].reduce((a, x) => a + (S.prints?.[x] ? num(cfg.dotlac[x]) : 0), 0) + appsSum + vysSum;
+      if (k === 'stulpne') p += num(cfg.stulp?.[S.stulpTyp]);
       if (k === 'trenirky' && S.prints?.cisloTren) p += num(cfg.dotlac.cisloTren);
       unit[k] = unitGk[k] = p;
       return;
     }
     const arr = cfg.items[S.sport][k];
     p = k === 'stulpne' && S.sport === 'hokej' ? num(arr[S.stulpVer]) : num(arr[S.tier]);
+    if (k === 'stulpne') p += num(cfg.stulp?.[S.stulpTyp]); // ponožkové / bezponožkové
     let g = p;
     if (k === 'dres') {
       const slv = sp.rukavy.length > 1 ? num(cfg.sleeve[S.sleeve]) : 0;
-      const add = num(cfg.fit[S.fit]) + num(cfg.collar[S.collar]) + (S.nn ? num(cfg.nameNum) : 0) + appsSum;
+      const add = num(cfg.fit[S.fit]) + num(cfg.collar[S.collar]) + (S.nn ? num(cfg.nameNum) : 0) + appsSum + vysSum;
       p += slv + add;
-      g += add + num(cfg.gk.cut) + (sp.brankari === 'futbal' ? num(cfg.sleeve.dlhy) : slv) + (sp.brankari === 'futbal' && S.gkElbow ? num(cfg.gk.lakte) : 0);
+      // hádzanársky brankár = mikina s dlhým rukávom z iného materiálu (jedna cena gk.mikina), futbalový = brankársky strih + dlhý rukáv (+ lakte), hokejový = brankársky strih
+      g += add + (sp.brankari === 'hadzana' ? num(cfg.gk.mikina) : num(cfg.gk.cut) + (sp.brankari === 'futbal' ? num(cfg.sleeve.dlhy) : slv) + (sp.brankari === 'futbal' && S.gkElbow ? num(cfg.gk.lakte) : 0));
     }
     if (k === 'trenirky' && sp.brankari === 'futbal' && S.gkHip) g += num(cfg.gk.boky);
     unit[k] = p; unitGk[k] = g;
@@ -111,7 +129,7 @@ function spocitaj(cfg, S, roster = []) {
   if (cap > 0 && gross > 0 && (gross - total) / gross * 100 > cap) { total = gross * (1 - cap / 100); capped = true; }
   const vat = 1 + num(cfg.vat) / 100;
   const show = (v) => (S.b2b ? v / vat : v); // B2B vidí ceny bez DPH
-  return { sp, stock, players, gk, chosen, pcs, gross, vt, volume, vol, b2bAmt, b2bP, delAmt, total, capped, vat, show, unit, unitGk, gkOn, appsSum };
+  return { sp, stock, players, gk, chosen, pcs, gross, vt, volume, vol, b2bAmt, b2bP, delAmt, total, capped, vat, show, unit, unitGk, gkOn, appsSum, vysSum };
 }
 
 // Normalizácia veľkostí z Excelu (XXL → 2XL, XXXL → 3XL)
@@ -173,7 +191,7 @@ async function zostavCennik(supabase) {
     const naklad = r.produkt_id != null && nakladProduktu.has(Number(r.produkt_id)) ? nakladProduktu.get(Number(r.produkt_id)) : n(r.naklad_eur);
     return naklad > 0 ? r2(priceAt(naklad, 1, pcfg) * (1 + vat / 100)) : null;
   };
-  const cfg = { aktivny: nast.aktivny !== false, sporty: {}, poradie: [], items: {}, stock: {}, dotlac: {}, nameNum: 0, fit: {}, sleeve: {}, collar: {}, apps: {}, gk: {}, volume: [], delivery: {}, terminy: {}, vat, maxZlavaPercent: n(nast.max_zlava_percent, 40), sizeChart: {}, updated: String(nast.updated_at || '').slice(0, 10) };
+  const cfg = { aktivny: nast.aktivny !== false, sporty: {}, poradie: [], items: {}, stock: {}, dotlac: {}, nameNum: 0, fit: {}, sleeve: {}, collar: {}, apps: {}, vys: {}, stulp: {}, gk: {}, volume: [], delivery: {}, terminy: {}, vat, maxZlavaPercent: n(nast.max_zlava_percent, 40), sizeChart: {}, updated: String(nast.updated_at || '').slice(0, 10) };
   for (const s of sportyR.data || []) {
     const items = {}, stock = {};
     for (const pol of ['dres', 'trenirky', 'stulpne']) {
@@ -184,7 +202,7 @@ async function zostavCennik(supabase) {
     }
     if (!Object.keys(items).length && !Object.keys(stock).length) continue;
     cfg.items[s.kod] = items; if (Object.keys(stock).length) cfg.stock[s.kod] = stock;
-    cfg.sporty[s.kod] = { n: s.nazov, rukavy: s.rukavy, goliere: s.goliere, brankari: s.brankari, skladPoznamka: s.sklad_poznamka || '' };
+    cfg.sporty[s.kod] = { n: s.nazov, rukavy: s.rukavy, goliere: s.goliere, strihy: s.strihy || ['standard', 'raglan'], kvality: n(s.kvality, 3), brankari: s.brankari, skladPoznamka: s.sklad_poznamka || '' };
     cfg.poradie.push(s.kod);
   }
   for (const p of pripl) {
@@ -226,6 +244,10 @@ function textRekapitulacie(cfg, S, r, kontakt, roster, cislo) {
   if (S.b2b) L.push(`B2B kód: ${S.b2b.kod} (${S.b2b.n}, −${S.b2b.p} %)`);
   L.push('', `Šport: ${sp.n}`, `Typ výroby: ${r.stock ? 'Zo skladu + dotlač' : 'Zákazková celopotlač'}`);
   L.push('Položky: ' + r.chosen.map((k) => POLOZKY[k] + ` ${eur(r.show(r.unit[k]))}/ks`).join(', '));
+  if (!r.stock) L.push(`Strih: ${S.fit}, rukáv: ${S.sleeve}, golier: ${S.collar}, materiál: ${S.sport === 'hokej' ? ['Light', 'Heavy', 'Pro'][S.tier] : ['Základ', 'Premium', 'Pro'][S.tier]}`);
+  if (r.chosen.includes('stulpne')) L.push(`Štulpne: ${S.stulpTyp === 'bezponozkove' ? 'bezponožkové' : 'ponožkové'}`);
+  if (S.sport === 'hokej') { const v = ['hrud', 'rukav', 'chrbat'].filter((k) => S.vys?.[k]).map((k) => ({ hrud: 'logo na hrudi', rukav: 'malé čísla na rukávoch', chrbat: 'veľké číslo na chrbte' }[k])); if (S.vysSponzorov) v.push(`${S.vysSponzorov}× logo sponzora`); if (v.length) L.push('Vyšívanie: ' + v.join(', ')); }
+  if ((S.doplnky || []).length || S.doplnkyIne) L.push('', 'DOPYT NA DOPLNKY (cena nie je súčasťou, pošleme aktuálnu ponuku): ' + [...(S.doplnky || []), S.doplnkyIne].filter(Boolean).join(', '));
   L.push(`Hráčov: ${r.players}${r.gk ? ` (z toho brankárov ${r.gk})` : ''}, kusov spolu: ${r.pcs}`);
   L.push(`Termín: ${cfg.terminy[S.del]?.n || S.del} (${cfg.terminy[S.del]?.[r.stock ? 'sklad' : 'custom'] || ''})`);
   L.push(`Cena bez zliav: ${eur(r.show(r.gross))}`, `Množstevná zľava ${r.vt.p} %: −${eur(r.show(r.vol))}`);
@@ -272,6 +294,7 @@ Deno.serve(async (req) => {
       const telefon = String(k.telefon || '').trim().slice(0, 40), poznamka = String(k.poznamka || '').trim().slice(0, 2000);
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error('Zadajte platný e-mail, na ktorý pošleme ponuku.');
       if (!klub && !kto) throw new Error('Doplňte klub / školu / firmu alebo meno kontaktnej osoby.');
+      const jenDoplnky = (Array.isArray(body.vyber?.doplnky) && body.vyber.doplnky.length > 0) || !!String(body.vyber?.doplnkyIne || '').trim();
 
       const ip = (req.headers.get('x-forwarded-for') || '').split(',')[0].trim() || 'neznama';
       const ipHash = await sha256(ip + '|' + (Deno.env.get('SUPABASE_URL') || ''));
@@ -289,8 +312,8 @@ Deno.serve(async (req) => {
       if (S.pmode === 'roster' && !roster.length) S.pmode = 'count';
       S.players = Math.min(2000, Math.max(0, Math.floor(n(S.players))));
       const r = spocitaj(cfg, S, roster);
-      if (!r.chosen.length) throw new Error('Vyberte aspoň jednu položku.');
-      if (r.players < 1) throw new Error('Zadajte počet hráčov.');
+      if (!jenDoplnky && !r.chosen.length) throw new Error('Vyberte aspoň jednu položku.');
+      if (!jenDoplnky && r.players < 1) throw new Error('Zadajte počet hráčov alebo vyberte doplnky na dopyt.');
 
       const cislo = await ziskajCislo(supabase, 'DOP');
       const text = textRekapitulacie(cfg, S, r, { klub, kto, telefon, email, poznamka }, S.pmode === 'roster' ? roster : [], cislo);
