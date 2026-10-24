@@ -23,6 +23,43 @@ export function useCenaNahlad(supabase, funkcia, telo, povolene = true) {
   return { cena, chyba };
 }
 
+// Tabuľka „Množstevné zľavy“ (rovnaký vzhľad ako v čelenkách a buffkách): ceny za kus podľa počtu kusov z odpovede servera (cena.urovne).
+export function MnozstevneZlavy({ urovne, pocetKs, b2bPercent = 0, b2bKod = '' }) {
+  if (!urovne || urovne.length === 0) return null;
+  const zaklad = urovne[0].cenaKsBezDph;
+  const p = Number(b2bPercent) || 0;
+  return (
+    <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm">
+      <h3 className="text-sm font-bold text-slate-900 mb-1">Množstevné zľavy</h3>
+      <p className="text-[11px] text-slate-400 mb-3">Ceny v tabuľke sú bez DPH.{p > 0 && <> Máte zadaný B2B kód <strong>{b2bKod}</strong> — v tabuľke vidíte aj ceny po zľave {p} %.</>}</p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr className="border-b border-slate-100 text-slate-400 font-semibold">
+              <th className="p-2.5">Počet ks</th><th className="p-2.5">Cena €/ks (bez DPH)</th>{p > 0 && <th className="p-2.5 text-amber-600">S B2B zľavou (−{p} %)</th>}<th className="p-2.5">Zľava</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {urovne.map((u, i) => {
+              const dalsi = urovne[i + 1];
+              const jeAktualna = pocetKs >= u.ks && (!dalsi || pocetKs < dalsi.ks);
+              const zlava = zaklad > 0 ? Math.round(((zaklad - u.cenaKsBezDph) / zaklad) * 100) : 0;
+              return (
+                <tr key={u.ks} className={jeAktualna ? 'bg-indigo-50 font-semibold' : ''}>
+                  <td className="p-2.5 text-slate-700">od {u.ks} ks {jeAktualna && <span className="ml-1 text-[10px] bg-indigo-600 text-white px-2 py-0.5 rounded-full">Váš odber</span>}</td>
+                  <td className="p-2.5 font-mono font-bold text-slate-900">{u.cenaKsBezDph.toFixed(2)} €</td>
+                  {p > 0 && <td className="p-2.5 font-mono font-bold text-amber-600">{(Math.round(u.cenaKsBezDph * (100 - p)) / 100).toFixed(2)} €</td>}
+                  <td className={`p-2.5 font-mono ${zlava > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>{zlava > 0 ? `-${zlava}%` : 'Základ'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function Riadok({ label, value }) {
   return <div className="flex items-center justify-between text-xs"><span className="text-slate-400">{label}</span><span className="font-mono text-slate-100">{value}</span></div>;
 }

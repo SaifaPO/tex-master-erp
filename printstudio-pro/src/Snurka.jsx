@@ -4,7 +4,7 @@ import NumberInput from './NumberInput';
 import { useB2bKod } from './b2b';
 import B2bKod from './B2bKod';
 import PlochaEditor from './fabricEditor/PlochaEditor';
-import { useCenaNahlad, CenaSuhrn } from './cenaNahlad';
+import { useCenaNahlad, CenaSuhrn, MnozstevneZlavy } from './cenaNahlad';
 
 // Predvolené fotky typov šnúrok (public/snurka). Ak je v administrácii nahraná vlastná fotka (foto_url), použije sa tá.
 const VYCHODZIE_FOTO = { klasicka: '/snurka/klasicka.webp', sponou: '/snurka/sponou.webp', spona_poistka: '/snurka/spona_poistka.webp', klucenka: '/snurka/klucenka.webp' };
@@ -45,7 +45,7 @@ export default function Snurka({ supabase }) {
   const MEDZERA_CASTI = 10;
   const casti = (mod?.casti_mm || '').split(',').map((x) => Number(String(x).trim())).filter((x) => x > 0);
   const sirkaPlochy = casti.length ? casti.reduce((s, x) => s + x, 0) + MEDZERA_CASTI * (casti.length - 1) : (mod?.sirka_mm || 936);
-  const { cena, chyba } = useCenaNahlad(supabase, 'snurka-create-draft-order', { model, pocetKs, osobnyOdber, b2bKod: b2b.kod }, !!mod);
+  const { cena, chyba } = useCenaNahlad(supabase, 'snurka-create-draft-order', { model, pocetKs, osobnyOdber, b2bKod: b2b.kod, urovne: true }, !!mod);
 
   const objednat = async () => {
     setBezi(true); setChybaObj(''); setPotvrdenie('');
@@ -112,6 +112,7 @@ export default function Snurka({ supabase }) {
                 <CenaSuhrn cena={cena} chyba={chyba} osobnyOdber={osobnyOdber} onOsobnyOdber={setOsobnyOdber} onObjednat={objednat} bezi={bezi} chybaObjednavky={chybaObj} potvrdenie={potvrdenie}
                   riadky={[['Typ šnúrky', mod?.nazov || '—'], ['Rozmer', mod ? (casti.length > 1 ? `${casti.map((x) => x / 10).join(' + ')} cm × ${mod.vyska_mm} mm` : `${sirkaPlochy} × ${mod.vyska_mm} mm`) : '—'], ['Počet kusov', `${pocetKs} ks`]]} />
               </div>
+              <MnozstevneZlavy urovne={cena?.urovne} pocetKs={pocetKs} b2bPercent={b2b.zlavaPercent} b2bKod={b2b.kod} />
             </section>
           </main>
         )}
