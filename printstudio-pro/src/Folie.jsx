@@ -4,7 +4,7 @@ import PbtHeader from './PbtHeader';
 import NumberInput from './NumberInput';
 import { useB2bKod } from './b2b';
 import B2bKod from './B2bKod';
-import { useCenaNahlad, CenaSuhrn } from './cenaNahlad';
+import { useCenaNahlad, CenaSuhrn, MnozstevneZlavy } from './cenaNahlad';
 
 const BUCKET = 'print-designs';
 const POVOLENE = ['.pdf', '.eps', '.ai', '.svg', '.dxf'];
@@ -108,7 +108,7 @@ export default function Folie({ supabase }) {
     if (!farby.find((x) => x.kod === farba && x.druh_kod === kod)) setFarba(prva?.kod || '');
   };
 
-  const { cena, chyba } = useCenaNahlad(supabase, 'folie-create-draft-order', { druh, farba, sirkaMm: sirka, vyskaMm: vyska, pocetKs, uroven, osobnyOdber, b2bKod: b2b.kod }, !!(druh && farba) && !rozmerChyba);
+  const { cena, chyba } = useCenaNahlad(supabase, 'folie-create-draft-order', { druh, farba, sirkaMm: sirka, vyskaMm: vyska, pocetKs, uroven, osobnyOdber, b2bKod: b2b.kod, urovne: true }, !!(druh && farba) && !rozmerChyba);
 
   const vyberSubor = (f) => {
     if (!f) return;
@@ -267,6 +267,7 @@ export default function Folie({ supabase }) {
               {cena?.dlzkaBm != null && <div className="flex items-center justify-between text-xs"><span className="text-slate-400">Spotreba materiálu</span><span className="font-mono text-slate-100">{cena.dlzkaBm} bm</span></div>}
             </CenaSuhrn>
           </div>
+          <MnozstevneZlavy urovne={cena?.urovne} pocetKs={pocetKs} b2bPercent={b2b.zlavaPercent} b2bKod={b2b.kod} />
         </section>
       </main>
     </div>

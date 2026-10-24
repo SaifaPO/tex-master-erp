@@ -5,7 +5,7 @@ import { useB2bKod } from './b2b';
 import B2bKod from './B2bKod';
 import PlochaEditor from './fabricEditor/PlochaEditor';
 import OkrajIlustracia from './OkrajIlustracia';
-import { useCenaNahlad, CenaSuhrn } from './cenaNahlad';
+import { useCenaNahlad, CenaSuhrn, MnozstevneZlavy } from './cenaNahlad';
 
 const BUCKET = 'print-designs';
 // Predvolené fotky ukončenia okrajov (public/stolova); kým nie je k okraju nahraná fotka v administrácii, ostatné sa kreslia ilustráciou.
@@ -71,7 +71,7 @@ export default function Stolova({ supabase }) {
 
   const vel = d.velkosti.find((x) => x.kod === velkost);
   const pripravene = !!(vel && tvar && okraj && podstavec);
-  const { cena, chyba } = useCenaNahlad(supabase, 'stolova-create-draft-order', { velkost, tvar, okraj, podstavec, pocetKs, osobnyOdber, b2bKod: b2b.kod }, pripravene);
+  const { cena, chyba } = useCenaNahlad(supabase, 'stolova-create-draft-order', { velkost, tvar, okraj, podstavec, pocetKs, osobnyOdber, b2bKod: b2b.kod, urovne: true }, pripravene);
 
   const objednat = async () => {
     setBezi(true); setChybaObj(''); setPotvrdenie('');
@@ -155,6 +155,7 @@ export default function Stolova({ supabase }) {
                 <CenaSuhrn cena={cena} chyba={chyba} osobnyOdber={osobnyOdber} onOsobnyOdber={setOsobnyOdber} onObjednat={objednat} bezi={bezi} chybaObjednavky={chybaObj} potvrdenie={potvrdenie}
                   riadky={[['Veľkosť', nazov(d.velkosti, velkost)], ['Tvar', nazov(d.tvary, tvar)], ['Okraje', nazov(d.okraje, okraj)], ['Podstavec', nazov(d.podstavce, podstavec)], ['Počet kusov', `${pocetKs} ks`]]} />
               </div>
+              <MnozstevneZlavy urovne={cena?.urovne} pocetKs={pocetKs} b2bPercent={b2b.zlavaPercent} b2bKod={b2b.kod} />
             </section>
           </main>
         )}

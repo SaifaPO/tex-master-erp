@@ -30,6 +30,8 @@ export default function Transfer3D({ supabase }) {
   const [nastavenia, setNastavenia] = useState(null);
   const [urovne, setUrovne] = useState([]);
   const [laky, setLaky] = useState([]);
+  const [textury, setTextury] = useState([]);
+  const [textura, setTextura] = useState(''); // '' = bez textúry (hladký podklad)
 
   const [sirka, setSirka] = useState(10);
   const [vyska, setVyska] = useState(10);
@@ -51,15 +53,17 @@ export default function Transfer3D({ supabase }) {
   useEffect(() => {
     if (!supabase) { setLoadError('Supabase klient nie je nakonfigurovaný.'); setIsLoading(false); return; }
     (async () => {
-      const [{ data: n, error: nErr }, { data: u }, { data: l }] = await Promise.all([
+      const [{ data: n, error: nErr }, { data: u }, { data: l }, { data: tx }] = await Promise.all([
         supabase.from('transfer3d_nastavenia_verejny').select('*').maybeSingle(),
         supabase.from('transfer3d_urovne_verejny').select('*').order('poradie'),
         supabase.from('transfer3d_laky_verejny').select('*').order('poradie'),
+        supabase.from('transfer3d_textury_verejny').select('*').order('poradie'),
       ]);
       if (nErr || !n) { setLoadError('Objednávka 3D transferov ešte nie je pripravená (chýba migrácia migration_transfer3d.sql).'); setIsLoading(false); return; }
       setNastavenia(n);
       setUrovne(u || []);
       setLaky(l || []);
+      setTextury(tx || []);
       if (u?.length) setUroven(u.find((x) => x.kod === 'medium')?.kod || u[0].kod);
       if (l?.length) setLak(l.find((x) => x.kod === 'partial')?.kod || l[0].kod);
       setIsLoading(false);
@@ -106,7 +110,7 @@ export default function Transfer3D({ supabase }) {
       const { error: uploadErr } = await supabase.storage.from(BUCKET).upload(cesta, subor, { contentType: subor.type || undefined });
       if (uploadErr) throw new Error('Súbor sa nepodarilo nahrať: ' + uploadErr.message);
       const { data, error } = await supabase.functions.invoke('transfer3d-create-draft-order', {
-        body: { sirkaCm: sirka, vyskaCm: vyska, pocetKs, uroven, lak, osobnyOdber, b2bKod: b2b.kod, suborNazov: subor.name, suborCesta: cesta },
+        body: { sirkaCm: sirka, vyskaCm: vyska, pocetKs, uroven, lak, textura: textura || null, osobnyOdber, b2bKod: b2b.kod, suborNazov: subor.name, suborCesta: cesta },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -194,6 +198,25 @@ export default function Transfer3D({ supabase }) {
                 ))}
               </div>
             </section>
+            {textury.length > 0 && (
+              <section className="bg-white rounded-2xl border border-slate-200 p-5">
+                <h3 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-2 mb-1">4. Textúra podkladu loga</h3>
+                <p className="text-xs text-slate-500 mb-4">Povrchová štruktúra, ktorá sa použije ako podklad vášho loga. Zobrazený je detail vzoru (cca 4 × 4 cm). Cena sa nemení.</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                  <div onClick={() => setTextura('')} className={kartaStyl(textura === '')}>
+                    <div className="w-full aspect-square rounded-lg mb-2 bg-slate-100 border border-slate-200 flex items-center justify-center text-[11px] text-slate-500 px-2">hladký podklad</div>
+                    <h4 className="font-semibold text-slate-900 text-xs">Bez textúry</h4>
+                  </div>
+                  {textury.map((t) => (
+                    <div key={t.kod} onClick={() => setTextura(t.kod)} className={kartaStyl(textura === t.kod)}>
+                      {t.foto_url ? <img src={t.foto_url} alt={t.nazov} loading="lazy" className="w-full aspect-square object-cover rounded-lg mb-2 border border-slate-200" /> : <div className="w-full aspect-square rounded-lg mb-2 bg-slate-100" />}
+                      <h4 className="font-semibold text-slate-900 text-xs">{t.nazov}</h4>
+                      {t.popis && <p className="text-[10px] text-slate-500 mt-0.5">{t.popis}</p>}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
           </div>
 
           <aside className="w-full lg:w-96">
@@ -204,6 +227,7 @@ export default function Transfer3D({ supabase }) {
                 <RowSum label="Počet kusov" value={`${pocetKs} ks`} />
                 <RowSum label="3D efekt" value={urovne.find((u) => u.kod === uroven)?.nazov || '—'} />
                 <RowSum label="Lak" value={laky.find((l) => l.kod === lak)?.nazov || '—'} />
+                {textury.length > 0 && <RowSum label="Textúra podkladu" value={textury.find((t) => t.kod === textura)?.nazov || 'bez textúry'} />}
               </div>
 
               <label className="flex items-start gap-2 cursor-pointer text-xs text-slate-300">

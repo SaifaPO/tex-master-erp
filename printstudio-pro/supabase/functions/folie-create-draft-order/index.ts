@@ -204,6 +204,24 @@ Deno.serve(async (req) => {
         spotreba: { dlzkaBm: r2(dlzkaBm), rezMin: r2(rezMin), separaciaMin: r2(weedMin), pracaMin: r2(pracaMin), nastrihanieMin: r2(strihMin) },
         nastrihanieCena: nastrihanieEur };
     }
+    // Cenové úrovne podľa počtu kusov (tabuľka „Množstevné zľavy“) — rovnaký výpočet nákladov pre iný počet kusov, bez B2B zľavy
+    if (body.urovne) {
+      const urovneKs: { ks: number; cenaKsBezDph: number }[] = [];
+      for (const l of [1, 5, 10, 25, 50, 100, 200, 500]) {
+        const rz = rozlozenie(w, h, l, n(nast.pracovna_sirka_mm, 490), n(nast.medzera_mm, 5));
+        if (!rz || rz.dlzkaMm > n(nast.max_dlzka_mm, 10000)) continue;
+        const dl = Math.max(0.1, (rz.dlzkaMm + n(nast.medzera_mm, 5)) / 1000);
+        const rm = dl * n(nast.rez_min_bm);
+        const wm = vylupanie ? l * (velky ? n(nast.weeding_min_velky) : n(nast.weeding_min_maly)) : 0;
+        const pm = n(nast.priprava_min) + rm + wm;
+        const nk = (dl * n(druh.cena_bm) * odpadK + (rm / 60) * n(nast.stroj_rezanie_hod) + (pm / 60) * n(nast.praca_hod)) * (1 + n(nast.riziko_percent) / 100);
+        const sm = nastrihane ? dl * (velky ? n(nast.strihanie_min_bm_velky, 5) : n(nast.strihanie_min_bm_maly, 10)) : 0;
+        const ns = r2((sm / 60) * n(nast.strihanie_hod, 7) * (1 + n(nast.strihanie_marza_percent, 100) / 100));
+        const cc = await spoluCena(supabase, nast, cfg, nk, l, true, null, ns);
+        urovneKs.push({ ks: l, cenaKsBezDph: r2(cc.logaSpolu / l) });
+      }
+      vysledok.urovne = urovneKs;
+    }
     if (preview) return odpoved(vysledok);
 
     const objednavkaId = crypto.randomUUID();

@@ -3,6 +3,7 @@ import NumberInput from '../NumberInput';
 import { Layers, Download, Trash2, Calculator, Loader2, AlertTriangle } from 'lucide-react';
 import FotoSlot from './FotoSlot';
 import ErpProduktVyber from './ErpProduktVyber';
+import { SkupinaMoznosti } from './AdminPomocky';
 
 const BUCKET = 'print-designs';
 const eur = (v, d = 2) => `${(Number(v) || 0).toFixed(d)} €`;
@@ -31,6 +32,7 @@ export default function Transfer3dTab({ supabase }) {
   const [nast, setNast] = useState(null);
   const [urovne, setUrovne] = useState([]);
   const [laky, setLaky] = useState([]);
+  const [textury, setTextury] = useState([]);
   const [objednavky, setObjednavky] = useState([]);
   const [zariadenia, setZariadenia] = useState([]);
   const [cenaElektriny, setCenaElektriny] = useState(0);
@@ -43,7 +45,7 @@ export default function Transfer3dTab({ supabase }) {
 
   const nacitaj = useCallback(async () => {
     setNacitava(true);
-    const [n, u, l, o, cm, p, erp] = await Promise.all([
+    const [n, u, l, o, cm, p, erp, tx] = await Promise.all([
       supabase.from('transfer3d_nastavenia').select('*').eq('id', 1).maybeSingle(),
       supabase.from('transfer3d_urovne').select('*').order('poradie'),
       supabase.from('transfer3d_laky').select('*').order('poradie'),
@@ -51,10 +53,11 @@ export default function Transfer3dTab({ supabase }) {
       supabase.from('cost_metrics').select('id, name, value, power_kw, amortizacia_hod'),
       supabase.from('produkty').select('id, nazov, zakladna_cena, aktivny, erp_produkt_id').eq('aktivny', true).order('nazov'),
       supabase.from('products').select('id, name, custom_code, production_cost').order('name'),
+      supabase.from('transfer3d_textury').select('*').order('poradie'),
     ]);
     if (n.error || !n.data) { setChyba('Tabuľky 3D transferov ešte neexistujú — spusti v Supabase SQL Editore migráciu migration_transfer3d.sql (priečinok printstudio-pro).'); setNacitava(false); return; }
     setChyba('');
-    setNast(n.data); setUrovne(u.data || []); setLaky(l.data || []); setObjednavky(o.data || []);
+    setNast(n.data); setUrovne(u.data || []); setLaky(l.data || []); setTextury(tx?.data || []); setObjednavky(o.data || []);
     const metriky = cm.data || [];
     setCenaElektriny(Number(metriky.find((m) => m.name === 'Cena elektriny')?.value) || 0);
     setZariadenia(metriky.filter((m) => m.name !== 'Cena elektriny' && (Number(m.power_kw) > 0 || Number(m.amortizacia_hod) > 0)));
@@ -261,6 +264,14 @@ export default function Transfer3dTab({ supabase }) {
         </div>
       </div>
 
+      {/* TEXTÚRY PODKLADU LOGA */}
+      <SkupinaMoznosti supabase={supabase} tabulka="transfer3d_textury" nadpis="Textúry podkladu loga" priecinok="transfer3d" riadky={textury} setRiadky={setTextury}
+        popis="Zákazník si pri objednávke vyberie textúru, ktorá sa použije ako podklad jeho loga (cena sa nemení). Fotka je detail vzoru (cca 4 × 4 cm). Do „Názov výrobného súboru“ napíš názov súboru s plnou textúrou 30 × 40 cm — objaví sa v Shopify objednávke pre výrobu. Odškrtni „Zobrazovať“, ak textúru chceš dočasne skryť."
+        novy={{ aktivny: true, popis: '', subor_nazov: '' }} textovePolia={[{ k: 'subor_nazov', l: 'Názov výrobného súboru (napr. 03_carbon_300x400.pdf)' }]}
+        extra={(r, zmen) => (
+          <label className="flex items-center gap-2 text-[11px] text-slate-300 cursor-pointer"><input type="checkbox" checked={r.aktivny !== false} onChange={(e) => zmen(r.kod, { aktivny: e.target.checked })} /> Zobrazovať zákazníkom</label>
+        )} />
+
       {/* ERP PRODUKT */}
       <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-5">
         <h3 className="font-bold text-sm text-white mb-1">Produkt v Katalógu produktov (pre zákazky v ERP)</h3>
@@ -363,7 +374,7 @@ export default function Transfer3dTab({ supabase }) {
                     {o.osobny_odber && <span className="bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded text-[10px]">Osobný odber</span>}
                     <span className="text-slate-500 text-[10px]">{new Date(o.created_at).toLocaleString('sk-SK')}</span>
                   </div>
-                  <div className="text-slate-300">{urovne.find((u) => u.kod === o.uroven)?.nazov || o.uroven} · {laky.find((l) => l.kod === o.lak)?.nazov || o.lak} | Suma s DPH: <strong className="text-emerald-400 font-mono">{eur(o.cena_spolu)}</strong>{o.naklad_spolu != null && <span className="text-slate-500"> | náklad {eur(o.naklad_spolu)}</span>} | fólia {o.dlzka_bm} bm</div>
+                  <div className="text-slate-300">{urovne.find((u) => u.kod === o.uroven)?.nazov || o.uroven} · {laky.find((l) => l.kod === o.lak)?.nazov || o.lak}{o.textura ? ` · textúra: ${textury.find((x) => x.kod === o.textura)?.nazov || o.textura}` : ''} | Suma s DPH: <strong className="text-emerald-400 font-mono">{eur(o.cena_spolu)}</strong>{o.naklad_spolu != null && <span className="text-slate-500"> | náklad {eur(o.naklad_spolu)}</span>} | fólia {o.dlzka_bm} bm</div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <select value={o.stav} onChange={(e) => zmenStav(o.id, e.target.value)} className="px-2 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs">

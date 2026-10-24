@@ -134,7 +134,7 @@ Deno.serve(async (req) => {
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
   try {
     const body = await req.json();
-    const { preview = false, uroven: urovenKod, lak: lakKod, osobnyOdber = false, b2bKod = null, suborNazov = null, suborCesta = null } = body;
+    const { preview = false, uroven: urovenKod, lak: lakKod, textura: texturaKod = null, osobnyOdber = false, b2bKod = null, suborNazov = null, suborCesta = null } = body;
     const w = n(body.sirkaCm), h = n(body.vyskaCm), ks = Math.max(1, Math.round(n(body.pocetKs, 1)));
 
     const [{ data: nast }, { data: ur }, { data: lk }, { data: cfg }, { data: metriky }] = await Promise.all([
@@ -148,6 +148,13 @@ Deno.serve(async (req) => {
     if (nast.aktivny === false) throw new Error('Objednávanie 3D transferov je dočasne vypnuté.');
     if (!ur) throw new Error('Vyber úroveň 3D efektu.');
     if (!lk) throw new Error('Vyber variant laku.');
+    // Textúra podkladu loga (voliteľná) — kontroluje sa, že existuje a je zapnutá; na cenu nemá vplyv
+    let tx: any = null;
+    if (texturaKod) {
+      const { data: t } = await supabase.from('transfer3d_textury').select('*').eq('kod', String(texturaKod)).eq('aktivny', true).maybeSingle();
+      if (!t) throw new Error('Vybraná textúra nie je dostupná.');
+      tx = t;
+    }
     if (w <= 0 || h <= 0) throw new Error('Rozmery musia byť väčšie ako 0.');
     if (w > n(nast.max_sirka_cm, 28) || h > n(nast.max_vyska_cm, 38)) throw new Error(`Maximálny rozmer motívu je ${n(nast.max_sirka_cm, 28)} × ${n(nast.max_vyska_cm, 38)} cm.`);
 
@@ -201,7 +208,7 @@ Deno.serve(async (req) => {
       suborUrl = signed?.signedUrl || null;
     }
     const { error: insertErr } = await supabase.from('transfer3d_objednavky').insert({
-      id: objednavkaId, cislo_objednavky: cisloObjednavky, sirka_cm: w, vyska_cm: h, pocet_ks: ks, uroven: ur.kod, lak: lk.kod,
+      id: objednavkaId, cislo_objednavky: cisloObjednavky, sirka_cm: w, vyska_cm: h, pocet_ks: ks, uroven: ur.kod, lak: lk.kod, textura: tx ? tx.kod : null,
       dlzka_bm: r2(v.roz.dlzkaBm), cena_kus: r2(logaPoZlave / ks), cena_spolu: spolu, naklad_spolu: r2(v.nakladSpolu),
       subor_nazov: suborNazov, subor_cesta: suborCesta, subor_url: suborUrl, osobny_odber: !!osobnyOdber,
     });
@@ -229,13 +236,14 @@ Deno.serve(async (req) => {
             { name: '_pocet_ks', value: String(ks) },
             { name: '_uroven', value: ur.nazov },
             { name: '_lak', value: lk.nazov },
+            { name: '_textura', value: tx ? `${tx.nazov}${tx.subor_nazov ? ` (súbor ${tx.subor_nazov})` : ''}` : 'bez textúry' },
             { name: '_subor', value: suborNazov || '' },
             { name: '_subor_link', value: suborUrl || '' },
             { name: '_osobny_odber', value: osobnyOdber ? 'áno' : 'nie' },
             { name: '_b2b_kod', value: zlavaPercent > 0 ? String(b2bKod).trim().toUpperCase() : '' },
           ],
         }],
-        note: `${cisloObjednavky} (3D transfery)` + (suborUrl ? `\nSúbor na tlač: ${suborUrl}` : ''),
+        note: `${cisloObjednavky} (3D transfery)` + (tx ? `\nTextúra podkladu: ${tx.nazov}${tx.subor_nazov ? ` — ${tx.subor_nazov}` : ''}` : '') + (suborUrl ? `\nSúbor na tlač: ${suborUrl}` : ''),
         tags: 'transfer3d',
         use_customer_default_address: true,
       },

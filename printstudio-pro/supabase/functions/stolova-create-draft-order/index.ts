@@ -163,6 +163,13 @@ Deno.serve(async (req) => {
       vysledok.admin = { nakladSpolu: r2(nakladKs * ks), nakladKs: r2(nakladKs), margaEur: r2(c.logaSpolu - nakladKs * ks), margaPercent: nakladKs > 0 ? r2((c.logaSpolu / (nakladKs * ks) - 1) * 100) : 0,
         rozpis: { velkost: r2(nVel), tvar: r2(nTv), okraj: r2(nOk), podstavec: r2(nPod) } };
     }
+    // Cenové úrovne podľa počtu kusov (tabuľka „Množstevné zľavy“ v konfigurátore) — cena za kus bez DPH a bez B2B zľavy
+    if (body.urovne) {
+      vysledok.urovne = await Promise.all([1, 5, 10, 25, 50, 100, 200, 500].map(async (l) => {
+        const cc = await spoluCena(supabase, nast, cfg, nakladKs * l, l, true, null);
+        return { ks: l, cenaKsBezDph: r2(cc.logaSpolu / l) };
+      }));
+    }
     if (preview) return odpoved(vysledok);
 
     const objednavkaId = crypto.randomUUID();
