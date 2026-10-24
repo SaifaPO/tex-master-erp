@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Banknote, Calculator, TrendingUp } from 'lucide-react';
 import { priceAt, marginAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 import NumberInput from '../NumberInput';
-import { vcSublimaciaGarment as vcSublimaciaGarmentZo, vcSublimaciaGarmentRozpis, vcDtfGarment as vcDtfGarmentZo, vcDtfGarmentRozpis, vcRezanyTransferRozpis, vcVysivka as vcVysivkaZo, nakladFarbySietotlac, vcSietotlacZaklad, plochaFormatuSietotlac, vcRezanyTransfer as vcRezanyTransferZo, vcLaserRezanie as vcLaserRezaniaZo } from './vyrobneNaklady';
+import { vcSublimaciaGarment as vcSublimaciaGarmentZo, vcSublimaciaGarmentRozpis, vcDtfGarment as vcDtfGarmentZo, vcDtfGarmentRozpis, vcRezanyTransferRozpis, vcVysivka as vcVysivkaZo, nakladFarbySietotlac, vcSietotlacZaklad, vcSietotlacCelkom, plochaFormatuSietotlac, vcRezanyTransfer as vcRezanyTransferZo, vcLaserRezanie as vcLaserRezaniaZo } from './vyrobneNaklady';
 
 const inputCls = 'w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white';
 const labelCls = 'text-xs text-slate-400 font-medium';
@@ -199,6 +199,9 @@ export default function PotlaceTab({ supabase }) {
   const vcSietotlac = sietotlacPlatny ? vcSietotlacZaklad(kostraLive, testVelkostId, testTmavyTextil, ks, plochaVlastnaSiet) : 0;
   const navrhPriplatokFarbaVC = sietotlacPlatny ? nakladFarbySietotlac(kostraLive, testVelkostId, testTmavyTextil, 2, ks, plochaVlastnaSiet).spolu : 0;
   const plochaSietotlacCm2 = plochaFormatuSietotlac(kostraLive, testVelkostId, plochaVlastnaSiet);
+  // Testovacia kalkulacka dole porovnava technologie pri ZADANOM POCTE FARIEB — sietotlac aj rezany transfer (flex) rastu s poctom farieb
+  // (rovnako ako v e-shope a v Cenovych ponukach). Sekcie vyssie ostavaju pri "1. farbe" + priplatok za dalsiu farbu.
+  const vcSietotlacTest = sietotlacPlatny ? vcSietotlacCelkom(kostraLive, testVelkostId, testTmavyTextil, pocetFariebSiet, ks, plochaVlastnaSiet) : 0;
 
   const vcRezany = vcRezanyTransferZo(kostraLive, testFoliaId, plocha);
   const rzSub = vcSublimaciaGarmentRozpis(kostraLive, plocha);
@@ -453,8 +456,8 @@ export default function PotlaceTab({ supabase }) {
           {[
             { key: 'sublimacia', label: 'Sublimácia', vc: vcSublimacia, plochaZaklad: plocha, minCena: sublimacia.min_cena },
             { key: 'dtf', label: 'DTF', vc: vcDtf, plochaZaklad: plocha, minCena: dtf.min_cena },
-            { key: 'sietotlac', label: 'Sieťotlač', vc: vcSietotlac, plochaZaklad: plochaSietotlacCm2, minCena: sietotlac.min_cena },
-            { key: 'rezany', label: 'Rezaný transfer (flex)', vc: vcRezany, plochaZaklad: plocha, minCena: rezany.min_cena },
+            { key: 'sietotlac', label: `Sieťotlač · ${pocetFariebSiet} ${pocetFariebSiet === 1 ? 'farba' : pocetFariebSiet < 5 ? 'farby' : 'farieb'}`, vc: vcSietotlacTest, plochaZaklad: plochaSietotlacCm2, minCena: sietotlac.min_cena },
+            { key: 'rezany', label: `Rezaný transfer (flex) · ${pocetFariebSiet} ${pocetFariebSiet === 1 ? 'farba' : pocetFariebSiet < 5 ? 'farby' : 'farieb'}`, vc: vcRezany * pocetFariebSiet, plochaZaklad: plocha, minCena: rezany.min_cena },
             { key: 'laser', label: `Laserové rezanie${vybranaHrubka ? ` (${vybranaHrubka.label})` : ''}`, vc: vcLaser, plochaZaklad: plocha, minCena: laser.min_cena },
           ].map(({ key, label, vc, plochaZaklad, minCena }) => {
             // "min. cena úkonu" (nastavená vyššie pri danej technológii) je FLOOR na skutočne
