@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Shirt, Calculator, Settings2, AlertTriangle } from 'lucide-react';
 import NumberInput from '../NumberInput';
-import { priceAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
+import { priceAt, marginAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 
 // VÝŠIVKA — KALKULÁCIA CENY (rovnako ako sublimácia, DTF, laser…): náklad výšivky = čas stroja (amortizácia + elektrina z Réžie firiem; 3-hlavový stroj
 // vyšíva 3 kusy naraz) + niť (vrchná + spodná) + podkladový materiál + práca zamestnanca (príprava, upnutie kusov, dozor), × rezerva na zmetky.
@@ -13,18 +13,24 @@ const cislo = (v, d = 1) => (Number(v) || 0).toLocaleString('sk-SK', { maximumFr
 export function vypocitajVysivku(n, hodStroj, d, ks) {
   const hlavy = Math.max(1, Math.floor(Number(n.hlavy)) || 1);
   const q = Math.max(1, Math.floor(Number(ks)) || 1);
-  const minKus = Number(d.minut) > 0 ? Number(d.minut) : (Number(d.stehov) || 0) / (Number(n.rychlost_spm) || 1) + ((Number(d.strihov) || 0) * Number(n.strih_s) + (Number(d.vymen) || 0) * Number(n.zmena_farby_s)) / 60;
-  const behy = Math.ceil(q / hlavy);
-  const strojMin = behy * minKus;
+  const stehov = Number(d.stehov) || 0;
+  // čas jedného kusu na jednej hlave: stehy ÷ rýchlosť + strihy nite + výmeny farieb (rovnako ako v editore výšivky)
+  const minSteh = stehov / (Number(n.rychlost_spm) || 1);
+  const minStrih = ((Number(d.strihov) || 0) * Number(n.strih_s)) / 60;
+  const minVymen = ((Number(d.vymen) || 0) * Number(n.zmena_farby_s)) / 60;
+  const minKus = minSteh + minStrih + minVymen;
+  // 3-hlavový stroj vyšíva 3 kusy naraz → priemerne na 1 kus pripadne čas ÷ počet hláv
+  const minNaKusStroj = minKus / hlavy;
+  const strojMin = q * minNaKusStroj;
   const strojEur = (strojMin / 60) * hodStroj;
-  const nitM = Number(d.nitM) > 0 ? Number(d.nitM) : ((Number(d.stehov) || 0) / 1000) * Number(n.nit_m_na_1000_stehov);
+  const nitM = (stehov / 1000) * Number(n.nit_m_na_1000_stehov);
   const nitEur = q * nitM * (1 + Number(n.spodna_nit_percent) / 100) * (Number(n.nit_cena_kus_eur) / (Number(n.nit_dlzka_kus_m) || 1));
   const stabEur = q * Number(n.stabilizator_eur_ks);
   const pracaMin = Number(n.priprava_min) + q * Number(n.vkladanie_min_ks) + (strojMin * Number(n.obsluha_percent)) / 100;
   const pracaEur = (pracaMin / 60) * Number(n.praca_hod);
   const zaklad = strojEur + nitEur + stabEur + pracaEur;
   const naklad = zaklad * (1 + Number(n.riziko_percent) / 100);
-  return { hlavy, q, minKus, behy, strojMin, strojEur, nitM, nitEur, stabEur, pracaMin, pracaEur, zaklad, naklad, rizikoEur: naklad - zaklad, vyuzitieHlav: q / (behy * hlavy) };
+  return { hlavy, q, stehov, minSteh, minStrih, minVymen, minKus, minNaKusStroj, strojMin, strojEur, nitM, nitEur, stabEur, pracaMin, pracaEur, zaklad, naklad, rizikoEur: naklad - zaklad };
 }
 
 function Pole({ label, hodnota, onChange, jednotka, step = '0.1', pomoc }) {
@@ -48,7 +54,7 @@ export default function VysivkaKalkTab({ supabase }) {
   // kalkulačka
   const [zdroj, setZdroj] = useState('rucne');       // rucne | dizajn
   const [dizajnId, setDizajnId] = useState('');
-  const [d, setD] = useState({ stehov: 8000, vymen: 3, strihov: 10, minut: 0, nitM: 0 });
+  const [d, setD] = useState({ stehov: 8000, vymen: 3, strihov: 10 });
   const [ks, setKs] = useState(30);
 
   const nacitaj = useCallback(async () => {
@@ -88,17 +94,21 @@ export default function VysivkaKalkTab({ supabase }) {
   const vyberDizajn = (id) => {
     setDizajnId(id);
     const r = dizajny.find((x) => x.id === id);
-    if (r) setD({ stehov: Number(r.stehov) || 0, vymen: Number(r.vymen_niti) || 0, strihov: Number(r.strihov) || 0, minut: Number(r.minut) || 0, nitM: Number(r.spotreba_nite_m) || 0 });
+    if (r) setD({ stehov: Number(r.stehov) || 0, vymen: Number(r.vymen_niti) || 0, strihov: Number(r.strihov) || 0 });
   };
 
   const v = useMemo(() => (nast ? vypocitajVysivku(nast, hodStroj, d, ks) : null), [nast, hodStroj, d, ks]);
-  const cenaKs = v ? priceAt(v.naklad / v.q, v.q, pricingCfg) : 0;
+  const nakladKs = v ? v.naklad / v.q : 0;
+  const marzaKrivka = v ? marginAt(nakladKs, v.q, pricingCfg) : 0;
+  const cenaKs = v ? priceAt(nakladKs, v.q, pricingCfg) : 0;
   const spoluBezDph = v ? Math.max(cenaKs * v.q, Number(nast.min_cena_eur) || 0) : 0;
+  const platiMinimum = v ? cenaKs * v.q < (Number(nast.min_cena_eur) || 0) : false;
   const dph = Number(pricingCfg.dphPercent) || 23;
   const tabulka = useMemo(() => (nast ? [1, 3, 6, 10, 30, 60, 100, 250].map((q) => {
     const x = vypocitajVysivku(nast, hodStroj, d, q);
-    const c = Math.max(priceAt(x.naklad / x.q, x.q, pricingCfg) * x.q, Number(nast.min_cena_eur) || 0);
-    return { q, naklad: x.naklad, cenaKs: c / x.q, spolu: c };
+    const nk = x.naklad / x.q;
+    const c = Math.max(priceAt(nk, x.q, pricingCfg) * x.q, Number(nast.min_cena_eur) || 0);
+    return { q, nakladKs: nk, marza: nk > 0 ? (c / x.q / nk - 1) * 100 : 0, cenaKs: c / x.q, spolu: c };
   }) : []), [nast, hodStroj, d, pricingCfg]);
 
   if (chyba) return <p className="text-sm text-amber-300 bg-amber-950/30 border border-amber-900/50 rounded-xl p-4 flex gap-2"><AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> {chyba}</p>;
@@ -108,7 +118,7 @@ export default function VysivkaKalkTab({ supabase }) {
     <div className="space-y-5">
       <div>
         <h2 className="text-xl font-bold text-white flex items-center gap-2"><Shirt className="w-5 h-5 text-indigo-400" /> Výšivka — kalkulácia ceny <span className={`text-[11px] font-normal ml-2 ${ulozene ? 'text-slate-600' : 'text-amber-400'}`}>{ulozene ? 'uložené' : 'ukladám…'}</span></h2>
-        <p className="text-xs text-slate-400 mt-1 max-w-3xl">Cena výšivky sa počíta z toho, koľko stehov dizajn má a ako dlho stroj vyšíva — rovnako ako pri sublimácii a DTF z nákladov a marže. 3-hlavový stroj vyšíva 3 kusy naraz, takže čas stroja sa delí podľa počtu hláv (po zaokrúhlení na celé behy).</p>
+        <p className="text-xs text-slate-400 mt-1 max-w-3xl">Cena výšivky sa počíta z toho, koľko stehov dizajn má a ako dlho stroj vyšíva — rovnako ako pri sublimácii a DTF z nákladov a marže. Čas jedného kusu sa dopočíta zo stehov a rýchlosti stroja; 3-hlavový stroj vyšíva 3 kusy naraz, takže priemerný čas stroja na kus je tretina.</p>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
@@ -159,40 +169,52 @@ export default function VysivkaKalkTab({ supabase }) {
             <Pole label="Stehov na kus" step="100" hodnota={d.stehov} onChange={(x) => setD({ ...d, stehov: x })} />
             <Pole label="Výmen farieb" step="1" hodnota={d.vymen} onChange={(x) => setD({ ...d, vymen: x })} />
             <Pole label="Strihov nite" step="1" hodnota={d.strihov} onChange={(x) => setD({ ...d, strihov: x })} />
-            <Pole label="Čas na kus (0 = dopočítať)" jednotka="min" hodnota={d.minut} onChange={(x) => setD({ ...d, minut: x })} pomoc="Ak je zadaný, použije sa namiesto výpočtu zo stehov" />
-            <Pole label="Vrchná niť (0 = dopočítať)" jednotka="m" hodnota={d.nitM} onChange={(x) => setD({ ...d, nitM: x })} />
             <Pole label="Počet kusov" step="1" hodnota={ks} onChange={(x) => setKs(Math.max(1, Math.round(x)))} />
           </div>
 
           <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-1.5 text-xs">
+            <p className="text-[10px] uppercase tracking-wide text-slate-500 font-bold">1. Čas výšivky (automaticky zo stehov)</p>
             {[
-              ['Čas jedného kusu na jednej hlave', `${cislo(v.minKus, 1)} min`],
-              [`Behy stroja (${v.hlavy} ${v.hlavy === 1 ? 'hlava' : v.hlavy < 5 ? 'hlavy' : 'hláv'} naraz)`, `${v.behy} × → ${cislo(v.strojMin, 1)} min · využitie hláv ${Math.round(v.vyuzitieHlav * 100)} %`],
-              ['Stroj (amortizácia + elektrina)', eur(v.strojEur)],
-              [`Niť (${cislo(v.nitM, 1)} m vrchnej na kus + spodná)`, eur(v.nitEur)],
-              ['Podkladový materiál', eur(v.stabEur)],
-              [`Práca (${cislo(v.pracaMin, 0)} min)`, eur(v.pracaEur)],
-              [`Rezerva ${cislo(nast.riziko_percent, 0)} %`, eur(v.rizikoEur)],
+              [`Stehy: ${v.stehov.toLocaleString('sk-SK')} ÷ ${cislo(nast.rychlost_spm, 0)} stehov/min`, `${cislo(v.minSteh, 1)} min`],
+              [`Strihy nite: ${cislo(d.strihov, 0)} × ${cislo(nast.strih_s, 1)} s`, `${cislo(v.minStrih, 1)} min`],
+              [`Výmeny farieb: ${cislo(d.vymen, 0)} × ${cislo(nast.zmena_farby_s, 1)} s`, `${cislo(v.minVymen, 1)} min`],
             ].map(([a, b]) => <div key={a} className="flex justify-between gap-3"><span className="text-slate-400">{a}</span><span className="text-slate-100 font-mono text-right">{b}</span></div>)}
-            <div className="flex justify-between gap-3 border-t border-slate-800 pt-1.5"><span className="text-slate-300 font-bold">Náklad spolu / na kus</span><span className="text-white font-mono font-bold">{eur(v.naklad)} / {eur(v.naklad / v.q)}</span></div>
+            <div className="flex justify-between gap-3 border-t border-slate-800 pt-1.5"><span className="text-slate-300">Čas jedného kusu na jednej hlave</span><span className="text-white font-mono">{cislo(v.minKus, 1)} min</span></div>
+            <div className="flex justify-between gap-3"><span className="text-slate-300 font-bold">Priemerný čas stroja na kus (÷ {v.hlavy} {v.hlavy === 1 ? 'hlava' : v.hlavy < 5 ? 'hlavy' : 'hláv'})</span><span className="text-white font-mono font-bold">{cislo(v.minNaKusStroj, 1)} min</span></div>
+            <div className="flex justify-between gap-3"><span className="text-slate-400">Čas stroja na {v.q} ks</span><span className="text-slate-100 font-mono">{cislo(v.strojMin, 0)} min ({cislo(v.strojMin / 60, 1)} h)</span></div>
+
+            <p className="text-[10px] uppercase tracking-wide text-slate-500 font-bold pt-3">2. Náklad (výrobná cena, bez DPH)</p>
+            {[
+              ['Stroj (amortizácia + elektrina)', v.strojEur],
+              [`Niť (${cislo(v.nitM, 1)} m vrchnej na kus + spodná)`, v.nitEur],
+              ['Podkladový materiál', v.stabEur],
+              [`Práca (${cislo(v.pracaMin, 0)} min spolu — príprava sa rozloží na všetky kusy)`, v.pracaEur],
+              [`Rezerva ${cislo(nast.riziko_percent, 0)} %`, v.rizikoEur],
+            ].map(([a, b]) => <div key={a} className="flex justify-between gap-3"><span className="text-slate-400">{a}</span><span className="text-slate-100 font-mono text-right">{eur(b / v.q, 3)} / ks <span className="text-slate-600">· {eur(b)}</span></span></div>)}
+            <div className="flex justify-between gap-3 border-t border-slate-800 pt-1.5"><span className="text-slate-300 font-bold">Náklad na kus (VC)</span><span className="text-white font-mono font-bold">{eur(nakladKs, 3)} <span className="text-slate-600 font-normal">· spolu {eur(v.naklad)}</span></span></div>
+
+            <p className="text-[10px] uppercase tracking-wide text-slate-500 font-bold pt-3">3. Marža a predajná cena</p>
+            <div className="flex justify-between gap-3"><span className="text-slate-400">Marža z Cenotvorby pri {v.q} ks</span><span className="text-slate-100 font-mono">{cislo(marzaKrivka, 0)} % (+ {eur(cenaKs - nakladKs)} / ks)</span></div>
             <div className="flex justify-between gap-3"><span className="text-emerald-300 font-bold">Predajná cena za kus (bez DPH)</span><span className="text-emerald-300 font-mono font-bold">{eur(spoluBezDph / v.q)}</span></div>
             <div className="flex justify-between gap-3"><span className="text-emerald-300">Spolu (bez DPH / s DPH {dph} %)</span><span className="text-emerald-300 font-mono">{eur(spoluBezDph)} / {eur(spoluBezDph * (1 + dph / 100))}</span></div>
-            <div className="flex justify-between gap-3"><span className="text-slate-400">Marža</span><span className="text-slate-200 font-mono">{v.naklad > 0 ? `${cislo((spoluBezDph / v.naklad - 1) * 100, 0)} %` : '—'}</span></div>
+            <div className="flex justify-between gap-3"><span className="text-slate-400">Zisk na zákazke</span><span className="text-slate-200 font-mono">{eur(spoluBezDph - v.naklad)}</span></div>
+            {platiMinimum && <p className="text-[11px] text-amber-300 pt-1">Platí minimálna cena výšivky {eur(nast.min_cena_eur)} — marža je preto vyššia než z krivky.</p>}
           </div>
         </section>
       </div>
 
       <section className="bg-slate-900/60 rounded-2xl border border-slate-800 p-5">
         <h3 className="font-bold text-sm text-white mb-1">Cena za kus podľa množstva (pre tento dizajn)</h3>
-        <p className="text-[11px] text-slate-500 mb-3">Pri násobkoch počtu hláv ({v.hlavy}) je stroj najlepšie využitý — pri 4 kusoch na 3-hlavovom stroji treba 2 behy.</p>
+        <p className="text-[11px] text-slate-500 mb-3">Náklad na kus s množstvom klesá (príprava objednávky sa rozloží na viac kusov) a marža podľa krivky z Cenotvorby tiež klesá, takže cena za kus je pri väčšom odbere nižšia.</p>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
-            <thead className="text-slate-500 uppercase text-[10px]"><tr><th className="text-left py-1.5">Kusov</th><th className="text-right">Náklad / kus</th><th className="text-right">Predaj / kus (bez DPH)</th><th className="text-right">Spolu (bez DPH)</th></tr></thead>
+            <thead className="text-slate-500 uppercase text-[10px]"><tr><th className="text-left py-1.5">Kusov</th><th className="text-right">Náklad / kus</th><th className="text-right">Marža</th><th className="text-right">Predaj / kus (bez DPH)</th><th className="text-right">Spolu (bez DPH)</th></tr></thead>
             <tbody>
               {tabulka.map((r) => (
                 <tr key={r.q} className={`border-t border-slate-800 ${r.q === v.q ? 'bg-indigo-950/40' : ''}`}>
                   <td className="py-1.5 text-slate-200 font-semibold">{r.q} ks</td>
-                  <td className="text-right font-mono text-slate-400">{eur(r.naklad)}</td>
+                  <td className="text-right font-mono text-slate-400">{eur(r.nakladKs, 3)}</td>
+                  <td className="text-right font-mono text-slate-400">{cislo(r.marza, 0)} %</td>
                   <td className="text-right font-mono text-white font-bold">{eur(r.cenaKs)}</td>
                   <td className="text-right font-mono text-slate-300">{eur(r.spolu)}</td>
                 </tr>
