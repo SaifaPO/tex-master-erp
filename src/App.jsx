@@ -515,7 +515,7 @@ const mapHelpRequestToDb = (h) => ({ id: h.id, order_id: h.orderId, item_id: h.i
 
 const BLANK_GOODS_TYPES = ['Tričko', 'Polokošeľa', 'Mikina', 'Tepláky', 'Šiltovka', 'Ponožky', 'Vlajka', 'Iné'];
 // Návrhy organizačných pozícií (len informatívny popis pri zamestnancovi, neovplyvňuje prístupové práva — tie rieši Rola)
-const ORGANIZATIONAL_POSITIONS = ['Riaditeľ výroby (dohliada na chod zákaziek)', 'Technický riaditeľ (technické záležitosti)', 'Vedúci grafického oddelenia', 'Operátor laseru', 'Operátor sublimácie', 'Operátor transferu', 'Operátor sieťotlače', 'Švadlena', 'Skladník / Balič'];
+const ORGANIZATIONAL_POSITIONS = ['Riaditeľ výroby (dohliada na chod zákaziek)', 'Technický riaditeľ (technické záležitosti)', 'Vedúci grafického oddelenia', 'Operátor laseru', 'Operátor sublimácie', 'Operátor transferu', 'Operátor sieťotlače', 'Švadlena', 'Skladník / Balič', 'Grafik', 'Grafik / Office manager', 'Office manager', 'Tlačiar', 'Výpomoc', 'Krajčírka', 'Obchodný zástupca', 'Obchodný riaditeľ', 'Obchodný riaditeľ / Šofér', 'Šofér', 'Účtovník', 'Účtovník / Office manager', 'Manažér výroby', 'Výrobný majster'];
 
 const SK_MONTHS = ['Január', 'Február', 'Marec', 'Apríl', 'Máj', 'Jún', 'Júl', 'August', 'September', 'Október', 'November', 'December'];
 
