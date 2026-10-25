@@ -373,6 +373,20 @@ function applyRealtimeChange(setter, payload, mapFn, keyField = 'id') {
   });
 }
 
+// Zamestnanci: realtime neposiela citlivé stĺpce (mzdy, hashe) — nesmie ich prepísať prázdnom, preto zlučujeme so starým stavom.
+const EMPLOYEE_HIDDEN_FIELDS = [['has_password', 'hasPassword'], ['has_pin', 'hasPin'], ['has_signup_token', 'hasSignupToken'], ['mzda_hruba', 'mzdaHruba'], ['socialne_poistenie', 'socialnePoistenie'], ['zdravotne_poistenie', 'zdravotnePoistenie'], ['company', 'company'], ['titul_pre_ponuky', 'titulProPonuky']];
+function applyEmployeeRealtimeChange(setter, payload) {
+  if (payload.eventType === 'DELETE') { applyRealtimeChange(setter, payload, mapEmployeeFromDb); return; }
+  setter(prev => {
+    const mapped = mapEmployeeFromDb(payload.new);
+    const old = prev.find(x => x.id === mapped.id);
+    if (!old) return [...prev, mapped];
+    const merged = { ...mapped };
+    EMPLOYEE_HIDDEN_FIELDS.forEach(([dbKey, key]) => { if (!(dbKey in payload.new)) merged[key] = old[key]; });
+    return prev.map(x => (x.id === mapped.id ? merged : x));
+  });
+}
+
 // Jednoduché hashovanie hesla (SHA-256) — heslo sa nikde neukladá v čitateľnej podobe.
 // Pozor: toto NIE JE plnohodnotné bezpečnostné riešenie ako napr. Supabase Auth (chýba napr. "salt"),
 // je to primerané pre interný nástroj na dielenských tabletoch, nie pre appku vystavenú verejne na internete.
@@ -1887,7 +1901,7 @@ export default function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings' }, (payload) => { if (payload.new) setCompanySettings(mapCompanySettingsFromDb(payload.new)); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, (payload) => applyRealtimeChange(setProducts, payload, mapProductFromDb))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'quality_tiers' }, (payload) => applyRealtimeChange(setQualityTiers, payload, mapTierFromDb))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, (payload) => applyRealtimeChange(setEmployees, payload, mapEmployeeFromDb))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, (payload) => applyEmployeeRealtimeChange(setEmployees, payload))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
         if (payload.eventType === 'UPDATE') {
           const oldOrder = ordersRef.current.find(o => o.id === payload.new.id);
@@ -6196,6 +6210,8 @@ export default function App() {
         if (pinError || pinData?.error) { triggerNotification('error', pinData?.error || pinError.message); return; }
       }
       if (currentUser.id === editingEmployee.id) setCurrentUser(editingEmployee);
+      // hneď aj lokálne (mzdy sa cez realtime nevysielajú, firma/titul až po prenose) — nech zoznam ukáže uložené hodnoty
+      setEmployees(prev => prev.map(x => (x.id === editingEmployee.id ? { ...x, ...editingEmployee } : x)));
       setEditingEmployee(null);
       setEditEmpPassword('');
       setEditEmpPin('');
