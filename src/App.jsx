@@ -257,38 +257,62 @@ function colorForOrder(orderId) {
 }
 
 // Role, ktoré sa prihlasujú menom/heslom cez Supabase Auth (nie PIN-om na stanici).
-const EMAIL_LOGIN_ROLES = ['master', 'supervisor', 'sales', 'uctovnik', 'sofer', 'predajna'];
-const ALL_ROLES = ['master', 'supervisor', 'sales', 'employee', 'uctovnik', 'sofer', 'predajna'];
-const ROLE_LABELS = { master: 'Master', supervisor: 'Supervisor', sales: 'Obchodník', employee: 'Zamestnanec', uctovnik: 'Účtovník', sofer: 'Šofér', predajna: 'Predajňa' };
-// Úzke role vidia len vymenované karty v hornom menu; role bez záznamu tu (master/supervisor/sales/employee) vidia všetko ako doteraz.
-const ROLE_TAB_ALLOWLIST = {
-  uctovnik: ['invoices', 'materials', 'reports', 'manual'],
-  sofer: ['cestaky', 'kniha-jazd', 'manual'],
-  predajna: ['orders', 'planner', 'manual']
+const EMAIL_LOGIN_ROLES = ['master', 'supervisor', 'manazer', 'majster', 'sales', 'uctovnik', 'sofer', 'predajna'];
+// Poradie = od najvyššej úrovne po najnižšiu (master > supervisor > manažér výroby > výrobný majster > ...)
+const ALL_ROLES = ['master', 'supervisor', 'manazer', 'majster', 'sales', 'employee', 'uctovnik', 'sofer', 'predajna'];
+const ROLE_LABELS = { master: 'Master', supervisor: 'Supervisor', manazer: 'Manažér výroby', majster: 'Výrobný majster', sales: 'Obchodník', employee: 'Zamestnanec', uctovnik: 'Účtovník', sofer: 'Šofér', predajna: 'Predajňa' };
+// Vedenie výroby: smie obísť "priradeného grafika", dostáva žiadosti o pomoc medzi stanicami
+const VEDENIE_VYROBY = ['master', 'supervisor', 'manazer'];
+const PRIJEMCOVIA_POMOCI = [...VEDENIE_VYROBY, 'majster'];
+
+// Karty v hornom menu — kto ich vidí sa nastavuje v Zamestnanci & Práva -> Globálne Oprávnenia (ACL), riadky "Karta: ...".
+// Tu sú len PREDVOĽBY (kým Master nič neprestaví). Master vidí všetko vždy.
+const TAB_DEFS = [
+  ['planner', 'Plánovacia Matica'], ['orders', 'Konfigurátor Zákaziek'], ['catalog', 'Katalóg Produktov'], ['isolated-station', 'Samostatné Dielne'],
+  ['materials', 'Sklad'], ['profiles', 'Zamestnanci & Práva'], ['qr-terminal', 'Čítačka QR'], ['reports', 'Prehľady'], ['designers', 'Dashboard Grafikov'],
+  ['problems', 'Problémy'], ['invoices', 'Financie'], ['quotes', 'Cenové ponuky'], ['archive', 'História Zákaziek'],
+  ['cestaky', 'Cestovné príkazy'], ['kniha-jazd', 'Kniha jázd (tachometer, tankovanie)'], ['manual', 'Manuál'],
+];
+const VYROBA_A_VEDENIE = ['master', 'supervisor', 'manazer', 'majster', 'sales', 'employee'];
+const TAB_DEFAULT_ROLES = {
+  planner: [...VYROBA_A_VEDENIE, 'predajna'],
+  orders: [...VYROBA_A_VEDENIE, 'predajna'],
+  catalog: VYROBA_A_VEDENIE,
+  'isolated-station': VYROBA_A_VEDENIE,
+  materials: [...VYROBA_A_VEDENIE, 'uctovnik'],
+  profiles: VYROBA_A_VEDENIE,
+  'qr-terminal': VYROBA_A_VEDENIE,
+  reports: [...VYROBA_A_VEDENIE, 'uctovnik'],
+  designers: VYROBA_A_VEDENIE,
+  problems: VYROBA_A_VEDENIE,
+  invoices: [...VYROBA_A_VEDENIE, 'uctovnik'],
+  quotes: VYROBA_A_VEDENIE,
+  archive: VYROBA_A_VEDENIE,
+  cestaky: ['master', 'supervisor', 'sales', 'uctovnik', 'sofer'],
+  'kniha-jazd': ['master', 'supervisor', 'uctovnik', 'sofer'],
+  manual: ALL_ROLES,
 };
-function canSeeTab(role, tabId) {
-  const allowlist = ROLE_TAB_ALLOWLIST[role];
-  return !allowlist || allowlist.includes(tabId);
-}
 
 // Poznámka k novým rolám (uctovnik, sofer): pridané 2026-08-29. Ak acl_settings v DB uz ma ulozene
 // vlastne pravidla pre existujuci kluc (napr. create_order), ulozeny objekt NEOBSAHUJE tieto nove role —
 // hasPermission() nizsie sa preto pre chybajucu rolu vrati k FALLBACK_ACL, nie k undefined/false naslepo.
 const FALLBACK_ACL = {
-  create_order: { master: true, supervisor: true, sales: true, employee: false, uctovnik: false, sofer: false, predajna: true },
-  delete_order: { master: true, supervisor: false, sales: false, employee: false, uctovnik: false, sofer: false, predajna: false },
-  edit_priority: { master: true, supervisor: true, sales: false, employee: false, uctovnik: false, sofer: false, predajna: false },
-  scan_qr: { master: true, supervisor: true, sales: false, employee: true, uctovnik: false, sofer: false, predajna: false },
-  update_status: { master: true, supervisor: true, sales: false, employee: true, uctovnik: false, sofer: false, predajna: false },
-  manage_profiles: { master: true, supervisor: false, sales: false, employee: false, uctovnik: false, sofer: false, predajna: false },
-  edit_stock: { master: true, supervisor: true, sales: false, employee: false, uctovnik: false, sofer: false, predajna: false },
-  manage_catalog: { master: true, supervisor: true, sales: false, employee: false, uctovnik: false, sofer: false, predajna: false },
-  view_reports: { master: true, supervisor: true, sales: false, employee: false, uctovnik: true, sofer: false, predajna: false },
+  create_order: { master: true, supervisor: true, manazer: true, majster: false, sales: true, employee: false, uctovnik: false, sofer: false, predajna: true },
+  delete_order: { master: true, supervisor: false, manazer: false, majster: false, sales: false, employee: false, uctovnik: false, sofer: false, predajna: false },
+  edit_priority: { master: true, supervisor: true, manazer: true, majster: false, sales: false, employee: false, uctovnik: false, sofer: false, predajna: false },
+  scan_qr: { master: true, supervisor: true, manazer: true, majster: true, sales: false, employee: true, uctovnik: false, sofer: false, predajna: false },
+  update_status: { master: true, supervisor: true, manazer: true, majster: true, sales: false, employee: true, uctovnik: false, sofer: false, predajna: false },
+  manage_profiles: { master: true, supervisor: false, manazer: false, majster: false, sales: false, employee: false, uctovnik: false, sofer: false, predajna: false },
+  edit_stock: { master: true, supervisor: true, manazer: true, majster: false, sales: false, employee: false, uctovnik: false, sofer: false, predajna: false },
+  manage_catalog: { master: true, supervisor: true, manazer: false, majster: false, sales: false, employee: false, uctovnik: false, sofer: false, predajna: false },
+  view_reports: { master: true, supervisor: true, manazer: false, majster: false, sales: false, employee: false, uctovnik: true, sofer: false, predajna: false },
+  // Problémy, nezrovnalosti materiálu a žiadosti o ultra prioritu (predtým zdieľali právo "Vidieť Prehľady", ktoré ukazuje aj peniaze a marže)
+  view_problems: { master: true, supervisor: true, manazer: true, majster: true, sales: false, employee: false, uctovnik: false, sofer: false, predajna: false },
   // Financie (predtym zdielalo pravo s create_order) — teraz samostatne, aby uctovnik mohol vidiet
   // Financie bez toho, aby mohol vytvarat vyrobne zakazky.
-  view_finance: { master: true, supervisor: true, sales: true, employee: false, uctovnik: true, sofer: false, predajna: false },
+  view_finance: { master: true, supervisor: true, manazer: false, majster: false, sales: true, employee: false, uctovnik: true, sofer: false, predajna: false },
   // Cenove ponuky — pristup len pre majitelov/konatelov a obchodnikov (nie ucotvnik/vyroba/sofer).
-  create_quotes: { master: true, supervisor: false, sales: true, employee: false, uctovnik: false, sofer: false, predajna: false }
+  create_quotes: { master: true, supervisor: false, manazer: false, majster: false, sales: true, employee: false, uctovnik: false, sofer: false, predajna: false }
 };
 
 const mapMaterialFromDb = (r) => ({ id: r.id, name: r.name, color: r.color, colorHex: r.color_hex || '', width: r.width, weight: r.weight, pricePerM: r.price_per_m, qty: r.qty, unit: r.unit, minQty: r.min_qty, warehouseId: r.warehouse_id || 'sklad-1', manufacturer: r.manufacturer || '', productType: r.product_type || '', deliveryNoteNumber: r.delivery_note_number || '', deliveryNoteDate: r.delivery_note_date || '', zakazkaOdberatel: r.zakazka_odberatel || '', history: r.history || [] });
@@ -666,8 +690,8 @@ const DOTLACOVKA_PLACEMENT_POINTS = [
 
 const mapVehicleFromDb = (r) => ({ id: r.id, name: r.name, licensePlate: r.license_plate || '' });
 const mapVehicleToDb = (v) => ({ id: v.id, name: v.name, license_plate: v.licensePlate || null });
-const mapVehicleLogFromDb = (r) => ({ id: r.id, vehicleId: r.vehicle_id, employeeId: r.employee_id, employeeName: r.employee_name, entryDate: r.entry_date, odometerKm: r.odometer_km || 0, photoUrl: r.photo_url || '', fuelType: r.fuel_type || '', fuelLiters: r.fuel_liters ?? null, fuelCost: r.fuel_cost ?? null, notes: r.notes || '', createdAt: r.created_at });
-const mapVehicleLogToDb = (v) => ({ id: v.id, vehicle_id: v.vehicleId, employee_id: v.employeeId, employee_name: v.employeeName, entry_date: v.entryDate, odometer_km: v.odometerKm, photo_url: v.photoUrl || null, fuel_type: v.fuelType || null, fuel_liters: v.fuelLiters ?? null, fuel_cost: v.fuelCost ?? null, notes: v.notes || null });
+const mapVehicleLogFromDb = (r) => ({ id: r.id, vehicleId: r.vehicle_id, employeeId: r.employee_id, employeeName: r.employee_name, entryDate: r.entry_date, odometerKm: r.odometer_km || 0, photoUrl: r.photo_url || '', receiptPhotoUrl: r.receipt_photo_url || '', fuelType: r.fuel_type || '', fuelLiters: r.fuel_liters ?? null, fuelCost: r.fuel_cost ?? null, notes: r.notes || '', createdAt: r.created_at });
+const mapVehicleLogToDb = (v) => ({ id: v.id, vehicle_id: v.vehicleId, employee_id: v.employeeId, employee_name: v.employeeName, entry_date: v.entryDate, odometer_km: v.odometerKm, photo_url: v.photoUrl || null, receipt_photo_url: v.receiptPhotoUrl || null, fuel_type: v.fuelType || null, fuel_liters: v.fuelLiters ?? null, fuel_cost: v.fuelCost ?? null, notes: v.notes || null });
 
 const mapTravelOrderFromDb = (r) => ({ id: r.id, employeeId: r.employee_id, employeeName: r.employee_name, tripDate: r.trip_date, departureTime: r.departure_time || '', returnTime: r.return_time || '', fromLocation: r.from_location || '', toLocation: r.to_location || '', purpose: r.purpose || '', relatedOrderId: r.related_order_id || null, distanceKm: r.distance_km || 0, fuelConsumptionL100km: r.fuel_consumption_l100km ?? 7, fuelPricePerLiter: r.fuel_price_per_liter ?? 1.7, status: r.status || 'navrhnute', approvedBy: r.approved_by || '', approvedAt: r.approved_at || null, rejectionReason: r.rejection_reason || '', createdAt: r.created_at });
 const mapTravelOrderToDb = (t) => ({ id: t.id, employee_id: t.employeeId, employee_name: t.employeeName, trip_date: t.tripDate, departure_time: t.departureTime || null, return_time: t.returnTime || null, from_location: t.fromLocation || null, to_location: t.toLocation || null, purpose: t.purpose || null, related_order_id: t.relatedOrderId || null, distance_km: t.distanceKm, fuel_consumption_l100km: t.fuelConsumptionL100km, fuel_price_per_liter: t.fuelPricePerLiter, status: t.status });
@@ -1283,6 +1307,8 @@ export default function App() {
   const [newVehiclePlate, setNewVehiclePlate] = useState('');
   const [selectedVehicleId, setSelectedVehicleId] = useState('');
   const [odometerPhotoFile, setOdometerPhotoFile] = useState(null);
+  const [receiptPhotoFile, setReceiptPhotoFile] = useState(null);
+  const [receiptPhotoPreview, setReceiptPhotoPreview] = useState('');
   const [odometerPhotoPreview, setOdometerPhotoPreview] = useState('');
   const [isReadingOdometer, setIsReadingOdometer] = useState(false);
   const [odometerReadError, setOdometerReadError] = useState('');
@@ -1849,7 +1875,7 @@ export default function App() {
         if (payload.eventType === 'INSERT') {
           const h = mapHelpRequestFromDb(payload.new);
           const me = currentUserRef.current;
-          const isRecipient = me && (me.role === 'master' || me.role === 'supervisor' || me.role === h.targetRole || me.id === h.targetEmployeeId);
+          const isRecipient = me && (PRIJEMCOVIA_POMOCI.includes(me.role) || me.role === h.targetRole || me.id === h.targetEmployeeId);
           if (isRecipient) {
             playAlertBeep(h.zdroj === 'tlacidlo' || h.zdroj === 'sos_ekran' ? 4 : 2, h.zdroj === 'tlacidlo' || h.zdroj === 'sos_ekran' ? 880 : 740);
             showDesktopNotification('🆘 Žiadosť o pomoc', `${h.raisedByName} (${STATION_CONFIGS[h.stationId]?.name || h.stationId}): ${h.message}`);
@@ -2009,7 +2035,7 @@ export default function App() {
 
   // Požiadať o povolenie desktop notifikácií, keď sa prihlási niekto, kto rieši problémy
   useEffect(() => {
-    if (currentUser && hasPermission('view_reports') && typeof Notification !== 'undefined' && Notification.permission === 'default') {
+    if (currentUser && hasPermission('view_problems') && typeof Notification !== 'undefined' && Notification.permission === 'default') {
       Notification.requestPermission();
     }
   }, [currentUser]);
@@ -2017,7 +2043,7 @@ export default function App() {
   // Eskalujúce pripomienky nevyriešených problémov — čím dlhšie otvorené, tým častejšie a otravnejšie (ako pripomienka bezpečnostného pásu v aute)
   const lastReminderRef = useRef(0);
   useEffect(() => {
-    if (!currentUser || !hasPermission('view_reports')) return;
+    if (!currentUser || !hasPermission('view_problems')) return;
     const interval = setInterval(() => {
       const openProbs = problemReportsRef.current.filter(p => p.status === 'open');
       if (openProbs.length === 0) return;
@@ -2048,7 +2074,7 @@ export default function App() {
   useEffect(() => {
     if (!currentUser) return;
     const interval = setInterval(() => {
-      const relevant = helpRequestsRef.current.filter(h => h.status !== 'resolved' && (currentUser.role === 'master' || currentUser.role === 'supervisor' || currentUser.role === h.targetRole || currentUser.id === h.targetEmployeeId));
+      const relevant = helpRequestsRef.current.filter(h => h.status !== 'resolved' && (PRIJEMCOVIA_POMOCI.includes(currentUser.role) || currentUser.role === h.targetRole || currentUser.id === h.targetEmployeeId));
       if (relevant.length === 0) return;
       const now = Date.now();
       const oldestMinutes = Math.max(...relevant.map(h => (now - new Date(h.createdAt).getTime()) / 60000));
@@ -2128,13 +2154,42 @@ export default function App() {
     return () => clearInterval(interval);
   }, [pinLockedUntil]);
 
+  // Hodnota práva/karty pre rolu: uložené v acl_settings, inak predvoľba (FALLBACK_ACL / TAB_DEFAULT_ROLES). Kľúč "tab_<id>" = viditeľnosť karty v menu.
+  const aclHodnota = (key, role) => {
+    if (role === 'master') return true;
+    const stored = acl[key]?.[role];
+    if (stored !== undefined) return stored;
+    if (key.startsWith('tab_')) return (TAB_DEFAULT_ROLES[key.slice(4)] || ALL_ROLES).includes(role);
+    return FALLBACK_ACL[key]?.[role] || false;
+  };
   const hasPermission = (action) => {
     const role = currentUser?.role;
     if (!role) return false;
-    const stored = acl[action]?.[role];
-    if (stored !== undefined) return stored;
-    return FALLBACK_ACL[action]?.[role] || false;
+    return aclHodnota(action, role);
   };
+  const canSeeTab = (role, tabId) => aclHodnota('tab_' + tabId, role);
+
+  // Karta je v menu viditeľná len ak ju rola smie vidieť A má aj potrebné právo (financie, prehľady, ponuky, problémy)
+  const tabVisible = (id) => {
+    const role = currentUser?.role;
+    if (!role) return false;
+    if (id === 'printstudio') return role === 'master';
+    if (!canSeeTab(role, id)) return false;
+    if (id === 'reports') return hasPermission('view_reports');
+    if (id === 'invoices') return hasPermission('view_finance');
+    if (id === 'quotes') return hasPermission('create_quotes');
+    if (id === 'problems') return hasPermission('view_problems') || role === 'sales';
+    return true;
+  };
+  // Ak aktuálna karta pre prihlásenú rolu nie je dostupná (napr. po prepnutí profilu, alebo šofér, ktorému ostala otvorená Plánovacia Matica),
+  // otvor prvú kartu, ktorú smie vidieť
+  useEffect(() => {
+    if (!currentUser) return;
+    const znama = activeTab === 'printstudio' || TAB_DEFS.some(([tid]) => tid === activeTab);
+    if (!znama || tabVisible(activeTab)) return;
+    const prva = TAB_DEFS.find(([tid]) => tabVisible(tid));
+    if (prva) setActiveTab(prva[0]);
+  }, [currentUser, acl, activeTab]);
 
   // Globálne vyhľadávanie (Ctrl+K) — Ctrl/Cmd+K nikde inde v appke nie je obsadené.
   useEffect(() => {
@@ -2180,7 +2235,7 @@ export default function App() {
     push(entries, 'Čítačka QR', null, canSeeTab(role, 'qr-terminal'), () => setActiveTab('qr-terminal'));
     push(entries, 'Prehľady', null, hasPermission('view_reports') && canSeeTab(role, 'reports'), () => setActiveTab('reports'));
     push(entries, 'Dashboard Grafikov', null, canSeeTab(role, 'designers'), () => setActiveTab('designers'));
-    push(entries, 'Problémy', null, (hasPermission('view_reports') || role === 'sales') && canSeeTab(role, 'problems'), () => setActiveTab('problems'));
+    push(entries, 'Problémy', null, (hasPermission('view_problems') || role === 'sales') && canSeeTab(role, 'problems'), () => setActiveTab('problems'));
     push(entries, 'História Zákaziek', null, canSeeTab(role, 'archive'), () => setActiveTab('archive'));
     push(entries, 'Cestovné príkazy', null, canSeeTab(role, 'cestaky'), () => setActiveTab('cestaky'));
     push(entries, 'Kniha jázd', null, canSeeTab(role, 'kniha-jazd'), () => setActiveTab('kniha-jazd'));
@@ -3361,15 +3416,23 @@ export default function App() {
       const { error: upErr } = await supabase.storage.from('item-images').upload(path, odometerPhotoFile);
       if (!upErr) photoUrl = supabase.storage.from('item-images').getPublicUrl(path).data.publicUrl;
     }
+    let receiptPhotoUrl = '';
+    if (receiptPhotoFile) {
+      const rpath = `vehicle-logs/blocek-${Date.now()}-${receiptPhotoFile.name}`;
+      const { error: rErr } = await supabase.storage.from('item-images').upload(rpath, receiptPhotoFile);
+      if (!rErr) receiptPhotoUrl = supabase.storage.from('item-images').getPublicUrl(rpath).data.publicUrl;
+      else { triggerNotification('error', `Bloček sa nepodarilo nahrať: ${rErr.message}`); return; }
+    }
     const created = {
       id: `vlog-${Date.now()}`, vehicleId: selectedVehicleId, employeeId: currentUser.id, employeeName: `${currentUser.firstName} ${currentUser.lastName}`,
-      entryDate: new Date().toISOString().slice(0, 10), odometerKm: parseInt(confirmedOdometerKm, 10) || 0, photoUrl,
+      entryDate: new Date().toISOString().slice(0, 10), odometerKm: parseInt(confirmedOdometerKm, 10) || 0, photoUrl, receiptPhotoUrl,
       fuelType: newLogFuelType, fuelLiters: newLogFuelLiters.trim() ? parseFloat(newLogFuelLiters) : null, fuelCost: newLogFuelCost.trim() ? parseFloat(newLogFuelCost) : null
     };
     const { error } = await supabase.from('vehicle_log_entries').insert(mapVehicleLogToDb(created));
     if (error) { triggerNotification('error', error.message); return; }
     setOdometerPhotoFile(null); setOdometerPhotoPreview(''); setConfirmedOdometerKm(''); setOdometerReadError('');
     setNewLogFuelType(''); setNewLogFuelLiters(''); setNewLogFuelCost('');
+    setReceiptPhotoFile(null); setReceiptPhotoPreview('');
     triggerNotification('success', 'Záznam do knihy jázd bol uložený.');
   };
 
@@ -6022,7 +6085,7 @@ export default function App() {
   };
 
   const handleResolveMismatch = async (item, stationId, resolution) => {
-    if (!hasPermission('view_reports')) { triggerNotification('error', 'Prístup zamietnutý.'); return; }
+    if (!hasPermission('view_problems')) { triggerNotification('error', 'Prístup zamietnutý.'); return; }
     const order = orders.find(o => o.id === item.orderId);
     if (!order) return;
     const now = getFormattedDateTime();
@@ -6055,7 +6118,7 @@ export default function App() {
 
   // --- ULTRA PRIORITA ZÁKAZKY (Funkcia 1) ---
   const handleSetUltraPriority = async (orderId, itemId, active) => {
-    if (currentUser.role !== 'master' && currentUser.role !== 'supervisor') { triggerNotification('error', 'Ultra prioritu môže nastaviť len Master alebo Supervisor.'); return; }
+    if (!hasPermission('edit_priority')) { triggerNotification('error', 'Ultra prioritu môže nastaviť len ten, kto má právo meniť priority.'); return; }
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
     const now = getFormattedDateTime();
@@ -6088,7 +6151,7 @@ export default function App() {
   };
 
   const handleResolveUltraPriorityRequest = async (orderId, itemId, approve) => {
-    if (currentUser.role !== 'master' && currentUser.role !== 'supervisor') { triggerNotification('error', 'Prístup zamietnutý.'); return; }
+    if (!hasPermission('edit_priority')) { triggerNotification('error', 'Prístup zamietnutý.'); return; }
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
     const updatedItems = order.items.map(item => item.itemId !== itemId ? item : {
@@ -6106,7 +6169,7 @@ export default function App() {
   // stanicu (pozri blokáciu v handleQrScan vyššie).
   const handleSchvalLaserScanCheck = async (checkId, itemId, schvalene, poznamka) => {
     const found = findItemByItemId(itemId);
-    if (currentUser.role !== 'master' && currentUser.role !== 'supervisor' && found?.item?.assignedDesignerId && found.item.assignedDesignerId !== currentUser.id) {
+    if (!VEDENIE_VYROBY.includes(currentUser.role) && found?.item?.assignedDesignerId && found.item.assignedDesignerId !== currentUser.id) {
       triggerNotification('error', 'Túto fotku môže schváliť len priradený grafik alebo Master.');
       return;
     }
@@ -6224,7 +6287,7 @@ export default function App() {
 
   const handleToggleAcl = async (actionKey, roleKey) => {
     if (currentUser.role !== 'master') return;
-    const updatedRules = { ...acl, [actionKey]: { ...acl[actionKey], [roleKey]: !acl[actionKey][roleKey] } };
+    const updatedRules = { ...acl, [actionKey]: { ...(acl[actionKey] || {}), [roleKey]: !aclHodnota(actionKey, roleKey) } };
     setAcl(updatedRules); // okamzita zmena v UI, nespoliehat sa len na spatny realtime prenos
     const { error } = await supabase.from('acl_settings').update({ rules: updatedRules }).eq('id', 1);
     if (error) { triggerNotification('error', error.message); setAcl(acl); } // vratit spat pri zlyhani zapisu
@@ -6692,20 +6755,20 @@ export default function App() {
           <button onClick={() => setIsSearchPaletteOpen(true)} className="px-3 py-1 rounded-md font-bold border bg-slate-900 text-slate-300 border-slate-800 hover:text-white hover:border-indigo-700 flex items-center gap-1.5">
             <Search className="h-3.5 w-3.5" /> Hľadať <span className="hidden sm:inline text-[10px] text-slate-500 font-normal ml-0.5">(Ctrl+K)</span>
           </button>
-          {problemReports.filter(p => p.status === 'open').length > 0 && hasPermission('view_reports') && (
+          {problemReports.filter(p => p.status === 'open').length > 0 && hasPermission('view_problems') && (
             <button onClick={() => setActiveTab('problems')} className="px-3 py-1 rounded-md font-bold border bg-rose-600 text-white border-rose-500 animate-pulse flex items-center gap-1.5">
               <AlertTriangle className="h-3.5 w-3.5" /> {problemReports.filter(p => p.status === 'open').length} nevyriešených problémov
             </button>
           )}
           {(() => {
-            const myOpenHelpCount = helpRequests.filter(h => h.status !== 'resolved' && (hasPermission('view_reports') || currentUser.role === h.targetRole || currentUser.id === h.targetEmployeeId || currentUser.id === h.raisedById)).length;
+            const myOpenHelpCount = helpRequests.filter(h => h.status !== 'resolved' && (hasPermission('view_problems') || currentUser.role === h.targetRole || currentUser.id === h.targetEmployeeId || currentUser.id === h.raisedById)).length;
             return myOpenHelpCount > 0 && (
               <button onClick={() => setActiveTab('problems')} className="px-3 py-1 rounded-md font-bold border bg-amber-600 text-white border-amber-500 animate-pulse flex items-center gap-1.5">
                 🆘 {myOpenHelpCount} žiadostí o pomoc
               </button>
             );
           })()}
-          {hasPermission('view_reports') && (() => {
+          {hasPermission('view_problems') && (() => {
             const pendingMismatchCount = allItems.reduce((sum, item) => sum + MATERIAL_CHECK_STATIONS.filter(sid => item.materialChecks?.[sid]?.mismatch?.status === 'pending').length, 0);
             return pendingMismatchCount > 0 && (
               <button onClick={() => setActiveTab('problems')} className="px-3 py-1 rounded-md font-bold border bg-orange-600 text-white border-orange-500 animate-pulse flex items-center gap-1.5">
@@ -6713,7 +6776,7 @@ export default function App() {
               </button>
             );
           })()}
-          {hasPermission('view_reports') && (() => {
+          {hasPermission('view_problems') && (() => {
             const pendingUltraCount = allItems.filter(item => item.ultraPriorityStatus === 'pending').length;
             return pendingUltraCount > 0 && (
               <button onClick={() => setActiveTab('problems')} className="px-3 py-1 rounded-md font-bold border bg-rose-600 text-white border-rose-500 animate-pulse flex items-center gap-1.5">
@@ -6786,7 +6849,7 @@ export default function App() {
               {canSeeTab(currentUser.role, 'designers') && (
                 <button onClick={() => setActiveTab('designers')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'designers' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Palette className="h-3.5 w-3.5" /> Dashboard Grafikov</button>
               )}
-              {(hasPermission('view_reports') || currentUser.role === 'sales') && canSeeTab(currentUser.role, 'problems') && (
+              {(hasPermission('view_problems') || currentUser.role === 'sales') && canSeeTab(currentUser.role, 'problems') && (
                 <button onClick={() => setActiveTab('problems')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'problems' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><AlertTriangle className="h-3.5 w-3.5" /> Problémy</button>
               )}
               {currentUser.role === 'master' && (
@@ -6802,7 +6865,7 @@ export default function App() {
                 <button onClick={() => setActiveTab('archive')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'archive' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Search className="h-3.5 w-3.5" /> História Zákaziek</button>
               )}
               {canSeeTab(currentUser.role, 'cestaky') && (
-                <button onClick={() => setActiveTab('cestaky')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'cestaky' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Banknote className="h-3.5 w-3.5" /> Cestovné príkazy{travelOrders.filter(t => t.status === 'navrhnute').length > 0 && (currentUser.role === 'master' || currentUser.role === 'supervisor') && <span className="bg-amber-500 text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full ml-1">{travelOrders.filter(t => t.status === 'navrhnute').length}</span>}</button>
+                <button onClick={() => setActiveTab('cestaky')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'cestaky' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Banknote className="h-3.5 w-3.5" /> Cestovné príkazy{travelOrders.filter(t => t.status === 'navrhnute').length > 0 && hasPermission('edit_priority') && <span className="bg-amber-500 text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full ml-1">{travelOrders.filter(t => t.status === 'navrhnute').length}</span>}</button>
               )}
               {canSeeTab(currentUser.role, 'kniha-jazd') && (
                 <button onClick={() => setActiveTab('kniha-jazd')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'kniha-jazd' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Camera className="h-3.5 w-3.5" /> Kniha jázd</button>
@@ -9904,6 +9967,8 @@ export default function App() {
                         <select value={editingEmployee ? editingEmployee.role : newEmpRole} onChange={(e) => editingEmployee ? setEditingEmployee({ ...editingEmployee, role: e.target.value }) : setNewEmpRole(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white">
                           <option value="master">Master</option>
                           <option value="supervisor">Supervisor</option>
+                          <option value="manazer">Manažér výroby</option>
+                          <option value="majster">Výrobný majster</option>
                           <option value="sales">Obchodník</option>
                           <option value="employee">Zamestnanec</option>
                           <option value="uctovnik">Účtovník</option>
@@ -10100,13 +10165,19 @@ export default function App() {
                         { key: 'manage_profiles', label: 'Spravovať profily' },
                         { key: 'edit_stock', label: 'Korigovať sklad' },
                         { key: 'manage_catalog', label: 'Spravovať katalóg' },
-                        { key: 'view_reports', label: 'Vidieť Prehľady' },
-                        { key: 'view_finance', label: 'Vidieť Financie' }
-                      ].map(action => (
+                        { key: 'view_reports', label: 'Vidieť Prehľady (obsahujú € a marže)' },
+                        { key: 'view_problems', label: 'Vidieť Problémy a upozornenia výroby' },
+                        { key: 'view_finance', label: 'Vidieť Financie' },
+                        { key: 'create_quotes', label: 'Cenové ponuky' },
+                        { sekcia: 'Karty v hornom menu — kto ktorú kartu vidí (ak má zároveň aj potrebné právo vyššie)' },
+                        ...TAB_DEFS.map(([id, label]) => ({ key: 'tab_' + id, label: 'Karta: ' + label }))
+                      ].map(action => action.sekcia ? (
+                        <tr key={action.sekcia} className="bg-slate-900"><td colSpan={ALL_ROLES.length + 1} className="px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-indigo-300">{action.sekcia}</td></tr>
+                      ) : (
                         <tr key={action.key} className="hover:bg-slate-900/40">
                           <td className="px-4 py-3 font-semibold text-slate-200">{action.label}</td>
                           {ALL_ROLES.map(role => (
-                            <td key={role} className="px-3 py-3 text-center"><input type="checkbox" checked={acl[action.key]?.[role] ?? FALLBACK_ACL[action.key]?.[role] ?? false} onChange={() => handleToggleAcl(action.key, role)} disabled={currentUser.role !== 'master' || role === 'master'} className="rounded bg-slate-900 border-slate-800 text-indigo-600 focus:ring-0" /></td>
+                            <td key={role} className="px-3 py-3 text-center"><input type="checkbox" checked={aclHodnota(action.key, role)} onChange={() => handleToggleAcl(action.key, role)} disabled={currentUser.role !== 'master' || role === 'master'} className="rounded bg-slate-900 border-slate-800 text-indigo-600 focus:ring-0" /></td>
                           ))}
                         </tr>
                       ))}
@@ -10517,7 +10588,7 @@ export default function App() {
           const mojeFotoKontroly = (laserScanChecks || []).filter(c => c.status !== 'approved').filter(c => {
             const found = findItemByItemId(c.item_id);
             const assignedId = found?.item?.assignedDesignerId;
-            return currentUser.role === 'master' || currentUser.role === 'supervisor' || !assignedId || assignedId === currentUser.id;
+            return VEDENIE_VYROBY.includes(currentUser.role) || !assignedId || assignedId === currentUser.id;
           });
           return (
             <div className="space-y-4 print:hidden animate-in fade-in duration-150">
@@ -10603,7 +10674,7 @@ export default function App() {
           );
         })()}
 
-        {activeTab === 'problems' && hasPermission('view_reports') && (() => {
+        {activeTab === 'problems' && hasPermission('view_problems') && (() => {
           const openProblems = problemReports.filter(p => p.status === 'open').sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
           const resolvedProblems = problemReports.filter(p => p.status === 'resolved').sort((a, b) => new Date(b.resolvedAt) - new Date(a.resolvedAt));
           const listToShow = showResolvedProblems ? resolvedProblems : openProblems;
@@ -10780,7 +10851,7 @@ export default function App() {
         })()}
 
         {activeTab === 'problems' && (() => {
-          const myRequests = helpRequests.filter(h => hasPermission('view_reports') || currentUser.role === h.targetRole || currentUser.id === h.targetEmployeeId || currentUser.id === h.raisedById);
+          const myRequests = helpRequests.filter(h => hasPermission('view_problems') || currentUser.role === h.targetRole || currentUser.id === h.targetEmployeeId || currentUser.id === h.raisedById);
           const openRequests = myRequests.filter(h => h.status !== 'resolved').sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
           if (openRequests.length === 0) return null;
           return (
@@ -10788,7 +10859,7 @@ export default function App() {
               <h2 className="text-xl font-bold text-white flex items-center gap-2">🆘 Žiadosti o pomoc ({openRequests.length})</h2>
               {openRequests.map(h => {
                 const found = findItemByItemId(h.itemId || '');
-                const canAct = currentUser.id === h.raisedById || hasPermission('view_reports');
+                const canAct = currentUser.id === h.raisedById || hasPermission('view_problems');
                 return (
                   <div key={h.id} className={`bg-slate-950 border rounded-xl p-4 space-y-2 ${h.status === 'paused' ? 'border-amber-700/50' : 'border-rose-700/50'}`}>
                     <div className="flex items-center gap-2 flex-wrap">
@@ -12043,6 +12114,20 @@ export default function App() {
                     <input type="number" step="0.01" value={newLogFuelLiters} onChange={(e) => setNewLogFuelLiters(e.target.value)} placeholder="Litrov" disabled={!newLogFuelType} className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-2 text-xs text-white disabled:opacity-40" />
                     <input type="number" step="0.01" value={newLogFuelCost} onChange={(e) => setNewLogFuelCost(e.target.value)} placeholder="Suma €" disabled={!newLogFuelType} className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-2 text-xs text-white disabled:opacity-40" />
                   </div>
+                  {newLogFuelType && (
+                    receiptPhotoPreview ? (
+                      <div className="relative">
+                        <img src={receiptPhotoPreview} alt="Bloček z tankovania" className="w-full h-40 object-cover rounded-lg border border-slate-800" />
+                        <button type="button" onClick={() => { setReceiptPhotoFile(null); setReceiptPhotoPreview(''); }} className="absolute top-1.5 right-1.5 bg-slate-950/80 text-rose-400 rounded-lg p-1.5"><X className="h-4 w-4" /></button>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center gap-1 border-2 border-dashed border-slate-800 rounded-lg py-5 cursor-pointer hover:border-indigo-600 transition-colors">
+                        <Camera className="h-5 w-5 text-slate-500" />
+                        <span className="text-xs text-slate-500">Odfotiť bloček z tankovania</span>
+                        <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { const f = e.target.files[0]; if (f) { setReceiptPhotoFile(f); setReceiptPhotoPreview(URL.createObjectURL(f)); } }} />
+                      </label>
+                    )
+                  )}
                   <button onClick={handleSaveVehicleLogEntry} disabled={!confirmedOdometerKm.trim()} className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2.5 rounded-lg uppercase text-xs">Uložiť záznam</button>
                 </div>
               )}
@@ -12059,7 +12144,10 @@ export default function App() {
                           <p className="text-sm font-bold text-white">{v.entryDate} — {v.odometerKm.toLocaleString('sk-SK')} km</p>
                           <p className="text-[11px] text-slate-500">{v.employeeName}{v.fuelType ? ` • Tankoval ${v.fuelType === 'benzin' ? 'benzín' : 'naftu'}${v.fuelLiters ? ` (${v.fuelLiters} l)` : ''}${v.fuelCost ? ` za ${v.fuelCost.toFixed(2)} €` : ''}` : ''}</p>
                         </div>
-                        {v.photoUrl && <a href={v.photoUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300 text-[11px] font-bold shrink-0">Fotka</a>}
+                        <div className="flex gap-3 shrink-0">
+                          {v.photoUrl && <a href={v.photoUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300 text-[11px] font-bold">Tachometer</a>}
+                          {v.receiptPhotoUrl && <a href={v.receiptPhotoUrl} target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300 text-[11px] font-bold">Bloček</a>}
+                        </div>
                       </div>
                     ))
                   )}
@@ -13080,21 +13168,21 @@ export default function App() {
                         {item.ultraPriority ? (
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="text-[10px] bg-rose-600 text-white px-2.5 py-1 rounded-full font-extrabold animate-pulse">🔴 ULTRA PRIORITA AKTÍVNA</span>
-                            {(currentUser.role === 'master' || currentUser.role === 'supervisor') && (
+                            {hasPermission('edit_priority') && (
                               <button onClick={() => handleSetUltraPriority(selectedOrderDetails.id, item.itemId, false)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-bold px-2.5 py-1 rounded-full">Vypnúť</button>
                             )}
                           </div>
                         ) : item.ultraPriorityStatus === 'pending' ? (
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="text-[10px] bg-amber-700 text-white px-2.5 py-1 rounded-full font-bold">⏳ Čaká na schválenie ultra priority (navrhol {item.ultraPriorityRequestedBy})</span>
-                            {(currentUser.role === 'master' || currentUser.role === 'supervisor') && (
+                            {hasPermission('edit_priority') && (
                               <>
                                 <button onClick={() => handleResolveUltraPriorityRequest(selectedOrderDetails.id, item.itemId, true)} className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold px-2.5 py-1 rounded-full">Schváliť</button>
                                 <button onClick={() => handleResolveUltraPriorityRequest(selectedOrderDetails.id, item.itemId, false)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-bold px-2.5 py-1 rounded-full">Zamietnuť</button>
                               </>
                             )}
                           </div>
-                        ) : (currentUser.role === 'master' || currentUser.role === 'supervisor') ? (
+                        ) : hasPermission('edit_priority') ? (
                           <button onClick={() => handleSetUltraPriority(selectedOrderDetails.id, item.itemId, true)} className="bg-rose-950/50 hover:bg-rose-900/50 border border-rose-700/50 text-rose-300 text-[10px] font-bold px-2.5 py-1 rounded-full">🔴 Aktivovať ultra prioritu</button>
                         ) : currentUser.role === 'sales' ? (
                           <button onClick={() => handleRequestUltraPriority(selectedOrderDetails.id, item.itemId)} className="bg-rose-950/50 hover:bg-rose-900/50 border border-rose-700/50 text-rose-300 text-[10px] font-bold px-2.5 py-1 rounded-full">Navrhnúť ultra prioritu</button>
