@@ -14,6 +14,7 @@ import MesacnyReportTab from './MesacnyReportTab';
 import OdovzdanieZakazky from './OdovzdanieZakazky';
 import PrintStudioAdmin from './printstudio/PrintStudioAdmin';
 import NotifikacieZvonec from './NotifikacieZvonec';
+import PozvankaScreen from './PozvankaScreen';
 import GlobalSearchPalette from './GlobalSearchPalette';
 import FakturaEmail from './FakturaEmail';
 import FakturaDokument from './FakturaDokument';
@@ -1429,6 +1430,7 @@ export default function App() {
   const [authSignupPassword2, setAuthSignupPassword2] = useState('');
   const [authSignupCode, setAuthSignupCode] = useState('');
   const [justGeneratedSignupCode, setJustGeneratedSignupCode] = useState('');
+  const [hromadnePozvanky, setHromadnePozvanky] = useState(null); // null | [{ id, meno, rola, odkaz }]
   const [authError, setAuthError] = useState('');
   const [isAuthBusy, setIsAuthBusy] = useState(false);
   const [authSession, setAuthSession] = useState(null);
@@ -6155,16 +6157,47 @@ export default function App() {
 
   const handleStartEditEmployee = (emp) => { setEditingEmployee({ ...emp }); setEditEmpPassword(''); setEditEmpPin(''); setJustGeneratedSignupCode(''); };
 
+  // Pozvánka: dlhý náhodný token (24 znakov) -> v databáze len jeho hash; zamestnanec dostane odkaz, kde si zadá e-mail a heslo (Edge Function employee-invite)
+  const vytvorTokenPozvanky = async (employeeId) => {
+    const abeceda = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const nahoda = new Uint8Array(24);
+    crypto.getRandomValues(nahoda);
+    const token = Array.from(nahoda, (n) => abeceda[n % abeceda.length]).join('');
+    const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 dní
+    const { error } = await supabase.from('employees').update({ signup_token: await hashPassword(token), signup_token_expires: expires }).eq('id', employeeId);
+    if (error) throw error;
+    return { odkaz: `${window.location.origin}/?pozvanka=${token}`, expires };
+  };
+
+  const kopirujDoSchranky = async (text, spravaOk) => {
+    try { await navigator.clipboard.writeText(text); triggerNotification('success', spravaOk); }
+    catch { window.prompt('Skopíruj (Ctrl+C):', text); }
+  };
+
   const handleGenerateSignupCode = async (employeeId) => {
     if (!hasPermission('manage_profiles')) { triggerNotification('error', 'Nemáte oprávnenie.'); return; }
-    const code = Array.from({ length: 8 }, () => '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'[Math.floor(Math.random() * 32)]).join('');
-    const codeHash = await hashPassword(code);
-    const expires = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(); // 48 hodín
-    const { error } = await supabase.from('employees').update({ signup_token: codeHash, signup_token_expires: expires }).eq('id', employeeId);
-    if (error) { triggerNotification('error', error.message); return; }
-    setEditingEmployee(prev => prev ? { ...prev, hasSignupToken: true, signupTokenExpires: expires } : prev);
-    setJustGeneratedSignupCode(code);
-    triggerNotification('success', 'Registračný kód bol vygenerovaný. Platí 48 hodín — daj ho tejto osobe osobne (telefón/chat), nie verejne. Po zatvorení sa už nedá znova zobraziť (len vygenerovať nový).');
+    try {
+      const { odkaz, expires } = await vytvorTokenPozvanky(employeeId);
+      setEditingEmployee(prev => prev ? { ...prev, hasSignupToken: true, signupTokenExpires: expires } : prev);
+      setJustGeneratedSignupCode(odkaz);
+      triggerNotification('success', 'Odkaz pozvánky je pripravený (platí 7 dní, funguje len raz). Pošli ho tejto osobe — po zatvorení sa už nedá znova zobraziť, len vygenerovať nový.');
+    } catch (err) { triggerNotification('error', err.message || 'Odkaz sa nepodarilo vytvoriť.'); }
+  };
+
+  const handleBulkInvites = async () => {
+    if (!hasPermission('manage_profiles')) { triggerNotification('error', 'Nemáte oprávnenie.'); return; }
+    const cielovi = employees.filter(x => !x.authUserId);
+    if (cielovi.length === 0) { triggerNotification('success', 'Všetci zamestnanci už majú vytvorený účet.'); return; }
+    if (!window.confirm(`Vytvoriť osobné odkazy pre ${cielovi.length} zamestnancov bez účtu? Už vytvorené staré odkazy týchto ľudí prestanú platiť.`)) return;
+    try {
+      const zoznam = [];
+      for (const emp of cielovi) {
+        const { odkaz } = await vytvorTokenPozvanky(emp.id);
+        zoznam.push({ id: emp.id, meno: `${emp.firstName} ${emp.lastName}`, rola: ROLE_LABELS[emp.role] || emp.role, odkaz });
+      }
+      setHromadnePozvanky(zoznam);
+      setEmployees(prev => prev.map(x => (x.authUserId ? x : { ...x, hasSignupToken: true })));
+    } catch (err) { triggerNotification('error', err.message || 'Odkazy sa nepodarilo vytvoriť.'); }
   };
 
   const handleCancelSignupCode = async (employeeId) => {
@@ -6482,6 +6515,10 @@ export default function App() {
     );
   };
 
+  // Osobný odkaz pozvánky (?pozvanka=...) — zamestnanec si tu zadá e-mail a heslo a hneď sa prihlási
+  const pozvankaToken = new URLSearchParams(window.location.search).get('pozvanka');
+  if (pozvankaToken) return <PozvankaScreen supabase={supabase} token={pozvankaToken} />;
+
   if (loadError) {
     return (
       <div className="min-h-screen bg-slate-900 text-slate-100 flex items-center justify-center p-6">
@@ -6605,7 +6642,7 @@ export default function App() {
           <div className="text-center space-y-1">
             <img src="/logo-atak-pbt.png" alt="ATAK x PBT" className="h-10 w-auto brightness-0 invert mx-auto mb-2" />
             <h1 className="text-lg font-extrabold text-white">TEX-MASTER ERP</h1>
-            <p className="text-xs text-slate-500">{authScreenMode === 'login' ? 'Prihlásenie pre Master / Supervisor / Obchodníka' : 'Vytvorenie prihlasovacieho účtu'}</p>
+            <p className="text-xs text-slate-500">{authScreenMode === 'login' ? 'Prihlásenie e-mailom a heslom' : 'Vytvorenie prihlasovacieho účtu'}</p>
           </div>
           <form onSubmit={authScreenMode === 'login' ? handleAuthLogin : handleAuthSignup} className="space-y-4">
             <div>
@@ -9773,6 +9810,29 @@ export default function App() {
         )}
         {activeTab === 'profiles' && (
           <div className="space-y-6 print:hidden animate-in fade-in duration-150">
+            {hromadnePozvanky && (
+              <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => setHromadnePozvanky(null)}>
+                <div className="bg-slate-950 border border-slate-700 rounded-2xl p-5 w-full max-w-2xl max-h-[85vh] flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
+                  <h3 className="font-bold text-white">Osobné odkazy pozvánok ({hromadnePozvanky.length})</h3>
+                  <p className="text-[11px] text-amber-300">Každý odkaz je len pre jednu osobu, platí 7 dní a funguje len raz. Po zatvorení tohto okna sa už nezobrazia — skopíruj ich teraz a pošli každému jeho vlastný.</p>
+                  <div className="overflow-y-auto space-y-2 pr-1">
+                    {hromadnePozvanky.map(z => (
+                      <div key={z.id} className="bg-slate-900 border border-slate-800 rounded-lg p-2 space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-bold text-slate-100">{z.meno} <span className="text-[10px] text-slate-500 font-normal">({z.rola})</span></span>
+                          <button onClick={() => kopirujDoSchranky(z.odkaz, `Odkaz pre ${z.meno} skopírovaný.`)} className="bg-slate-800 hover:bg-slate-700 text-indigo-300 font-bold text-[10px] px-2 py-1 rounded">Kopírovať</button>
+                        </div>
+                        <p className="font-mono text-[10px] text-slate-400 break-all">{z.odkaz}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => kopirujDoSchranky(hromadnePozvanky.map(z => `${z.meno}: ${z.odkaz}`).join('\n'), 'Všetky odkazy skopírované.')} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs py-2 rounded-lg">Kopírovať všetky (meno: odkaz)</button>
+                    <button onClick={() => setHromadnePozvanky(null)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 rounded-lg text-xs">Zavrieť</button>
+                  </div>
+                </div>
+              </div>
+            )}
             {!hasPermission('manage_profiles') ? (
               <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 shadow-xl space-y-4">
                 <div className="bg-rose-950/40 border border-rose-800 p-6 rounded-2xl text-center space-y-3">
@@ -9790,7 +9850,10 @@ export default function App() {
             ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 shadow-xl space-y-4">
-                <h3 className="font-bold text-md text-white flex items-center gap-2"><Users className="text-indigo-400 h-5 w-5" /> Zoznam Zamestnancov & Sviatky</h3>
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <h3 className="font-bold text-md text-white flex items-center gap-2"><Users className="text-indigo-400 h-5 w-5" /> Zoznam Zamestnancov & Sviatky</h3>
+                  <button onClick={handleBulkInvites} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] px-3 py-1.5 rounded-lg">🔗 Pozvánky pre všetkých bez účtu</button>
+                </div>
                 <div className="space-y-2.5 max-h-[350px] overflow-y-auto pr-1">
                   {employees.map(emp => (
                     <div key={emp.id} className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl flex items-start justify-between gap-4">
@@ -9803,7 +9866,7 @@ export default function App() {
                         <p className="text-xs text-slate-400">Pozícia: <strong className="text-slate-300">{emp.position || '—'}</strong></p>
                         <p className="text-[10px] text-slate-500">Dátum nástupu: <strong className="text-slate-400">{emp.entryDate || '—'}</strong></p>
                         <p className="text-[10px] text-slate-500">Telefón: <strong className="text-slate-400">{emp.phone || '—'}</strong> • Email: <strong className="text-slate-400">{emp.email || '—'}</strong></p>
-                        <p className="text-[10px] text-slate-500">Heslo: <strong className={emp.hasPassword ? 'text-emerald-400' : 'text-rose-400'}>{emp.hasPassword ? 'Nastavené' : 'Nenastavené — nemôže sa prihlásiť'}</strong> • PIN: <strong className={emp.hasPin ? 'text-emerald-400' : 'text-slate-500'}>{emp.hasPin ? 'Nastavený' : 'Nenastavený'}</strong></p>
+                        <p className="text-[10px] text-slate-500">Heslo: <strong className={emp.hasPassword ? 'text-emerald-400' : 'text-rose-400'}>{emp.hasPassword ? 'Nastavené' : 'Nenastavené — nemôže sa prihlásiť'}</strong> • PIN: <strong className={emp.hasPin ? 'text-emerald-400' : 'text-slate-500'}>{emp.hasPin ? 'Nastavený' : 'Nenastavený'}</strong> • Účet (e-mail): <strong className={emp.authUserId ? 'text-emerald-400' : emp.hasSignupToken ? 'text-amber-400' : 'text-slate-500'}>{emp.authUserId ? 'Vytvorený' : emp.hasSignupToken ? 'Čaká na pozvánku' : 'Nie je'}</strong></p>
                         <div className="flex flex-wrap gap-2 pt-1">
                           <span className="bg-indigo-950/40 text-indigo-300 text-[10px] px-2 py-0.5 rounded border border-indigo-900/20 flex items-center gap-1 font-bold"><CalendarDays className="h-3.5 w-3.5" /> Narodeniny: {emp.birthday ? formatDeliveryDate(emp.birthday) : '—'}</span>
                           <span className="bg-purple-950/40 text-purple-300 text-[10px] px-2 py-0.5 rounded border border-purple-900/20 flex items-center gap-1 font-bold"><Gift className="h-3.5 w-3.5" /> Meniny: {emp.nameday || '—'}</span>
@@ -9943,28 +10006,31 @@ export default function App() {
                     <div>
                       <label className="text-slate-400 block mb-0.5">Staré heslo (nepoužíva sa — Master/Superv./Obchodník sa prihlasujú emailom, nechaj prázdne)</label>
                       <input type="password" placeholder="nepoužívané" value={editingEmployee ? editEmpPassword : newEmpPassword} onChange={(e) => editingEmployee ? setEditEmpPassword(e.target.value) : setNewEmpPassword(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white opacity-60" />
-                      {editingEmployee && EMAIL_LOGIN_ROLES.includes(editingEmployee.role) && (
+                      {editingEmployee && (
                         <div className="mt-1.5">
                           {editingEmployee.authUserId ? (
-                            <p className="text-[10px] text-slate-500">✅ Prihlasovací účet (email) je vytvorený a prepojený.</p>
+                            <p className="text-[10px] text-slate-500">✅ Prihlasovací účet (e-mail{editingEmployee.email ? `: ${editingEmployee.email}` : ''}) je vytvorený a prepojený.</p>
                           ) : justGeneratedSignupCode && editingEmployee.hasSignupToken ? (
                             <div className="bg-amber-950/20 border border-amber-800/40 rounded-lg p-2 space-y-1">
-                              <p className="text-[10px] text-amber-300">🔑 Registračný kód (platí do {new Date(editingEmployee.signupTokenExpires).toLocaleString('sk-SK')}) — daj ho tejto osobe osobne, nie verejne. <strong>Po zatvorení sa už znova nezobrazí!</strong></p>
-                              <p className="font-mono text-sm font-extrabold text-white tracking-widest text-center bg-slate-950 py-1.5 rounded">{justGeneratedSignupCode}</p>
-                              <button type="button" onClick={() => handleCancelSignupCode(editingEmployee.id)} className="text-[10px] text-rose-400 hover:text-rose-300 underline">Zrušiť kód</button>
+                              <p className="text-[10px] text-amber-300">🔗 Osobný odkaz pozvánky (platí do {new Date(editingEmployee.signupTokenExpires).toLocaleString('sk-SK')}, funguje len raz). Pošli ho tejto osobe — po otvorení si zadá e-mail a heslo a hneď sa prihlási. <strong>Po zatvorení sa už znova nezobrazí!</strong></p>
+                              <p className="font-mono text-[11px] text-white break-all bg-slate-950 p-1.5 rounded">{justGeneratedSignupCode}</p>
+                              <div className="flex gap-3">
+                                <button type="button" onClick={() => kopirujDoSchranky(justGeneratedSignupCode, 'Odkaz skopírovaný.')} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] px-3 py-1.5 rounded-lg">Kopírovať odkaz</button>
+                                <button type="button" onClick={() => handleCancelSignupCode(editingEmployee.id)} className="text-[10px] text-rose-400 hover:text-rose-300 underline">Zrušiť odkaz</button>
+                              </div>
                             </div>
                           ) : editingEmployee.hasSignupToken && editingEmployee.signupTokenExpires && new Date(editingEmployee.signupTokenExpires) > new Date() ? (
                             <div className="bg-slate-900 border border-slate-800 rounded-lg p-2 space-y-1">
-                              <p className="text-[10px] text-slate-400">🔒 Registračný kód je nastavený (platí do {new Date(editingEmployee.signupTokenExpires).toLocaleString('sk-SK')}), z bezpečnostných dôvodov sa už nedá znova zobraziť.</p>
+                              <p className="text-[10px] text-slate-400">🔒 Odkaz pozvánky je vytvorený (platí do {new Date(editingEmployee.signupTokenExpires).toLocaleString('sk-SK')}), z bezpečnostných dôvodov sa už nedá znova zobraziť.</p>
                               <div className="flex gap-2">
-                                <button type="button" onClick={() => handleGenerateSignupCode(editingEmployee.id)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] px-3 py-1.5 rounded-lg">Vygenerovať nový</button>
+                                <button type="button" onClick={() => handleGenerateSignupCode(editingEmployee.id)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] px-3 py-1.5 rounded-lg">Vygenerovať nový odkaz</button>
                                 <button type="button" onClick={() => handleCancelSignupCode(editingEmployee.id)} className="text-[10px] text-rose-400 hover:text-rose-300 underline">Zrušiť</button>
                               </div>
                             </div>
                           ) : (
                             <div className="space-y-1">
-                              <p className="text-[10px] text-slate-500">⚠️ Prihlasovací účet ešte nie je vytvorený.</p>
-                              <button type="button" onClick={() => handleGenerateSignupCode(editingEmployee.id)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] px-3 py-1.5 rounded-lg">Vygenerovať registračný kód</button>
+                              <p className="text-[10px] text-slate-500">⚠️ Prihlasovací účet (e-mail + heslo) ešte nie je vytvorený. Vytvor osobný odkaz a pošli ho — zamestnanec si tam sám zadá e-mail a heslo.</p>
+                              <button type="button" onClick={() => handleGenerateSignupCode(editingEmployee.id)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] px-3 py-1.5 rounded-lg">Vytvoriť odkaz pozvánky</button>
                             </div>
                           )}
                         </div>
