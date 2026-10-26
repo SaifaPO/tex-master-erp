@@ -1,11 +1,17 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Bell, Inbox, FileQuestion, ClipboardList, Check, X, Trash2 } from 'lucide-react';
+import { Bell, Inbox, FileQuestion, ClipboardList, FileText, Check, X, Trash2 } from 'lucide-react';
 
 // Zvonček s notifikáciami v hornej lište ERP: nový dopyt, nová objednávka z konfigurátora, nová zákazka. Záznamy vytvárajú databázové
 // triggery (migration_erp_notifikacie.sql); tu sa zobrazia okamžite cez Realtime ako vyskakovacie okno a ostanú v zozname, kým ich
 // nezmažeš — dajú sa pozrieť aj spätne. Kliknutím na notifikáciu sa otvorí presne to miesto (dopyt / objednávka / zákazka).
-const IKONY = { dopyt: FileQuestion, objednavka: Inbox, zakazka: ClipboardList };
-const FARBY = { dopyt: 'text-amber-300 bg-amber-500/15', objednavka: 'text-emerald-300 bg-emerald-500/15', zakazka: 'text-indigo-300 bg-indigo-500/15' };
+const IKONY = { dopyt: FileQuestion, objednavka: Inbox, zakazka: ClipboardList, faktura: FileText };
+const FARBY = { dopyt: 'text-amber-300 bg-amber-500/15', objednavka: 'text-emerald-300 bg-emerald-500/15', zakazka: 'text-indigo-300 bg-indigo-500/15', faktura: 'text-sky-300 bg-sky-500/15' };
+// Notifikácia môže mať cieľ (pre_role = zoznam rolí, pre_employee_id = konkrétna osoba); bez cieľa je len pre Mastra (pôvodné správanie: dopyty, objednávky, zákazky)
+const jeProMna = (n, rola, mojeId) => {
+  const maCiel = (n.pre_role && n.pre_role.length > 0) || n.pre_employee_id;
+  if (!maCiel) return rola === 'master';
+  return !!(n.pre_role && n.pre_role.includes(rola)) || (!!n.pre_employee_id && n.pre_employee_id === mojeId);
+};
 
 const pred = (iso) => {
   const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
@@ -15,7 +21,7 @@ const pred = (iso) => {
   return new Date(iso).toLocaleDateString('sk-SK', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' });
 };
 
-export default function NotifikacieZvonec({ supabase, onOtvor }) {
+export default function NotifikacieZvonec({ supabase, onOtvor, rola = 'master', mojeId = '' }) {
   const [polozky, setPolozky] = useState([]);
   const [otvorene, setOtvorene] = useState(false);
   const [vyskakovacie, setVyskakovacie] = useState([]);
@@ -26,14 +32,15 @@ export default function NotifikacieZvonec({ supabase, onOtvor }) {
     const { data, error } = await supabase.from('erp_notifikacie').select('*').order('created_at', { ascending: false }).limit(60);
     if (error) { setChyba(error.message.includes('erp_notifikacie') ? 'Notifikácie ešte nie sú zapnuté (migration_erp_notifikacie.sql).' : error.message); return; }
     setChyba('');
-    setPolozky(data || []);
-  }, [supabase]);
+    setPolozky((data || []).filter((n) => jeProMna(n, rola, mojeId)));
+  }, [supabase, rola, mojeId]);
 
   useEffect(() => {
     nacitaj();
     const kanal = supabase.channel('erp-notifikacie')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'erp_notifikacie' }, (payload) => {
         const n = payload.new;
+        if (!jeProMna(n, rola, mojeId)) return;
         setPolozky((l) => (l.some((x) => x.id === n.id) ? l : [n, ...l].slice(0, 60)));
         setVyskakovacie((v) => [...v, n]);
         setTimeout(() => setVyskakovacie((v) => v.filter((x) => x.id !== n.id)), 9000);
@@ -45,7 +52,7 @@ export default function NotifikacieZvonec({ supabase, onOtvor }) {
     // poistka, keby sa Realtime spojenie na chvíľu prerušilo
     const interval = setInterval(nacitaj, 60000);
     return () => { clearInterval(interval); supabase.removeChannel(kanal); };
-  }, [supabase, nacitaj]);
+  }, [supabase, nacitaj, rola, mojeId]);
 
   // zavretie zoznamu kliknutím mimo
   useEffect(() => {
@@ -63,12 +70,14 @@ export default function NotifikacieZvonec({ supabase, onOtvor }) {
     await supabase.from('erp_notifikacie').update({ precitane: true }).eq('id', n.id);
   };
   const oznacVsetko = async () => {
+    const ids = polozky.filter((x) => !x.precitane).map((x) => x.id);
     setPolozky((l) => l.map((x) => ({ ...x, precitane: true })));
-    await supabase.from('erp_notifikacie').update({ precitane: true }).eq('precitane', false);
+    if (ids.length) await supabase.from('erp_notifikacie').update({ precitane: true }).in('id', ids);
   };
   const zmazPrecitane = async () => {
+    const ids = polozky.filter((x) => x.precitane).map((x) => x.id);
     setPolozky((l) => l.filter((x) => !x.precitane));
-    await supabase.from('erp_notifikacie').delete().eq('precitane', true);
+    if (ids.length) await supabase.from('erp_notifikacie').delete().in('id', ids);
   };
   const otvor = (n) => {
     oznacPrecitane(n);

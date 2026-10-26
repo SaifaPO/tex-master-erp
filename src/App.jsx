@@ -15,6 +15,7 @@ import OdovzdanieZakazky from './OdovzdanieZakazky';
 import PrintStudioAdmin from './printstudio/PrintStudioAdmin';
 import NotifikacieZvonec from './NotifikacieZvonec';
 import PozvankaScreen from './PozvankaScreen';
+import { mapNacrtFromDb, mapNacrtToDb, spoluNacrtu, stavSuhlasov, NacrtModal, NacrtyFronta } from './FakturaNacrty';
 import GlobalSearchPalette from './GlobalSearchPalette';
 import FakturaEmail from './FakturaEmail';
 import FakturaDokument from './FakturaDokument';
@@ -333,8 +334,8 @@ const mapTierToDb = (t) => ({ id: t.id, name: t.name, fit: t.fit, ventilation: t
 const mapEmployeeFromDb = (r) => ({ id: r.id, firstName: r.first_name, lastName: r.last_name, birthday: r.birthday, nameday: r.nameday, entryDate: r.entry_date, role: r.role, position: r.position, hasPassword: !!r.has_password, phone: r.phone || '', email: r.email || '', avatar: r.avatar || '', hasPin: !!r.has_pin, authUserId: r.auth_user_id || '', hasSignupToken: !!r.has_signup_token, signupTokenExpires: r.signup_token_expires || null, company: r.company || '', titulProPonuky: r.titul_pre_ponuky || '', mzdaHruba: r.mzda_hruba ?? null, socialnePoistenie: r.socialne_poistenie ?? null, zdravotnePoistenie: r.zdravotne_poistenie ?? null });
 const mapEmployeeToDb = (e) => ({ id: e.id, first_name: e.firstName, last_name: e.lastName, birthday: e.birthday, nameday: e.nameday, entry_date: e.entryDate, role: e.role, position: e.position, phone: e.phone || null, email: e.email || null, avatar: e.avatar || null, auth_user_id: e.authUserId || null, company: e.company || null, titul_pre_ponuky: e.titulProPonuky || null, mzda_hruba: e.mzdaHruba === '' || e.mzdaHruba == null ? null : parseFloat(e.mzdaHruba), socialne_poistenie: e.socialnePoistenie === '' || e.socialnePoistenie == null ? null : parseFloat(e.socialnePoistenie), zdravotne_poistenie: e.zdravotnePoistenie === '' || e.zdravotnePoistenie == null ? null : parseFloat(e.zdravotnePoistenie) });
 
-const mapOrderFromDb = (r) => ({ id: r.id, customer: r.customer, createdAt: r.created_at, deliveryDate: r.scheduled_day, driveLink: r.drive_link, notes: r.notes, paymentType: r.payment_type || 'faktura', items: r.items || [], orderLog: r.order_log || [], legacyOrderNumber: r.legacy_order_number || '', companyBrand: r.company_brand || 'ATAK', orderNumber: r.order_number || '', accountingStatus: r.accounting_status || null, lastModifiedAt: r.last_modified_at || null, lastModifiedNote: r.last_modified_note || '', variableSymbol: r.variable_symbol || '', expectedAmount: r.expected_amount ?? null, variableSymbolConfirmed: !!r.variable_symbol_confirmed, attachments: r.attachments || [] });
-const mapOrderToDb = (o) => ({ id: o.id, customer: o.customer, created_at: o.createdAt, scheduled_day: o.deliveryDate, drive_link: o.driveLink, notes: o.notes, payment_type: o.paymentType, items: o.items, order_log: o.orderLog || [], legacy_order_number: o.legacyOrderNumber || null, company_brand: o.companyBrand || 'ATAK', order_number: o.orderNumber || null, accounting_status: o.accountingStatus || null, last_modified_at: o.lastModifiedAt || null, last_modified_note: o.lastModifiedNote || null, variable_symbol: o.variableSymbol || null, expected_amount: o.expectedAmount ?? null, variable_symbol_confirmed: o.variableSymbolConfirmed ?? false, attachments: o.attachments || [] });
+const mapOrderFromDb = (r) => ({ id: r.id, customer: r.customer, createdAt: r.created_at, deliveryDate: r.scheduled_day, driveLink: r.drive_link, notes: r.notes, paymentType: r.payment_type || 'faktura', items: r.items || [], orderLog: r.order_log || [], legacyOrderNumber: r.legacy_order_number || '', companyBrand: r.company_brand || 'ATAK', orderNumber: r.order_number || '', accountingStatus: r.accounting_status || null, lastModifiedAt: r.last_modified_at || null, lastModifiedNote: r.last_modified_note || '', variableSymbol: r.variable_symbol || '', expectedAmount: r.expected_amount ?? null, variableSymbolConfirmed: !!r.variable_symbol_confirmed, attachments: r.attachments || [], sellerId: r.seller_id || '', sellerName: r.seller_name || '', invoicePlan: r.invoice_plan || '' });
+const mapOrderToDb = (o) => ({ id: o.id, customer: o.customer, created_at: o.createdAt, scheduled_day: o.deliveryDate, drive_link: o.driveLink, notes: o.notes, payment_type: o.paymentType, items: o.items, order_log: o.orderLog || [], legacy_order_number: o.legacyOrderNumber || null, company_brand: o.companyBrand || 'ATAK', order_number: o.orderNumber || null, accounting_status: o.accountingStatus || null, last_modified_at: o.lastModifiedAt || null, last_modified_note: o.lastModifiedNote || null, variable_symbol: o.variableSymbol || null, expected_amount: o.expectedAmount ?? null, variable_symbol_confirmed: o.variableSymbolConfirmed ?? false, attachments: o.attachments || [], seller_id: o.sellerId || null, seller_name: o.sellerName || null, invoice_plan: o.invoicePlan || null });
 
 // VS sa odvodzuje rovnakym sposobom ako pri fakturach (len cislice, posledych 10) — zakazka ho dostane
 // uz pri vytvoreni, este pred vystavenim faktury, aby sa dala platba priradit aj bez existujucej faktury.
@@ -1425,6 +1426,7 @@ export default function App() {
   const otvorZNotifikacie = (odkaz) => {
     if (!odkaz?.tab) return;
     setActiveTab(odkaz.tab);
+    if (odkaz.nacrtId) { setFinanceSubTab('queue'); setOtvorenyNacrtId(odkaz.nacrtId); }
     if (odkaz.tab === 'printstudio') {
       setPrintstudioJumpTarget(odkaz.subtab || 'objednavky');
       setPrintstudioFokus({ typ: odkaz.typ, id: odkaz.id, nonce: Date.now() });
@@ -1548,6 +1550,11 @@ export default function App() {
     return d.toISOString().slice(0, 10);
   });
   const [newOrderPaymentType, setNewOrderPaymentType] = useState('faktura');
+  const [newOrderInvoicePlan, setNewOrderInvoicePlan] = useState('faktura'); // 'faktura' | 'zalohova' — typ náčrtu, ktorý sa pripraví hneď pri vytvorení zákazky
+  const [newOrderSellerId, setNewOrderSellerId] = useState('');             // predávajúci (obchodník) zákazky; prázdne = prihlásený používateľ
+  const [nacrty, setNacrty] = useState([]);                                 // náčrty faktúr (tabuľka faktura_nacrty)
+  const [otvorenyNacrtId, setOtvorenyNacrtId] = useState('');
+  const [autoOtvorEmailId, setAutoOtvorEmailId] = useState('');             // faktúra, ktorej e-mail sa po vystavení z náčrtu otvorí sám
   const [orderDriveLink, setOrderDriveLink] = useState('https://drive.google.com/');
   const [newOrderLegacyNumber, setNewOrderLegacyNumber] = useState('');
   const [newOrderCompany, setNewOrderCompany] = useState(''); // zamerne bez predvolenej hodnoty — obchodnik musi vedome vybrat, ktora firma fakturuje zakaznikovi
@@ -2100,6 +2107,19 @@ export default function App() {
     }, 15000);
     return () => clearInterval(interval);
   }, [currentUser]);
+
+  // Náčrty faktúr: načítanie + živé aktualizácie (ak tabuľka ešte neexistuje, appka beží ďalej bez nich)
+  useEffect(() => {
+    if (isLoading || !supabase) return undefined;
+    let zrusene = false;
+    supabase.from('faktura_nacrty').select('*').order('created_at', { ascending: false }).limit(300).then(({ data, error }) => {
+      if (!zrusene && !error) setNacrty((data || []).map(mapNacrtFromDb));
+    });
+    const kanal = supabase.channel('faktura-nacrty')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'faktura_nacrty' }, (payload) => applyRealtimeChange(setNacrty, payload, mapNacrtFromDb))
+      .subscribe();
+    return () => { zrusene = true; supabase.removeChannel(kanal); };
+  }, [isLoading]);
 
   // Obnovenie sedenia Supabase Auth pri načítaní appky + reakcia na prihlásenie/odhlásenie/MFA
   useEffect(() => {
@@ -2994,6 +3014,149 @@ export default function App() {
     setShowNewInvoiceForm(false);
     setSelectedInvoiceForDetail(created);
     triggerNotification('success', `${TYPY_DOKLADOV[docType].kratky} č. ${invoiceNumber} bola vystavená.`);
+  };
+
+  // --- NÁČRTY FAKTÚR ZO ZÁKAZKY: pri vytvorení zákazky sa pripraví náčrt; odsúhlasí ho predávajúci aj financie, potom sa vystaví
+  // ostrý doklad a predávajúci ho jedným kliknutím pošle zákazníkovi (e-mail z centrálnej adresy, kópia + odpoveď na predávajúceho).
+  const menoPrihlaseneho = () => `${currentUser.firstName} ${currentUser.lastName}`;
+  const posliNotifikaciu = async ({ titulok, text, nacrtId, preRole = null, preEmployeeId = null }) => {
+    try {
+      await supabase.from('erp_notifikacie').insert({ typ: 'faktura', zdroj: 'faktura_nacrty', titulok, text, odkaz: { tab: 'invoices', nacrtId }, pre_role: preRole, pre_employee_id: preEmployeeId });
+    } catch { /* upozornenie je len bonus */ }
+  };
+  const ulozNacrtDoDb = async (n) => {
+    const { error } = await supabase.from('faktura_nacrty').upsert(mapNacrtToDb(n));
+    if (error) throw error;
+    setNacrty(prev => (prev.some(x => x.id === n.id) ? prev.map(x => (x.id === n.id ? n : x)) : [n, ...prev]));
+  };
+  // e-mail, telefón a adresa z náčrtu sa uložia k zákazníkovi, aby ich nabudúce nebolo treba písať znova
+  const ulozKontaktZakaznika = async (n) => {
+    const meno = n.customerName.trim();
+    if (!meno || (!n.customerEmail.trim() && !n.customerPhone.trim() && !n.customerAddress.trim())) return;
+    const existing = customers.find(c => c.name === meno);
+    await supabase.from('customers').upsert(mapCustomerToDb({
+      name: meno, phone: n.customerPhone.trim() || existing?.phone || '', email: n.customerEmail.trim() || existing?.email || '',
+      contactPerson: existing?.contactPerson || '', address: n.customerAddress.trim() || existing?.address || '', notes: existing?.notes || '', interactionLog: existing?.interactionLog || []
+    }));
+  };
+  // súhlasy berieme vždy z aktuálneho stavu v databáze, nie z kópie, ktorú má otvorené okno (mohol medzitým schváliť niekto iný)
+  const zlucSuhlasy = (n) => {
+    const akt = nacrty.find(x => x.id === n.id);
+    return akt ? { ...n, sellerApprovedAt: akt.sellerApprovedAt, sellerApprovedBy: akt.sellerApprovedBy, financeApprovedAt: akt.financeApprovedAt, financeApprovedBy: akt.financeApprovedBy, status: akt.status, invoiceId: akt.invoiceId } : n;
+  };
+
+  const vytvorNacrtZoZakazky = async (order, plan = 'faktura') => {
+    const c = customers.find(x => x.name === order.customer);
+    const posledna = invoices.filter(i => i.customerName === order.customer && i.docType !== 'dobropis').sort((a, b) => String(b.issueDate).localeCompare(String(a.issueDate)))[0];
+    const due = new Date(); due.setDate(due.getDate() + getTierDueDays(getCustomerTier(order.customer)));
+    const n = {
+      id: `nac-${Date.now()}`, orderId: order.id, docType: plan === 'zalohova' ? 'zalohova' : 'faktura', status: 'navrh',
+      customerName: order.customer, customerAddress: posledna?.customerAddress || c?.address || '', customerIco: posledna?.customerIco || '', customerDic: posledna?.customerDic || '',
+      customerIcDph: posledna?.customerIcDph || '', customerType: posledna?.customerType || 'sk_platca', customerEmail: c?.email || '', customerPhone: c?.phone || '',
+      language: posledna?.language || 'sk', dueDate: due.toISOString().slice(0, 10), notes: '',
+      items: (order.items || []).map(it => ({ description: `${it.productName} (${it.qualityTier}, ${genderLabel(it.gender)})`, qty: it.qty, unitPrice: 0, vatRate: companySettings.defaultVatRate })),
+      sellerId: order.sellerId || currentUser.id, sellerName: order.sellerName || menoPrihlaseneho(),
+      sellerApprovedAt: null, sellerApprovedBy: '', financeApprovedAt: null, financeApprovedBy: '', invoiceId: '', createdBy: menoPrihlaseneho(), createdAt: new Date().toISOString()
+    };
+    await ulozNacrtDoDb(n);
+    await posliNotifikaciu({ titulok: `Nový náčrt ${n.docType === 'zalohova' ? 'zálohovej faktúry' : 'faktúry'} na kontrolu`, text: `${order.orderNumber || order.id} • ${order.customer} — predávajúci ${n.sellerName}`, nacrtId: n.id, preRole: ['uctovnik', 'master'] });
+    return n;
+  };
+
+  const ulozNacrt = async (n, obsahZmeneny) => {
+    let novy = zlucSuhlasy(n);
+    const mal = !!(novy.sellerApprovedAt || novy.financeApprovedAt);
+    if (obsahZmeneny && mal) novy = { ...novy, sellerApprovedAt: null, sellerApprovedBy: '', financeApprovedAt: null, financeApprovedBy: '' };
+    try {
+      await ulozNacrtDoDb(novy); await ulozKontaktZakaznika(novy);
+      triggerNotification('success', obsahZmeneny && mal ? 'Náčrt uložený. Súhlasy sa zrušili, treba ich udeliť znova.' : 'Náčrt uložený.');
+      if (obsahZmeneny && mal) {
+        const cieleni = [{ preRole: ['uctovnik', 'master'] }, novy.sellerId ? { preEmployeeId: novy.sellerId } : null].filter(Boolean);
+        for (const ciel of cieleni) await posliNotifikaciu({ titulok: 'Náčrt faktúry sa zmenil — treba ho odsúhlasiť znova', text: `${novy.customerName} • upravil ${menoPrihlaseneho()}`, nacrtId: novy.id, ...ciel });
+      }
+    } catch (e) { triggerNotification('error', `Náčrt sa nepodarilo uložiť: ${e.message}`); }
+  };
+
+  const schvalNacrtPredavajuci = async (n) => {
+    const aktualny = zlucSuhlasy(n);
+    const novy = { ...aktualny, sellerApprovedAt: new Date().toISOString(), sellerApprovedBy: menoPrihlaseneho() };
+    try {
+      await ulozNacrtDoDb(novy); await ulozKontaktZakaznika(novy);
+      const o = orders.find(x => x.id === novy.orderId);
+      if (!novy.financeApprovedAt) await posliNotifikaciu({ titulok: 'Obchodník odsúhlasil náčrt faktúry — čaká na financie', text: `${o?.orderNumber || novy.orderId} • ${novy.customerName} • ${novy.sellerName}`, nacrtId: novy.id, preRole: ['uctovnik', 'master'] });
+      triggerNotification('success', novy.financeApprovedAt ? 'Odsúhlasené oboma stranami — môžeš faktúru vystaviť a poslať zákazníkovi.' : 'Odsúhlasené. Čaká sa na financie (dostali upozornenie).');
+    } catch (e) { triggerNotification('error', `Súhlas sa nepodarilo uložiť: ${e.message}`); }
+  };
+
+  const schvalNacrtFinancie = async (n) => {
+    const aktualny = zlucSuhlasy(n);
+    const novy = { ...aktualny, financeApprovedAt: new Date().toISOString(), financeApprovedBy: menoPrihlaseneho() };
+    try {
+      await ulozNacrtDoDb(novy); await ulozKontaktZakaznika(novy);
+      const o = orders.find(x => x.id === novy.orderId);
+      const oba = !!novy.sellerApprovedAt;
+      if (novy.sellerId) await posliNotifikaciu({
+        titulok: oba ? 'Náčrt faktúry je odsúhlasený — môžeš ho vystaviť a poslať zákazníkovi' : 'Financie odsúhlasili náčrt faktúry — čaká na tvoj súhlas',
+        text: `${o?.orderNumber || novy.orderId} • ${novy.customerName}`, nacrtId: novy.id, preEmployeeId: novy.sellerId,
+      });
+      triggerNotification('success', oba ? 'Odsúhlasené oboma stranami. Predávajúci dostal upozornenie, že môže faktúru odoslať.' : 'Odsúhlasené. Predávajúci dostal upozornenie.');
+    } catch (e) { triggerNotification('error', `Súhlas sa nepodarilo uložiť: ${e.message}`); }
+  };
+
+  const zrusNacrt = async (n) => {
+    if (!window.confirm('Naozaj zrušiť tento náčrt faktúry?')) return;
+    try {
+      await ulozNacrtDoDb({ ...zlucSuhlasy(n), status: 'zrusene' });
+      setOtvorenyNacrtId('');
+      triggerNotification('success', 'Náčrt bol zrušený.');
+    } catch (e) { triggerNotification('error', e.message); }
+  };
+
+  // Z odsúhlaseného náčrtu sa vystaví ostrý doklad (rovnako ako ručne: číslo, účtovný zápis, stav zákazky) a otvorí sa e-mail zákazníkovi
+  const vystavZNacrtu = async (n) => {
+    if (!hasPermission('create_order')) { triggerNotification('error', 'Faktúru vystavuje predávajúci (alebo Master) — nemáte oprávnenie vystavovať doklady.'); return; }
+    const akt = zlucSuhlasy(n);
+    if (akt.status !== 'navrh') { triggerNotification('error', 'Tento náčrt už bol vystavený alebo zrušený.'); return; }
+    if (!stavSuhlasov(akt).oba) { triggerNotification('error', 'Náčrt musí odsúhlasiť predávajúci aj financie.'); return; }
+    const year = new Date().getFullYear();
+    const docType = akt.docType;
+    const seq = docType === 'zalohova' ? companySettings.nextProformaNumber : companySettings.nextInvoiceNumber;
+    const invoiceNumber = docType === 'zalohova' ? `ZF${year}${String(seq).padStart(4, '0')}` : `${companySettings.invoiceNumberPrefix || year}${String(seq).padStart(4, '0')}`;
+    const totals = spoluNacrtu(akt.items);
+    const now = new Date();
+    const linkedOrder = akt.orderId ? orders.find(o => o.id === akt.orderId) : null;
+    const created = {
+      id: `inv-${Date.now()}`, invoiceNumber, orderId: akt.orderId || null,
+      customerName: akt.customerName.trim(), customerAddress: akt.customerAddress.trim(), customerIco: akt.customerIco.trim(), customerDic: akt.customerDic.trim(), customerIcDph: akt.customerIcDph.trim(), customerType: akt.customerType,
+      issueDate: now.toISOString().slice(0, 10), deliveryDate: now.toISOString().slice(0, 10), dueDate: akt.dueDate,
+      variableSymbol: docType === 'zalohova' ? `9${String(year).slice(2)}${String(seq).padStart(4, '0')}` : (linkedOrder?.variableSymbol || invoiceNumber.replace(/\D/g, '').slice(-10)),
+      docType, language: akt.language, advancePaid: 0,
+      items: akt.items.map(it => ({ description: it.description, qty: parseFloat(it.qty), unitPrice: parseFloat(it.unitPrice) || 0, vatRate: parseFloat(it.vatRate) || 0 })),
+      ...totals, status: 'issued', notes: akt.notes.trim(), createdBy: menoPrihlaseneho(), corrections: []
+    };
+    const { error } = await supabase.from('invoices').insert(mapInvoiceToDb(created));
+    if (error) { triggerNotification('error', error.message); return; }
+    await supabase.from('company_settings').update(docType === 'zalohova' ? { next_proforma_number: seq + 1 } : { next_invoice_number: seq + 1 }).eq('id', 1);
+    if (docType !== 'zalohova') {
+      await supabase.from('journal_entries').insert({
+        id: `j-${Date.now()}`, entry_date: created.issueDate, description: `Vystavená faktúra ${invoiceNumber} — ${created.customerName}`,
+        md_account: '311 - Odberatelia', dal_account: '601 - Tržby z predaja', amount: created.total, invoice_id: created.id
+      });
+      if (akt.orderId) await supabase.from('orders').update({ accounting_status: 'invoiced' }).eq('id', akt.orderId);
+    }
+    try { await ulozNacrtDoDb({ ...akt, status: 'vystavene', invoiceId: created.id }); } catch { /* doklad je vystavený, stav náčrtu sa dorovná */ }
+    setOtvorenyNacrtId('');
+    setActiveTab('invoices');
+    setSelectedInvoiceForDetail(created);
+    setAutoOtvorEmailId(created.id);
+    triggerNotification('success', `${TYPY_DOKLADOV[docType].kratky} č. ${invoiceNumber} bola vystavená. Skontroluj e-mail a klikni na Odoslať.`);
+  };
+
+  // predávajúci faktúry = predávajúci jej zákazky (podpíše e-mail, dostane kópiu, zákazník mu odpovie); ak ho zákazka nemá, použije sa prihlásený používateľ
+  const predavajuciPreFakturu = (inv) => {
+    const o = inv?.orderId ? orders.find(x => x.id === inv.orderId) : null;
+    const emp = (o?.sellerId && employees.find(x => x.id === o.sellerId)) || (o?.sellerId ? null : currentUser);
+    return emp ? { meno: `${emp.firstName} ${emp.lastName}`, email: emp.email || '' } : null;
   };
 
   // --- DOBROPIS k faktúre (čiastočný alebo úplný): položky so zápornými množstvami, vlastný číselný rad DB… ---
@@ -5156,7 +5319,9 @@ export default function App() {
     const nextNum = counterData?.next_number || 1;
     const orderNumber = `${newOrderCompany}-${shortYear}-${String(nextNum).padStart(4, '0')}`;
 
-    const created = { id: orderId, customer: newOrderCustomer, createdAt: now, deliveryDate: newOrderDeliveryDate, driveLink: orderDriveLink, notes: orderNotes, paymentType: newOrderPaymentType, items: itemsWithMeta, orderLog: [], legacyOrderNumber: newOrderLegacyNumber.trim(), companyBrand: newOrderCompany, orderNumber, variableSymbol: generateVariableSymbol(orderId), accountingStatus: newOrderPaymentType === 'faktura' ? 'pending_review' : null };
+    const predavajuci = employees.find(e => e.id === (newOrderSellerId || currentUser.id)) || currentUser;
+    const created = { id: orderId, customer: newOrderCustomer, createdAt: now, deliveryDate: newOrderDeliveryDate, driveLink: orderDriveLink, notes: orderNotes, paymentType: newOrderPaymentType, items: itemsWithMeta, orderLog: [], legacyOrderNumber: newOrderLegacyNumber.trim(), companyBrand: newOrderCompany, orderNumber, variableSymbol: generateVariableSymbol(orderId), accountingStatus: newOrderPaymentType === 'faktura' ? 'pending_review' : null,
+      sellerId: predavajuci.id, sellerName: `${predavajuci.firstName} ${predavajuci.lastName}`, invoicePlan: newOrderPaymentType === 'faktura' ? newOrderInvoicePlan : '' };
     const { error } = await supabase.from('orders').insert(mapOrderToDb(created));
     if (error) { triggerNotification('error', `Chyba: ${error.message}`); return; }
     await supabase.from('order_number_counters').upsert({ company: newOrderCompany, year: fullYear, next_number: nextNum + 1 }, { onConflict: 'company,year' });
@@ -5174,11 +5339,22 @@ export default function App() {
     }
     setSelectedOrderDetails(created);
     setActiveTab('planner');
+    // Fakturácia: hneď sa pripraví náčrt faktúry / zálohovej faktúry a otvorí sa okno na doplnenie fakturačných údajov a cien
+    if (created.paymentType === 'faktura') {
+      try {
+        const nacrt = await vytvorNacrtZoZakazky(created, newOrderInvoicePlan);
+        setOtvorenyNacrtId(nacrt.id);
+      } catch (e) {
+        triggerNotification('error', `Zákazka je vytvorená, ale náčrt faktúry sa nepodarilo pripraviť: ${e.message}. Faktúru vystavíš ručne vo Financie → Fronta pre účtovníka.`);
+      }
+    }
     setNewOrderCustomer('');
     setOrderNotes('');
     setOrderDriveLink('https://drive.google.com/');
     setNewOrderLegacyNumber('');
     setNewOrderPaymentType('faktura');
+    setNewOrderInvoicePlan('faktura');
+    setNewOrderSellerId('');
     setNewOrderCompany('');
     setPendingItems([]);
     triggerNotification('success', `Zákazka ${orderNumber} bola zaradená do výroby (${itemsWithMeta.length} položiek) a materiál bol odpočítaný zo skladu.`);
@@ -6890,7 +7066,7 @@ export default function App() {
                 <button onClick={() => setActiveTab('manual')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'manual' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><BookOpen className="h-3.5 w-3.5" /> Manuál</button>
               )}
             </nav>
-            {currentUser.role === 'master' && <NotifikacieZvonec supabase={supabase} onOtvor={otvorZNotifikacie} />}
+            {['master', 'supervisor', 'sales', 'uctovnik'].includes(currentUser.role) && <NotifikacieZvonec supabase={supabase} onOtvor={otvorZNotifikacie} rola={currentUser.role} mojeId={currentUser.id} />}
             </div>
           </div>
         </div>
@@ -7631,10 +7807,20 @@ export default function App() {
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-400 mb-1">Spôsob platby</label>
-                      <div className="grid grid-cols-2 gap-1">
-                        <button type="button" onClick={() => setNewOrderPaymentType('faktura')} className={`py-2 text-center text-xs font-bold rounded transition-colors ${newOrderPaymentType === 'faktura' ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-white'}`}>Faktúra</button>
+                      <div className="grid grid-cols-3 gap-1">
+                        <button type="button" onClick={() => { setNewOrderPaymentType('faktura'); setNewOrderInvoicePlan('faktura'); }} className={`py-2 text-center text-xs font-bold rounded transition-colors ${newOrderPaymentType === 'faktura' && newOrderInvoicePlan === 'faktura' ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-white'}`}>Faktúra</button>
+                        <button type="button" onClick={() => { setNewOrderPaymentType('faktura'); setNewOrderInvoicePlan('zalohova'); }} className={`py-2 text-center text-xs font-bold rounded transition-colors ${newOrderPaymentType === 'faktura' && newOrderInvoicePlan === 'zalohova' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-white'}`}>Zálohová (proforma)</button>
                         <button type="button" onClick={() => setNewOrderPaymentType('hotovost')} className={`py-2 text-center text-xs font-bold rounded transition-colors flex items-center justify-center gap-1.5 ${newOrderPaymentType === 'hotovost' ? 'bg-rose-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-white'}`}><Banknote className="h-3.5 w-3.5" /> Hotovosť ($)</button>
                       </div>
+                      {newOrderPaymentType === 'faktura' && (
+                        <div className="mt-2 space-y-1.5 bg-slate-900/60 border border-slate-800 rounded-lg p-2.5">
+                          <p className="text-[10px] text-sky-300">Po zaradení zákazky sa hneď otvorí náčrt {newOrderInvoicePlan === 'zalohova' ? 'zálohovej faktúry' : 'faktúry'} na doplnenie fakturačných údajov. Odsúhlasí ho predávajúci aj financie a potom sa pošle zákazníkovi.</p>
+                          <label className="block text-[10px] font-semibold text-slate-400">Predávajúci (jeho e-mail dostane kópiu faktúry)</label>
+                          <select value={newOrderSellerId || currentUser.id} onChange={(e) => setNewOrderSellerId(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white">
+                            {employees.filter(e => ['master', 'supervisor', 'sales', 'manazer'].includes(e.role) || e.id === currentUser.id).map(e => <option key={e.id} value={e.id}>{e.firstName} {e.lastName}{e.email ? '' : ' (bez e-mailu)'}</option>)}
+                          </select>
+                        </div>
+                      )}
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-400 mb-1">Staré číslo zákazky (voliteľné, ak je to opakovanie)</label>
@@ -11241,6 +11427,7 @@ export default function App() {
                 const paymentsAwaitingInvoice = bankTransactions.filter(tx => tx.matched && tx.orderId && !invoicesTax.some(inv => inv.orderId === tx.orderId));
                 return (
                 <div className="space-y-3">
+                  <NacrtyFronta nacrty={nacrty} orders={orders} onOtvor={setOtvorenyNacrtId} />
                   {paymentsAwaitingInvoice.length > 0 && (
                     <div className="space-y-2 mb-4">
                       <h3 className="text-sm font-bold text-amber-300 flex items-center gap-1.5"><AlertTriangle className="h-4 w-4" /> Platby prijaté pred vystavením faktúry ({paymentsAwaitingInvoice.length})</h3>
@@ -12173,6 +12360,21 @@ export default function App() {
           );
         })()}
 
+        {otvorenyNacrtId && (() => {
+          const nacrt = nacrty.find(x => x.id === otvorenyNacrtId);
+          if (!nacrt) return null;
+          return (
+            <NacrtModal
+              key={nacrt.id} nacrt={nacrt} order={orders.find(x => x.id === nacrt.orderId)} employees={employees}
+              jePredavajuci={currentUser.role === 'master' || currentUser.id === nacrt.sellerId}
+              jeFinancie={['master', 'uctovnik'].includes(currentUser.role)}
+              mozeVystavit={hasPermission('create_order')}
+              onUloz={ulozNacrt} onSchvalPredavajuci={schvalNacrtPredavajuci} onSchvalFinancie={schvalNacrtFinancie}
+              onVystav={vystavZNacrtu} onZrus={zrusNacrt} onClose={() => setOtvorenyNacrtId('')}
+            />
+          );
+        })()}
+
         {showAddVehicleForm && (
           <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
             <form onSubmit={handleAddVehicle} className="bg-slate-900 border border-slate-700 p-6 rounded-2xl w-full max-w-sm shadow-2xl space-y-3">
@@ -12595,7 +12797,7 @@ export default function App() {
                     <button onClick={() => stiahniEFakturu(selectedInvoiceForDetail, companySettings, (m) => triggerNotification('error', m))} className="bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Download className="h-4 w-4" /> e-faktúra (XML)</button>
                   )}
                   <button onClick={() => printWithFilename(selectedInvoiceForDetail.invoiceNumber)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"><Printer className="h-4 w-4" /> Tlačiť / PDF</button>
-                  <FakturaEmail supabase={supabase} faktura={selectedInvoiceForDetail} zakaznici={customers} firma={companySettings} idDokumentu="faktura-dokument" triggerNotification={triggerNotification} />
+                  <FakturaEmail supabase={supabase} faktura={selectedInvoiceForDetail} zakaznici={customers} firma={companySettings} idDokumentu="faktura-dokument" triggerNotification={triggerNotification} predavajuci={predavajuciPreFakturu(selectedInvoiceForDetail)} autoOtvor={autoOtvorEmailId} />
                 </div>
                 <button onClick={() => setSelectedInvoiceForDetail(null)} className="p-1 rounded bg-slate-200 text-slate-600 hover:text-slate-900"><X className="h-5 w-5" /></button>
               </div>
