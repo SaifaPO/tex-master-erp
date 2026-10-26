@@ -267,7 +267,7 @@ function buildEmailHtml(form, company, attachedDocuments = []) {
     <td>
       <table border="0" cellspacing="0" cellpadding="0"><tr>
         ${logoHtml ? `<td valign="middle" style="padding-right:12px;">${logoHtml}</td>` : ''}
-        ${company.zobrazitNazovPriLogu !== false ? `<td valign="middle"><div style="color:#ffffff;font-size:20px;font-weight:800;font-family:${headingFontCfg.family};letter-spacing:0.3px;">${escapeHtml(companyName)}</div></td>` : ''}
+        ${!logoHtml ? `<td valign="middle"><div style="color:#ffffff;font-size:20px;font-weight:800;font-family:${headingFontCfg.family};letter-spacing:0.3px;">${escapeHtml(companyName)}</div></td>` : ''}
       </tr></table>
     </td>
     <td align="right" valign="middle">
@@ -1148,11 +1148,7 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
                   </div>
                 </div>
                 <div><label className={labelCls}>Názov firmy</label><input type="text" defaultValue={c.name} onBlur={(e) => updateCompanyField(c.id, 'name', e.target.value)} className={inputCls} /></div>
-                <label className="flex items-center gap-2 text-xs text-slate-300">
-                  <input type="checkbox" checked={c.zobrazitNazovPriLogu !== false} onChange={(e) => updateCompanyField(c.id, 'zobrazitNazovPriLogu', e.target.checked)} className="rounded bg-slate-950 border-slate-700" />
-                  Zobraziť názov firmy vedľa loga v hlavičke
-                </label>
-                <p className="text-[9px] text-slate-600 -mt-1.5">Vypni, ak logo už obsahuje názov firmy napevno (napr. ATAK) — plný právny názov sa aj tak vždy zobrazí v pätičke ponuky.</p>
+                <p className="text-[9px] text-slate-600 -mt-1.5">V hlavičke ponuky sa zobrazuje len logo (názov firmy sa zobrazí, len ak logo nie je nahrané). Plný právny názov je vždy v pätičke ponuky.</p>
                 <div>
                   <label className={labelCls}>Font názvu firmy v ponuke</label>
                   <select defaultValue={c.headingFont || 'default'} onChange={(e) => updateCompanyField(c.id, 'headingFont', e.target.value)} className={inputCls}>

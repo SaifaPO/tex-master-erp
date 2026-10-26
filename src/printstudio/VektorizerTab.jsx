@@ -1,19 +1,19 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { Upload, Download, RefreshCw, Eye, EyeOff, Wand2, ZoomIn, ZoomOut, Maximize } from 'lucide-react';
-import ImageTracer from 'imagetracerjs';
+import { trasuj, zostavSvgZTd } from './vektorTrace.js';
 import { setPngDpi } from './dtfSeparator/lib/pngDpi.js';
 
-// Vektorizér obrázkov: rastrový obrázok (PNG/JPG) -> SVG krivky po farbách. Beží celý v prehliadači (knižnica imagetracerjs),
+// Vektorizér obrázkov: rastrový obrázok (PNG/JPG) -> SVG krivky po farbách. Beží celý v prehliadači (vlastný trasovač vektorTrace.js),
 // súbor nikam neodchádza a nie je limit počtu obrázkov. Vhodné na logá, ploché grafiky, siluety, podklady pre rezané fólie,
 // výšivku a laser. Fotky a veľmi jemné detaily vyjdú horšie než pri AI vektorizácii (to by bolo platené API).
 const MIN_LONG_SIDE = 900;   // malé obrázky sa pred trasovaním zväčšia (hladšie krivky)
 const MAX_LONG_SIDE = 1600;  // veľké sa zmenšia (rýchlosť)
 
 const PRESETY = [
-  { id: 'logo', label: 'Logo / ploché farby', auto: true, colors: 8, ltres: 1, qtres: 1, pathomit: 8, blur: 0, popis: 'Čisté logá, nápisy, ploché ilustrácie.' },
-  { id: 'silueta', label: 'Silueta (1–2 farby)', colors: 2, ltres: 1, qtres: 1, pathomit: 16, blur: 1, popis: 'Čiernobiele logá, podklady na rezanie fólie a laser.' },
-  { id: 'detail', label: 'Detailná kresba', colors: 16, ltres: 0.5, qtres: 0.5, pathomit: 2, blur: 0, popis: 'Viac farieb a jemnejšie krivky, väčší SVG súbor.' },
-  { id: 'foto', label: 'Fotka (veľa farieb)', colors: 32, ltres: 0.5, qtres: 0.5, pathomit: 4, blur: 0, popis: 'Efekt „vektorovej maľby“. Výsledok je veľký a nie vždy čistý.' }
+  { id: 'logo', label: 'Logo / ploché farby', auto: true, colors: 8, vyhladenie: 1, tolerancia: 0.6, pathomit: 8, rohy: true, popis: 'Čisté logá, nápisy, ploché ilustrácie. Rovné hrany ostanú rovné, rohy ostré.' },
+  { id: 'silueta', label: 'Silueta (1–2 farby)', colors: 2, vyhladenie: 1.4, tolerancia: 0.7, pathomit: 16, rohy: true, popis: 'Čiernobiele logá, podklady na rezanie fólie a laser.' },
+  { id: 'detail', label: 'Detailná kresba', colors: 16, vyhladenie: 0.7, tolerancia: 0.4, pathomit: 2, rohy: true, popis: 'Viac farieb a jemnejšie krivky, väčší SVG súbor.' },
+  { id: 'foto', label: 'Fotka (veľa farieb)', colors: 32, vyhladenie: 0.8, tolerancia: 0.5, pathomit: 4, rohy: false, popis: 'Efekt „vektorovej maľby“. Výsledok je veľký a nie vždy čistý.' }
 ];
 
 const farbaCss = (c) => `rgba(${c.r},${c.g},${c.b},${(c.a ?? 255) / 255})`;
@@ -214,10 +214,10 @@ export default function VektorizerTab() {
   const [autoFarby, setAutoFarby] = useState(true);   // počet farieb sa nájde automaticky (odlišné farby loga)
   const [najdeneFarby, setNajdeneFarby] = useState(0);
   const [zoom, setZoom] = useState({ z: 1, x: 0, y: 0 });  // spoločný zoom a posun oboch náhľadov
-  const [ltres, setLtres] = useState(1);
-  const [qtres, setQtres] = useState(1);
+  const [vyhladenie, setVyhladenie] = useState(1);   // rozmazanie masky farby (px) – odstráni „schody“ po pixeloch
+  const [tolerancia, setTolerancia] = useState(0.6);  // max. odchýlka krivky od obrysu (px)
+  const [ostreRohy, setOstreRohy] = useState(true);
   const [pathomit, setPathomit] = useState(8);
-  const [blur, setBlur] = useState(0);
   const [odstranitPozadie, setOdstranitPozadie] = useState(true);
   const [vysledok, setVysledok] = useState(null); // { td, imgd, w, h }
   const [skryte, setSkryte] = useState(new Set());
@@ -233,7 +233,7 @@ export default function VektorizerTab() {
   const pouziPreset = (id) => {
     const p = PRESETY.find(x => x.id === id);
     if (!p) return;
-    setPreset(id); setAutoFarby(!!p.auto); setColors(p.colors); setLtres(p.ltres); setQtres(p.qtres); setPathomit(p.pathomit); setBlur(p.blur);
+    setPreset(id); setAutoFarby(!!p.auto); setColors(p.colors); setVyhladenie(p.vyhladenie); setTolerancia(p.tolerancia); setPathomit(p.pathomit); setOstreRohy(p.rohy);
   };
 
   const nacitajSubor = (file) => {
@@ -268,9 +268,8 @@ export default function VektorizerTab() {
         const ap = autoFarby ? automatickaPaleta(imgd) : null;
         const pal = ap ? ap.pal : vypocitajPaletu(imgd, colors);
         setNajdeneFarby(ap ? ap.pocet : 0);
-        const options = { pal, numberofcolors: pal.length, colorquantcycles: 1, ltres, qtres, pathomit, blurradius: blur, blurdelta: 20, colorsampling: 2, strokewidth: 0, roundcoords: 1, layering: 0, viewbox: true };
-        const td = ImageTracer.imagedataToTracedata(imgd, options);
-        setVysledok({ td, imgd, options, w: canvas.width, h: canvas.height });
+        const td = trasuj(imgd, pal, { vyhladenie, tolerancia, pathomit, ostreRohy });
+        setVysledok({ td, imgd, w: canvas.width, h: canvas.height });
         setSkryte(predvoleneSkryte(td, imgd, odstranitPozadie));
         setChyba('');
       } catch (e) {
@@ -279,15 +278,14 @@ export default function VektorizerTab() {
       setPocita(false);
     }, 350);
     return () => clearTimeout(t);
-  }, [img, colors, autoFarby, ltres, qtres, pathomit, blur, odstranitPozadie]);
+  }, [img, colors, autoFarby, vyhladenie, tolerancia, pathomit, ostreRohy, odstranitPozadie]);
 
   const poctyTvarov = useMemo(() => (vysledok ? vysledok.td.layers.map(l => l.filter(p => !p.isholepath).length) : []), [vysledok]);
 
   // SVG z tracedata: viditelne len vybrane farby (viditelna(i) === true)
-  const zostavSvg = (viditelna, sirkaCmExport) => {
+  const zostavSvg = (viditelna, sirkaCmExport, obrys = 0) => {
     if (!vysledok) return '';
-    const kopia = { ...vysledok.td, layers: vysledok.td.layers.map((l, i) => (viditelna(i) ? l : [])) };
-    let svg = ImageTracer.getsvgstring(kopia, { ...vysledok.options, viewbox: true, scale: 1 });
+    let svg = zostavSvgZTd(vysledok.td, viditelna, { obrys });
     if (sirkaCmExport > 0) {
       const vyska = (sirkaCmExport * vysledok.h) / vysledok.w;
       svg = svg.replace('<svg ', `<svg width="${sirkaCmExport.toFixed(2)}cm" height="${vyska.toFixed(2)}cm" `);
@@ -295,7 +293,9 @@ export default function VektorizerTab() {
     return svg;
   };
 
-  const svgVsetky = useMemo(() => zostavSvg(i => !skryte.has(i), 0), [vysledok, skryte]); // eslint-disable-line react-hooks/exhaustive-deps
+  const svgCisty = useMemo(() => zostavSvg(i => !skryte.has(i), 0), [vysledok, skryte]); // eslint-disable-line react-hooks/exhaustive-deps
+  // náhľad a PNG: jemný okraj v rovnakej farbe zakryje škáry medzi susednými farbami
+  const svgVsetky = useMemo(() => zostavSvg(i => !skryte.has(i), 0, 0.5), [vysledok, skryte]); // eslint-disable-line react-hooks/exhaustive-deps
   const svgUrl = useMemo(() => (svgVsetky ? 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgVsetky) : ''), [svgVsetky]);
   const zaklad = (fileName || 'vektor').replace(/\.[^.]+$/, '');
 
@@ -326,7 +326,7 @@ export default function VektorizerTab() {
   };
   const prepniFarbu = (i) => setSkryte(prev => { const n = new Set(prev); if (n.has(i)) n.delete(i); else n.add(i); return n; });
 
-  const velkostKb = svgVsetky ? Math.round(svgVsetky.length / 1024) : 0;
+  const velkostKb = svgCisty ? Math.max(1, Math.round(svgCisty.length / 1024)) : 0;
 
   return (
     <div className="space-y-6 text-slate-100">
@@ -414,19 +414,18 @@ export default function VektorizerTab() {
             <p className="text-[9px] text-slate-600">Vyššie číslo = čistejší výsledok, ale zmiznú malé detaily.</p>
           </div>
           <div>
-            <label className="text-xs text-slate-400 flex justify-between mb-1"><span>Vyhladenie hrán (rozostrenie pred trasovaním)</span><span className="text-white font-mono">{blur}</span></label>
-            <input type="range" min="0" max="5" step="1" value={blur} onChange={(e) => setBlur(Number(e.target.value))} className="w-full" />
+            <label className="text-xs text-slate-400 flex justify-between mb-1"><span>Vyhladenie hrán</span><span className="text-white font-mono">{vyhladenie.toFixed(1)}</span></label>
+            <input type="range" min="0.6" max="4" step="0.1" value={vyhladenie} onChange={(e) => setVyhladenie(Number(e.target.value))} className="w-full" />
+            <p className="text-[9px] text-slate-600">Vyššie číslo = hladšie a „pokojnejšie“ krivky (odstráni zúbky z nekvalitného obrázka), ale jemné detaily a rohy sa viac zaoblia.</p>
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs text-slate-400 flex justify-between mb-1"><span>Presnosť čiar</span><span className="text-white font-mono">{ltres}</span></label>
-              <input type="range" min="0.1" max="4" step="0.1" value={ltres} onChange={(e) => setLtres(Number(e.target.value))} className="w-full" />
-            </div>
-            <div>
-              <label className="text-xs text-slate-400 flex justify-between mb-1"><span>Presnosť kriviek</span><span className="text-white font-mono">{qtres}</span></label>
-              <input type="range" min="0.1" max="4" step="0.1" value={qtres} onChange={(e) => setQtres(Number(e.target.value))} className="w-full" />
-            </div>
+          <div>
+            <label className="text-xs text-slate-400 flex justify-between mb-1"><span>Presnosť kriviek (px)</span><span className="text-white font-mono">{tolerancia.toFixed(1)}</span></label>
+            <input type="range" min="0.2" max="3" step="0.1" value={tolerancia} onChange={(e) => setTolerancia(Number(e.target.value))} className="w-full" />
+            <p className="text-[9px] text-slate-600">Nižšie číslo = presnejšie sleduje obrys (viac bodov), vyššie = menej bodov a jednoduchšie krivky.</p>
           </div>
+          <label className="flex items-center gap-2 text-xs text-slate-300 font-bold cursor-pointer">
+            <input type="checkbox" checked={ostreRohy} onChange={(e) => setOstreRohy(e.target.checked)} className="accent-indigo-600" /> Zachovať ostré rohy a rovné hrany
+          </label>
           <label className="flex items-center gap-2 text-xs text-slate-300 font-bold cursor-pointer">
             <input type="checkbox" checked={odstranitPozadie} onChange={(e) => setOdstranitPozadie(e.target.checked)} className="accent-indigo-600" /> Automaticky skryť farbu pozadia
           </label>

@@ -111,22 +111,29 @@ export default function VysivkaModul({ supabase, zakazka = null, onUlozene, vysk
 
   useEffect(() => { nacitajHistoriu(); }, [nacitajHistoriu]);
 
-  // vyska="auto": editor vyplní presne zvyšok okna a stránka okolo sa nescrolluje (žiadny vonkajší posuvník, scrolluje sa len v editore)
+  // vyska="auto": editor sa roztiahne na výšku svojho obsahu (bočné panely), takže nemá vlastný posuvník
+  // a celé okno stránky sa dá normálne scrollovať nadol.
   useEffect(() => {
     if (vyska !== 'auto') return undefined;
-    const prev = document.documentElement.style.overflow;
-    document.documentElement.style.overflow = 'hidden';
-    window.scrollTo(0, 0);
+    const panelObsah = el => {
+      if (!el) return 0;
+      let max = 0;
+      Array.from(el.children).forEach(c => { max = Math.max(max, c.offsetTop + c.offsetHeight); });
+      return max + 16;
+    };
     const prepocitaj = () => {
-      const r = frameRef.current?.getBoundingClientRect();
-      if (!r) return;
-      setAutoVyska(Math.max(420, Math.floor(window.innerHeight - (r.top + window.scrollY) - 56)));
+      try {
+        const d = frameRef.current?.contentDocument;
+        if (!d || !d.body) return;
+        const hlavicka = d.querySelector('header.top')?.offsetHeight || 0;
+        const potreba = hlavicka + Math.max(panelObsah(d.querySelector('.panel.left')), panelObsah(d.querySelector('.panel.right')), 640);
+        setAutoVyska(h => (Math.abs(h - potreba) > 4 ? potreba : h));
+      } catch { /* iframe ešte nie je načítaný */ }
     };
     prepocitaj();
-    const t = setTimeout(prepocitaj, 400);
-    window.addEventListener('resize', prepocitaj);
-    return () => { clearTimeout(t); window.removeEventListener('resize', prepocitaj); document.documentElement.style.overflow = prev; };
-  }, [vyska, historia.length, stav]);
+    const t = setInterval(prepocitaj, 400);
+    return () => clearInterval(t);
+  }, [vyska]);
 
   useEffect(() => {
     const onMsg = async e => {
