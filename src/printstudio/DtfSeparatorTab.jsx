@@ -5,6 +5,7 @@ import { generateLpiTestSheet } from './dtfSeparator/lib/testSheet.js';
 import { renderSeparation, DEFAULT_CHANNEL_ANGLES, CHANNEL_LABELS } from './dtfSeparator/lib/separation.js';
 import { renderDtgFullColor } from './dtfSeparator/lib/dtgFullColor.js';
 import { renderColorPop, COLORPOP_PALETTES } from './dtfSeparator/lib/colorpop.js';
+import { renderAutoDtf } from './dtfSeparator/lib/autoDtf.js';
 import { setPngDpi } from './dtfSeparator/lib/pngDpi.js';
 
 // Predtym samostatna appka (dtf-separator/) s vlastnym Vercel deployom a provizornym zdielanym
@@ -54,7 +55,13 @@ export default function DtfSeparatorTab() {
   const magnifierCanvasRef = useRef(null);
   const MAGNIFIER_SIZE = 190; // px okienka lupy
 
-  const [mode, setMode] = useState('spot'); // 'spot' | 'cmyk' | 'dtg'
+  const [mode, setMode] = useState('auto'); // 'auto' | 'spot' | 'cmyk' | 'dtg' | 'colorpop'
+  // Auto príprava na DTF: odstráni pozadie, plné plochy nechá plné, mäkké prechody (žiara, tieň) prevedie na halftone
+  const [autoBackground, setAutoBackground] = useState(true);
+  const [autoFeather, setAutoFeather] = useState(70);
+  const [autoSolid, setAutoSolid] = useState(0.97);
+  const [autoDescreen, setAutoDescreen] = useState(false);
+  const [autoResult, setAutoResult] = useState(null); // rezim 'auto' — { composite, white, stats }
   const [lpi, setLpi] = useState(35);
   const [angleDeg, setAngleDeg] = useState(22.5);
   const [dotShape, setDotShape] = useState('circle');
@@ -168,7 +175,13 @@ export default function DtfSeparatorTab() {
     setIsRendering(true);
     const t = setTimeout(() => {
       const scaledOutputDpi = Math.max(20, Math.round(outputDpi * (workingPreviewCanvas._scale || 1)));
-      if (mode === 'cmyk') {
+      if (mode === 'auto') {
+        setAutoResult(renderAutoDtf(workingPreviewCanvas, {
+          lpi, angleDeg, dotShape, algorithm, outputDpi: scaledOutputDpi,
+          autoBackground, tolerance: bgTolerance, feather: autoFeather, solidThreshold: autoSolid, descreen: autoDescreen,
+          whiteBase: { enabled: whiteBaseEnabled, chokePx, threshold: whiteThreshold }
+        }));
+      } else if (mode === 'cmyk') {
         const result = renderSeparation(workingPreviewCanvas, {
           lpi, outputDpi: scaledOutputDpi, dotShape, algorithm, blackPoint, whitePoint, channelAngles,
           whiteBase: { enabled: whiteBaseEnabled, chokePx, threshold: whiteThreshold, previewBackground: previewBg }
@@ -197,12 +210,14 @@ export default function DtfSeparatorTab() {
     }, 180);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workingPreviewCanvas, mode, lpi, angleDeg, dotShape, algorithm, inkColor, outputDpi, blackPoint, whitePoint, invert, channelAngles, whiteBaseEnabled, chokePx, whiteThreshold, previewBg, bgRemovalEnabled, bgTolerance, bgFeather, cpColors, cpKnockout, cpSpreadAngles]);
+  }, [workingPreviewCanvas, mode, lpi, angleDeg, dotShape, algorithm, inkColor, outputDpi, blackPoint, whitePoint, invert, channelAngles, whiteBaseEnabled, chokePx, whiteThreshold, previewBg, bgRemovalEnabled, bgTolerance, bgFeather, cpColors, cpKnockout, cpSpreadAngles, autoBackground, autoFeather, autoSolid, autoDescreen]);
 
   // "Po" vrstva zavisi od rezimu — pre spot je to jediny vysledok, pre cmyk/dtg podla toho, ktory
   // kanal/nahlad je prave zvoleny. "Pred" je vzdy workingPreviewCanvas (povodny obrazok).
-  const garmentMode = mode === 'cmyk' || mode === 'dtg' || mode === 'colorpop'; // rezimy s nahladom na farbe textilie
-  const afterLayer = mode === 'colorpop'
+  const garmentMode = mode === 'cmyk' || mode === 'dtg' || mode === 'colorpop' || mode === 'auto'; // rezimy s nahladom na farbe textilie
+  const afterLayer = mode === 'auto'
+    ? (autoResult && (dtgView === 'white' ? autoResult.white : autoResult.composite))
+    : mode === 'colorpop'
     ? (cpResult && (dtgView === 'white' ? cpResult.white : cpResult.composite))
     : mode === 'cmyk'
     ? (separationResult && (channelView === 'composite' ? separationResult.composite : channelView === 'white' ? separationResult.white : separationResult.channels[channelView]))
@@ -305,6 +320,14 @@ export default function DtfSeparatorTab() {
           downloadCanvas(full.channels.y, 'Y', outputDpi);
           downloadCanvas(full.channels.k, 'K', outputDpi);
           if (full.white) downloadCanvas(full.white, 'White-underbase', outputDpi);
+        } else if (mode === 'auto') {
+          const full = renderAutoDtf(workingCanvas, {
+            lpi, angleDeg, dotShape, algorithm, outputDpi,
+            autoBackground, tolerance: bgTolerance, feather: autoFeather, solidThreshold: autoSolid, descreen: autoDescreen,
+            whiteBase: { enabled: whiteBaseEnabled, chokePx, threshold: whiteThreshold }
+          });
+          downloadCanvas(full.composite, `auto_dtf_${lpi}lpi`, outputDpi);
+          if (full.white) downloadCanvas(full.white, 'White-underbase', outputDpi);
         } else if (mode === 'colorpop') {
           const full = renderColorPop(workingCanvas, {
             palette: cpColors, knockout: cpKnockout, spreadAngles: cpSpreadAngles,
@@ -365,8 +388,8 @@ export default function DtfSeparatorTab() {
           ) : (
             <>
               <div className="flex flex-wrap items-center gap-2 bg-slate-900 border border-slate-800 rounded-xl p-2">
-                {(mode === 'dtg' || mode === 'colorpop') ? (
-                  (mode === 'colorpop' ? ['composite', 'white'] : DTG_VIEWS).map(v => (
+                {(mode === 'dtg' || mode === 'colorpop' || mode === 'auto') ? (
+                  ((mode === 'colorpop' || mode === 'auto') ? ['composite', 'white'] : DTG_VIEWS).map(v => (
                     <button key={v} onClick={() => setDtgView(v)} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${dtgView === v ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}>
                       {DTG_VIEW_LABELS[v]}
                     </button>
@@ -448,12 +471,50 @@ export default function DtfSeparatorTab() {
           <div>
             <label className="text-xs text-slate-400 block mb-1">Režim separácie</label>
             <div className="grid grid-cols-1 gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
+              <button onClick={() => setMode('auto')} className={`py-1.5 rounded text-xs font-bold ${mode === 'auto' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>✨ Auto príprava na DTF (pozadie + prechody → halftone)</button>
               <button onClick={() => setMode('spot')} className={`py-1.5 rounded text-xs font-bold ${mode === 'spot' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Spot color (1 farba) — sieťotlač</button>
               <button onClick={() => setMode('cmyk')} className={`py-1.5 rounded text-xs font-bold ${mode === 'cmyk' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>CMYK proces (4 farby) — sieťotlač</button>
               <button onClick={() => setMode('dtg')} className={`py-1.5 rounded text-xs font-bold ${mode === 'dtg' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>DTF/DTG plnofarebné (raster efekt)</button>
               <button onClick={() => setMode('colorpop')} className={`py-1.5 rounded text-xs font-bold ${mode === 'colorpop' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>ColorPop — viacfarebný raster (DTF/DTG/sieťotlač)</button>
             </div>
           </div>
+
+          {mode === 'auto' && (
+            <div className="space-y-3 border border-indigo-900/50 bg-indigo-950/10 rounded-lg p-2.5">
+              <p className="text-[11px] text-slate-300 leading-relaxed">Jedno kliknutie: nahraj obrázok a ostatné sa spraví samo. <b>Pozadie</b> sa odstráni, <b>plné farebné plochy</b> ostanú plné a <b>mäkké prechody</b> (žiara, tieň, vyblednutie do stratena, rozmazané okraje) sa zmenia na <b>halftone bodky</b> — DTF tlačí polopriehľadné pixely zle, bodky tlačí čisto.</p>
+              <label className="flex items-center gap-2 text-xs text-slate-300 font-bold cursor-pointer">
+                <input type="checkbox" checked={autoBackground} onChange={(e) => setAutoBackground(e.target.checked)} className="accent-indigo-600" /> Odstrániť pozadie automaticky
+              </label>
+              <p className="text-[9px] text-slate-600 -mt-2">Ak je obrázok už priehľadný (PNG), použije sa jeho priehľadnosť. Inak sa farba pozadia odhadne z rohov.</p>
+              {autoBackground && (
+                <>
+                  <div>
+                    <label className="text-xs text-slate-400 flex justify-between mb-1"><span>Tolerancia pozadia</span><span className="text-white font-mono">{bgTolerance}</span></label>
+                    <input type="range" min="5" max="150" value={bgTolerance} onChange={(e) => setBgTolerance(Number(e.target.value))} className="w-full" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 flex justify-between mb-1"><span>Šírka žiary / mäkkého prechodu</span><span className="text-white font-mono">{autoFeather}</span></label>
+                    <input type="range" min="0" max="200" value={autoFeather} onChange={(e) => setAutoFeather(Number(e.target.value))} className="w-full" />
+                    <p className="text-[9px] text-slate-600 mt-0.5">Čím viac, tým pozvoľnejšie vybledne obrázok smerom k pozadiu (žiara okolo motívu) — a práve to sa prevedie na bodky. 0 = ostrý okraj.</p>
+                  </div>
+                </>
+              )}
+              <div>
+                <label className="text-xs text-slate-400 flex justify-between mb-1"><span>Od akej krytosti je farba „plná“</span><span className="text-white font-mono">{Math.round(autoSolid * 100)} %</span></label>
+                <input type="range" min="0.6" max="0.99" step="0.01" value={autoSolid} onChange={(e) => setAutoSolid(Number(e.target.value))} className="w-full" />
+                <p className="text-[9px] text-slate-600 mt-0.5">Všetko pod touto hranicou (a nad takmer nulou) sa rastruje na bodky. Nižšie = viac plnej farby, vyššie = viac bodiek.</p>
+              </div>
+              <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
+                <input type="checkbox" checked={autoDescreen} onChange={(e) => setAutoDescreen(e.target.checked)} className="accent-indigo-600" /> Prepočítať existujúci raster (zjemní a rastruje nanovo)
+              </label>
+              {autoResult?.stats && (
+                <div className="text-[10px] text-slate-400 bg-slate-950 border border-slate-800 rounded-lg p-2 space-y-0.5">
+                  <div>Plná farba: <b className="text-slate-200">{autoResult.stats.plnaFarbaPct} %</b> • prechody na bodky: <b className="text-indigo-300">{autoResult.stats.prechodyPct} %</b> • priehľadné: <b className="text-slate-200">{autoResult.stats.priehladnePct} %</b></div>
+                  <div>Pozadie: {autoResult.stats.pozadie}</div>
+                </div>
+              )}
+            </div>
+          )}
 
           {mode === 'colorpop' && (
             <div className="space-y-3 border border-slate-800 rounded-lg p-2.5">
@@ -508,7 +569,7 @@ export default function DtfSeparatorTab() {
             </div>
           </div>
 
-          {mode === 'spot' || mode === 'dtg' || mode === 'colorpop' ? (
+          {mode === 'spot' || mode === 'dtg' || mode === 'colorpop' || mode === 'auto' ? (
             <div>
               <label className="text-xs text-slate-400 flex justify-between mb-1"><span>Uhol rastra</span><span className="text-white font-mono">{angleDeg}°</span></label>
               <input type="range" min="0" max="90" step="0.5" value={angleDeg} onChange={(e) => setAngleDeg(Number(e.target.value))} disabled={algorithm === 'floyd'} className="w-full disabled:opacity-40" />
@@ -578,7 +639,7 @@ export default function DtfSeparatorTab() {
             <p className="text-[9px] text-slate-600">Halftonovanie niekedy obraz opticky vyplaví (pôsobí mdlo) — mierne zvýšenie sýtosti pred rastrovaním to vie kompenzovať. 100% = bezo zmeny.</p>
           </div>
 
-          <div className="border-t border-slate-800 pt-3 space-y-3">
+          {mode !== 'auto' && <div className="border-t border-slate-800 pt-3 space-y-3">
             <span className="text-[10px] text-slate-500 uppercase font-bold">Levels (čierny/biely bod)</span>
             <div>
               <label className="text-xs text-slate-400 flex justify-between mb-1"><span>Čierny bod</span><span className="text-white font-mono">{blackPoint}</span></label>
@@ -593,7 +654,7 @@ export default function DtfSeparatorTab() {
                 <input type="checkbox" checked={invert} onChange={(e) => setInvert(e.target.checked)} className="accent-indigo-600" /> Invertovať (svetlé = viac atramentu)
               </label>
             )}
-          </div>
+          </div>}
 
           {(mode === 'dtg' || mode === 'colorpop') && (
             <div className="border-t border-slate-800 pt-3 space-y-3">
@@ -640,7 +701,7 @@ export default function DtfSeparatorTab() {
           <button onClick={handleDownloadPng} disabled={!workingCanvas || isDownloading} className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-bold py-2.5 rounded-lg text-sm flex items-center justify-center gap-2">
             {isDownloading
               ? <><RefreshCw className="h-4 w-4 animate-spin" /> Spracúvam v plnom rozlíšení…</>
-              : <><Download className="h-4 w-4" /> {mode === 'cmyk' ? 'Stiahnuť vrstvy (C, M, Y, K, White)' : mode === 'dtg' || mode === 'colorpop' ? 'Stiahnuť PNG (farebné + biely podklad)' : 'Stiahnuť PNG (plné rozlíšenie)'}</>}
+              : <><Download className="h-4 w-4" /> {mode === 'cmyk' ? 'Stiahnuť vrstvy (C, M, Y, K, White)' : mode === 'dtg' || mode === 'colorpop' || mode === 'auto' ? 'Stiahnuť PNG (farebné + biely podklad)' : 'Stiahnuť PNG (plné rozlíšenie)'}</>}
           </button>
         </div>
       </div>
