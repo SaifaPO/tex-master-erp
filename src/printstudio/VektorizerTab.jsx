@@ -217,6 +217,8 @@ export default function VektorizerTab() {
   const [vyhladenie, setVyhladenie] = useState(1);   // rozmazanie masky farby (px) – odstráni „schody“ po pixeloch
   const [tolerancia, setTolerancia] = useState(0.6);  // max. odchýlka krivky od obrysu (px)
   const [ostreRohy, setOstreRohy] = useState(true);
+  const [vyrovnat, setVyrovnat] = useState(true);
+  const [uholVyrovnania, setUholVyrovnania] = useState(3);
   const [pathomit, setPathomit] = useState(8);
   const [odstranitPozadie, setOdstranitPozadie] = useState(true);
   const [vysledok, setVysledok] = useState(null); // { td, imgd, w, h }
@@ -268,7 +270,7 @@ export default function VektorizerTab() {
         const ap = autoFarby ? automatickaPaleta(imgd) : null;
         const pal = ap ? ap.pal : vypocitajPaletu(imgd, colors);
         setNajdeneFarby(ap ? ap.pocet : 0);
-        const td = trasuj(imgd, pal, { vyhladenie, tolerancia, pathomit, ostreRohy });
+        const td = trasuj(imgd, pal, { vyhladenie, tolerancia, pathomit, ostreRohy, vyrovnat, uholVyrovnania });
         setVysledok({ td, imgd, w: canvas.width, h: canvas.height });
         setSkryte(predvoleneSkryte(td, imgd, odstranitPozadie));
         setChyba('');
@@ -278,7 +280,7 @@ export default function VektorizerTab() {
       setPocita(false);
     }, 350);
     return () => clearTimeout(t);
-  }, [img, colors, autoFarby, vyhladenie, tolerancia, pathomit, ostreRohy, odstranitPozadie]);
+  }, [img, colors, autoFarby, vyhladenie, tolerancia, pathomit, ostreRohy, vyrovnat, uholVyrovnania, odstranitPozadie]);
 
   const poctyTvarov = useMemo(() => (vysledok ? vysledok.td.layers.map(l => l.filter(p => !p.isholepath).length) : []), [vysledok]);
 
@@ -426,6 +428,20 @@ export default function VektorizerTab() {
           <label className="flex items-center gap-2 text-xs text-slate-300 font-bold cursor-pointer">
             <input type="checkbox" checked={ostreRohy} onChange={(e) => setOstreRohy(e.target.checked)} className="accent-indigo-600" /> Zachovať ostré rohy a rovné hrany
           </label>
+          {ostreRohy && (
+            <div className="space-y-1">
+              <label className="flex items-center gap-2 text-xs text-slate-300 font-bold cursor-pointer">
+                <input type="checkbox" checked={vyrovnat} onChange={(e) => setVyrovnat(e.target.checked)} className="accent-indigo-600" /> Vyrovnať vodorovné a zvislé hrany
+              </label>
+              {vyrovnat && (
+                <>
+                  <label className="text-[11px] text-slate-400 flex justify-between"><span>Vyrovnať hrany odchýlené do</span><span className="text-white font-mono">{uholVyrovnania}°</span></label>
+                  <input type="range" min="1" max="10" step="0.5" value={uholVyrovnania} onChange={(e) => setUholVyrovnania(Number(e.target.value))} className="w-full" />
+                  <p className="text-[9px] text-slate-600">Hrana, ktorá je o niekoľko stupňov od vodorovnej alebo zvislej (napr. šikmý vrch písmena T), sa urobí presne rovná. Zvýš, ak je logo nakrivo viac. Zníž, ak je šikmina zámerná.</p>
+                </>
+              )}
+            </div>
+          )}
           <label className="flex items-center gap-2 text-xs text-slate-300 font-bold cursor-pointer">
             <input type="checkbox" checked={odstranitPozadie} onChange={(e) => setOdstranitPozadie(e.target.checked)} className="accent-indigo-600" /> Automaticky skryť farbu pozadia
           </label>

@@ -322,7 +322,8 @@ function useky(pts, rohy, k, tol) {
     if (lab > 1e-6) {
       for (let q = 1; q < P.length - 1; q++) { const d = Math.abs(ab[0] * (P[q][1] - a[1]) - ab[1] * (P[q][0] - a[0])) / lab; if (d > maxD) maxD = d; }
     } else maxD = Infinity;
-    if (maxD < tol * 0.6) { out.push({ line: [a, b] }); return; }
+    // dlhá hrana môže mať po rozmazaní/šume odchýlku pod ~1 px a pritom je zjavne rovná — tolerancia rastie s dĺžkou
+    if (maxD < tol * 0.6 + 0.4 + 0.002 * lab) { out.push({ line: [a, b] }); return; }
     const kr = [];
     fitCubic(P, t1, t2, err, kr);
     kr.forEach(c => out.push({ cubic: c }));
@@ -347,6 +348,41 @@ function useky(pts, rohy, k, tol) {
   }
   return out;
 }
+// Vyrovnanie: rovný úsek, ktorý sa od vodorovnej/zvislej líši o pár stupňov (šum, skosenie po rozmazaní), sa urobí presne vodorovný/zvislý.
+// Koncové body sú spoločné pre susedné úseky, takže sa posúvajú spolu (aj s riadiacimi bodmi priľahlých kriviek) — tvar ostane súvislý.
+function vyrovnajUseky(us, uholStupne) {
+  const m = us.length;
+  if (m < 3 || !us.some(u => u.line)) return us;
+  const start = (u) => (u.line ? u.line[0] : u.cubic[0]);
+  const koniec = (u) => (u.line ? u.line[1] : u.cubic[3]);
+  // vrchol j = začiatok úseku j (= koniec úseku j-1); ak sa obrys nespája, nič nemeníme
+  for (let j = 0; j < m; j++) {
+    const a = koniec(us[j]), b = start(us[(j + 1) % m]);
+    if (Math.abs(a[0] - b[0]) > 1e-3 || Math.abs(a[1] - b[1]) > 1e-3) return us;
+  }
+  const V = us.map(u => [start(u)[0], start(u)[1]]);
+  const orig = V.map(v => [v[0], v[1]]);
+  const s = Math.sin((uholStupne * Math.PI) / 180);
+  for (let prechod = 0; prechod < 4; prechod++) {
+    for (let j = 0; j < m; j++) {
+      if (!us[j].line) continue;
+      const p = V[j], q = V[(j + 1) % m];
+      const dx = q[0] - p[0], dy = q[1] - p[1], dl = Math.hypot(dx, dy);
+      if (dl < 4) continue;
+      if (Math.abs(dy) <= dl * s) { const y = (p[1] + q[1]) / 2; p[1] = y; q[1] = y; }
+      else if (Math.abs(dx) <= dl * s) { const x = (p[0] + q[0]) / 2; p[0] = x; q[0] = x; }
+    }
+  }
+  return us.map((u, j) => {
+    const p = V[j], q = V[(j + 1) % m];
+    if (u.line) return { line: [p, q] };
+    const dp = [p[0] - orig[j][0], p[1] - orig[j][1]];
+    const dq = [q[0] - orig[(j + 1) % m][0], q[1] - orig[(j + 1) % m][1]];
+    const c = u.cubic;
+    return { cubic: [p, [c[1][0] + dp[0], c[1][1] + dp[1]], [c[2][0] + dq[0], c[2][1] + dq[1]], q] };
+  });
+}
+
 function cestaZUsekov(us) {
   if (!us.length) return '';
   const start = us[0].line ? us[0].line[0] : us[0].cubic[0];
@@ -362,7 +398,7 @@ function cestaZUsekov(us) {
 // imgd: ImageData, pal: [{r,g,b,a}] (priehľadná farba má a < 128), nastavenia:
 //   vyhladenie – sigma rozmazania masky v pixeloch (0.6–4), tolerancia – maximálna odchýlka krivky od obrysu v pixeloch,
 //   pathomit – škvrny menšie ako cca (pathomit × 2) px² sa zahodia, ostreRohy – zachovať ostré rohy
-export function trasuj(imgd, pal, { vyhladenie = 1, tolerancia = 0.7, pathomit = 8, ostreRohy = true, uholRohu = 52 } = {}) {
+export function trasuj(imgd, pal, { vyhladenie = 1, tolerancia = 0.7, pathomit = 8, ostreRohy = true, uholRohu = 52, vyrovnat = true, uholVyrovnania = 3 } = {}) {
   const { width: w, height: h, data } = imgd;
   const opaque = [];
   let tIdx = -1;
@@ -416,7 +452,9 @@ export function trasuj(imgd, pal, { vyhladenie = 1, tolerancia = 0.7, pathomit =
       let rohy = ostreRohy ? najdiRohy(pts, k, uholRohu) : [];
       let body = pts;
       if (rohy.length) ({ pts: body, rohy } = spresniRohy(pts, rohy, k, 2 + sigma * 2.5));
-      const d = cestaZUsekov(useky(body, rohy, k, tolerancia));
+      let us = useky(body, rohy, k, tolerancia);
+      if (ostreRohy && vyrovnat) us = vyrovnajUseky(us, uholVyrovnania);
+      const d = cestaZUsekov(us);
       if (d) cesty.push({ d, isholepath: o.plocha < 0 });
     }
     return cesty;
