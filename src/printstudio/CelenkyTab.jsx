@@ -8,7 +8,7 @@ import { priceAt, marginAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pr
 
 const BUCKET = 'print-designs';
 // Referencne urovne (ks) len na nahlad v tabulke nizsie — realny vypocet funguje pre lubovolny pocet.
-const KS_PREVIEW_LEVELS = [1, 5, 10, 25, 50, 100];
+const KS_PREVIEW_LEVELS = [1, 5, 10, 25, 50, 100, 250, 500, 1000];
 
 const NAKLADY_DEFAULT = { produkt_id: null };
 const NASTAVENIA_DEFAULT = {

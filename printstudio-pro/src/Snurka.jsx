@@ -7,7 +7,9 @@ import PlochaEditor from './fabricEditor/PlochaEditor';
 import { useCenaNahlad, CenaSuhrn, MnozstevneZlavy } from './cenaNahlad';
 
 // Predvolené fotky typov šnúrok (public/snurka). Ak je v administrácii nahraná vlastná fotka (foto_url), použije sa tá.
-const VYCHODZIE_FOTO = { klasicka: '/snurka/klasicka.webp', sponou: '/snurka/sponou.webp', spona_poistka: '/snurka/spona_poistka.webp', klucenka: '/snurka/klucenka.webp' };
+// Plná adresa nasadenia: appka beží aj cez Shopify App Proxy (pbtprint.sk/apps/...), kde by cesta "/snurka/..." mierila na neexistujúcu stránku obchodu.
+const FOTO_ZAKLAD = 'https://printstudio-pro.vercel.app/snurka/';
+const VYCHODZIE_FOTO = { klasicka: FOTO_ZAKLAD + 'klasicka.webp', sponou: FOTO_ZAKLAD + 'sponou.webp', spona_poistka: FOTO_ZAKLAD + 'spona_poistka.webp', klucenka: FOTO_ZAKLAD + 'klucenka.webp' };
 
 const BUCKET = 'print-designs';
 

@@ -44,8 +44,10 @@ function stylFarby(trieda, hex) {
 // Fotky vzoriek fólií (Siser) uložené v public/folie — názov súboru = kód farby, resp. druh_<kód druhu>. Vlastná fotka z administrácie (foto_url) má prednosť.
 const FOTO_FARBY = new Set(['ps_white', 'ps_black', 'ps_red', 'ps_royal', 'ps_green', 'ps_yellow', 'ps_orange', 'ps_grey', 'ps_gold', 'ps_silver', 'g_silver', 'g_gold', 'g_black', 'g_red', 'g_blue', 'g_pink', 'm_gold', 'm_silver', 'm_red', 'm_blue', 'r_silver', 'sb_white', 'sb_yellow', 'f_white', 'f_black', 'f_red', 'f_blue', 'f_yellow', 'f_green']);
 const FOTO_DRUHY = new Set(['psfilm', 'glitter', 'electric', 'reflex', 'subli', 'flock']);
-const fotoFarby = (c) => (c ? (c.foto_url || (FOTO_FARBY.has(c.kod) ? `/folie/${c.kod}.webp` : null)) : null);
-const fotoDruhu = (d) => (d ? (d.foto_url || (FOTO_DRUHY.has(d.kod) ? `/folie/druh_${d.kod}.webp` : null)) : null);
+// Plná adresa nasadenia: appka beží aj cez Shopify App Proxy (pbtprint.sk/apps/...), kde by cesta "/folie/..." nefungovala.
+const FOLIE_FOTO_ZAKLAD = 'https://printstudio-pro.vercel.app/folie/';
+const fotoFarby = (c) => (c ? (c.foto_url || (FOTO_FARBY.has(c.kod) ? `${FOLIE_FOTO_ZAKLAD}${c.kod}.webp` : null)) : null);
+const fotoDruhu = (d) => (d ? (d.foto_url || (FOTO_DRUHY.has(d.kod) ? `${FOLIE_FOTO_ZAKLAD}druh_${d.kod}.webp` : null)) : null);
 
 export default function Folie({ supabase }) {
   const [nacitava, setNacitava] = useState(true);

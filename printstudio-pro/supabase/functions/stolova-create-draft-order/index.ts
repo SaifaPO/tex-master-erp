@@ -165,7 +165,7 @@ Deno.serve(async (req) => {
     }
     // Cenové úrovne podľa počtu kusov (tabuľka „Množstevné zľavy“ v konfigurátore) — cena za kus bez DPH a bez B2B zľavy
     if (body.urovne) {
-      vysledok.urovne = await Promise.all([1, 5, 10, 25, 50, 100, 200, 500].map(async (l) => {
+      vysledok.urovne = await Promise.all([1, 5, 10, 25, 50, 100, 250, 500, 1000].map(async (l) => {
         const cc = await spoluCena(supabase, nast, cfg, nakladKs * l, l, true, null);
         return { ks: l, cenaKsBezDph: r2(cc.logaSpolu / l) };
       }));
