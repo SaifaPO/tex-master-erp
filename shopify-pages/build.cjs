@@ -11,6 +11,8 @@ const mail = (subj, body) => `mailto:${EMAIL}?subject=${encodeURIComponent(subj)
 const tlacCss = fs.readFileSync(path.join(__dirname, 'tlac.html'), 'utf8');
 const baseCss = tlacCss.slice(tlacCss.indexOf('<style>') + 7, tlacCss.indexOf('</style>')).replace(/pbt-tlac/g, 'pbt-p');
 const extraCss = `
+.pbt-p .banner{display:block;margin:0 0 24px}
+.pbt-p .banner img{display:block;width:100%;height:auto;border-radius:16px}
 .pbt-p .steps{list-style:none;margin:0 0 36px;padding:0;display:grid;grid-template-columns:1fr;gap:14px;counter-reset:s}
 .pbt-p .steps li{counter-increment:s;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;display:grid;grid-template-columns:1fr 130px;column-gap:20px;row-gap:4px;align-items:start;grid-template-rows:auto auto 1fr}
 .pbt-p .steps li:before{content:counter(s);grid-column:1;display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:#0d9488;color:#fff;font-weight:800;margin-bottom:4px}
@@ -28,7 +30,7 @@ const extraCss = `
 .pbt-p .soc a{display:inline-flex;align-items:center;gap:8px;text-decoration:none;font-weight:700;font-size:14px;padding:8px 14px;border-radius:9px;color:#fff}
 .pbt-p .soc svg{width:20px;height:20px}
 .pbt-p .soc .fb{background:#1877f2}.pbt-p .soc .ig{background:linear-gradient(45deg,#f09433,#dc2743 50%,#bc1888)}
-@media(max-width:600px){.pbt-p .steps li{grid-template-columns:1fr}.pbt-p .steps img{grid-column:1;grid-row:auto;justify-self:start;max-height:200px;margin-top:10px}}
+@media(max-width:600px){.pbt-p .steps li{grid-template-columns:1fr 88px;column-gap:12px;padding:14px}.pbt-p .banner img{border-radius:12px}}
 `;
 const style = `<style>${baseCss}${extraCss}</style>`;
 
@@ -53,6 +55,7 @@ const steps = (items) => `<ol class="steps">\n${items.map(([h, p, img]) => `<li>
 // ---------------- DTF ----------------
 const dtf = `${style}
 <div class="pbt-p">
+<a class="banner" href="/apps/dtf-metraz?dtf=1"><img src="${IMG}dtf-banner.jpg?v=1793205287" alt="Expresná kvalitná DTF tlač, vzorky zadarmo (platíte len poštovné)"></a>
 <div class="hero">
 <h1>DTF transfery = nažehľovačky</h1>
 <p class="lead">DTF transfer je to, čo poznáš ako nažehľovačku: potlač, ktorú si jednoducho nažehlíš na tričko. Objednáš si ju sám z domu, zvládne to aj mamina so žehličkou. Nahraj obrázok, zaplať a transfer ti pošleme domov. Cena sa spočíta hneď podľa rozmeru a množstva.</p>
