@@ -18,6 +18,22 @@ function csvEscape(v) {
   return /[",;\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
+// Rychla simulacia: "1 5 9 20" alebo "1; 5; 9,50; 20" -> [1, 5, 9.5, 20].
+// Oddelovac je medzera / bodkociarka / novy riadok. Ciarka je desatinna ("9,50"), ale ak je v jednom
+// "slove" viac ciarok ("1,5,9,20"), berie sa ako zoznam — rozpoznane hodnoty sa Martinovi ukazuju hned pod polom.
+const MAX_REF_COSTS = 12;
+function parseRefCosts(text) {
+  const out = [];
+  String(text || '').split(/[\s;]+/).filter(Boolean).forEach(tok => {
+    const parts = (tok.match(/,/g) || []).length > 1 ? tok.split(',') : [tok];
+    parts.forEach(part => {
+      const n = parseFloat(part.replace(',', '.'));
+      if (Number.isFinite(n) && n > 0) out.push(n);
+    });
+  });
+  return out.slice(0, MAX_REF_COSTS);
+}
+
 export default function CenotvorbaTab({ supabase }) {
   const [config, setConfig] = useState(DEFAULT_PRICING_CONFIG);
   const [products, setProducts] = useState([]);
@@ -28,6 +44,8 @@ export default function CenotvorbaTab({ supabase }) {
   const [refQty, setRefQty] = useState(1);
   const [refQtyText, setRefQtyText] = useState('1');
   const [savingRowId, setSavingRowId] = useState(null);
+  const [refCostText, setRefCostText] = useState('');
+  const [refCostShow, setRefCostShow] = useState('unit'); // 'unit' (cena za 1 ks) | 'total' (cena za celú objednávku)
   const [message, setMessage] = useState(null);
   const [priceView, setPriceView] = useState('moc'); // 'moc' (koncoví zákazníci) | 'voc' (reklamky/veľkoobchod) — len náhľad v tejto tabuľke
 
@@ -103,6 +121,8 @@ export default function CenotvorbaTab({ supabase }) {
 
   // Krivka marže (podľa výrobnej ceny, pri aktuálnom refQty) — cisto vizualizacia, prekresli sa
   // automaticky pri kazdej zmene koeficientov/refQty, kedze je odvodena priamo z config/products.
+  const refCosts = useMemo(() => parseRefCosts(refCostText), [refCostText]);
+
   const curveData = useMemo(() => {
     const costs = products.filter(p => p.productionCost > 0).map(p => p.productionCost);
     const minCost = Math.max(0.05, Math.min(1, ...(costs.length ? costs : [1])));
@@ -118,11 +138,12 @@ export default function CenotvorbaTab({ supabase }) {
     const productPoints = products
       .filter(p => p.productionCost > 0)
       .map(p => ({ name: p.name, cost: p.productionCost, margin: marginAt(p.productionCost, refQty, config) }));
+    const refPoints = refCosts.filter(c => c >= minCost && c <= maxCost).map(c => ({ cost: c, margin: marginAt(c, refQty, config) }));
     const allMargins = [...points.map(p => p.margin), ...productPoints.map(p => p.margin), config.marginFloor];
     const yMin = Math.max(0, Math.floor(Math.min(...allMargins) - 5));
     const yMax = Math.ceil(Math.max(...allMargins) + 10);
-    return { points, productPoints, minCost, maxCost, yMin, yMax };
-  }, [products, refQty, config]);
+    return { points, productPoints, refPoints, minCost, maxCost, yMin, yMax };
+  }, [products, refQty, config, refCosts]);
 
   const sortedProducts = useMemo(() => {
     const capMarginFor = (p) => {
@@ -301,6 +322,79 @@ export default function CenotvorbaTab({ supabase }) {
         </div>
       </div>
 
+      {/* Referencna vyrobna cena — rychla simulacia bez produktu v katalogu, neukladá sa nikam */}
+      <div className="bg-slate-900 border border-indigo-900/50 rounded-lg p-4">
+        <h3 className="font-bold text-sm text-slate-200 mb-1">⚡ Referenčná výrobná cena — rýchla simulácia</h3>
+        <p className="text-[11px] text-slate-400 mb-3">
+          Zadaj výrobnú cenu (bez DPH), ktorú poznáš z kalkulácie — nemusí byť v katalógu. Môžeš zadať aj viac hodnôt naraz
+          oddelených medzerou alebo bodkočiarkou (napr. <span className="text-slate-300">1 5 9 20</span>). Ceny sa počítajú z koeficientov vyššie
+          (aj z neuložených zmien) a z prepínača MOC/VOC. Nič sa nikam neukladá.
+        </p>
+        <div className="flex flex-wrap items-end gap-3 mb-2">
+          <div>
+            <label className="block text-[11px] text-slate-400 mb-1">Výrobná cena / ks (€)</label>
+            <input type="text" inputMode="decimal" value={refCostText} onChange={e => setRefCostText(e.target.value)} placeholder="napr. 1 5 9 20" className="w-56 bg-slate-950 border border-indigo-900/50 rounded p-2 text-white text-sm" />
+          </div>
+          <div>
+            <label className="block text-[11px] text-slate-400 mb-1">V tabuľke ukázať</label>
+            <div className="flex gap-1.5">
+              <button onClick={() => setRefCostShow('unit')} className={`px-3 py-2 rounded-lg text-xs font-bold ${refCostShow === 'unit' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>Cena za 1 ks</button>
+              <button onClick={() => setRefCostShow('total')} className={`px-3 py-2 rounded-lg text-xs font-bold ${refCostShow === 'total' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>Cena spolu</button>
+            </div>
+          </div>
+        </div>
+        {refCostText.trim() !== '' && (
+          <p className="text-[11px] text-slate-500 mb-2">
+            {refCosts.length > 0
+              ? <>Počítam s: <span className="text-indigo-300 font-semibold">{refCosts.map(c => `${c.toFixed(2)} €`).join(' · ')}</span>{refCosts.length >= MAX_REF_COSTS ? ` (max. ${MAX_REF_COSTS} hodnôt)` : ''}</>
+              : <span className="text-amber-500">Nerozpoznal som žiadne číslo — zadaj napr. 9 alebo 1 5 9 20.</span>}
+          </p>
+        )}
+        {refCosts.length > 0 && (() => {
+          const qtyCols = Array.from(new Set([refQty, ...QUANTITY_LEVELS])).sort((a, b) => a - b);
+          return (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-slate-800 text-slate-400">
+                    <th className="text-left p-2 whitespace-nowrap">Výrobná cena / ks</th>
+                    {qtyCols.map(q => (
+                      <th key={q} className={`text-left p-2 whitespace-nowrap ${q === refQty ? 'bg-indigo-950/40 text-indigo-300' : ''}`}>{q} ks{q === refQty ? ' ★' : ''}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {refCosts.map((c, i) => (
+                    <tr key={`${c}-${i}`} className="border-b border-slate-800/60 hover:bg-slate-800/30">
+                      <td className="p-2 font-bold text-slate-200 whitespace-nowrap">{c.toFixed(2)} €</td>
+                      {qtyCols.map(q => {
+                        const unit = dispPrice(priceAt(c, q, config));
+                        const marginPct = ((unit - c) / c) * 100;
+                        const profit = unit - c;
+                        const main = refCostShow === 'total' ? unit * q : unit;
+                        return (
+                          <td key={q} className={`p-2 whitespace-nowrap ${q === refQty ? 'bg-indigo-950/20' : ''}`}>
+                            <div className="font-bold text-indigo-300">{main.toFixed(2)} €</div>
+                            <div className="text-[10px] text-slate-500">
+                              marža {marginPct.toFixed(0)} % · zisk {refCostShow === 'total' ? (profit * q).toFixed(2) : profit.toFixed(2)} €
+                              {refCostShow === 'total' && <> · {unit.toFixed(2)} €/ks</>}
+                            </div>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="text-[10px] text-slate-600 mt-2">
+                ★ = referenčný počet kusov z poľa vyššie ({refQty} ks). Ceny sú {priceView === 'voc' ? 'VOC (reklamky)' : 'MOC (koncoví zákazníci)'} bez DPH.
+                Hodnoty sa zobrazia aj ako oranžové body v grafe krivky marže.
+              </p>
+            </div>
+          );
+        })()}
+      </div>
+
       {/* Export */}
       <div className="flex justify-end">
         <button onClick={handleExportCsv} className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold px-3 py-2 rounded-lg">
@@ -399,7 +493,7 @@ export default function CenotvorbaTab({ supabase }) {
 const X_TICK_CANDIDATES = [0.5, 1, 2, 5, 10, 25, 50, 100, 250, 500, 1000, 2000, 5000];
 
 function MargeCurveChart({ curveData, config, refQty }) {
-  const { points, productPoints, minCost, maxCost, yMin, yMax } = curveData;
+  const { points, productPoints, refPoints, minCost, maxCost, yMin, yMax } = curveData;
   const chartW = 640, chartH = 260, padL = 44, padR = 16, padT = 12, padB = 28;
   const plotW = chartW - padL - padR, plotH = chartH - padT - padB;
   const logMin = Math.log10(minCost), logMax = Math.log10(maxCost);
@@ -440,8 +534,13 @@ function MargeCurveChart({ curveData, config, refQty }) {
                 <title>{p.name}: {p.margin.toFixed(0)}% marža @ {p.cost.toFixed(2)}€ VC</title>
               </circle>
             ))}
+            {refPoints.map((p, i) => (
+              <circle key={`ref-${p.cost}-${i}`} cx={xScale(p.cost)} cy={yScale(p.margin)} r="4.5" fill="#f59e0b" stroke="#0f172a" strokeWidth="1">
+                <title>Referenčná výrobná cena {p.cost.toFixed(2)}€: {p.margin.toFixed(0)}% marža @ {refQty} ks</title>
+              </circle>
+            ))}
           </svg>
-          <p className="text-[10px] text-slate-600 mt-1">Prejdi myšou nad zelenou bodkou pre názov produktu.</p>
+          <p className="text-[10px] text-slate-600 mt-1">Prejdi myšou nad zelenou bodkou pre názov produktu.{refPoints.length > 0 ? ' Oranžové body = tvoje referenčné výrobné ceny zo simulácie.' : ''}</p>
         </>
       )}
     </div>
