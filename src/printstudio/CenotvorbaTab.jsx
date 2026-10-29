@@ -278,10 +278,10 @@ export default function CenotvorbaTab({ supabase }) {
           a stĺpce nižšie ostanú prázdne. Dá sa vyplniť rovno v stĺpci "Red. výkon" v tabuľke nižšie
           (rovnaké pole ako "Redukovaný výkon" v Katalógu Modelov — zmena sa prejaví na oboch miestach).
         </p>
-        <div className="flex items-end gap-3">
+        <div className="flex flex-wrap items-end gap-3">
           <div>
             <label className="block text-[11px] text-slate-400 mb-1">Cieľ: € marže / jednotku redukovaného výkonu (coef_f)</label>
-            <NumberInput step="0.01" min="0" value={config.capMarginTarget} onChange={v => setConfig({ ...config, capMarginTarget: v })} fallback={0} className="w-64 bg-slate-950 border border-amber-900/40 rounded p-2 text-white text-sm" />
+            <NumberInput step="0.01" min="0" value={config.capMarginTarget} onChange={v => setConfig({ ...config, capMarginTarget: v })} fallback={0} className="w-full max-w-[16rem] bg-slate-950 border border-amber-900/40 rounded p-2 text-white text-sm" />
           </div>
           <p className="text-[11px] text-slate-500 pb-2">0 = vypnuté (tabuľka nižšie sa správa ako doteraz)</p>
         </div>
@@ -296,14 +296,14 @@ export default function CenotvorbaTab({ supabase }) {
           samostatný vzorec. Prepínač nižšie mení len náhľad v tejto tabuľke — Cenník potlače, DTF
           metráž ani zákaznícke konfigurátory sa tým nemenia.
         </p>
-        <div className="flex items-end gap-3">
+        <div className="flex flex-wrap items-end gap-3">
           <div>
             <label className="block text-[11px] text-slate-400 mb-1">Veľkoobchodná zľava (%)</label>
             <NumberInput step="0.5" min="0" max="100" value={config.wholesaleDiscountPercent} onChange={v => setConfig({ ...config, wholesaleDiscountPercent: v })} fallback={0} className="w-40 bg-slate-950 border border-cyan-900/40 rounded p-2 text-white text-sm" />
           </div>
           <div>
             <label className="block text-[11px] text-slate-400 mb-1">Zobraziť ceny ako</label>
-            <div className="flex gap-1.5">
+            <div className="flex flex-wrap gap-1.5">
               <button onClick={() => setPriceView('moc')} className={`px-3 py-2 rounded-lg text-xs font-bold ${priceView === 'moc' ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>MOC (koncoví)</button>
               <button onClick={() => setPriceView('voc')} className={`px-3 py-2 rounded-lg text-xs font-bold ${priceView === 'voc' ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>VOC (reklamky)</button>
             </div>
@@ -333,11 +333,11 @@ export default function CenotvorbaTab({ supabase }) {
         <div className="flex flex-wrap items-end gap-3 mb-2">
           <div>
             <label className="block text-[11px] text-slate-400 mb-1">Výrobná cena / ks (€)</label>
-            <input type="text" inputMode="decimal" value={refCostText} onChange={e => setRefCostText(e.target.value)} placeholder="napr. 1 5 9 20" className="w-56 bg-slate-950 border border-indigo-900/50 rounded p-2 text-white text-sm" />
+            <input type="text" inputMode="decimal" value={refCostText} onChange={e => setRefCostText(e.target.value)} placeholder="napr. 1 5 9 20" className="w-full max-w-[14rem] bg-slate-950 border border-indigo-900/50 rounded p-2 text-white text-sm" />
           </div>
           <div>
             <label className="block text-[11px] text-slate-400 mb-1">V tabuľke ukázať</label>
-            <div className="flex gap-1.5">
+            <div className="flex flex-wrap gap-1.5">
               <button onClick={() => setRefCostShow('unit')} className={`px-3 py-2 rounded-lg text-xs font-bold ${refCostShow === 'unit' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>Cena za 1 ks</button>
               <button onClick={() => setRefCostShow('total')} className={`px-3 py-2 rounded-lg text-xs font-bold ${refCostShow === 'total' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>Cena spolu</button>
             </div>
