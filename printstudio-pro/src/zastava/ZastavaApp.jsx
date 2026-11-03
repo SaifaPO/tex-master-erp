@@ -8,6 +8,7 @@ import RozmeryTab from './RozmeryTab';
 import GrafikaTab from '../beachflag/GrafikaTab';
 import StatnaVlajkaPicker from './StatnaVlajkaPicker';
 import DoplnkyTab from './DoplnkyTab';
+import { rozlozBody } from './okaLayout';
 import { useB2bKod } from '../b2b';
 import B2bKod from '../B2bKod';
 
