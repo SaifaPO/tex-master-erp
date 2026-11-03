@@ -30,7 +30,7 @@ import {
   ClipboardList, Package, Cpu, QrCode, Plus, User, Clock, Layers, Search, Check, X, Calendar,
   Palette, Scissors, Printer, Sliders, Sparkles, ZoomIn, ZoomOut, FileText, PlusCircle, Table,
   Shield, Users, Lock, Edit2, Trash2, Tag, Scale, CalendarDays, FileEdit, Gift, Loader2, AlertTriangle,
-  Shirt, Box, Banknote, GripVertical, Download, Upload, ArrowUp, ArrowDown, BarChart3, Camera, Bot, Zap, Star, RefreshCw, BookOpen, Paperclip, Copy
+  Shirt, Box, Banknote, GripVertical, Download, Upload, ArrowUp, ArrowDown, BarChart3, Camera, Bot, Zap, Star, RefreshCw, BookOpen, Paperclip, Copy, Menu
 } from 'lucide-react';
 
 // ============================================================
@@ -2224,6 +2224,8 @@ export default function App() {
   };
   // Plávajúce tlačidlo "späť hore" vpravo dole (zobrazí sa po poscrollovaní)
   const [showScrollTop, setShowScrollTop] = useState(false);
+  // Menu kariet na mobile: schované, rozbalí sa tlačidlom "Menu" (na PC je vždy vidno)
+  const [menuOtvorene, setMenuOtvorene] = useState(false);
   useEffect(() => {
     const onScroll = () => setShowScrollTop(window.scrollY > 400);
     window.addEventListener('scroll', onScroll, { passive: true });
@@ -7021,14 +7023,13 @@ export default function App() {
 
       <header className="bg-slate-950 border-b border-slate-800 sticky top-0 z-30 shadow-lg print:hidden">
         <div className="max-w-7xl mx-auto px-4 py-3">
-          <div className="flex flex-col lg:flex-row items-center justify-between gap-4">
+          <div className="flex flex-wrap lg:flex-nowrap items-center gap-x-4 gap-y-3">
             <button type="button" onClick={goHome} title="Domov — prvá karta, úplne hore" className="flex flex-col items-start shrink-0 text-left cursor-pointer hover:opacity-80 transition-opacity">
               <img src="/logo-atak-pbt.png" alt="ATAK x PBT" className="h-8 w-auto brightness-0 invert mb-1.5" />
-              <span className="font-extrabold text-md tracking-wider text-white block">TEX-MASTER ERP v7.0</span>
+              <span className="font-extrabold text-sm sm:text-base tracking-wider text-white block">TEX-MASTER ERP v7.0</span>
               <span className="text-[10px] text-indigo-400 block -mt-1 font-semibold">Živé dáta • Supabase</span>
             </button>
-            <div className="flex items-center gap-2 w-full lg:w-auto">
-            <nav className="flex flex-wrap items-center justify-center gap-1 bg-slate-900/60 p-1 rounded-xl border border-slate-800 w-full lg:w-auto">
+            <nav onClick={(e) => { if (e.target.closest('button')) setMenuOtvorene(false); }} className={`order-3 lg:order-2 lg:ml-auto ${menuOtvorene ? 'flex' : 'hidden'} lg:flex flex-wrap items-center justify-center gap-1 bg-slate-900/60 p-1 rounded-xl border border-slate-800 w-full lg:w-auto max-h-[65vh] overflow-y-auto lg:max-h-none lg:overflow-visible`}>
               {canSeeTab(currentUser.role, 'planner') && (
                 <button onClick={() => setActiveTab('planner')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'planner' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Calendar className="h-3.5 w-3.5" /> Plánovacia Matica</button>
               )}
@@ -7081,8 +7082,12 @@ export default function App() {
                 <button onClick={() => setActiveTab('manual')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'manual' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><BookOpen className="h-3.5 w-3.5" /> Manuál</button>
               )}
             </nav>
-            <OnlinePrezencia supabase={supabase} currentUser={currentUser} employees={employees} rolaLabely={ROLE_LABELS} mozeVidiet mozePisat />
-            {['master', 'supervisor', 'sales', 'uctovnik'].includes(currentUser.role) && <NotifikacieZvonec supabase={supabase} onOtvor={otvorZNotifikacie} rola={currentUser.role} mojeId={currentUser.id} />}
+            <div className="order-2 lg:order-3 ml-auto lg:ml-0 flex items-center gap-1.5 sm:gap-2 shrink-0">
+              <button type="button" onClick={() => setMenuOtvorene((o) => !o)} title="Menu kariet" aria-expanded={menuOtvorene} className={`lg:hidden h-8 min-w-8 px-2 rounded-full border text-xs font-bold flex items-center justify-center gap-1.5 ${menuOtvorene ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-200'}`}>
+                {menuOtvorene ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}<span className="hidden sm:inline">Menu</span>
+              </button>
+              <OnlinePrezencia supabase={supabase} currentUser={currentUser} employees={employees} rolaLabely={ROLE_LABELS} mozeVidiet mozePisat />
+              {['master', 'supervisor', 'sales', 'uctovnik'].includes(currentUser.role) && <NotifikacieZvonec supabase={supabase} onOtvor={otvorZNotifikacie} rola={currentUser.role} mojeId={currentUser.id} />}
             </div>
           </div>
         </div>

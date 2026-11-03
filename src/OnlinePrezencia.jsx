@@ -153,18 +153,18 @@ export default function OnlinePrezencia({ supabase, currentUser, employees = [],
         <div className="flex items-center gap-1 shrink-0">
           {mozeVidiet && online.length > 0 && (
             <div className="flex items-center -space-x-1.5 pl-1" title="Kto je práve v ERP">
-              {vsetci.slice(0, 8).map((o) => {
+              {vsetci.slice(0, 8).map((o, idx) => {
                 const ja = String(o.id) === mojeId;
                 const emoji = avatarOd.get(String(o.id));
                 return (
-                  <div key={o.id} className="relative" onMouseEnter={() => setHover(o.id)} onMouseLeave={() => setHover((h) => (h === o.id ? null : h))}>
+                  <div key={o.id} className={`relative ${idx >= 2 ? 'hidden sm:block' : ''}`} onMouseEnter={() => setHover(o.id)} onMouseLeave={() => setHover((h) => (h === o.id ? null : h))}>
                     <button type="button" disabled={ja || !mozePisat} onClick={() => { setKomu(o); setText(''); }}
                       className={`relative h-8 w-8 rounded-full border-2 border-slate-950 text-[11px] font-extrabold text-white flex items-center justify-center ${FARBY_ROL[o.rola] || 'bg-slate-600'} ${!ja && mozePisat ? 'hover:scale-110 hover:z-10 cursor-pointer' : 'cursor-default'} transition-transform`}>
                       {emoji ? <span className="text-base leading-none">{emoji}</span> : inicialky(o.meno)}
                       <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400 border-2 border-slate-950" />
                     </button>
                     {hover === o.id && (
-                      <div className="absolute z-50 top-full mt-2 right-0 w-56 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl p-3 text-left pointer-events-none">
+                      <div className="fixed top-20 right-3 sm:absolute sm:top-full sm:mt-2 sm:right-0 z-50 w-56 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl p-3 text-left pointer-events-none">
                         <div className="text-sm font-bold text-white">{o.meno}{ja ? ' (ty)' : ''}</div>
                         <div className="text-[11px] text-slate-400">{rolaLabely[o.rola] || o.rola}</div>
                         <div className="mt-1.5 text-[11px] text-emerald-300">● online od {hhmm(o.od)} ({trvanie(o.od, now)})</div>
@@ -174,7 +174,8 @@ export default function OnlinePrezencia({ supabase, currentUser, employees = [],
                   </div>
                 );
               })}
-              {vsetci.length > 8 && <div className="h-8 w-8 rounded-full border-2 border-slate-950 bg-slate-800 text-[11px] font-bold text-slate-300 flex items-center justify-center">+{vsetci.length - 8}</div>}
+              {vsetci.length > 2 && <div className="sm:hidden h-8 w-8 rounded-full border-2 border-slate-950 bg-slate-800 text-[11px] font-bold text-slate-300 flex items-center justify-center">+{vsetci.length - 2}</div>}
+              {vsetci.length > 8 && <div className="hidden sm:flex h-8 w-8 rounded-full border-2 border-slate-950 bg-slate-800 text-[11px] font-bold text-slate-300 items-center justify-center">+{vsetci.length - 8}</div>}
             </div>
           )}
 
