@@ -33,6 +33,7 @@ export default function SosTlacidlaTab({ supabase }) {
   const zmaz = async (id) => { if (!window.confirm('Zmazať toto tlačidlo? Fyzické tlačidlo prestane fungovať.')) return; await supabase.from('sos_tlacidla').delete().eq('id', id); nacitaj(); };
   const kopiruj = async (text) => { try { await navigator.clipboard.writeText(text); setVyslednaSprava('Skopírované.'); } catch { setVyslednaSprava(text); } };
   const test = async (t) => {
+    if (supabase.__readOnly) { setVyslednaSprava('Režim náhľadu (Supervisor): skúšobné stlačenie by poslalo skutočné upozornenie, preto je vypnuté.'); return; }
     setVyslednaSprava('Posielam skúšobné stlačenie…');
     try {
       const odp = await fetch(`${FUNKCIA_URL}?t=${encodeURIComponent(t.token)}&typ=pomoc`);

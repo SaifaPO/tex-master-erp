@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { makeReadOnlySupabase } from '../supabaseReadOnly';
 import { Siren, Link2, Scissors, Tag, Box, Palette, Type, Image as ImageIcon, Banknote, Camera, ShoppingBag, Flag, Shirt, Calculator, Waves, ShoppingCart, ExternalLink, Layers3, Ruler, Printer, Circle, Wind, Grid3x3, HardDrive, BadgePercent, Inbox, LayoutGrid, Library, Coins, Settings2, Wand2 } from 'lucide-react';
 import KategorieTab from './KategorieTab';
 import ProduktyTab from './ProduktyTab';
@@ -87,8 +88,19 @@ const SKUPINY = [
   { id: 'nastavenia', label: 'Nastavenia', icon: Settings2, tabs: ['shopify', 'b2b-kody', 'manualy', 'dtf-separator', 'vektorizer', 'vysivka', 'sos', 'ulozisko'] },
 ];
 
-export default function PrintStudioAdmin({ supabase, initialSubtab, fokus = null }) {
+export default function PrintStudioAdmin({ supabase: rawSupabase, initialSubtab, fokus = null, readOnly = false }) {
   const [subtab, setSubtab] = useState('objednavky');
+  // Režim náhľadu (Supervisor): všetko vidí a môže si čísla skúšať meniť na obrazovke, ale žiadny zápis na server neprejde.
+  const [blokToast, setBlokToast] = useState(null);
+  const supabase = useMemo(
+    () => (readOnly ? makeReadOnlySupabase(rawSupabase, () => setBlokToast(Date.now())) : rawSupabase),
+    [rawSupabase, readOnly]
+  );
+  useEffect(() => {
+    if (!blokToast) return undefined;
+    const t = setTimeout(() => setBlokToast(null), 4000);
+    return () => clearTimeout(t);
+  }, [blokToast]);
   const skupina = SKUPINY.find(g => g.tabs.includes(subtab)) || SKUPINY[0];
   const activeAppUrl = SUBTABS.find(t => t.id === subtab)?.appUrl;
 
@@ -108,6 +120,17 @@ export default function PrintStudioAdmin({ supabase, initialSubtab, fokus = null
 
   return (
     <div className="space-y-6 print:hidden animate-in fade-in duration-150">
+      {readOnly && (
+        <div className="bg-amber-950/30 border border-amber-900/50 rounded-lg px-4 py-2.5 text-xs text-amber-200">
+          <strong>👁 Režim náhľadu (Supervisor).</strong> Všetko tu vidíš a čísla (marže, koeficienty, DPH, ceny…) si môžeš na skúšku meniť,
+          ale <strong>nič sa neuloží</strong> — po obnovení stránky alebo prepnutí karty sa vrátia pôvodné hodnoty.
+        </div>
+      )}
+      {blokToast && (
+        <div className="fixed bottom-6 right-6 z-50 max-w-sm bg-slate-900 border border-amber-600 text-amber-200 text-xs font-semibold rounded-lg px-4 py-3 shadow-2xl">
+          👁 Režim náhľadu: táto zmena sa neuložila (Supervisor nemôže ukladať).
+        </div>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-2">
           <div className="flex flex-wrap gap-1.5 bg-slate-950 p-1.5 rounded-xl border border-slate-800 w-fit">

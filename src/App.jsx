@@ -2207,7 +2207,7 @@ export default function App() {
   const tabVisible = (id) => {
     const role = currentUser?.role;
     if (!role) return false;
-    if (id === 'printstudio') return role === 'master';
+    if (id === 'printstudio') return role === 'master' || role === 'supervisor'; // supervisor: len náhľad (nič sa neukladá)
     if (!canSeeTab(role, id)) return false;
     if (id === 'reports') return hasPermission('view_reports');
     if (id === 'invoices') return hasPermission('view_finance');
@@ -2288,7 +2288,7 @@ export default function App() {
     push(entries, 'Réžia firiem', 'Financie', financeVisible && role === 'master', () => { setActiveTab('invoices'); setFinanceSubTab('overhead'); });
     push(entries, 'Cenové ponuky', null, hasPermission('create_quotes') && canSeeTab(role, 'quotes'), () => setActiveTab('quotes'));
 
-    const psVisible = role === 'master';
+    const psVisible = role === 'master' || role === 'supervisor';
     push(entries, 'PrintStudio Pro', null, psVisible, () => { setActiveTab('printstudio'); setPrintstudioJumpTarget('produkty'); });
     const psSub = [
       ['objednavky', 'Objednávky a dopyty (aplikácie)'], ['kategorie', 'Kategórie'], ['produkty', 'Produkty (Blanks)'], ['farby', 'Farby'], ['fonty', 'Fonty'],
@@ -7044,7 +7044,7 @@ export default function App() {
               {(hasPermission('view_problems') || currentUser.role === 'sales') && canSeeTab(currentUser.role, 'problems') && (
                 <button onClick={() => setActiveTab('problems')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'problems' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><AlertTriangle className="h-3.5 w-3.5" /> Problémy</button>
               )}
-              {currentUser.role === 'master' && (
+              {(currentUser.role === 'master' || currentUser.role === 'supervisor') && (
                 <button onClick={() => setActiveTab('printstudio')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'printstudio' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Shirt className="h-3.5 w-3.5" /> PrintStudio Pro</button>
               )}
               {hasPermission('view_finance') && canSeeTab(currentUser.role, 'invoices') && (
@@ -8809,8 +8809,8 @@ export default function App() {
           </div>
         )}
 
-        {activeTab === 'printstudio' && currentUser.role === 'master' && (
-          <PrintStudioAdmin supabase={supabase} initialSubtab={printstudioJumpTarget} fokus={printstudioFokus} />
+        {activeTab === 'printstudio' && (currentUser.role === 'master' || currentUser.role === 'supervisor') && (
+          <PrintStudioAdmin supabase={supabase} readOnly={currentUser.role !== 'master'} initialSubtab={printstudioJumpTarget} fokus={printstudioFokus} />
         )}
 
         {activeTab === 'isolated-station' && (
