@@ -97,15 +97,14 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const {
-      typ = 'tubular_basic', materialKod = null,
-      pocetKs, deliverySpeed = 'standard', osobnyOdber = false, b2bKod = null,
-      suborNazov = null, suborCesta = null, dizajnJson = null,
-    } = body;
+    const { deliverySpeed = 'standard', osobnyOdber = false, b2bKod = null } = body;
 
-    if (typ !== 'tubular_basic' && typ !== 'premium') throw new Error('Neplatný typ buffky.');
-    const ks = Math.max(1, Math.round(Number(pocetKs)) || 1);
-    if (!suborCesta) throw new Error('Chýba tlačový súbor buffky.');
+    // Viac motivov v jednej objednavke: body.polozky = [{ typ, materialKod, pocetKs, suborNazov, suborCesta, dizajnJson }].
+    // Starsi klient posiela jeden motiv v koreni (typ, materialKod, pocetKs, suborCesta...) — berie sa ako jedna polozka.
+    const vstupne: Array<Record<string, unknown>> = Array.isArray(body.polozky) && body.polozky.length > 0
+      ? body.polozky
+      : [{ typ: body.typ, materialKod: body.materialKod, pocetKs: body.pocetKs, suborNazov: body.suborNazov, suborCesta: body.suborCesta, dizajnJson: body.dizajnJson }];
+    if (vstupne.length > 20) throw new Error('Najviac 20 motívov v jednej objednávke.');
 
     const [{ data: nak }, { data: cfg }, { data: nastavenia }] = await Promise.all([
       supabase.from('buffky_naklady_verejny').select('*').maybeSingle(),
@@ -119,43 +118,79 @@ Deno.serve(async (req) => {
       ? { coefA: Number(cfg.coef_a), coefB: Number(cfg.coef_b), marginFloor: Number(cfg.margin_floor), coefP: Number(cfg.coef_p), cielovaHodnotaZakazky: Number(cfg.cielova_hodnota_zakazky ?? 25000), dphPercent: Number(cfg.dph_percent ?? 23) }
       : { coefA: 300, coefB: 54, marginFloor: 30, coefP: 1.3, cielovaHodnotaZakazky: 25000, dphPercent: 23 };
 
-    // Nikdy neveri klientom poslanej cene materialu — pri Premium sa nakladovy zaklad materialu
-    // ZNOVA zisti zo servera (buffky_premium_materialy_verejny), materialKod len urcuje KTORY.
-    let nakladKs = Number(nak.naklad_ks) || 0;
-    let vybranyMaterialNazov: string | null = null;
-    if (typ === 'premium') {
-      if (!materialKod) throw new Error('Chýba zvolený materiál Premium buffky.');
-      const { data: material } = await supabase.from('buffky_premium_materialy_verejny').select('kod, nazov, naklad_material_ks').eq('kod', materialKod).maybeSingle();
-      if (!material) throw new Error('Zvolený materiál sa nenašiel alebo nie je aktívny.');
-      nakladKs = Number(material.naklad_material_ks || 0) + Number(nak.naklad_potlac_ks || 0) + Number(nak.cena_sitia_bok_ks || 0);
-      vybranyMaterialNazov = material.nazov;
+    // Kazdu polozku overime a nakladovy zaklad zistime ZNOVA zo servera — klientom poslana cena sa nikdy nepouzije.
+    // Pri Premium sa nakladovy zaklad materialu berie z buffky_premium_materialy_verejny, materialKod len urcuje KTORY.
+    type Polozka = { id: string; typ: string; materialKod: string | null; ks: number; nakladKs: number; materialNazov: string | null; suborNazov: string | null; suborCesta: string; dizajnJson: string | null; cenaKus: number; tovar: number };
+    const polozky: Polozka[] = [];
+    for (const v of vstupne) {
+      const typ = String(v.typ || 'tubular_basic');
+      if (typ !== 'tubular_basic' && typ !== 'premium') throw new Error('Neplatný typ buffky.');
+      const ks = Math.max(1, Math.round(Number(v.pocetKs)) || 1);
+      if (!v.suborCesta) throw new Error('Chýba tlačový súbor buffky.');
+      let nakladKs = Number(nak.naklad_ks) || 0;
+      let materialNazov: string | null = null;
+      if (typ === 'premium') {
+        if (!v.materialKod) throw new Error('Chýba zvolený materiál Premium buffky.');
+        const { data: material } = await supabase.from('buffky_premium_materialy_verejny').select('kod, nazov, naklad_material_ks').eq('kod', v.materialKod).maybeSingle();
+        if (!material) throw new Error('Zvolený materiál sa nenašiel alebo nie je aktívny.');
+        nakladKs = Number(material.naklad_material_ks || 0) + Number(nak.naklad_potlac_ks || 0) + Number(nak.cena_sitia_bok_ks || 0);
+        materialNazov = material.nazov;
+      }
+      polozky.push({
+        id: crypto.randomUUID(), typ, materialKod: typ === 'premium' ? String(v.materialKod) : null, ks, nakladKs, materialNazov,
+        suborNazov: v.suborNazov ? String(v.suborNazov) : null, suborCesta: String(v.suborCesta), dizajnJson: v.dizajnJson ? String(v.dizajnJson) : null, cenaKus: 0, tovar: 0,
+      });
     }
-    const cenaKus = priceAt(nakladKs, ks, pricingConfig);
-    const subtotalPredZlavou = Math.max(cenaKus * ks, Number(nastavenia.minimalna_cena_objednavky) || 0);
+
+    // Cena: mnozstevna hladina z CELKOVEHO poctu kusov vsetkych motivov; minimalna hodnota objednavky raz na cely tovar;
+    // B2B zlava, expres, postovne (raz) a DPH z celku. (Rovnaky algoritmus ako printstudio-pro/src/kosikCena.js.)
+    const ksSpolu = polozky.reduce((s, p) => s + p.ks, 0);
+    for (const p of polozky) { p.cenaKus = priceAt(p.nakladKs, ksSpolu, pricingConfig); p.tovar = p.cenaKus * p.ks; }
+    const tovarSpolu = polozky.reduce((s, p) => s + p.tovar, 0);
+    const doplatokMinima = Math.max(0, (Number(nastavenia.minimalna_cena_objednavky) || 0) - tovarSpolu);
+    const predZlavou = tovarSpolu + doplatokMinima;
     // B2B zlava sa odpocita z ceny tovaru (pred expresom, dopravou a DPH)
     const b2bZlavaPercent = await b2bZlava(supabase, b2bKod);
-    const subtotal = subtotalPredZlavou - Math.round(subtotalPredZlavou * b2bZlavaPercent) / 100;
-    const expressFee = deliverySpeed === 'express' ? subtotal * ((Number(nastavenia.priplatok_expres_percent) || 0) / 100) : 0;
+    const subtotal = predZlavou - Math.round(predZlavou * b2bZlavaPercent) / 100;
+    const expressPercent = deliverySpeed === 'express' ? (Number(nastavenia.priplatok_expres_percent) || 0) : 0;
+    const expressFee = subtotal * (expressPercent / 100);
     const shippingFee = osobnyOdber ? 0 : (Number(nastavenia.cena_doprava) || 0);
     const grandTotalBezDph = subtotal + expressFee + shippingFee;
     const dphPercent = Number(pricingConfig.dphPercent) || 0;
     const dphSuma = grandTotalBezDph * (dphPercent / 100);
     const grandTotal = grandTotalBezDph + dphSuma;
 
-    const objednavkaId = crypto.randomUUID();
-    const { error: insertErr } = await supabase.from('buffky_objednavky').insert({
-      id: objednavkaId,
-      typ,
-      material_kod: typ === 'premium' ? materialKod : null,
-      pocet_ks: ks,
-      cena_kus: Math.round(cenaKus * 100) / 100,
-      cena_spolu: Math.round(grandTotal * 100) / 100,
-      doprava_rychlost: deliverySpeed,
-      dizajn_json: dizajnJson ? JSON.parse(dizajnJson) : null,
-      subor_nazov: suborNazov,
-      subor_cesta: suborCesta,
-      osobny_odber: !!osobnyOdber,
+    // Rozpis do poloziek Shopify draftu (v centoch, aby sucet presne sedel): kazdy motiv ma svoj podiel z tovaru
+    // (vratane doplatku do minima, po B2B zlave, s expresom a DPH), postovne ide ako samostatna polozka.
+    const faktor = predZlavou > 0 ? subtotal / predZlavou : 1;
+    const dphKoef = 1 + dphPercent / 100;
+    const grandCents = Math.round(grandTotal * 100);
+    const viac = polozky.length > 1;
+    // pri jednom motive je postovne zahrnute v cene polozky (ako doteraz), pri viacerych ide ako samostatna polozka
+    const shipCents = viac && shippingFee > 0 ? Math.round(shippingFee * dphKoef * 100) : 0;
+    const itemCents = polozky.map((p) => {
+      const podielMinima = tovarSpolu > 0 ? doplatokMinima * p.tovar / tovarSpolu : 0;
+      return Math.round((p.tovar + podielMinima) * faktor * (1 + expressPercent / 100) * dphKoef * 100);
     });
+    const rozdiel = grandCents - shipCents - itemCents.reduce((s, c) => s + c, 0);
+    itemCents[itemCents.length - 1] += rozdiel; // zaokruhlovaci rozdiel (max. par centov) na posledny motiv
+
+    const skupinaId = crypto.randomUUID();
+    const riadkyDb = polozky.map((p, i) => ({
+      id: p.id,
+      typ: p.typ,
+      material_kod: p.materialKod,
+      pocet_ks: p.ks,
+      cena_kus: Math.round(p.cenaKus * 100) / 100,
+      cena_spolu: viac ? itemCents[i] / 100 : Math.round(grandTotal * 100) / 100,
+      doprava_rychlost: deliverySpeed,
+      dizajn_json: p.dizajnJson ? JSON.parse(p.dizajnJson) : null,
+      subor_nazov: p.suborNazov,
+      subor_cesta: p.suborCesta,
+      osobny_odber: !!osobnyOdber,
+      ...(viac ? { skupina_id: skupinaId, poradie: i + 1 } : {}),
+    }));
+    const { error: insertErr } = await supabase.from('buffky_objednavky').insert(riadkyDb);
     if (insertErr) throw insertErr;
 
     const domain = Deno.env.get('SHOPIFY_STORE_DOMAIN');
@@ -164,29 +199,35 @@ Deno.serve(async (req) => {
     if (!domain || !clientId || !clientSecret) throw new Error('SHOPIFY_STORE_DOMAIN, SHOPIFY_CLIENT_ID alebo SHOPIFY_CLIENT_SECRET nie je nastavený v Supabase secrets.');
     const token = await ziskajAdminToken(domain, clientId, clientSecret);
 
-    const typLabel = typ === 'premium' ? `Premium${vybranyMaterialNazov ? ' — ' + vybranyMaterialNazov : ''}` : 'Tubular Basic';
+    const lineItems: Record<string, unknown>[] = polozky.map((p, i) => {
+      const typLabel = p.typ === 'premium' ? `Premium${p.materialNazov ? ' — ' + p.materialNazov : ''}` : 'Tubular Basic';
+      return {
+        title: `Buffka — ${typLabel} — vlastný dizajn (${p.ks} ks)` + (viac ? ` — motív ${i + 1}/${polozky.length}` : '') + (osobnyOdber ? ' (osobný odber)' : ''),
+        price: (itemCents[i] / 100).toFixed(2),
+        quantity: 1,
+        taxable: false, // cena uz zahrna DPH (vypocitana server-side) — Shopify ju druhykrat neprirata
+        requires_shipping: !osobnyOdber,
+        properties: [
+          { name: '_objednavka_id', value: p.id },
+          { name: '_typ', value: typLabel },
+          { name: '_pocet_ks', value: String(p.ks) },
+          { name: '_subor', value: p.suborNazov || '' },
+          { name: '_osobny_odber', value: osobnyOdber ? 'áno' : 'nie' },
+          { name: '_b2b_kod', value: b2bZlavaPercent > 0 ? String(b2bKod).trim().toUpperCase() : '' },
+          { name: '_b2b_zlava_percent', value: b2bZlavaPercent > 0 ? String(b2bZlavaPercent) : '' },
+          ...(viac ? [{ name: '_motiv', value: `${i + 1}/${polozky.length}` }, { name: '_skupina_id', value: skupinaId }] : []),
+        ],
+      };
+    });
+    if (viac && shipCents > 0) {
+      lineItems.push({ title: 'Poštovné a balné (spoločné pre všetky motívy)', price: (shipCents / 100).toFixed(2), quantity: 1, taxable: false, requires_shipping: false });
+    }
+
     const draftPayload = {
       draft_order: {
         ...zakaznikDoDraftOrder(body.zakaznik),
-        line_items: [
-          {
-            title: `Buffka — ${typLabel} — vlastný dizajn (${ks} ks)` + (osobnyOdber ? ' (osobný odber)' : ''),
-            price: grandTotal.toFixed(2),
-            quantity: 1,
-            taxable: false, // cena uz zahrna DPH (vypocitana server-side) — Shopify ju druhykrat neprirata
-            requires_shipping: !osobnyOdber,
-            properties: [
-              { name: '_objednavka_id', value: objednavkaId },
-              { name: '_typ', value: typLabel },
-              { name: '_pocet_ks', value: String(ks) },
-              { name: '_subor', value: suborNazov || '' },
-              { name: '_osobny_odber', value: osobnyOdber ? 'áno' : 'nie' },
-              { name: '_b2b_kod', value: b2bZlavaPercent > 0 ? String(b2bKod).trim().toUpperCase() : '' },
-              { name: '_b2b_zlava_percent', value: b2bZlavaPercent > 0 ? String(b2bZlavaPercent) : '' },
-            ],
-          },
-        ],
-        note: `Buffka objednávka ${objednavkaId}`,
+        line_items: lineItems,
+        note: viac ? `Buffky objednávka (${polozky.length} motívy) ${skupinaId}: ${polozky.map((p) => p.id).join(', ')}` : `Buffka objednávka ${polozky[0].id}`,
         tags: 'buffky',
         use_customer_default_address: true,
       },
@@ -205,7 +246,7 @@ Deno.serve(async (req) => {
     const draftOrder = data?.draft_order;
     if (!draftOrder?.invoice_url) throw new Error('Shopify nevrátil odkaz na platbu draft objednávky.');
 
-    return odpoved({ checkoutUrl: draftOrder.invoice_url, cenaSpolu: grandTotal, objednavkaId });
+    return odpoved({ checkoutUrl: draftOrder.invoice_url, cenaSpolu: grandCents / 100, objednavkaId: polozky[0].id });
   } catch (e) {
     const msg = e instanceof Error ? e.message : (e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : JSON.stringify(e));
     return odpoved({ error: msg });

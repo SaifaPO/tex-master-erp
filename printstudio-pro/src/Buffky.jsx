@@ -9,6 +9,8 @@ import { useB2bKod } from './b2b';
 import B2bKod from './B2bKod';
 import { CenaB2b } from './CenaB2b';
 import { initBuffkyEngine } from './buffky/buffkyEngine';
+import { vypocitajKosik } from './kosikCena';
+import { KosikMotivov, nahladZCanvasu } from './kosikMotivov';
 
 const BUCKET = 'print-designs';
 
@@ -33,6 +35,8 @@ export default function Buffky({ supabase, onSpat }) {
   const [dopytBezi, setDopytBezi] = useState(false);
   const [confirmation, setConfirmation] = useState('');
   const [submitError, setSubmitError] = useState('');
+  const [kosik, setKosik] = useState([]); // motívy pridané do objednávky (viac motívov = jedno poštovné)
+  const [pridavam, setPridavam] = useState(false);
 
   const rootRef = useRef(null);
   const engineRef = useRef(null);
@@ -71,38 +75,70 @@ export default function Buffky({ supabase, onSpat }) {
   }, [isLoading, loadError, nastavenia, typ]);
 
   const vybranyMaterial = premiumMaterialy.find(m => m.kod === materialKod);
-  const nakladKs = !naklady ? 0 : (typ === 'premium'
-    ? Number(vybranyMaterial?.naklad_material_ks || 0) + Number(naklady.naklad_potlac_ks || 0) + Number(naklady.cena_sitia_bok_ks || 0)
+  const nakladPre = (t, mKod) => !naklady ? 0 : (t === 'premium'
+    ? Number(premiumMaterialy.find(m => m.kod === mKod)?.naklad_material_ks || 0) + Number(naklady.naklad_potlac_ks || 0) + Number(naklady.cena_sitia_bok_ks || 0)
     : Number(naklady.naklad_ks || 0));
+  const popisPolozky = (t, mKod) => t === 'premium' ? `Premium${premiumMaterialy.find(m => m.kod === mKod)?.nazov ? ' — ' + premiumMaterialy.find(m => m.kod === mKod).nazov : ''}` : 'Tubular Basic';
+  const nakladKs = nakladPre(typ, materialKod);
 
-  const cenaKus = priceAt(nakladKs, pocetKs, pricingConfig);
-  const subtotalPredZlavou = Math.max(cenaKus * pocetKs, Number(nastavenia?.minimalna_cena_objednavky) || 0);
-  // B2B zľava (kód agentúry) sa odpočíta z ceny tovaru — rovnako ako na serveri.
-  const b2bZlavaEur = Math.round(subtotalPredZlavou * (Number(b2b.zlavaPercent) || 0)) / 100;
-  const subtotal = subtotalPredZlavou - b2bZlavaEur;
-  const expressFee = deliverySpeed === 'express' ? subtotal * ((Number(nastavenia?.priplatok_expres_percent) || 0) / 100) : 0;
-  const shippingFee = osobnyOdber ? 0 : Number(nastavenia?.cena_doprava) || 0;
-  const grandTotalBezDph = subtotal + expressFee + shippingFee;
-  const dphPercent = Number(pricingConfig.dphPercent) || 0;
-  const dphSuma = grandTotalBezDph * (dphPercent / 100);
-  const grandTotal = grandTotalBezDph + dphSuma;
+  // Cena: ak je v objednávke aspoň jeden pridaný motív, platí zoznam motívov; inak sa objednáva návrh v editore (ako doteraz).
+  // Množstevná hladina sa počíta z celkového počtu kusov všetkých motívov, minimum a poštovné platia raz na celú objednávku.
+  const aktualnaPolozka = { nakladKs, pocetKs };
+  const polozkyNaCenu = kosik.length > 0 ? kosik.map(p => ({ nakladKs: nakladPre(p.typ, p.materialKod), pocetKs: p.pocetKs })) : [aktualnaPolozka];
+  const vypocet = vypocitajKosik({ polozky: polozkyNaCenu, cfg: pricingConfig, nastavenia, deliverySpeed, osobnyOdber, b2bPercent: b2b.zlavaPercent });
+  const vJeden = vypocitajKosik({ polozky: [aktualnaPolozka], cfg: pricingConfig, nastavenia, deliverySpeed, osobnyOdber, b2bPercent: b2b.zlavaPercent }); // B2B dopyt = len aktuálny návrh
+  const subtotal = vJeden.subtotal;
+  const { b2bZlavaEur, expressFee, shippingFee, grandTotalBezDph, dphPercent, dphSuma, grandTotal } = vypocet;
+
+  // Vytvorí položku z návrhu v editore: nahrá tlačový súbor a vráti motív do zoznamu.
+  const vytvorPolozku = async () => {
+    if (typ === 'premium' && !materialKod) throw new Error('Vyber materiál buffky.');
+    const id = crypto.randomUUID();
+    const blob = await engineRef.current.getProductionBlob();
+    const cesta = `buffky/${id}/buffka.png`;
+    const { error: uploadErr } = await supabase.storage.from(BUCKET).upload(cesta, blob, { contentType: 'image/png' });
+    if (uploadErr) throw new Error('Nepodarilo sa nahrať tlačový súbor: ' + uploadErr.message);
+    return {
+      id, typ, materialKod: typ === 'premium' ? materialKod : null, pocetKs, popis: popisPolozky(typ, materialKod),
+      suborNazov: 'buffka.png', suborCesta: cesta, dizajnJson: engineRef.current.getDesignJson(), nahlad: nahladZCanvasu(rootRef.current),
+    };
+  };
+
+  const pridajMotiv = async () => {
+    if (!engineRef.current) return;
+    setPridavam(true); setSubmitError(''); setConfirmation('');
+    try {
+      const p = await vytvorPolozku();
+      setKosik(k => [...k, p]);
+      setConfirmation('Motív je v objednávke. Návrh v editore môžeš upraviť a pridať ďalší motív, alebo objednávku dokončiť.');
+    } catch (e) {
+      setSubmitError('Motív sa nepodarilo pridať: ' + e.message);
+    } finally {
+      setPridavam(false);
+    }
+  };
+  const odoberMotiv = (id) => setKosik(k => k.filter(p => p.id !== id));
 
   const odoslatObjednavku = async () => {
     if (!engineRef.current) return;
-    if (typ === 'premium' && !materialKod) { setSubmitError('Vyber materiál buffky.'); return; }
     setIsSubmitting(true);
     setSubmitError('');
     setConfirmation('');
     try {
-      const objednavkaId = crypto.randomUUID();
-      const blob = await engineRef.current.getProductionBlob();
-      const cesta = `buffky/${objednavkaId}/buffka.png`;
-      const { error: uploadErr } = await supabase.storage.from(BUCKET).upload(cesta, blob, { contentType: 'image/png' });
-      if (uploadErr) throw new Error('Nepodarilo sa nahrať tlačový súbor: ' + uploadErr.message);
-      const dizajnJson = engineRef.current.getDesignJson();
+      let polozky = kosik;
+      // Návrh v editore je v objednávke, ak sa jeho náhľad zhoduje s niektorým pridaným motívom.
+      const aktNahlad = nahladZCanvasu(rootRef.current);
+      const vKosiku = kosik.length > 0 && aktNahlad && kosik.some(p => p.nahlad === aktNahlad);
+      if (!vKosiku) {
+        if (kosik.length > 0 && !window.confirm('Návrh v editore ešte nie je v objednávke. Pridať ho a objednať všetky motívy spolu?\n\nOK = pridať a objednať\nZrušiť = vrátiť sa a upraviť')) { setIsSubmitting(false); return; }
+        polozky = [...kosik, await vytvorPolozku()];
+      }
 
       const { data, error } = await supabase.functions.invoke('buffky-create-draft-order', {
-        body: { typ, materialKod: typ === 'premium' ? materialKod : null, pocetKs, deliverySpeed, osobnyOdber, b2bKod: b2b.kod, suborNazov: 'buffka.png', suborCesta: cesta, dizajnJson },
+        body: {
+          polozky: polozky.map(({ typ: t, materialKod: m, pocetKs: k, suborNazov, suborCesta, dizajnJson }) => ({ typ: t, materialKod: m, pocetKs: k, suborNazov, suborCesta, dizajnJson })),
+          deliverySpeed, osobnyOdber, b2bKod: b2b.kod,
+        },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -435,7 +471,7 @@ export default function Buffky({ supabase, onSpat }) {
             <h3 className="text-sm font-bold text-white flex items-center gap-2"><Gift className="w-4 h-4 text-cyan-400" /> Súhrn objednávky</h3>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1">Počet kusov</label>
+                <label className="block text-xs font-medium text-slate-400 mb-1">{kosik.length > 0 ? 'Počet kusov tohto motívu' : 'Počet kusov'}</label>
                 <NumberInput min="1" step="1" value={pocetKs} onChange={(v) => setPocetKs(Math.max(1, v))} fallback={1} className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" />
               </div>
               <div>
@@ -452,13 +488,23 @@ export default function Buffky({ supabase, onSpat }) {
               <span className="text-xs text-slate-300">Osobný odber v Prešove alebo Košiciach (neplatím poštovné)</span>
             </label>
 
+            <KosikMotivov
+              polozky={kosik} riadky={kosik.length > 0 ? vypocet.riadky : null} onOdober={odoberMotiv} onPridat={pridajMotiv} bezi={pridavam || isSubmitting}
+              popisKrok={kosik.length === 0
+                ? 'Chceš viac rôznych motívov (napr. 2 buffky s inou grafikou)? Pridaj tento motív, uprav návrh a pridaj ďalší — poštovné zaplatíš len raz a množstevná zľava sa počíta zo všetkých kusov.'
+                : 'Návrh v editore sa do objednávky dostane až po kliknutí na „Pridať tento motív“ (alebo ho pri objednaní ponúkneme pridať).'}
+            />
+
             <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl space-y-1.5">
               <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
                 <span className="text-xs font-bold text-slate-200">Cena</span>
                 <span className="text-[10px] font-normal text-cyan-300 bg-cyan-500/10 px-2 py-1 rounded-full">sadzba DPH {dphPercent}%</span>
               </div>
-              <RowSum label="Cena za kus (bez DPH)" value={<CenaB2b v={cenaKus} p={b2b.zlavaPercent} />} />
-              {b2bZlavaEur > 0 && <RowSum label={`Tovar spolu (${pocetKs} ks, bez DPH)`} value={<CenaB2b v={subtotalPredZlavou} p={b2b.zlavaPercent} />} />}
+              {vypocet.riadky.length === 1
+                ? <RowSum label="Cena za kus (bez DPH)" value={<CenaB2b v={vypocet.riadky[0].cenaKus} p={b2b.zlavaPercent} />} />
+                : vypocet.riadky.map((r, i) => <RowSum key={i} label={`Motív ${i + 1}: ${r.ks} ks × ${r.cenaKus.toFixed(2)} €`} value={<CenaB2b v={r.tovar} p={b2b.zlavaPercent} />} />)}
+              {(vypocet.riadky.length > 1 || b2bZlavaEur > 0) && <RowSum label={`Tovar spolu (${vypocet.ksSpolu} ks, bez DPH)`} value={<CenaB2b v={vypocet.tovarSpolu} p={b2b.zlavaPercent} />} />}
+              {vypocet.doplatokMinima > 0 && <RowSum label={`Doplatok do minimálnej hodnoty objednávky (${vypocet.minimum.toFixed(2)} €)`} value={`${vypocet.doplatokMinima.toFixed(2)} €`} />}
               <RowSum label="Doprava" value={shippingFee === 0 ? 'Zdarma' : `${shippingFee.toFixed(2)} €`} />
               {b2bZlavaEur > 0 && <RowSum label={`B2B zľava ${Number(b2b.zlavaPercent)} %`} value={`−${b2bZlavaEur.toFixed(2)} €`} />}
               {expressFee > 0 && <RowSum label="Príplatok expres" value={`${expressFee.toFixed(2)} €`} />}
@@ -513,7 +559,8 @@ export default function Buffky({ supabase, onSpat }) {
                   const rate = priceAt(nakladKs, level, pricingConfig);
                   const base = priceAt(nakladKs, QUANTITY_LEVELS[0], pricingConfig);
                   const discount = base > 0 ? Math.round(((base - rate) / base) * 100) : 0;
-                  const isCurrent = pocetKs >= level && (level === QUANTITY_LEVELS[QUANTITY_LEVELS.length - 1] || pocetKs < QUANTITY_LEVELS[QUANTITY_LEVELS.indexOf(level) + 1]);
+                  const ksHladina = vypocet.ksSpolu;
+                  const isCurrent = ksHladina >= level && (level === QUANTITY_LEVELS[QUANTITY_LEVELS.length - 1] || ksHladina < QUANTITY_LEVELS[QUANTITY_LEVELS.indexOf(level) + 1]);
                   return (
                     <tr key={level} className={isCurrent ? 'bg-cyan-500/10 font-semibold' : ''}>
                       <td className="p-2.5 text-slate-300">od {level} ks {isCurrent && <span className="ml-1 text-[10px] bg-cyan-600 text-white px-2 py-0.5 rounded-full">Váš odber</span>}</td>

@@ -9,6 +9,8 @@ import { useB2bKod } from './b2b';
 import B2bKod from './B2bKod';
 import { CenaB2b } from './CenaB2b';
 import { initCelenkyEngine } from './celenky/celenkyEngine';
+import { vypocitajKosik } from './kosikCena';
+import { KosikMotivov, nahladZCanvasu } from './kosikMotivov';
 
 const BUCKET = 'print-designs';
 
@@ -37,6 +39,8 @@ export default function Celenky({ supabase, onSpat }) {
   const [dopytBezi, setDopytBezi] = useState(false);
   const [confirmation, setConfirmation] = useState('');
   const [submitError, setSubmitError] = useState('');
+  const [kosik, setKosik] = useState([]); // motívy pridané do objednávky (viac motívov = jedno poštovné)
+  const [pridavam, setPridavam] = useState(false);
 
   const rootRef = useRef(null);
   const engineRef = useRef(null);
@@ -87,17 +91,46 @@ export default function Celenky({ supabase, onSpat }) {
 
   // ---- Cena ----
   const nakladVarianta = aktVariant.naklad_ks != null ? Number(aktVariant.naklad_ks) : nakladKs;
-  const cenaKus = priceAt(nakladVarianta, pocetKs, pricingConfig);
-  const subtotalPredZlavou = Math.max(cenaKus * pocetKs, Number(nastavenia?.minimalna_cena_objednavky) || 0);
-  // B2B zľava (kód agentúry) sa odpočíta z ceny tovaru — rovnako ako na serveri.
-  const b2bZlavaEur = Math.round(subtotalPredZlavou * (Number(b2b.zlavaPercent) || 0)) / 100;
-  const subtotal = subtotalPredZlavou - b2bZlavaEur;
-  const expressFee = deliverySpeed === 'express' ? subtotal * ((Number(nastavenia?.priplatok_expres_percent) || 0) / 100) : 0;
-  const shippingFee = osobnyOdber ? 0 : Number(nastavenia?.cena_doprava) || 0;
-  const grandTotalBezDph = subtotal + expressFee + shippingFee;
-  const dphPercent = Number(pricingConfig.dphPercent) || 0;
-  const dphSuma = grandTotalBezDph * (dphPercent / 100);
-  const grandTotal = grandTotalBezDph + dphSuma;
+  // Cena: ak je v objednávke aspoň jeden pridaný motív, platí zoznam motívov; inak sa objednáva návrh v editore (ako doteraz).
+  // Množstevná hladina sa počíta z celkového počtu kusov všetkých motívov, minimum a poštovné platia raz na celú objednávku.
+  const nakladPreVariant = (velkostKod, materialKod) => {
+    const vr = varianty.find(x => x.velkost_kod === velkostKod && x.material_kod === materialKod);
+    return vr && vr.naklad_ks != null ? Number(vr.naklad_ks) : nakladKs;
+  };
+  const aktualnaPolozka = { nakladKs: nakladVarianta, pocetKs };
+  const polozkyNaCenu = kosik.length > 0 ? kosik.map(p => ({ nakladKs: nakladPreVariant(p.velkost, p.material), pocetKs: p.pocetKs })) : [aktualnaPolozka];
+  const vypocet = vypocitajKosik({ polozky: polozkyNaCenu, cfg: pricingConfig, nastavenia, deliverySpeed, osobnyOdber, b2bPercent: b2b.zlavaPercent });
+  const vJeden = vypocitajKosik({ polozky: [aktualnaPolozka], cfg: pricingConfig, nastavenia, deliverySpeed, osobnyOdber, b2bPercent: b2b.zlavaPercent }); // B2B dopyt = len aktuálny návrh
+  const subtotal = vJeden.subtotal;
+  const { b2bZlavaEur, expressFee, shippingFee, grandTotalBezDph, dphPercent, dphSuma, grandTotal } = vypocet;
+
+  const popisVariantu = (v) => { const vr = varianty.find(x => x.velkost_kod === v.velkost && x.material_kod === v.material); return vr ? `${vr.velkost_nazov}, ${materialy.find(m => m.kod === vr.material_kod)?.nazov || vr.material_kod}` : 'Čelenka'; };
+
+  // Vytvorí položku z návrhu v editore: nahrá tlačový súbor a vráti motív do zoznamu.
+  const vytvorPolozku = async () => {
+    const id = crypto.randomUUID();
+    const blob = await engineRef.current.getProductionBlob();
+    const cesta = `celenky/${id}/celenka.png`;
+    const { error: uploadErr } = await supabase.storage.from(BUCKET).upload(cesta, blob, { contentType: 'image/png' });
+    if (uploadErr) throw new Error('Nepodarilo sa nahrať tlačový súbor: ' + uploadErr.message);
+    const zaklad = { velkost: aktVariant.velkost_kod, material: aktVariant.material_kod };
+    return { id, ...zaklad, pocetKs, popis: popisVariantu(zaklad), suborNazov: 'celenka.png', suborCesta: cesta, dizajnJson: engineRef.current.getDesignJson(), nahlad: nahladZCanvasu(rootRef.current, 120, '#editorCanvas') };
+  };
+
+  const pridajMotiv = async () => {
+    if (!engineRef.current) return;
+    setPridavam(true); setSubmitError(''); setConfirmation('');
+    try {
+      const p = await vytvorPolozku();
+      setKosik(k => [...k, p]);
+      setConfirmation('Motív je v objednávke. Návrh v editore môžeš upraviť a pridať ďalší motív, alebo objednávku dokončiť.');
+    } catch (e) {
+      setSubmitError('Motív sa nepodarilo pridať: ' + e.message);
+    } finally {
+      setPridavam(false);
+    }
+  };
+  const odoberMotiv = (id) => setKosik(k => k.filter(p => p.id !== id));
 
   const odoslatObjednavku = async () => {
     if (!engineRef.current) return;
@@ -105,15 +138,20 @@ export default function Celenky({ supabase, onSpat }) {
     setSubmitError('');
     setConfirmation('');
     try {
-      const objednavkaId = crypto.randomUUID();
-      const blob = await engineRef.current.getProductionBlob();
-      const cesta = `celenky/${objednavkaId}/celenka.png`;
-      const { error: uploadErr } = await supabase.storage.from(BUCKET).upload(cesta, blob, { contentType: 'image/png' });
-      if (uploadErr) throw new Error('Nepodarilo sa nahrať tlačový súbor: ' + uploadErr.message);
-      const dizajnJson = engineRef.current.getDesignJson();
+      let polozky = kosik;
+      // Návrh v editore je v objednávke, ak sa jeho dizajn aj variant zhodujú s niektorým pridaným motívom.
+      const aktJson = engineRef.current.getDesignJson();
+      const vKosiku = kosik.some(p => p.dizajnJson === aktJson && p.velkost === aktVariant.velkost_kod && p.material === aktVariant.material_kod);
+      if (!vKosiku) {
+        if (kosik.length > 0 && !window.confirm('Návrh v editore ešte nie je v objednávke. Pridať ho a objednať všetky motívy spolu?\n\nOK = pridať a objednať\nZrušiť = vrátiť sa a upraviť')) { setIsSubmitting(false); return; }
+        polozky = [...kosik, await vytvorPolozku()];
+      }
 
       const { data, error } = await supabase.functions.invoke('celenky-create-draft-order', {
-        body: { pocetKs, velkost: aktVariant.velkost_kod, material: aktVariant.material_kod, deliverySpeed, osobnyOdber, b2bKod: b2b.kod, suborNazov: 'celenka.png', suborCesta: cesta, dizajnJson },
+        body: {
+          polozky: polozky.map(({ velkost, material, pocetKs: k, suborNazov, suborCesta, dizajnJson }) => ({ velkost, material, pocetKs: k, suborNazov, suborCesta, dizajnJson })),
+          deliverySpeed, osobnyOdber, b2bKod: b2b.kod,
+        },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -519,7 +557,7 @@ export default function Celenky({ supabase, onSpat }) {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">Počet kusov</label>
+                <label className="block text-xs font-medium text-slate-500 mb-1">{kosik.length > 0 ? 'Počet kusov tohto motívu' : 'Počet kusov'}</label>
                 <NumberInput min="1" step="1" value={pocetKs} onChange={(v) => setPocetKs(Math.max(1, v))} fallback={1} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
               </div>
               <div>
@@ -536,13 +574,23 @@ export default function Celenky({ supabase, onSpat }) {
               <span className="text-xs text-slate-600">Osobný odber v Prešove alebo Košiciach (neplatím poštovné)</span>
             </label>
 
+            <KosikMotivov
+              svetly polozky={kosik} riadky={kosik.length > 0 ? vypocet.riadky : null} onOdober={odoberMotiv} onPridat={pridajMotiv} bezi={pridavam || isSubmitting}
+              popisKrok={kosik.length === 0
+                ? 'Chceš viac rôznych motívov (napr. 2 čelenky s inou grafikou)? Pridaj tento motív, uprav návrh a pridaj ďalší — poštovné zaplatíš len raz a množstevná zľava sa počíta zo všetkých kusov.'
+                : 'Návrh v editore sa do objednávky dostane až po kliknutí na „Pridať tento motív“ (alebo ho pri objednaní ponúkneme pridať).'}
+            />
+
             <div className="bg-slate-900 text-white p-4 rounded-xl space-y-2">
               <div className="flex items-center justify-between border-b border-slate-800 pb-2">
                 <span className="text-xs font-bold">Cena</span>
                 <span className="text-[10px] font-normal text-indigo-300 bg-indigo-500/10 px-2 py-1 rounded-full">sadzba DPH {dphPercent}%</span>
               </div>
-              <RowSum label="Cena za kus (bez DPH)" value={<CenaB2b v={cenaKus} p={b2b.zlavaPercent} />} />
-              {b2bZlavaEur > 0 && <RowSum label={`Tovar spolu (${pocetKs} ks, bez DPH)`} value={<CenaB2b v={subtotalPredZlavou} p={b2b.zlavaPercent} />} />}
+              {vypocet.riadky.length === 1
+                ? <RowSum label="Cena za kus (bez DPH)" value={<CenaB2b v={vypocet.riadky[0].cenaKus} p={b2b.zlavaPercent} />} />
+                : vypocet.riadky.map((r, i) => <RowSum key={i} label={`Motív ${i + 1}: ${r.ks} ks × ${r.cenaKus.toFixed(2)} €`} value={<CenaB2b v={r.tovar} p={b2b.zlavaPercent} />} />)}
+              {(vypocet.riadky.length > 1 || b2bZlavaEur > 0) && <RowSum label={`Tovar spolu (${vypocet.ksSpolu} ks, bez DPH)`} value={<CenaB2b v={vypocet.tovarSpolu} p={b2b.zlavaPercent} />} />}
+              {vypocet.doplatokMinima > 0 && <RowSum label={`Doplatok do minimálnej hodnoty objednávky (${vypocet.minimum.toFixed(2)} €)`} value={`${vypocet.doplatokMinima.toFixed(2)} €`} />}
               <RowSum label="Doprava" value={shippingFee === 0 ? 'Zdarma' : `${shippingFee.toFixed(2)} €`} />
               {b2bZlavaEur > 0 && <RowSum label={`B2B zľava ${Number(b2b.zlavaPercent)} %`} value={`−${b2bZlavaEur.toFixed(2)} €`} />}
               {expressFee > 0 && <RowSum label="Príplatok expres" value={`${expressFee.toFixed(2)} €`} />}
@@ -598,7 +646,8 @@ export default function Celenky({ supabase, onSpat }) {
                   const rate = priceAt(nakladVarianta, level, pricingConfig);
                   const base = priceAt(nakladVarianta, QUANTITY_LEVELS[0], pricingConfig);
                   const discount = base > 0 ? Math.round(((base - rate) / base) * 100) : 0;
-                  const isCurrent = pocetKs >= level && (level === QUANTITY_LEVELS[QUANTITY_LEVELS.length - 1] || pocetKs < QUANTITY_LEVELS[QUANTITY_LEVELS.indexOf(level) + 1]);
+                  const ksHladina = vypocet.ksSpolu;
+                  const isCurrent = ksHladina >= level && (level === QUANTITY_LEVELS[QUANTITY_LEVELS.length - 1] || ksHladina < QUANTITY_LEVELS[QUANTITY_LEVELS.indexOf(level) + 1]);
                   return (
                     <tr key={level} className={isCurrent ? 'bg-indigo-50 font-semibold' : ''}>
                       <td className="p-2.5 text-slate-700">od {level} ks {isCurrent && <span className="ml-1 text-[10px] bg-indigo-600 text-white px-2 py-0.5 rounded-full">Váš odber</span>}</td>
