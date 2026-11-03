@@ -1,6 +1,6 @@
 // Spolocne prvky "kosika motivov": zakaznik si v jednej objednavke navrhne viac motivov (napr. 2 buffky s roznou
 // grafikou) a zaplati postovne len raz. Pouzivaju Buffky (tmavy vzhlad) a Celenky (svetly vzhlad).
-import React from 'react';
+import React, { useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 
 const eur = (v) => `${Number(v || 0).toFixed(2)} €`;
@@ -46,3 +46,40 @@ export function KosikMotivov({ polozky, riadky, onOdober, onPridat, bezi, popisK
     </div>
   );
 }
+
+// Stav košíka motívov pre aplikácie, kde sa motív pridáva do objednávky (šnúrky, stolové vlajky, fólie, 3D transfery).
+//  vytvorPolozku()   -> nahrá súbory a vráti { id, vstup, popis, nahlad, podpis, pocetKs }; vstup = objekt, ktorý sa pošle serveru (polozky[])
+//  podpisAktualneho() -> reťazec, ktorý jednoznačne opíše aktuálny návrh/súbor (null = v editore nie je čo pridať)
+export function useKosikMotivov({ vytvorPolozku, podpisAktualneho }) {
+  const [kosik, setKosik] = useState([]);
+  const [pridavam, setPridavam] = useState(false);
+  const [chyba, setChyba] = useState('');
+  const [info, setInfo] = useState('');
+  const pridaj = async () => {
+    setPridavam(true); setChyba(''); setInfo('');
+    try {
+      const p = await vytvorPolozku();
+      setKosik((k) => [...k, p]);
+      setInfo('Motív je v objednávke. Návrh môžeš upraviť a pridať ďalší motív, alebo objednávku dokončiť.');
+      return p;
+    } catch (e) {
+      setChyba('Motív sa nepodarilo pridať: ' + e.message);
+      return null;
+    } finally {
+      setPridavam(false);
+    }
+  };
+  const odober = (id) => setKosik((k) => k.filter((p) => p.id !== id));
+  // Vráti zoznam motívov na odoslanie (pridá aktuálny návrh, ak ešte nie je v objednávke) alebo null, ak zákazník zruší.
+  const pripravNaObjednanie = async () => {
+    const pod = podpisAktualneho();
+    if (kosik.length > 0 && (pod === null || kosik.some((p) => p.podpis === pod))) return kosik;
+    if (kosik.length > 0 && !window.confirm('Aktuálny návrh ešte nie je v objednávke. Pridať ho a objednať všetky motívy spolu? (OK = pridať a objednať, Zrušiť = vrátiť sa a upraviť)')) return null;
+    const p = await vytvorPolozku();
+    return [...kosik, p];
+  };
+  return { kosik, pridavam, chyba, info, setChyba, setInfo, pridaj, odober, pripravNaObjednanie };
+}
+
+// Riadky ceny motívov z odpovede servera (cena.polozky) pre zoznam motívov
+export const riadkyZCeny = (cena, pocet) => (cena && Array.isArray(cena.polozky) && cena.polozky.length === pocet && pocet > 1 ? cena.polozky.map((r) => ({ cenaKus: r.cenaKsBezDph, tovar: r.logaSpoluBezDph })) : null);

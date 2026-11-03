@@ -79,8 +79,13 @@ export function CenaSuhrn({ cena, chyba, osobnyOdber, onOsobnyOdber, onObjednat,
         <div className="bg-rose-950/60 border border-rose-700 text-rose-200 p-3 rounded-lg text-xs flex gap-2"><AlertTriangle className="w-4 h-4 shrink-0" /> {chyba}</div>
       ) : cena ? (
         <div className="space-y-1.5 border-t border-slate-700 pt-3">
-          <Riadok label="Cena za 1 ks (bez DPH)" value={<CenaB2b v={cena.cenaKsBezDph} p={cena.zlavaB2bPercent} />} />
-          <Riadok label="Spolu za výrobu (bez DPH)" value={<CenaB2b v={cena.logaSpoluBezDph} p={cena.zlavaB2bPercent} />} />
+          {cena.polozky && cena.polozky.length > 1
+            ? <>
+                {cena.polozky.map((p, i) => <Riadok key={i} label={`Motív ${i + 1}: ${p.ks} ks × ${p.cenaKsBezDph.toFixed(2)} €`} value={<CenaB2b v={p.logaSpoluBezDph} p={cena.zlavaB2bPercent} />} />)}
+                {cena.doplatokMinimaBezDph > 0 && <Riadok label="Doplatok do minimálnej ceny objednávky" value={`${cena.doplatokMinimaBezDph.toFixed(2)} €`} />}
+              </>
+            : <Riadok label="Cena za 1 ks (bez DPH)" value={<CenaB2b v={cena.cenaKsBezDph} p={cena.zlavaB2bPercent} />} />}
+          <Riadok label={cena.polozky && cena.polozky.length > 1 ? `Spolu za výrobu (${cena.ksSpolu} ks, bez DPH)` : 'Spolu za výrobu (bez DPH)'} value={<CenaB2b v={cena.logaSpoluBezDph} p={cena.zlavaB2bPercent} />} />
           {cena.zlavaB2bEur > 0 && <Riadok label={`B2B zľava ${cena.zlavaB2bPercent} %`} value={`−${cena.zlavaB2bEur.toFixed(2)} €`} />}
           {cena.manipulaciaBezDph > 0 && <Riadok label="Manipulačný poplatok" value={`${cena.manipulaciaBezDph.toFixed(2)} €`} />}
           <Riadok label="Poštovné a balné" value={cena.postovneBezDph === 0 ? 'Zdarma' : `${cena.postovneBezDph.toFixed(2)} €`} />

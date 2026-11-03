@@ -6,6 +6,7 @@ import B2bKod from './B2bKod';
 import PlochaEditor from './fabricEditor/PlochaEditor';
 import OkrajIlustracia from './OkrajIlustracia';
 import { useCenaNahlad, CenaSuhrn, MnozstevneZlavy } from './cenaNahlad';
+import { KosikMotivov, useKosikMotivov, riadkyZCeny } from './kosikMotivov';
 
 const BUCKET = 'print-designs';
 
@@ -69,21 +70,33 @@ export default function Stolova({ supabase }) {
 
   const vel = d.velkosti.find((x) => x.kod === velkost);
   const pripravene = !!(vel && tvar && okraj && podstavec);
-  const { cena, chyba } = useCenaNahlad(supabase, 'stolova-create-draft-order', { velkost, tvar, okraj, podstavec, pocetKs, osobnyOdber, b2bKod: b2b.kod, urovne: true }, pripravene);
+  // Košík motívov: viac rôznych motívov v jednej objednávke (jedno poštovné, množstevná zľava zo všetkých kusov)
+  const podpisAktualneho = () => { const nh = editorRef.current?.nahlad?.(); return nh ? `${velkost}|${tvar}|${okraj}|${podstavec}|${nh.front}|${nh.back}` : null; };
+  const vytvorPolozku = async () => {
+    if (!pripravene) throw new Error('Vyber veľkosť, tvar, okraje aj podstavec.');
+    const ex = await editorRef.current.exportuj();
+    const id = crypto.randomUUID();
+    const nahraj = async (blob, nazov) => {
+      const { error } = await supabase.storage.from(BUCKET).upload(`stolova/${id}/${nazov}`, blob, { contentType: 'image/png' });
+      if (error) throw new Error('Nepodarilo sa nahrať tlačový súbor: ' + error.message);
+      return `stolova/${id}/${nazov}`;
+    };
+    const [c1, c2] = [await nahraj(ex.front, 'liec.png'), await nahraj(ex.back, 'rub.png')];
+    const nh = editorRef.current.nahlad();
+    return { id, pocetKs, popis: `${vel?.nazov || ''}, ${d.tvary.find((x) => x.kod === tvar)?.nazov || ''}`, nahlad: nh.front, podpis: `${velkost}|${tvar}|${okraj}|${podstavec}|${nh.front}|${nh.back}`, vstup: { velkost, tvar, okraj, podstavec, pocetKs, suborNazov: 'liec.png', suborCesta: c1, suborCesta2: c2, dizajnJson: ex.json } };
+  };
+  const kos = useKosikMotivov({ vytvorPolozku, podpisAktualneho });
+  const bezDizajnu = ({ dizajnJson, ...zvysok }) => zvysok; // náhľad ceny nepotrebuje dizajn
+  const teloCeny = kos.kosik.length > 0 ? { polozky: kos.kosik.map((p) => bezDizajnu(p.vstup)), osobnyOdber, b2bKod: b2b.kod, urovne: true } : { velkost, tvar, okraj, podstavec, pocetKs, osobnyOdber, b2bKod: b2b.kod, urovne: true };
+  const { cena, chyba } = useCenaNahlad(supabase, 'stolova-create-draft-order', teloCeny, kos.kosik.length > 0 || pripravene);
 
   const objednat = async () => {
     setBezi(true); setChybaObj(''); setPotvrdenie('');
     try {
-      const ex = await editorRef.current.exportuj();
-      const id = crypto.randomUUID();
-      const nahraj = async (blob, nazov) => {
-        const { error } = await supabase.storage.from(BUCKET).upload(`stolova/${id}/${nazov}`, blob, { contentType: 'image/png' });
-        if (error) throw new Error('Nepodarilo sa nahrať tlačový súbor: ' + error.message);
-        return `stolova/${id}/${nazov}`;
-      };
-      const [c1, c2] = [await nahraj(ex.front, 'liec.png'), await nahraj(ex.back, 'rub.png')];
+      const polozky = await kos.pripravNaObjednanie();
+      if (!polozky) return;
       const { data, error } = await supabase.functions.invoke('stolova-create-draft-order', {
-        body: { velkost, tvar, okraj, podstavec, pocetKs, osobnyOdber, b2bKod: b2b.kod, suborNazov: 'liec.png', suborCesta: c1, suborCesta2: c2, dizajnJson: ex.json },
+        body: { polozky: polozky.map((p) => p.vstup), osobnyOdber, b2bKod: b2b.kod },
       });
       if (error) throw error;
       if (!data?.ok) throw new Error(data?.error || 'Server nevrátil odpoveď.');
@@ -146,14 +159,19 @@ export default function Stolova({ supabase }) {
             <section className="space-y-5 min-w-0">
               {plocha}
               <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-wrap items-end gap-4">
-                <div className="w-32"><label className="block text-xs font-medium text-slate-500 mb-1">Počet kusov</label><NumberInput min="1" step="1" value={pocetKs} onChange={(v) => setPocetKs(Math.max(1, Math.round(v)))} fallback={1} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" /></div>
+                <div className="w-32"><label className="block text-xs font-medium text-slate-500 mb-1">{kos.kosik.length > 0 ? 'Počet kusov tohto motívu' : 'Počet kusov'}</label><NumberInput min="1" step="1" value={pocetKs} onChange={(v) => setPocetKs(Math.max(1, Math.round(v)))} fallback={1} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" /></div>
                 <p className="text-xs text-slate-500 flex-1 min-w-[200px]">Tlačové súbory (líce aj rub, ≈ 300 DPI, priehľadné mimo tvaru) sa vygenerujú automaticky pri odoslaní objednávky.</p>
               </div>
               <div className="max-w-xl">
                 <CenaSuhrn cena={cena} chyba={chyba} osobnyOdber={osobnyOdber} onOsobnyOdber={setOsobnyOdber} onObjednat={objednat} bezi={bezi} chybaObjednavky={chybaObj} potvrdenie={potvrdenie}
-                  riadky={[['Veľkosť', nazov(d.velkosti, velkost)], ['Tvar', nazov(d.tvary, tvar)], ['Okraje', nazov(d.okraje, okraj)], ['Podstavec', nazov(d.podstavce, podstavec)], ['Počet kusov', `${pocetKs} ks`]]} />
+                  riadky={[['Veľkosť', nazov(d.velkosti, velkost)], ['Tvar', nazov(d.tvary, tvar)], ['Okraje', nazov(d.okraje, okraj)], ['Podstavec', nazov(d.podstavce, podstavec)], ['Počet kusov', `${pocetKs} ks`]]}>
+                  <KosikMotivov polozky={kos.kosik} riadky={riadkyZCeny(cena, kos.kosik.length)} onOdober={kos.odober} onPridat={kos.pridaj} bezi={kos.pridavam || bezi}
+                    popisKrok={kos.kosik.length === 0 ? 'Chceš viac rôznych motívov? Pridaj tento motív, uprav návrh a pridaj ďalší — poštovné zaplatíš len raz a množstevná zľava sa počíta zo všetkých kusov.' : 'Návrh v editore sa do objednávky dostane až po kliknutí na „Pridať tento motív“ (alebo ho pri objednaní ponúkneme pridať).'} />
+                  {kos.chyba && <p className="text-xs text-rose-300">{kos.chyba}</p>}
+                  {kos.info && <p className="text-xs text-emerald-300">{kos.info}</p>}
+                </CenaSuhrn>
               </div>
-              <MnozstevneZlavy urovne={cena?.urovne} pocetKs={pocetKs} b2bPercent={b2b.zlavaPercent} b2bKod={b2b.kod} />
+              <MnozstevneZlavy urovne={cena?.urovne} pocetKs={cena?.ksSpolu ?? pocetKs} b2bPercent={b2b.zlavaPercent} b2bKod={b2b.kod} />
             </section>
           </main>
         )}

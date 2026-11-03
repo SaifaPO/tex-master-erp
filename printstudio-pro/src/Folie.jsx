@@ -5,6 +5,7 @@ import NumberInput from './NumberInput';
 import { useB2bKod } from './b2b';
 import B2bKod from './B2bKod';
 import { useCenaNahlad, CenaSuhrn, MnozstevneZlavy } from './cenaNahlad';
+import { KosikMotivov, useKosikMotivov, riadkyZCeny } from './kosikMotivov';
 
 const BUCKET = 'print-designs';
 const POVOLENE = ['.pdf', '.eps', '.ai', '.svg', '.dxf'];
@@ -110,23 +111,34 @@ export default function Folie({ supabase }) {
     if (!farby.find((x) => x.kod === farba && x.druh_kod === kod)) setFarba(prva?.kod || '');
   };
 
-  const { cena, chyba } = useCenaNahlad(supabase, 'folie-create-draft-order', { druh, farba, sirkaMm: sirka, vyskaMm: vyska, pocetKs, uroven, osobnyOdber, b2bKod: b2b.kod, urovne: true }, !!(druh && farba) && !rozmerChyba);
-
   const vyberSubor = (f) => {
     if (!f) return;
     if (!POVOLENE.some((x) => f.name.toLowerCase().endsWith(x))) { window.alert('Prosím nahrajte vektorový formát (PDF, EPS, AI, SVG, DXF).'); return; }
     setSubor(f);
   };
 
+  // Košík motívov: viac rôznych motívov v jednej objednávke (jedno poštovné, množstevná zľava zo všetkých kusov)
+  const podpisAktualneho = () => (subor ? `${druh}|${farba}|${sirka}|${vyska}|${uroven}|${subor.name}|${subor.size}|${subor.lastModified}` : null);
+  const vytvorPolozku = async () => {
+    if (!subor) throw new Error('Nahrajte prosím vektorový súbor.');
+    if (rozmerChyba) throw new Error(rozmerChyba);
+    const cesta = `folie/${crypto.randomUUID()}/${subor.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    const { error: upErr } = await supabase.storage.from(BUCKET).upload(cesta, subor, { contentType: subor.type || undefined });
+    if (upErr) throw new Error('Súbor sa nepodarilo nahrať: ' + upErr.message);
+    return { id: crypto.randomUUID(), pocetKs, popis: `${farbaObj?.nazov || druhObj?.nazov || 'Fólia'}, ${sirka} × ${vyska} mm`, nahlad: '', podpis: podpisAktualneho(), vstup: { druh, farba, sirkaMm: sirka, vyskaMm: vyska, pocetKs, uroven, suborNazov: subor.name, suborCesta: cesta } };
+  };
+  const kos = useKosikMotivov({ vytvorPolozku, podpisAktualneho });
+  const teloCeny = kos.kosik.length > 0 ? { polozky: kos.kosik.map((p) => p.vstup), osobnyOdber, b2bKod: b2b.kod, urovne: true } : { druh, farba, sirkaMm: sirka, vyskaMm: vyska, pocetKs, uroven, osobnyOdber, b2bKod: b2b.kod, urovne: true };
+  const { cena, chyba } = useCenaNahlad(supabase, 'folie-create-draft-order', teloCeny, kos.kosik.length > 0 || (!!(druh && farba) && !rozmerChyba));
+
   const objednat = async () => {
-    if (!subor) { setChybaObj('Nahrajte prosím vektorový súbor.'); return; }
+    if (!subor && kos.kosik.length === 0) { setChybaObj('Nahrajte prosím vektorový súbor.'); return; }
     setBezi(true); setChybaObj(''); setPotvrdenie('');
     try {
-      const cesta = `folie/${crypto.randomUUID()}/${subor.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-      const { error: upErr } = await supabase.storage.from(BUCKET).upload(cesta, subor, { contentType: subor.type || undefined });
-      if (upErr) throw new Error('Súbor sa nepodarilo nahrať: ' + upErr.message);
+      const polozky = await kos.pripravNaObjednanie();
+      if (!polozky) return;
       const { data, error } = await supabase.functions.invoke('folie-create-draft-order', {
-        body: { druh, farba, sirkaMm: sirka, vyskaMm: vyska, pocetKs, uroven, osobnyOdber, b2bKod: b2b.kod, suborNazov: subor.name, suborCesta: cesta },
+        body: { polozky: polozky.map((p) => p.vstup), osobnyOdber, b2bKod: b2b.kod },
       });
       if (error) throw error;
       if (!data?.ok) throw new Error(data?.error || 'Server nevrátil odpoveď.');
@@ -264,12 +276,16 @@ export default function Folie({ supabase }) {
           </div>
           <div className="max-w-xl">
             <CenaSuhrn cena={cena} chyba={chyba} osobnyOdber={osobnyOdber} onOsobnyOdber={setOsobnyOdber} onObjednat={objednat} bezi={bezi} chybaObjednavky={chybaObj} potvrdenie={potvrdenie}
-              zakazane={!subor || !!rozmerChyba} poznamkaZakazane={!subor ? 'Najprv nahrajte vektorový súbor.' : ''}
+              zakazane={(!subor && kos.kosik.length === 0) || (!!subor && !!rozmerChyba)} poznamkaZakazane={!subor && kos.kosik.length === 0 ? 'Najprv nahrajte vektorový súbor.' : ''}
               riadky={[['Fólia', `${druhObj?.nazov || '—'}`], ['Farba', farbaObj?.nazov || '—'], ['Rozmer', `${sirka} × ${vyska} mm`], ['Počet kusov', `${pocetKs} ks`], ['Služba', UROVNE.find((u) => u.kod === uroven)?.nazov || '—'], ...(cena?.nastrihanieBezDph > 0 ? [['Z toho nastrihanie', `${Number(cena.nastrihanieBezDph).toFixed(2)} € bez DPH`]] : [])]}>
               {cena?.dlzkaBm != null && <div className="flex items-center justify-between text-xs"><span className="text-slate-400">Spotreba materiálu</span><span className="font-mono text-slate-100">{cena.dlzkaBm} bm</span></div>}
+              <KosikMotivov polozky={kos.kosik} riadky={riadkyZCeny(cena, kos.kosik.length)} onOdober={kos.odober} onPridat={async () => { if (await kos.pridaj()) setSubor(null); }} bezi={kos.pridavam || bezi}
+                popisKrok={kos.kosik.length === 0 ? 'Chceš viac rôznych grafík? Pridaj túto grafiku, nahraj ďalší súbor a pridaj ďalšiu — poštovné zaplatíš len raz a množstevná zľava sa počíta zo všetkých kusov.' : 'Po pridaní motívu nahraj ďalší súbor. Súbor v nahrávači sa do objednávky dostane až po kliknutí na „Pridať tento motív“ (alebo ho pri objednaní ponúkneme pridať).'} />
+              {kos.chyba && <p className="text-xs text-rose-300">{kos.chyba}</p>}
+              {kos.info && <p className="text-xs text-emerald-300">{kos.info}</p>}
             </CenaSuhrn>
           </div>
-          <MnozstevneZlavy urovne={cena?.urovne} pocetKs={pocetKs} b2bPercent={b2b.zlavaPercent} b2bKod={b2b.kod} />
+          <MnozstevneZlavy urovne={cena?.urovne} pocetKs={cena?.ksSpolu ?? pocetKs} b2bPercent={b2b.zlavaPercent} b2bKod={b2b.kod} />
         </section>
       </main>
     </div>

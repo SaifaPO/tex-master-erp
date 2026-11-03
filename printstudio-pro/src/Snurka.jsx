@@ -5,6 +5,7 @@ import { useB2bKod } from './b2b';
 import B2bKod from './B2bKod';
 import PlochaEditor from './fabricEditor/PlochaEditor';
 import { useCenaNahlad, CenaSuhrn, MnozstevneZlavy } from './cenaNahlad';
+import { KosikMotivov, useKosikMotivov, riadkyZCeny } from './kosikMotivov';
 
 // Predvolené fotky typov šnúrok (public/snurka). Ak je v administrácii nahraná vlastná fotka (foto_url), použije sa tá.
 // Plná adresa nasadenia: appka beží aj cez Shopify App Proxy (pbtprint.sk/apps/...), kde by cesta "/snurka/..." mierila na neexistujúcu stránku obchodu.
@@ -47,21 +48,34 @@ export default function Snurka({ supabase }) {
   const MEDZERA_CASTI = 10;
   const casti = (mod?.casti_mm || '').split(',').map((x) => Number(String(x).trim())).filter((x) => x > 0);
   const sirkaPlochy = casti.length ? casti.reduce((s, x) => s + x, 0) + MEDZERA_CASTI * (casti.length - 1) : (mod?.sirka_mm || 936);
-  const { cena, chyba } = useCenaNahlad(supabase, 'snurka-create-draft-order', { model, pocetKs, osobnyOdber, b2bKod: b2b.kod, urovne: true }, !!mod);
+
+  // Košík motívov: viac rôznych motívov v jednej objednávke (jedno poštovné, množstevná zľava zo všetkých kusov)
+  const podpisAktualneho = () => { const nh = editorRef.current?.nahlad?.(); return nh ? `${model}|${nh.front}|${nh.back}` : null; };
+  const vytvorPolozku = async () => {
+    if (!mod) throw new Error('Vyber typ šnúrky.');
+    const ex = await editorRef.current.exportuj();
+    const id = crypto.randomUUID();
+    const nahraj = async (blob, nazov) => {
+      const { error } = await supabase.storage.from(BUCKET).upload(`snurka/${id}/${nazov}`, blob, { contentType: 'image/png' });
+      if (error) throw new Error('Nepodarilo sa nahrať tlačový súbor: ' + error.message);
+      return `snurka/${id}/${nazov}`;
+    };
+    const [c1, c2] = [await nahraj(ex.front, 'liec.png'), await nahraj(ex.back, 'rub.png')];
+    const nh = editorRef.current.nahlad();
+    return { id, pocetKs, popis: mod.nazov, nahlad: nh.front, podpis: `${model}|${nh.front}|${nh.back}`, vstup: { model, pocetKs, suborNazov: 'liec.png', suborCesta: c1, suborCesta2: c2, dizajnJson: ex.json } };
+  };
+  const kos = useKosikMotivov({ vytvorPolozku, podpisAktualneho });
+  const bezDizajnu = ({ dizajnJson, ...zvysok }) => zvysok; // náhľad ceny nepotrebuje dizajn
+  const teloCeny = kos.kosik.length > 0 ? { polozky: kos.kosik.map((p) => bezDizajnu(p.vstup)), osobnyOdber, b2bKod: b2b.kod, urovne: true } : { model, pocetKs, osobnyOdber, b2bKod: b2b.kod, urovne: true };
+  const { cena, chyba } = useCenaNahlad(supabase, 'snurka-create-draft-order', teloCeny, kos.kosik.length > 0 || !!mod);
 
   const objednat = async () => {
     setBezi(true); setChybaObj(''); setPotvrdenie('');
     try {
-      const ex = await editorRef.current.exportuj();
-      const id = crypto.randomUUID();
-      const nahraj = async (blob, nazov) => {
-        const { error } = await supabase.storage.from(BUCKET).upload(`snurka/${id}/${nazov}`, blob, { contentType: 'image/png' });
-        if (error) throw new Error('Nepodarilo sa nahrať tlačový súbor: ' + error.message);
-        return `snurka/${id}/${nazov}`;
-      };
-      const [c1, c2] = [await nahraj(ex.front, 'liec.png'), await nahraj(ex.back, 'rub.png')];
+      const polozky = await kos.pripravNaObjednanie();
+      if (!polozky) return;
       const { data, error } = await supabase.functions.invoke('snurka-create-draft-order', {
-        body: { model, pocetKs, osobnyOdber, b2bKod: b2b.kod, suborNazov: 'liec.png', suborCesta: c1, suborCesta2: c2, dizajnJson: ex.json },
+        body: { polozky: polozky.map((p) => p.vstup), osobnyOdber, b2bKod: b2b.kod },
       });
       if (error) throw error;
       if (!data?.ok) throw new Error(data?.error || 'Server nevrátil odpoveď.');
@@ -107,14 +121,19 @@ export default function Snurka({ supabase }) {
             <section className="space-y-5 min-w-0">
               {plocha}
               <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-wrap items-end gap-4">
-                <div className="w-32"><label className="block text-xs font-medium text-slate-500 mb-1">Počet kusov</label><NumberInput min="1" step="1" value={pocetKs} onChange={(v) => setPocetKs(Math.max(1, Math.round(v)))} fallback={1} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" /></div>
+                <div className="w-32"><label className="block text-xs font-medium text-slate-500 mb-1">{kos.kosik.length > 0 ? 'Počet kusov tohto motívu' : 'Počet kusov'}</label><NumberInput min="1" step="1" value={pocetKs} onChange={(v) => setPocetKs(Math.max(1, Math.round(v)))} fallback={1} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" /></div>
                 <p className="text-xs text-slate-500 flex-1 min-w-[200px]">{casti.length > 1 ? `Tlač v ${casti.length} častiach (${casti.map((x) => x / 10).join(' + ')} cm), výška ${mod?.vyska_mm} mm.` : `Rozmer šnúrky ${sirkaPlochy} × ${mod?.vyska_mm} mm.`} Tlačové súbory (líce aj rub, ≈ 300 DPI) sa vygenerujú automaticky pri odoslaní objednávky. Dôležité texty nechajte v zelenom ráme (bezpečná zóna).</p>
               </div>
               <div className="max-w-xl">
                 <CenaSuhrn cena={cena} chyba={chyba} osobnyOdber={osobnyOdber} onOsobnyOdber={setOsobnyOdber} onObjednat={objednat} bezi={bezi} chybaObjednavky={chybaObj} potvrdenie={potvrdenie}
-                  riadky={[['Typ šnúrky', mod?.nazov || '—'], ['Rozmer', mod ? (casti.length > 1 ? `${casti.map((x) => x / 10).join(' + ')} cm × ${mod.vyska_mm} mm` : `${sirkaPlochy} × ${mod.vyska_mm} mm`) : '—'], ['Počet kusov', `${pocetKs} ks`]]} />
+                  riadky={[['Typ šnúrky', mod?.nazov || '—'], ['Rozmer', mod ? (casti.length > 1 ? `${casti.map((x) => x / 10).join(' + ')} cm × ${mod.vyska_mm} mm` : `${sirkaPlochy} × ${mod.vyska_mm} mm`) : '—'], ['Počet kusov', `${pocetKs} ks`]]}>
+                  <KosikMotivov polozky={kos.kosik} riadky={riadkyZCeny(cena, kos.kosik.length)} onOdober={kos.odober} onPridat={kos.pridaj} bezi={kos.pridavam || bezi}
+                    popisKrok={kos.kosik.length === 0 ? 'Chceš viac rôznych motívov? Pridaj tento motív, uprav návrh a pridaj ďalší — poštovné zaplatíš len raz a množstevná zľava sa počíta zo všetkých kusov.' : 'Návrh v editore sa do objednávky dostane až po kliknutí na „Pridať tento motív“ (alebo ho pri objednaní ponúkneme pridať).'} />
+                  {kos.chyba && <p className="text-xs text-rose-300">{kos.chyba}</p>}
+                  {kos.info && <p className="text-xs text-emerald-300">{kos.info}</p>}
+                </CenaSuhrn>
               </div>
-              <MnozstevneZlavy urovne={cena?.urovne} pocetKs={pocetKs} b2bPercent={b2b.zlavaPercent} b2bKod={b2b.kod} />
+              <MnozstevneZlavy urovne={cena?.urovne} pocetKs={cena?.ksSpolu ?? pocetKs} b2bPercent={b2b.zlavaPercent} b2bKod={b2b.kod} />
             </section>
           </main>
         )}

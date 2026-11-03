@@ -129,58 +129,139 @@ async function ziskajAdminToken(domain: string, clientId: string, clientSecret: 
   return data.access_token as string;
 }
 
+// Predajná cena objednávky s jedným alebo VIACERÝMI motívmi (košík motívov — jedno poštovné, jedna manipulácia):
+// množstevná hladina sa počíta z CELKOVÉHO počtu kusov všetkých motívov, minimálna cena platí raz na celú objednávku
+// (doplatok sa rozpočíta medzi motívy), B2B zľava, manipulácia, poštovné a DPH sa počítajú z celku.
+// Klient cenu len zobrazuje z odpovede servera (cenaNahlad.jsx) — cenu vždy prepočíta server.
+type VstupCena = { nakladSpolu: number; ks: number; pridavokEur?: number };
+async function spoluCenaViac(supabase: ReturnType<typeof createClient>, nast: any, cfg: PricingConfig, polozky: VstupCena[], osobnyOdber: boolean, b2bKod: unknown) {
+  const ksSpolu = polozky.reduce((s, p) => s + p.ks, 0);
+  const riadky = polozky.map((p) => {
+    const nakladKs = p.nakladSpolu / p.ks;
+    const cenaKs = priceAt(nakladKs, ksSpolu, cfg);
+    return { ks: p.ks, nakladKs, cenaKs, loga: r2(cenaKs * p.ks), pridavok: p.pridavokEur || 0 };
+  });
+  const logaBezMinima = riadky.reduce((s, r) => s + r.loga, 0);
+  const doplatokMinima = Math.max(0, n(nast.minimalna_cena_eur) - logaBezMinima);
+  const pridavokSpolu = riadky.reduce((s, r) => s + r.pridavok, 0);
+  const logaSpolu = logaBezMinima + doplatokMinima + pridavokSpolu;
+  const zlavaPercent = await b2bZlava(supabase, b2bKod);
+  const zlavaEur = r2(logaSpolu * zlavaPercent / 100);
+  const poZlave = logaSpolu - zlavaEur;
+  const manipulacia = n(nast.manipulacny_poplatok_eur);
+  const zdarma = n(nast.postovne_zdarma_od_eur) > 0 && (poZlave + manipulacia) >= n(nast.postovne_zdarma_od_eur);
+  const postovne = osobnyOdber || zdarma ? 0 : n(nast.cena_doprava);
+  const spoluBezDph = poZlave + manipulacia + postovne;
+  const dph = r2(spoluBezDph * cfg.dphPercent / 100);
+  return {
+    nakladKs: riadky[0].nakladKs, ksSpolu, riadky, doplatokMinima, logaBezMinima, logaSpolu, poZlave, zlavaPercent, manipulacia, postovne, spolu: r2(spoluBezDph + dph),
+    verejne: {
+      cenaKsBezDph: logaSpolu / ksSpolu, logaSpoluBezDph: logaSpolu, nastrihanieBezDph: pridavokSpolu, zlavaB2bPercent: zlavaPercent, zlavaB2bEur: zlavaEur, manipulaciaBezDph: manipulacia,
+      postovneBezDph: postovne, spoluBezDph: r2(spoluBezDph), dphPercent: cfg.dphPercent, dph, spolu: r2(spoluBezDph + dph),
+      ksSpolu, doplatokMinimaBezDph: r2(doplatokMinima),
+      polozky: riadky.map((r) => ({ ks: r.ks, cenaKsBezDph: (r.loga + r.pridavok) / r.ks, logaSpoluBezDph: r.loga + r.pridavok })),
+    } as Record<string, unknown>,
+  };
+}
+// Jedna položka = pôvodný výpočet (používajú ho aj cenové úrovne)
+async function spoluCena(supabase: ReturnType<typeof createClient>, nast: any, cfg: PricingConfig, nakladSpolu: number, ks: number, osobnyOdber: boolean, b2bKod: unknown, pridavokEur = 0) {
+  return spoluCenaViac(supabase, nast, cfg, [{ nakladSpolu, ks, pridavokEur }], osobnyOdber, b2bKod);
+}
+
+// Rozpis finálnej ceny (s DPH) do položiek Shopify draftu v centoch, aby súčet presne sedel: každý motív má svoj podiel z tovaru
+// (po B2B zľave, vrátane doplatku do minima), manipulácia + poštovné idú pri viacerých motívoch ako samostatná položka.
+function rozpisCenty(c: any, cfg: PricingConfig, pocet: number) {
+  const dphK = 1 + cfg.dphPercent / 100;
+  const zK = c.logaSpolu > 0 ? c.poZlave / c.logaSpolu : 1;
+  const logaBez = c.logaBezMinima;
+  const podiely = c.riadky.map((r: any) => (r.loga + r.pridavok + (logaBez > 0 ? c.doplatokMinima * r.loga / logaBez : 0)) * zK);
+  const celkomCents = Math.round(c.spolu * 100);
+  const extraCents = pocet > 1 ? Math.round((c.manipulacia + c.postovne) * dphK * 100) : 0;
+  const itemCents: number[] = podiely.map((p: number) => Math.round(p * dphK * 100));
+  itemCents[itemCents.length - 1] += celkomCents - extraCents - itemCents.reduce((s, x) => s + x, 0);
+  return { itemCents, extraCents, celkomCents, dphK };
+}
+
+// Shopify draft order s presnou cenou (cena už zahŕňa DPH, preto taxable: false) -> odkaz na platbu. Jedna alebo viac položiek (motívy + prípadne spoločné poštovné).
+type DraftPolozka = { title: string; price: number; requiresShipping: boolean; properties?: { name: string; value: string }[] };
+async function vytvorDraft(polozky: DraftPolozka[], note: string, tags: string) {
+  const domain = Deno.env.get('SHOPIFY_STORE_DOMAIN');
+  const clientId = Deno.env.get('SHOPIFY_CLIENT_ID');
+  const clientSecret = Deno.env.get('SHOPIFY_CLIENT_SECRET');
+  if (!domain || !clientId || !clientSecret) throw new Error('SHOPIFY_STORE_DOMAIN, SHOPIFY_CLIENT_ID alebo SHOPIFY_CLIENT_SECRET nie je nastavený v Supabase secrets.');
+  const tokRes = await fetch(`https://${domain}/admin/oauth/access_token`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, grant_type: 'client_credentials' }),
+  });
+  if (!tokRes.ok) throw new Error(`Nepodarilo sa získať Shopify token (${tokRes.status}): ${await tokRes.text()}`);
+  const token = (await tokRes.json())?.access_token as string;
+  if (!token) throw new Error('Shopify nevrátil access_token.');
+  const res = await fetch(`https://${domain}/admin/api/2025-01/draft_orders.json`, {
+    method: 'POST', headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ draft_order: {
+      line_items: polozky.map((p) => ({ title: p.title, price: p.price.toFixed(2), quantity: 1, taxable: false, requires_shipping: p.requiresShipping, ...(p.properties ? { properties: p.properties } : {}) })),
+      note, tags, use_customer_default_address: true,
+    } }),
+  });
+  if (!res.ok) throw new Error(`Shopify Admin API chyba ${res.status}: ${await res.text()}`);
+  const url = (await res.json())?.draft_order?.invoice_url;
+  if (!url) throw new Error('Shopify nevrátil odkaz na platbu draft objednávky.');
+  return url as string;
+}
+
+async function podpisanyOdkaz(supabase: ReturnType<typeof createClient>, cesta: unknown): Promise<string | null> {
+  if (!cesta) return null;
+  const { data } = await supabase.storage.from('print-designs').createSignedUrl(String(cesta), 60 * 60 * 24 * 365);
+  return data?.signedUrl || null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
   try {
     const body = await req.json();
-    const { preview = false, uroven: urovenKod, lak: lakKod, textura: texturaKod = null, osobnyOdber = false, b2bKod = null, suborNazov = null, suborCesta = null } = body;
-    const w = n(body.sirkaCm), h = n(body.vyskaCm), ks = Math.max(1, Math.round(n(body.pocetKs, 1)));
+    const { preview = false, osobnyOdber = false, b2bKod = null } = body;
+    // Viac motívov v jednej objednávke: body.polozky = [{ sirkaCm, vyskaCm, pocetKs, uroven, lak, textura, suborNazov, suborCesta }]; inak sa berie jeden motív z koreňa
+    const vstupne: any[] = Array.isArray(body.polozky) && body.polozky.length > 0 ? body.polozky : [body];
+    if (vstupne.length > 20) throw new Error('Najviac 20 motívov v jednej objednávke.');
 
-    const [{ data: nast }, { data: ur }, { data: lk }, { data: cfg }, { data: metriky }] = await Promise.all([
+    const [{ data: nast }, { data: cfgDb }, { data: metriky }] = await Promise.all([
       supabase.from('transfer3d_nastavenia').select('*').eq('id', 1).maybeSingle(),
-      supabase.from('transfer3d_urovne').select('*').eq('kod', String(urovenKod || '')).maybeSingle(),
-      supabase.from('transfer3d_laky').select('*').eq('kod', String(lakKod || '')).maybeSingle(),
       supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
       supabase.from('cost_metrics').select('*'),
     ]);
     if (!nast) throw new Error('Výrobné hodnoty 3D transferov nie sú nastavené (spusti migration_transfer3d.sql).');
     if (nast.aktivny === false) throw new Error('Objednávanie 3D transferov je dočasne vypnuté.');
-    if (!ur) throw new Error('Vyber úroveň 3D efektu.');
-    if (!lk) throw new Error('Vyber variant laku.');
-    // Textúra podkladu loga (voliteľná) — kontroluje sa, že existuje a je zapnutá; na cenu nemá vplyv
-    let tx: any = null;
-    if (texturaKod) {
-      const { data: t } = await supabase.from('transfer3d_textury').select('*').eq('kod', String(texturaKod)).eq('aktivny', true).maybeSingle();
-      if (!t) throw new Error('Vybraná textúra nie je dostupná.');
-      tx = t;
-    }
-    if (w <= 0 || h <= 0) throw new Error('Rozmery musia byť väčšie ako 0.');
-    if (w > n(nast.max_sirka_cm, 28) || h > n(nast.max_vyska_cm, 38)) throw new Error(`Maximálny rozmer motívu je ${n(nast.max_sirka_cm, 28)} × ${n(nast.max_vyska_cm, 38)} cm.`);
-
-    const pricingConfig: PricingConfig = cfg
-      ? { coefA: n(cfg.coef_a), coefB: n(cfg.coef_b), marginFloor: n(cfg.margin_floor), coefP: n(cfg.coef_p), cielovaHodnotaZakazky: n(cfg.cielova_hodnota_zakazky, 25000), dphPercent: n(cfg.dph_percent, 23) }
+    const pricingConfig: PricingConfig = cfgDb
+      ? { coefA: n(cfgDb.coef_a), coefB: n(cfgDb.coef_b), marginFloor: n(cfgDb.margin_floor), coefP: n(cfgDb.coef_p), cielovaHodnotaZakazky: n(cfgDb.cielova_hodnota_zakazky, 25000), dphPercent: n(cfgDb.dph_percent, 23) }
       : { coefA: 300, coefB: 54, marginFloor: 30, coefP: 1.3, cielovaHodnotaZakazky: 25000, dphPercent: 23 };
 
-    const v = vypocitaj(nast, ur, lk, metriky || [], w, h, ks);
-    const nakladKs = v.nakladSpolu / ks;
-    const cenaKs = priceAt(nakladKs, ks, pricingConfig);
-    const logaSpolu = Math.max(r2(cenaKs * ks), n(nast.minimalna_cena_eur));
-    const zlavaPercent = await b2bZlava(supabase, b2bKod);
-    const zlavaEur = r2(logaSpolu * zlavaPercent / 100);
-    const logaPoZlave = logaSpolu - zlavaEur;
-    const manipulacia = n(nast.manipulacny_poplatok_eur);
-    const postovneZdarma = n(nast.postovne_zdarma_od_eur) > 0 && (logaPoZlave + manipulacia) >= n(nast.postovne_zdarma_od_eur);
-    const postovne = osobnyOdber || postovneZdarma ? 0 : n(nast.cena_doprava);
-    const spoluBezDph = logaPoZlave + manipulacia + postovne;
-    const dphPercent = pricingConfig.dphPercent;
-    const dph = r2(spoluBezDph * dphPercent / 100);
-    const spolu = r2(spoluBezDph + dph);
-
+    // Výrobný náklad jedného motívu
+    const polozky: { v: any; w: number; h: number; ks: number; ur: any; lk: any; tx: any; vyp: ReturnType<typeof vypocitaj> }[] = [];
+    for (const v of vstupne) {
+      const w = n(v.sirkaCm), h = n(v.vyskaCm), ks = Math.max(1, Math.round(n(v.pocetKs, 1)));
+      const [{ data: ur }, { data: lk }] = await Promise.all([
+        supabase.from('transfer3d_urovne').select('*').eq('kod', String(v.uroven || '')).maybeSingle(),
+        supabase.from('transfer3d_laky').select('*').eq('kod', String(v.lak || '')).maybeSingle(),
+      ]);
+      if (!ur) throw new Error('Vyber úroveň 3D efektu.');
+      if (!lk) throw new Error('Vyber variant laku.');
+      // Textúra podkladu loga (voliteľná) — kontroluje sa, že existuje a je zapnutá; na cenu nemá vplyv
+      let tx: any = null;
+      if (v.textura) {
+        const { data: t } = await supabase.from('transfer3d_textury').select('*').eq('kod', String(v.textura)).eq('aktivny', true).maybeSingle();
+        if (!t) throw new Error('Vybraná textúra nie je dostupná.');
+        tx = t;
+      }
+      if (w <= 0 || h <= 0) throw new Error('Rozmery musia byť väčšie ako 0.');
+      if (w > n(nast.max_sirka_cm, 28) || h > n(nast.max_vyska_cm, 38)) throw new Error(`Maximálny rozmer motívu je ${n(nast.max_sirka_cm, 28)} × ${n(nast.max_vyska_cm, 38)} cm.`);
+      polozky.push({ v, w, h, ks, ur, lk, tx, vyp: vypocitaj(nast, ur, lk, metriky || [], w, h, ks) });
+    }
+    const viac = polozky.length > 1;
+    const c = await spoluCenaViac(supabase, nast, pricingConfig, polozky.map((p) => ({ nakladSpolu: p.vyp.nakladSpolu, ks: p.ks })), !!osobnyOdber, b2bKod);
+    const p0 = polozky[0];
     const vysledok: Record<string, unknown> = {
-      cenaKsBezDph: logaSpolu / ks, logaSpoluBezDph: logaSpolu, zlavaB2bPercent: zlavaPercent, zlavaB2bEur: zlavaEur,
-      manipulaciaBezDph: manipulacia, postovneBezDph: postovne, spoluBezDph: r2(spoluBezDph), dphPercent, dph, spolu,
-      dlzkaBm: r2(v.roz.dlzkaBm), naRiadok: v.roz.naRiadok, riadkov: v.roz.riadkov, otoceny: v.roz.otoceny,
+      ...c.verejne, dlzkaBm: r2(polozky.reduce((s, p) => s + p.vyp.roz.dlzkaBm, 0)), naRiadok: p0.vyp.roz.naRiadok, riadkov: p0.vyp.roz.riadkov, otoceny: p0.vyp.roz.otoceny,
     };
 
     // Podrobný rozpis nákladov a marže vidí len prihlásený admin (ERP), nie zákazník
@@ -190,9 +271,11 @@ Deno.serve(async (req) => {
       if (jwt) { const { data: u } = await supabase.auth.getUser(jwt); jeAdmin = !!u?.user; }
     } catch { /* anonymný zákazník */ }
     if (jeAdmin) {
+      const v = p0.vyp;
+      const nakladCelkom = polozky.reduce((s, p) => s + p.vyp.nakladSpolu, 0);
       vysledok.admin = {
-        nakladSpolu: r2(v.nakladSpolu), nakladKs: r2(nakladKs), margaEur: r2(logaSpolu - v.nakladSpolu),
-        margaPercent: v.nakladSpolu > 0 ? r2((logaSpolu / v.nakladSpolu - 1) * 100) : 0,
+        nakladSpolu: r2(nakladCelkom), nakladKs: r2(nakladCelkom / c.ksSpolu), margaEur: r2(c.logaSpolu - nakladCelkom),
+        margaPercent: nakladCelkom > 0 ? r2((c.logaSpolu / nakladCelkom - 1) * 100) : 0,
         rozpis: Object.fromEntries(Object.entries(v.rozpis).map(([k, x]) => [k, r2(x as number)])),
         spotreba: { cmykMl: r2(v.cmykMl), bielaMl: r2(v.bielaMl), lakMl: r2(v.lakMl), folieM2: r2(v.folieM2), potlacM2: Math.round(v.potlacM2 * 10000) / 10000, tlacMin: r2(v.tlacMin), rezMin: r2(v.rezMin), pracaMin: r2(v.pracaMin) },
       };
@@ -200,61 +283,47 @@ Deno.serve(async (req) => {
     if (preview) return odpoved({ ok: true, ...vysledok });
 
     // ---- skutočná objednávka ----
-    const objednavkaId = crypto.randomUUID();
-    const cisloObjednavky = await ziskajCisloObjednavky(supabase, 'T3D');
-    let suborUrl: string | null = null;
-    if (suborCesta) {
-      const { data: signed } = await supabase.storage.from('print-designs').createSignedUrl(String(suborCesta), 60 * 60 * 24 * 365);
-      suborUrl = signed?.signedUrl || null;
+    const { itemCents, extraCents, dphK } = rozpisCenty(c, pricingConfig, polozky.length);
+    const skupinaId = crypto.randomUUID();
+    const riadkyDraft: DraftPolozka[] = [];
+    const poznamky: string[] = [];
+    let prveId = '', prveCislo = '';
+    for (let i = 0; i < polozky.length; i++) {
+      const { v, w, h, ks, ur, lk, tx, vyp } = polozky[i];
+      const objednavkaId = crypto.randomUUID();
+      const cisloObjednavky = await ziskajCisloObjednavky(supabase, 'T3D');
+      if (i === 0) { prveId = objednavkaId; prveCislo = cisloObjednavky; }
+      const suborUrl = await podpisanyOdkaz(supabase, v.suborCesta);
+      const { error: insertErr } = await supabase.from('transfer3d_objednavky').insert({
+        id: objednavkaId, cislo_objednavky: cisloObjednavky, sirka_cm: w, vyska_cm: h, pocet_ks: ks, uroven: ur.kod, lak: lk.kod, textura: tx ? tx.kod : null,
+        dlzka_bm: r2(vyp.roz.dlzkaBm), cena_kus: viac ? r2(itemCents[i] / 100 / dphK / ks) : r2(c.poZlave / ks), cena_spolu: viac ? itemCents[i] / 100 : c.spolu, naklad_spolu: r2(vyp.nakladSpolu),
+        subor_nazov: v.suborNazov ?? null, subor_cesta: v.suborCesta ?? null, subor_url: suborUrl, osobny_odber: !!osobnyOdber,
+        ...(viac ? { skupina_id: skupinaId, poradie: i + 1 } : {}),
+      });
+      if (insertErr) throw insertErr;
+      riadkyDraft.push({
+        title: `3D transfer — ${ks}× ${w}×${h} cm (${ur.nazov}, ${lk.nazov})${viac ? ` — motív ${i + 1}/${polozky.length}` : ''}${osobnyOdber ? ' (osobný odber)' : ''}`,
+        price: itemCents[i] / 100, requiresShipping: !osobnyOdber,
+        properties: [
+          { name: '_cislo_objednavky', value: cisloObjednavky },
+          { name: '_objednavka_id', value: objednavkaId },
+          { name: '_rozmer_cm', value: `${w}x${h}` },
+          { name: '_pocet_ks', value: String(ks) },
+          { name: '_uroven', value: ur.nazov },
+          { name: '_lak', value: lk.nazov },
+          { name: '_textura', value: tx ? `${tx.nazov}${tx.subor_nazov ? ` (súbor ${tx.subor_nazov})` : ''}` : 'bez textúry' },
+          { name: '_subor', value: v.suborNazov || '' },
+          { name: '_subor_link', value: suborUrl || '' },
+          { name: '_osobny_odber', value: osobnyOdber ? 'áno' : 'nie' },
+          { name: '_b2b_kod', value: c.zlavaPercent > 0 ? String(b2bKod).trim().toUpperCase() : '' },
+          ...(viac ? [{ name: '_motiv', value: `${i + 1}/${polozky.length}` }, { name: '_skupina_id', value: skupinaId }] : []),
+        ],
+      });
+      poznamky.push(`${cisloObjednavky} (3D transfery${viac ? `, motív ${i + 1}/${polozky.length}` : ''})` + (tx ? `\nTextúra podkladu: ${tx.nazov}${tx.subor_nazov ? ` — ${tx.subor_nazov}` : ''}` : '') + (suborUrl ? `\nSúbor na tlač: ${suborUrl}` : ''));
     }
-    const { error: insertErr } = await supabase.from('transfer3d_objednavky').insert({
-      id: objednavkaId, cislo_objednavky: cisloObjednavky, sirka_cm: w, vyska_cm: h, pocet_ks: ks, uroven: ur.kod, lak: lk.kod, textura: tx ? tx.kod : null,
-      dlzka_bm: r2(v.roz.dlzkaBm), cena_kus: r2(logaPoZlave / ks), cena_spolu: spolu, naklad_spolu: r2(v.nakladSpolu),
-      subor_nazov: suborNazov, subor_cesta: suborCesta, subor_url: suborUrl, osobny_odber: !!osobnyOdber,
-    });
-    if (insertErr) throw insertErr;
-
-    const domain = Deno.env.get('SHOPIFY_STORE_DOMAIN');
-    const clientId = Deno.env.get('SHOPIFY_CLIENT_ID');
-    const clientSecret = Deno.env.get('SHOPIFY_CLIENT_SECRET');
-    if (!domain || !clientId || !clientSecret) throw new Error('SHOPIFY_STORE_DOMAIN, SHOPIFY_CLIENT_ID alebo SHOPIFY_CLIENT_SECRET nie je nastavený v Supabase secrets.');
-    const token = await ziskajAdminToken(domain, clientId, clientSecret);
-
-    const nazovPolozky = `3D transfer — ${ks}× ${w}×${h} cm (${ur.nazov}, ${lk.nazov})${osobnyOdber ? ' (osobný odber)' : ''}`;
-    const draftPayload = {
-      draft_order: {
-        line_items: [{
-          title: nazovPolozky,
-          price: spolu.toFixed(2),
-          quantity: 1,
-          taxable: false, // cena už zahŕňa DPH (vypočítaná na serveri)
-          requires_shipping: !osobnyOdber,
-          properties: [
-            { name: '_cislo_objednavky', value: cisloObjednavky },
-            { name: '_objednavka_id', value: objednavkaId },
-            { name: '_rozmer_cm', value: `${w}x${h}` },
-            { name: '_pocet_ks', value: String(ks) },
-            { name: '_uroven', value: ur.nazov },
-            { name: '_lak', value: lk.nazov },
-            { name: '_textura', value: tx ? `${tx.nazov}${tx.subor_nazov ? ` (súbor ${tx.subor_nazov})` : ''}` : 'bez textúry' },
-            { name: '_subor', value: suborNazov || '' },
-            { name: '_subor_link', value: suborUrl || '' },
-            { name: '_osobny_odber', value: osobnyOdber ? 'áno' : 'nie' },
-            { name: '_b2b_kod', value: zlavaPercent > 0 ? String(b2bKod).trim().toUpperCase() : '' },
-          ],
-        }],
-        note: `${cisloObjednavky} (3D transfery)` + (tx ? `\nTextúra podkladu: ${tx.nazov}${tx.subor_nazov ? ` — ${tx.subor_nazov}` : ''}` : '') + (suborUrl ? `\nSúbor na tlač: ${suborUrl}` : ''),
-        tags: 'transfer3d',
-        use_customer_default_address: true,
-      },
-    };
-    const res = await fetch(`https://${domain}/admin/api/2025-01/draft_orders.json`, {
-      method: 'POST', headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' }, body: JSON.stringify(draftPayload),
-    });
-    if (!res.ok) throw new Error(`Shopify Admin API chyba ${res.status}: ${await res.text()}`);
-    const data = await res.json();
-    if (!data?.draft_order?.invoice_url) throw new Error('Shopify nevrátil odkaz na platbu draft objednávky.');
-    return odpoved({ ok: true, checkoutUrl: data.draft_order.invoice_url, cenaSpolu: spolu, objednavkaId, cisloObjednavky });
+    if (viac && extraCents > 0) riadkyDraft.push({ title: 'Manipulácia a poštovné (spoločné pre všetky motívy)', price: extraCents / 100, requiresShipping: false });
+    const checkoutUrl = await vytvorDraft(riadkyDraft, poznamky.join('\n\n'), 'transfer3d');
+    return odpoved({ ok: true, checkoutUrl, cenaSpolu: c.spolu, objednavkaId: prveId, cisloObjednavky: prveCislo });
   } catch (e) {
     const msg = e instanceof Error ? e.message : (e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : JSON.stringify(e));
     return odpoved({ ok: false, error: msg });

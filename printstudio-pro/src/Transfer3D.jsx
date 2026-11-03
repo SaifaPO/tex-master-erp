@@ -5,6 +5,8 @@ import NumberInput from './NumberInput';
 import { useB2bKod } from './b2b';
 import B2bKod from './B2bKod';
 import { CenaB2b } from './CenaB2b';
+import { useCenaNahlad } from './cenaNahlad';
+import { KosikMotivov, useKosikMotivov, riadkyZCeny } from './kosikMotivov';
 
 const BUCKET = 'print-designs';
 
@@ -43,12 +45,9 @@ export default function Transfer3D({ supabase }) {
   const [nahladUrl, setNahladUrl] = useState('');
   const b2b = useB2bKod(supabase);
 
-  const [cena, setCena] = useState(null);
-  const [cenaChyba, setCenaChyba] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [confirmation, setConfirmation] = useState('');
-  const poslednyDotaz = useRef(0);
 
   useEffect(() => {
     if (!supabase) { setLoadError('Supabase klient nie je nakonfigurovaný.'); setIsLoading(false); return; }
@@ -78,22 +77,6 @@ export default function Transfer3D({ supabase }) {
     return '';
   }, [sirka, vyska, pocetKs, maxSirka, maxVyska]);
 
-  // Živý náhľad ceny — počíta server (Edge Function), zákazník nikdy nevidí nákupné ceny ani spotreby
-  useEffect(() => {
-    if (!supabase || !nastavenia || !uroven || !lak || rozmerChyba) { setCena(null); setCenaChyba(rozmerChyba); return; }
-    const id = ++poslednyDotaz.current;
-    const t = setTimeout(async () => {
-      const { data, error } = await supabase.functions.invoke('transfer3d-create-draft-order', {
-        body: { preview: true, sirkaCm: sirka, vyskaCm: vyska, pocetKs, uroven, lak, osobnyOdber, b2bKod: b2b.kod },
-      });
-      if (id !== poslednyDotaz.current) return;
-      if (error || !data?.ok) { setCena(null); setCenaChyba(data?.error || 'Cenu sa nepodarilo vypočítať (je funkcia transfer3d-create-draft-order nasadená?).'); return; }
-      setCenaChyba('');
-      setCena(data);
-    }, 350);
-    return () => clearTimeout(t);
-  }, [supabase, nastavenia, sirka, vyska, pocetKs, uroven, lak, osobnyOdber, b2b.kod, rozmerChyba]);
-
   const vyberSubor = (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
@@ -102,15 +85,35 @@ export default function Transfer3D({ supabase }) {
     setNahladUrl(/^image\//.test(f.type) ? URL.createObjectURL(f) : '');
   };
 
+  // Košík motívov: viac rôznych motívov v jednej objednávke (jedno poštovné a manipulácia, množstevná zľava zo všetkých kusov)
+  const podpisAktualneho = () => (subor ? `${sirka}|${vyska}|${uroven}|${lak}|${textura}|${subor.name}|${subor.size}|${subor.lastModified}` : null);
+  const vytvorPolozku = async () => {
+    if (!subor) throw new Error('Nahraj prosím súbor s logom.');
+    if (rozmerChyba) throw new Error(rozmerChyba);
+    const cesta = `transfer3d/${crypto.randomUUID()}/${subor.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    const { error: uploadErr } = await supabase.storage.from(BUCKET).upload(cesta, subor, { contentType: subor.type || undefined });
+    if (uploadErr) throw new Error('Súbor sa nepodarilo nahrať: ' + uploadErr.message);
+    return {
+      id: crypto.randomUUID(), pocetKs, popis: `${sirka} × ${vyska} cm, ${urovne.find((u) => u.kod === uroven)?.nazov || ''}`,
+      nahlad: /^image\//.test(subor.type) ? URL.createObjectURL(subor) : '', podpis: podpisAktualneho(),
+      vstup: { sirkaCm: sirka, vyskaCm: vyska, pocetKs, uroven, lak, textura: textura || null, suborNazov: subor.name, suborCesta: cesta },
+    };
+  };
+  const kos = useKosikMotivov({ vytvorPolozku, podpisAktualneho });
+
+  // Živý náhľad ceny — počíta server (Edge Function), zákazník nikdy nevidí nákupné ceny ani spotreby
+  const teloCeny = kos.kosik.length > 0 ? { polozky: kos.kosik.map((p) => p.vstup), osobnyOdber, b2bKod: b2b.kod } : { sirkaCm: sirka, vyskaCm: vyska, pocetKs, uroven, lak, osobnyOdber, b2bKod: b2b.kod };
+  const { cena, chyba: chybaCeny } = useCenaNahlad(supabase, 'transfer3d-create-draft-order', teloCeny, kos.kosik.length > 0 || !!(nastavenia && uroven && lak && !rozmerChyba));
+  const cenaChyba = (kos.kosik.length === 0 && rozmerChyba) || chybaCeny;
+
   const odoslat = async () => {
-    if (!subor) { setSubmitError('Nahraj prosím súbor s logom.'); return; }
+    if (!subor && kos.kosik.length === 0) { setSubmitError('Nahraj prosím súbor s logom.'); return; }
     setIsSubmitting(true); setSubmitError(''); setConfirmation('');
     try {
-      const cesta = `transfer3d/${crypto.randomUUID()}/${subor.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-      const { error: uploadErr } = await supabase.storage.from(BUCKET).upload(cesta, subor, { contentType: subor.type || undefined });
-      if (uploadErr) throw new Error('Súbor sa nepodarilo nahrať: ' + uploadErr.message);
+      const polozky = await kos.pripravNaObjednanie();
+      if (!polozky) return;
       const { data, error } = await supabase.functions.invoke('transfer3d-create-draft-order', {
-        body: { sirkaCm: sirka, vyskaCm: vyska, pocetKs, uroven, lak, textura: textura || null, osobnyOdber, b2bKod: b2b.kod, suborNazov: subor.name, suborCesta: cesta },
+        body: { polozky: polozky.map((p) => p.vstup), osobnyOdber, b2bKod: b2b.kod },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -235,12 +238,22 @@ export default function Transfer3D({ supabase }) {
                 <span>Osobný odber v Prešove alebo Košiciach (neplatím poštovné)</span>
               </label>
 
+              <KosikMotivov polozky={kos.kosik} riadky={riadkyZCeny(cena, kos.kosik.length)} onOdober={kos.odober} onPridat={async () => { if (await kos.pridaj()) { setSubor(null); if (nahladUrl) URL.revokeObjectURL(nahladUrl); setNahladUrl(''); } }} bezi={kos.pridavam || isSubmitting}
+                popisKrok={kos.kosik.length === 0 ? 'Chceš viac rôznych log? Pridaj toto logo, nahraj ďalší súbor a pridaj ďalšie — poštovné a manipuláciu zaplatíš len raz a množstevná zľava sa počíta zo všetkých kusov.' : 'Po pridaní motívu nahraj ďalší súbor. Súbor v nahrávači sa do objednávky dostane až po kliknutí na „Pridať tento motív“ (alebo ho pri objednaní ponúkneme pridať).'} />
+              {kos.chyba && <p className="text-xs text-rose-300">{kos.chyba}</p>}
+              {kos.info && <p className="text-xs text-emerald-300">{kos.info}</p>}
+
               {cenaChyba ? (
                 <div className="bg-rose-950/60 border border-rose-700 text-rose-200 p-3 rounded-lg text-xs flex gap-2"><AlertTriangle className="w-4 h-4 shrink-0" /> {cenaChyba}</div>
               ) : cena ? (
                 <div className="space-y-2 border-t border-slate-700 pt-3">
-                  <RowSum label="Cena za 1 ks (bez DPH)" value={<CenaB2b v={cena.cenaKsBezDph} p={cena.zlavaB2bPercent} />} />
-                  <RowSum label="Motívy spolu (bez DPH)" value={<CenaB2b v={cena.logaSpoluBezDph} p={cena.zlavaB2bPercent} />} />
+                  {cena.polozky && cena.polozky.length > 1
+                    ? <>
+                        {cena.polozky.map((p, i) => <RowSum key={i} label={`Motív ${i + 1}: ${p.ks} ks × ${p.cenaKsBezDph.toFixed(2)} €`} value={<CenaB2b v={p.logaSpoluBezDph} p={cena.zlavaB2bPercent} />} />)}
+                        {cena.doplatokMinimaBezDph > 0 && <RowSum label="Doplatok do minimálnej ceny objednávky" value={`${cena.doplatokMinimaBezDph.toFixed(2)} €`} />}
+                      </>
+                    : <RowSum label="Cena za 1 ks (bez DPH)" value={<CenaB2b v={cena.cenaKsBezDph} p={cena.zlavaB2bPercent} />} />}
+                  <RowSum label={cena.polozky && cena.polozky.length > 1 ? `Motívy spolu (${cena.ksSpolu} ks, bez DPH)` : 'Motívy spolu (bez DPH)'} value={<CenaB2b v={cena.logaSpoluBezDph} p={cena.zlavaB2bPercent} />} />
                   {cena.zlavaB2bEur > 0 && <RowSum label={`B2B zľava ${cena.zlavaB2bPercent} %`} value={`−${cena.zlavaB2bEur.toFixed(2)} €`} />}
                   {cena.manipulaciaBezDph > 0 && <RowSum label="Manipulačný poplatok" value={`${cena.manipulaciaBezDph.toFixed(2)} €`} />}
                   <RowSum label="Poštovné a balné" value={cena.postovneBezDph === 0 ? 'Zdarma' : `${cena.postovneBezDph.toFixed(2)} €`} />
@@ -258,10 +271,10 @@ export default function Transfer3D({ supabase }) {
 
               {submitError && <p className="text-xs text-rose-300">{submitError}</p>}
               {confirmation && <p className="text-xs text-emerald-300">{confirmation}</p>}
-              <button onClick={odoslat} disabled={isSubmitting || !cena || !subor} className="w-full py-3.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-bold text-sm flex items-center justify-center gap-2">
+              <button onClick={odoslat} disabled={isSubmitting || !cena || (!subor && kos.kosik.length === 0)} className="w-full py-3.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-bold text-sm flex items-center justify-center gap-2">
                 <ShoppingCart className="w-4 h-4" /> {isSubmitting ? 'Vytváram objednávku…' : 'Objednať a zaplatiť'}
               </button>
-              {!subor && <p className="text-[11px] text-slate-400 text-center">Najprv nahrajte súbor s logom.</p>}
+              {!subor && kos.kosik.length === 0 && <p className="text-[11px] text-slate-400 text-center">Najprv nahrajte súbor s logom.</p>}
             </div>
           </aside>
         </div>
