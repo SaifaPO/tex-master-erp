@@ -14,6 +14,7 @@ import MesacnyReportTab from './MesacnyReportTab';
 import OdovzdanieZakazky from './OdovzdanieZakazky';
 import PrintStudioAdmin from './printstudio/PrintStudioAdmin';
 import NotifikacieZvonec from './NotifikacieZvonec';
+import OnlinePrezencia from './OnlinePrezencia';
 import PozvankaScreen from './PozvankaScreen';
 import { mapNacrtFromDb, mapNacrtToDb, spoluNacrtu, stavSuhlasov, NacrtModal, NacrtyFronta } from './FakturaNacrty';
 import GlobalSearchPalette from './GlobalSearchPalette';
@@ -2215,6 +2216,20 @@ export default function App() {
     if (id === 'problems') return hasPermission('view_problems') || role === 'sales';
     return true;
   };
+  // Klik na logo = Domov: prvá karta, ktorú rola smie vidieť (Plánovacia Matica), a úplne hore na stránke
+  const goHome = () => {
+    const prva = ['planner', ...TAB_DEFS.map(([tid]) => tid)].find(tid => tabVisible(tid));
+    if (prva) setActiveTab(prva);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  // Plávajúce tlačidlo "späť hore" vpravo dole (zobrazí sa po poscrollovaní)
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setShowScrollTop(window.scrollY > 400);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
   // Ak aktuálna karta pre prihlásenú rolu nie je dostupná (napr. po prepnutí profilu, alebo šofér, ktorému ostala otvorená Plánovacia Matica),
   // otvor prvú kartu, ktorú smie vidieť
   useEffect(() => {
@@ -7007,11 +7022,11 @@ export default function App() {
       <header className="bg-slate-950 border-b border-slate-800 sticky top-0 z-30 shadow-lg print:hidden">
         <div className="max-w-7xl mx-auto px-4 py-3">
           <div className="flex flex-col lg:flex-row items-center justify-between gap-4">
-            <div className="flex flex-col items-start shrink-0">
+            <button type="button" onClick={goHome} title="Domov — prvá karta, úplne hore" className="flex flex-col items-start shrink-0 text-left cursor-pointer hover:opacity-80 transition-opacity">
               <img src="/logo-atak-pbt.png" alt="ATAK x PBT" className="h-8 w-auto brightness-0 invert mb-1.5" />
               <span className="font-extrabold text-md tracking-wider text-white block">TEX-MASTER ERP v7.0</span>
               <span className="text-[10px] text-indigo-400 block -mt-1 font-semibold">Živé dáta • Supabase</span>
-            </div>
+            </button>
             <div className="flex items-center gap-2 w-full lg:w-auto">
             <nav className="flex flex-wrap items-center justify-center gap-1 bg-slate-900/60 p-1 rounded-xl border border-slate-800 w-full lg:w-auto">
               {canSeeTab(currentUser.role, 'planner') && (
@@ -7066,11 +7081,19 @@ export default function App() {
                 <button onClick={() => setActiveTab('manual')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'manual' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><BookOpen className="h-3.5 w-3.5" /> Manuál</button>
               )}
             </nav>
+            <OnlinePrezencia supabase={supabase} currentUser={currentUser} employees={employees} rolaLabely={ROLE_LABELS} mozeVidiet={['master', 'supervisor'].includes(currentUser.role)} mozePisat={['master', 'supervisor'].includes(currentUser.role)} />
             {['master', 'supervisor', 'sales', 'uctovnik'].includes(currentUser.role) && <NotifikacieZvonec supabase={supabase} onOtvor={otvorZNotifikacie} rola={currentUser.role} mojeId={currentUser.id} />}
             </div>
           </div>
         </div>
       </header>
+
+      {showScrollTop && (
+        <button type="button" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} title="Späť úplne hore"
+          className="fixed bottom-5 right-5 z-40 print:hidden h-11 w-11 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white shadow-xl shadow-black/40 border border-indigo-400/40 flex items-center justify-center transition-colors">
+          <ArrowUp className="h-5 w-5" />
+        </button>
+      )}
 
       <main className={`flex-1 w-full mx-auto py-6 ${activeTab === 'planner' && plannerViewMode === 'matrix' ? 'max-w-none px-2 sm:px-3' : 'max-w-7xl px-4 sm:px-6 lg:px-8'}`}>
 
