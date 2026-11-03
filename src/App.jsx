@@ -7081,7 +7081,7 @@ export default function App() {
                 <button onClick={() => setActiveTab('manual')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'manual' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><BookOpen className="h-3.5 w-3.5" /> Manuál</button>
               )}
             </nav>
-            <OnlinePrezencia supabase={supabase} currentUser={currentUser} employees={employees} rolaLabely={ROLE_LABELS} mozeVidiet={['master', 'supervisor'].includes(currentUser.role)} mozePisat={['master', 'supervisor'].includes(currentUser.role)} />
+            <OnlinePrezencia supabase={supabase} currentUser={currentUser} employees={employees} rolaLabely={ROLE_LABELS} mozeVidiet mozePisat />
             {['master', 'supervisor', 'sales', 'uctovnik'].includes(currentUser.role) && <NotifikacieZvonec supabase={supabase} onOtvor={otvorZNotifikacie} rola={currentUser.role} mojeId={currentUser.id} />}
             </div>
           </div>
