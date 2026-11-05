@@ -14,7 +14,9 @@ export default function RozpisCeny({ cena, pocetKs, osobnyOdber, kompaktny = fal
         <div className="space-y-2">
           <div>
             <div className="font-semibold text-slate-800">Vlajka</div>
-            <div className="flex justify-between pl-3"><span>{cena.rozpis.vlajka.mnozstvo} ks × {C(cena.rozpis.vlajka.cenaZaKus)} (materiál + opracovanie{cena.obojstranna ? ', obojstranná sendvičová' : ''})</span><span className="font-semibold text-right">{C(cena.rozpis.vlajka.spolu)}</span></div>
+            {cena.vlajky && cena.vlajky.length > 1
+              ? cena.vlajky.map((v, i) => <div key={i} className="flex justify-between pl-3"><span>Motív {i + 1}: {v.ks} ks × {C(v.cenaZaKus)} (materiál + opracovanie)</span><span className="font-semibold text-right">{C(v.spolu)}</span></div>)
+              : <div className="flex justify-between pl-3"><span>{cena.rozpis.vlajka.mnozstvo} ks × {C(cena.rozpis.vlajka.cenaZaKus)} (materiál + opracovanie{cena.obojstranna ? ', obojstranná sendvičová' : ''})</span><span className="font-semibold text-right">{C(cena.rozpis.vlajka.spolu)}</span></div>}
           </div>
           {cena.rozpis.stoziare.length > 0 && (
             <div>

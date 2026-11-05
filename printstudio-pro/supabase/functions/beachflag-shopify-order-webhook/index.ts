@@ -117,6 +117,7 @@ async function vytvorErpZakazku(supabase: ReturnType<typeof createClient>, order
   const kontakt = [order.email, order.phone || order.shipping_address?.phone].filter(Boolean).join(', ');
   const poznamka = [
     `E-shop ${order.name} (${druhNazov}, ${nazovVarianty}, ${obj.pocet_ks} ks)`,
+    obj.skupina_id ? `MOTÍV ${obj.poradie || '?'} z viacerých v jednej objednávke (spoločné poštovné)` : '',
     express ? 'EXPRES dodanie' : 'štandardné dodanie',
     obj.osobny_odber ? 'OSOBNÝ ODBER' : '',
     kontakt ? `kontakt: ${kontakt}` : '',
@@ -145,7 +146,7 @@ async function vytvorErpZakazku(supabase: ReturnType<typeof createClient>, order
     }],
     order_log: [{ date: casNow, author: 'E-shop', text: `Zákazka založená automaticky zo zaplatenej objednávky ${order.name} (${druh}).` }],
     legacy_order_number: null, company_brand: 'PBT', order_number: cislo, accounting_status: null,
-    variable_symbol: orderId.replace(/\D/g, '').slice(-10), expected_amount: Number(order.total_price) || null, variable_symbol_confirmed: false,
+    variable_symbol: orderId.replace(/\D/g, '').slice(-10), expected_amount: (obj.skupina_id ? Number(obj.cena_spolu) : Number(order.total_price)) || Number(order.total_price) || null, variable_symbol_confirmed: false,
   });
   if (errOrder) throw new Error('Zákazku v ERP sa nepodarilo založiť: ' + errOrder.message);
 
@@ -184,6 +185,8 @@ Deno.serve(async (req) => {
 
     // Čelenky / buffky: zákazka v ERP (rozpoznané podľa štítku objednávky alebo vlastností položky)
     const stitky = String(order.tags || '').split(',').map((t: string) => t.trim().toLowerCase());
+    // Objednávka s viacerými motívmi (košík motívov) má viac položiek — zákazka v ERP vznikne pre KAŽDÝ motív zvlášť.
+    const erpVysledky: Record<string, unknown>[] = [];
     for (const li of (order.line_items || [])) {
       if (!najdiVlastnost(li.properties, '_objednavka_id')) continue;
       const jeCelenka = stitky.includes('celenky') || (li.properties || []).some((p: any) => p.name === '_rozmer_cm');
@@ -192,15 +195,20 @@ Deno.serve(async (req) => {
       const props = (li.properties || []).map((p: any) => p.name);
       const druh = jeTransfer3d ? 'transfer3d' : props.includes('_stolova') ? 'stolova' : props.includes('_snurka') ? 'snurka' : props.includes('_folie') ? 'folie' : jeCelenka ? 'celenky' : jeBuffka ? 'buffky' : null;
       if (!druh) continue;
+      await new Promise((r) => setTimeout(r, 5)); // unikátne ZAK-ID aj pri viacerých motívoch v jednej objednávke
       const vysledok = await vytvorErpZakazku(supabase, order, li, druh);
-      return odpoved(200, { ok: true, druh, ...vysledok });
+      erpVysledky.push({ druh, ...vysledok });
     }
-    const zastavaItem = (order.line_items || []).find((li: any) =>
+    if (erpVysledky.length > 0) return odpoved(200, { ok: true, druh: erpVysledky[0].druh, vysledky: erpVysledky });
+    const zastavaPolozky = (order.line_items || []).filter((li: any) =>
       najdiVlastnost(li.properties, '_zastava_order') === 'true'
     );
-    if (zastavaItem) {
-      const props = zastavaItem.properties as { name: string; value: string }[];
+    if (zastavaPolozky.length > 0) {
       const bezpecnyJsonParse = (s: string, fallback: unknown) => { try { return JSON.parse(s); } catch { return fallback; } };
+      for (const zastavaItem of zastavaPolozky) {
+      const props = zastavaItem.properties as { name: string; value: string }[];
+      // Pri viacerých motívoch je každý motív jedna položka (množstvo 1) a počet kusov je vo vlastnosti _pocet_ks
+      const ksMotivu = parseInt(najdiVlastnost(props, '_pocet_ks')) || zastavaItem.quantity || 1;
       const riadok = {
         shopify_order_id: String(order.id),
         shopify_order_number: order.name || null,
@@ -217,10 +225,10 @@ Deno.serve(async (req) => {
         farba_hex: najdiVlastnost(props, '_farba_hex') || null,
         farba_poznamka: najdiVlastnost(props, '_farba_poznamka') || null,
         text_na_vlajke: najdiVlastnost(props, '_text_na_vlajke') || null,
-        pocet_ks: zastavaItem.quantity || 1,
+        pocet_ks: ksMotivu,
         expresne: najdiVlastnost(props, '_expresne') === 'áno',
         ...(najdiVlastnost(props, '_obojstranna') ? { obojstranna: true } : {}),
-        cena_kus: parseFloat(zastavaItem.price) || null,
+        cena_kus: (parseFloat(zastavaItem.price) || 0) * (zastavaItem.quantity || 1) / ksMotivu || null,
         cena_spolu: (parseFloat(zastavaItem.price) || 0) * (zastavaItem.quantity || 1),
         status: 'na_schvalenie',
         nahlad_url: najdiVlastnost(props, '_nahlad_url') || null,
@@ -230,18 +238,25 @@ Deno.serve(async (req) => {
       };
       const { error } = await supabase.from('zastava_objednavky').insert(riadok);
       if (error) throw error;
-      return odpoved(200, { ok: true });
+      }
+      return odpoved(200, { ok: true, motivov: zastavaPolozky.length });
     }
 
-    const beachflagItem = (order.line_items || []).find((li: any) =>
+    const beachflagPolozky = (order.line_items || []).filter((li: any) =>
       najdiVlastnost(li.properties, '_beachflag_order') === 'true'
     );
-    if (!beachflagItem) {
+    if (beachflagPolozky.length === 0) {
       // Bežná (nie-beachflag, nie-zastava) objednávka — nič nerobíme, ale odpovieme 200, nech Shopify webhook nezopakuje.
       return odpoved(200, { ignored: true });
     }
 
-    const props = beachflagItem.properties as { name: string; value: string }[];
+    // Prúty, podstavce a doplnky sú pri viacerých motívoch spoločné pre celú objednávku — majú vlastnú položku (_beachflag_prislusenstvo)
+    // a v ERP sa pripoja k prvému motívu.
+    const prislusenstvoPolozka = (order.line_items || []).find((li: any) => najdiVlastnost(li.properties, '_beachflag_prislusenstvo') === 'true');
+    for (let idx = 0; idx < beachflagPolozky.length; idx++) {
+    const beachflagItem = beachflagPolozky[idx];
+    const props = ((idx === 0 && prislusenstvoPolozka ? [...beachflagItem.properties, ...prislusenstvoPolozka.properties.filter((p: any) => ['_stoziar', '_podstavec', '_doplnky'].includes(p.name))] : beachflagItem.properties)) as { name: string; value: string }[];
+    const ksMotivu = parseInt(najdiVlastnost(props, '_pocet_vlajok')) || beachflagItem.quantity || 1;
     const doplnkyText = najdiVlastnost(props, '_doplnky');
     const doplnky = doplnkyText
       ? doplnkyText.split(',').map((s) => s.trim()).filter(Boolean).map((s) => {
@@ -263,10 +278,10 @@ Deno.serve(async (req) => {
       farba_poznamka: najdiVlastnost(props, '_farba_poznamka') || null,
       text_na_vlajke: najdiVlastnost(props, '_text_na_vlajke') || null,
       ma_ai_pozadie: false,
-      pocet_ks: beachflagItem.quantity || 1,
+      pocet_ks: ksMotivu,
       expresne: najdiVlastnost(props, '_expresne') === 'áno',
       ...(najdiVlastnost(props, '_obojstranna') ? { obojstranna: true } : {}),
-      cena_kus: parseFloat(beachflagItem.price) || null,
+      cena_kus: (parseFloat(beachflagItem.price) || 0) * (beachflagItem.quantity || 1) / ksMotivu || null,
       cena_spolu: (parseFloat(beachflagItem.price) || 0) * (beachflagItem.quantity || 1),
       status: 'na_schvalenie',
       nahlad_url: najdiVlastnost(props, '_nahlad_url') || null,
@@ -277,8 +292,9 @@ Deno.serve(async (req) => {
 
     const { error } = await supabase.from('vlajka_objednavky').insert(riadok);
     if (error) throw error;
+    }
 
-    return odpoved(200, { ok: true });
+    return odpoved(200, { ok: true, motivov: beachflagPolozky.length });
   } catch (e) {
     return odpoved(500, { error: e instanceof Error ? e.message : String(e) });
   }

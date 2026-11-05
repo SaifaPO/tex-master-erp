@@ -11,6 +11,7 @@ import { useB2bKod } from '../b2b';
 import B2bKod from '../B2bKod';
 import DoplnkyTab from './DoplnkyTab';
 import VelkostnePorovnanie from './VelkostnePorovnanie';
+import { useKosikMotivov } from '../kosikMotivov';
 
 const BUCKET = 'print-designs';
 const DEFAULT_VIEWBOX = { w: 200, h: 420 };
@@ -83,12 +84,39 @@ export default function BeachflagApp({ supabase }) {
 
   useEffect(() => { katalogRef.current = katalog; }, [katalog]);
 
+  // Kosik motivov: viac roznych navrhov vlajok v jednej objednavke (rovnaky tvar a velkost; prúty, podstavce a doplnky su spolocne pre celu objednavku).
+  const snapshotMotivu = () => ({ tvarKod, velkostKod, materialKod, dokoncenieKod, obojstranna, pocetKs, farbaHex: bgColor, farbaPoznamka: pantoneNote, textNaVlajke: customText });
+  const podpisAktualneho = () => {
+    const c = fabricRef.current;
+    if (!c) return null;
+    try { return JSON.stringify(snapshotMotivu()) + '|' + c.toDataURL({ format: 'jpeg', quality: 0.4, multiplier: 60 / Math.max(1, c.getWidth()) }); } catch { return null; }
+  };
+  const vytvorPolozku = async () => {
+    const canvas = fabricRef.current;
+    if (!canvas) throw new Error('Plátno nie je pripravené.');
+    const prva = kos.kosik[0]?.vstup;
+    if (prva && (prva.tvarKod !== tvarKod || prva.velkostKod !== velkostKod)) throw new Error('Všetky motívy v jednej objednávke musia mať rovnaký tvar a veľkosť vlajky (prúty a podstavce sa viažu na veľkosť). Inú veľkosť objednaj samostatne.');
+    const designId = 'vlajka_' + crypto.randomUUID();
+    const blob = await fetch(canvas.toDataURL({ format: 'png', quality: 0.92 })).then(r => r.blob());
+    const cesta = `${designId}/vlajka.png`;
+    const { error: upErr } = await supabase.storage.from(BUCKET).upload(cesta, blob, { contentType: 'image/png' });
+    if (upErr) throw new Error('Náhľad sa nepodarilo nahrať: ' + upErr.message);
+    const { data: publicUrlData } = supabase.storage.from(BUCKET).getPublicUrl(cesta);
+    let nahlad = '';
+    try { nahlad = canvas.toDataURL({ format: 'jpeg', quality: 0.7, multiplier: 100 / Math.max(1, canvas.getWidth()) }); } catch { /* bez náhľadu */ }
+    const mat = katalog?.materialy?.find(m => m.kod === materialKod);
+    return { id: crypto.randomUUID(), pocetKs, popis: `${katalog?.tvary?.find(t => t.kod === tvarKod)?.nazov || tvarKod} ${velkostKod}, ${mat?.nazov || materialKod}`, nahlad, podpis: podpisAktualneho(), vstup: { ...snapshotMotivu(), designId, nahladUrl: publicUrlData?.publicUrl || null } };
+  };
+  const kos = useKosikMotivov({ vytvorPolozku, podpisAktualneho });
+  const ksVlajokSpolu = kos.kosik.length > 0 ? kos.kosik.reduce((s, p) => s + p.pocetKs, 0) : pocetKs;
+  const polozkyNaCenu = () => kos.kosik.map(p => { const { designId, nahladUrl, ...v } = p.vstup; return v; });
+
   // Pokial zakaznik pocty prutov/podstavcov nemenil rucne, kopiruju vyber z kroku Parametre x pocet vlajok.
   useEffect(() => {
     if (mnozstvaRucne) return;
-    setStoziareMn(stoziarKod ? { [stoziarKod]: pocetKs } : {});
-    setPodstavceMn(podstavecKod ? { [podstavecKod]: pocetKs } : {});
-  }, [mnozstvaRucne, stoziarKod, podstavecKod, pocetKs]);
+    setStoziareMn(stoziarKod ? { [stoziarKod]: ksVlajokSpolu } : {});
+    setPodstavceMn(podstavecKod ? { [podstavecKod]: ksVlajokSpolu } : {});
+  }, [mnozstvaRucne, stoziarKod, podstavecKod, ksVlajokSpolu]);
 
   const zoznamMnozstiev = (mapa) => Object.entries(mapa).filter(([, m]) => m > 0).map(([kod, mnozstvo]) => ({ kod, mnozstvo }));
   const nastavStoziarMn = (kod, hodnota) => { setMnozstvaRucne(true); setStoziareMn(m => ({ ...m, [kod]: Math.max(0, Math.round(hodnota) || 0) })); };
@@ -254,7 +282,9 @@ export default function BeachflagApp({ supabase }) {
     setCenaChyba('');
     const t = setTimeout(async () => {
       const { data, error } = await supabase.functions.invoke('beachflag-price-preview', {
-        body: { tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnky, pocetKs, expresne, osobnyOdber, obojstranna, stoziare: zoznamMnozstiev(stoziareMn), podstavce: zoznamMnozstiev(podstavceMn), b2bKod: b2b.kod },
+        body: kos.kosik.length > 0
+          ? { polozky: polozkyNaCenu(), stoziarKod, podstavecKod, doplnky, expresne, osobnyOdber, stoziare: zoznamMnozstiev(stoziareMn), podstavce: zoznamMnozstiev(podstavceMn), b2bKod: b2b.kod }
+          : { tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnky, pocetKs, expresne, osobnyOdber, obojstranna, stoziare: zoznamMnozstiev(stoziareMn), podstavce: zoznamMnozstiev(podstavceMn), b2bKod: b2b.kod },
       });
       setCenaNacitava(false);
       if (error) { setCenaChyba(error.message); return; }
@@ -262,7 +292,7 @@ export default function BeachflagApp({ supabase }) {
       setCena(data.cena);
     }, 400);
     return () => clearTimeout(t);
-  }, [supabase, katalog, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnkyMnozstva, pocetKs, expresne, osobnyOdber, obojstranna, stoziareMn, podstavceMn, b2b.kod]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [supabase, katalog, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnkyMnozstva, pocetKs, expresne, osobnyOdber, obojstranna, stoziareMn, podstavceMn, b2b.kod, kos.kosik]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Celkova cena objednavky pri KAZDEJ velkosti a KAZDOM materiali (so zvyskom konfiguracie nezmeneným) — zakaznik ju vidi priamo
   // pri vybere velkosti a materialu; pri zmene niecoho ineho (pocet kusov, prut, ...) sa to prepocita v realnom case.
@@ -364,23 +394,15 @@ export default function BeachflagApp({ supabase }) {
     setSubmitError('');
     setIsSubmitting(true);
     try {
-      const designId = 'vlajka_' + Date.now();
-      const dataUrl = canvas.toDataURL({ format: 'png', quality: 0.92 });
-      const blob = await fetch(dataUrl).then(r => r.blob());
-      const cesta = `${designId}/vlajka.png`;
-      await supabase.storage.from(BUCKET).upload(cesta, blob, { contentType: 'image/png' });
-      const { data: publicUrlData } = supabase.storage.from(BUCKET).getPublicUrl(cesta);
-
+      // Motivy v kosiku + (ak ho ponukneme pridat) aktualny navrh; prúty, podstavce a doplnky su spolocne pre celu objednavku
+      const polozky = await kos.pripravNaObjednanie();
+      if (!polozky) { setIsSubmitting(false); return; }
       const payload = {
-        designId,
-        tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod,
+        polozky: polozky.map(p => p.vstup),
+        stoziarKod, podstavecKod,
         doplnky: doplnkyVybrane,
-        farbaHex: bgColor,
-        farbaPoznamka: pantoneNote,
-        textNaVlajke: customText,
-        expresne, pocetKs, osobnyOdber, obojstranna,
+        expresne, osobnyOdber,
         stoziare: zoznamMnozstiev(stoziareMn), podstavce: zoznamMnozstiev(podstavceMn), b2bKod: b2b.kod,
-        nahladUrl: publicUrlData?.publicUrl || null,
       };
 
       const { data, error } = await supabase.functions.invoke('beachflag-create-draft-order', { body: payload });
@@ -433,7 +455,7 @@ export default function BeachflagApp({ supabase }) {
             stoziareMn={stoziareMn} onStoziarMn={nastavStoziarMn} podstavceMn={podstavceMn} onPodstavecMn={nastavPodstavecMn}
             expresne={expresne} onExpresne={setExpresne} pocetKs={pocetKs} onPocetKs={setPocetKs}
             osobnyOdber={osobnyOdber} onOsobnyOdber={setOsobnyOdber}
-            cena={cena} cenaNacitava={cenaNacitava} cenaChyba={cenaChyba} isSubmitting={isSubmitting} submitError={submitError} onObjednat={objednat}
+            cena={cena} cenaNacitava={cenaNacitava} cenaChyba={cenaChyba} kos={kos} isSubmitting={isSubmitting} submitError={submitError} onObjednat={objednat}
             onSpat={() => setKrok('grafika')} />
         )}
       </div>

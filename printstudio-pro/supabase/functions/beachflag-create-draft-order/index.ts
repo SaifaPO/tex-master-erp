@@ -180,6 +180,185 @@ function zakaznikDoDraftOrder(z: any): Record<string, unknown> {
   return out;
 }
 
+// ---- Kosik motivov: viac roznych navrhov vlajok (rovnaky tvar a velkost) v jednej objednavke ----
+// Mnozstevna hladina vlajok sa pocita z CELKOVEHO poctu vlajok; prúty, podstavce a doplnky su spolocne pre celu objednavku (kazda polozka ma svoj
+// pocet kusov, ako pri jednom motive). Kazdy motiv je jedna polozka Shopify draftu, prislusenstvo a doprava maju vlastne polozky.
+async function nakladJednejVlajky(supabase: ReturnType<typeof createClient>, f: Record<string, any>, nastavenia: any, cfg: any, nakladM2Sublimacia: number) {
+  const { tvarKod, velkostKod, materialKod, dokoncenieKod, obojstranna = false } = f;
+  if (!tvarKod || !velkostKod) throw new Error('Chýba tvar alebo veľkosť vlajky.');
+  if (!materialKod) throw new Error('Chýba materiál.');
+  const [{ data: tvar }, { data: velkost }, { data: material }, { data: dokoncenie }] = await Promise.all([
+    supabase.from('vlajka_tvary').select('*').eq('kod', tvarKod).maybeSingle(),
+    supabase.from('vlajka_velkosti').select('*').eq('kod', velkostKod).maybeSingle(),
+    supabase.from('vlajka_materialy').select('*').eq('kod', materialKod).eq('aktivny', true).maybeSingle(),
+    dokoncenieKod ? supabase.from('vlajka_dokoncenie').select('*').eq('kod', dokoncenieKod).maybeSingle() : Promise.resolve({ data: null }),
+  ]);
+  if (!tvar) throw new Error(`Tvar "${tvarKod}" sa v katalógu nenašiel.`);
+  if (!velkost) throw new Error(`Veľkosť "${velkostKod}" sa v katalógu nenašla.`);
+  if (!material) throw new Error(`Materiál "${materialKod}" sa v katalógu nenašiel.`);
+  const { data: rozmer } = await supabase.from('vlajka_tvar_rozmery').select('spotreba_m2').eq('tvar_id', tvar.id).eq('velkost', velkostKod).maybeSingle();
+  if (!rozmer || rozmer.spotreba_m2 == null) throw new Error(`Spotreba materiálu pre tvar "${tvarKod}" a veľkosť "${velkostKod}" nie je nastavená.`);
+  const nakladM2Latka = await resolveNakladM2(supabase, material);
+  const nakladSitia = (Number(velkost.minuty_sitia) || 0) * (Number(cfg?.cena_minuty_sitia) || 0);
+  const rezervaKoef = 1 + (Number(nastavenia?.rezerva_odpad_percent ?? 3) || 0) / 100;
+  let nakladMaterial = Number(rozmer.spotreba_m2) * rezervaKoef * (nakladM2Latka + nakladM2Sublimacia) + nakladSitia;
+  if (obojstranna) {
+    const sv = await nacitajSendvic(supabase, material);
+    nakladMaterial = Number(rozmer.spotreba_m2) * rezervaKoef * (2 * (nakladM2Latka + nakladM2Sublimacia) + sv.vlozkaM2 + sv.pracaM2) + nakladSitia * sv.sitieKoef;
+  }
+  return { tvar, velkost, material, dokoncenie, nakladMaterial, obojstranna: !!obojstranna };
+}
+
+async function vytvorKosik(supabase: ReturnType<typeof createClient>, body: Record<string, any>) {
+  const flagy: any[] = body.polozky;
+  if (flagy.length > 20) throw new Error('Najviac 20 motívov v jednej objednávke.');
+  const prvy = flagy[0];
+  if (flagy.some((f) => f.tvarKod !== prvy.tvarKod || f.velkostKod !== prvy.velkostKod)) {
+    throw new Error('Všetky motívy v jednej objednávke musia mať rovnaký tvar a veľkosť vlajky (prúty a podstavce sa viažu na veľkosť). Inú veľkosť objednaj samostatne.');
+  }
+  const { stoziarKod = null, podstavecKod = null, doplnky = [], expresne = false, osobnyOdber = false, stoziare = null, podstavce = null, b2bKod = null } = body;
+  const velkostKod: string = prvy.velkostKod;
+  const [{ data: doplnkyDb }, { data: nastavenia }, { data: cfg }, nakladM2Sublimacia, cenaStoziara, cenaPodstavca] = await Promise.all([
+    supabase.from('vlajka_doplnky').select('*'),
+    supabase.from('vlajka_nastavenia').select('*').eq('id', 1).maybeSingle(),
+    supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
+    resolveNakladSublimacieM2(supabase),
+    resolveStoziarCena(supabase, stoziarKod, velkostKod),
+    resolvePodstavecCena(supabase, podstavecKod, velkostKod),
+  ]);
+  const pricingConfig: PricingConfig = cfg
+    ? { coefA: Number(cfg.coef_a), coefB: Number(cfg.coef_b), marginFloor: Number(cfg.margin_floor), coefP: Number(cfg.coef_p), cielovaHodnotaZakazky: Number(cfg.cielova_hodnota_zakazky ?? 25000), dphPercent: Number(cfg.dph_percent ?? 23) }
+    : { coefA: 300, coefB: 54, marginFloor: 30, coefP: 1.3, cielovaHodnotaZakazky: 25000, dphPercent: 23 };
+
+  const ksF = flagy.map((f) => Math.max(1, Math.round(Number(f.pocetKs)) || 1));
+  const ksSpolu = ksF.reduce((a, b) => a + b, 0);
+  const vlajky = [];
+  for (let i = 0; i < flagy.length; i++) {
+    const n = await nakladJednejVlajky(supabase, flagy[i], nastavenia, cfg, nakladM2Sublimacia);
+    const zaklad = priceAt(n.nakladMaterial, ksSpolu, pricingConfig) + priceAt(Number(n.dokoncenie?.cena) || 0, ksSpolu, pricingConfig);
+    vlajky.push({ ...n, ks: ksF[i], zaklad, spolu: zaklad * ksF[i] });
+  }
+
+  // prislusenstvo (spolocne): prúty, podstavce, doplnky — kazda polozka s vlastnym poctom kusov (marza z poctu kusov danej polozky)
+  const zoznamPolozok = (pole: unknown, kodFallback: string | null) => (Array.isArray(pole)
+    ? (pole as { kod: string; mnozstvo: number }[]).filter((x) => x?.kod && Number(x.mnozstvo) > 0).map((x) => ({ kod: String(x.kod), mnozstvo: Math.round(Number(x.mnozstvo)) }))
+    : (kodFallback ? [{ kod: kodFallback, mnozstvo: ksSpolu }] : []));
+  const stoziarePolozky: { cena: number; mnozstvo: number; nazov: string }[] = [];
+  for (const p of zoznamPolozok(stoziare, stoziarKod)) {
+    const { data: st } = await supabase.from('vlajka_stoziare').select('nazov').eq('kod', p.kod).maybeSingle();
+    stoziarePolozky.push({ cena: p.kod === stoziarKod ? cenaStoziara : await resolveStoziarCena(supabase, p.kod, velkostKod), mnozstvo: p.mnozstvo, nazov: st?.nazov || p.kod });
+  }
+  const podstavcePolozky: { cena: number; mnozstvo: number; nazov: string }[] = [];
+  for (const p of zoznamPolozok(podstavce, podstavecKod)) {
+    const { data: pd } = await supabase.from('vlajka_podstavce').select('nazov').eq('kod', p.kod).maybeSingle();
+    podstavcePolozky.push({ cena: p.kod === podstavecKod ? cenaPodstavca : await resolvePodstavecCena(supabase, p.kod, velkostKod), mnozstvo: p.mnozstvo, nazov: pd?.nazov || p.kod });
+  }
+  const doplnkyVypocet = (doplnky as { kod: string; mnozstvo: number }[]).map((d) => {
+    const dbRow = (doplnkyDb || []).find((x: any) => x.kod === d.kod);
+    return { cena: dbRow ? Number(dbRow.cena) : 0, mnozstvo: Number(d.mnozstvo) || 0, nazov: dbRow?.nazov || d.kod };
+  });
+  const sumaPolozky = (pole: { cena: number; mnozstvo: number }[]) => pole.reduce((sum, d) => {
+    const m = Math.round(Number(d.mnozstvo) || 0);
+    return m > 0 ? sum + priceAt(Number(d.cena) || 0, m, pricingConfig) * m : sum;
+  }, 0);
+  const prislSpolu = sumaPolozky(stoziarePolozky) + sumaPolozky(podstavcePolozky) + sumaPolozky(doplnkyVypocet);
+
+  const vlajkySpolu = vlajky.reduce((a, v) => a + v.spolu, 0);
+  const subtotalPredZlavou = vlajkySpolu + prislSpolu;
+  const b2bZlavaPercent = await b2bZlava(supabase, b2bKod);
+  const b2bZlavaEur = Math.round(subtotalPredZlavou * b2bZlavaPercent) / 100;
+  const subtotal = subtotalPredZlavou - b2bZlavaEur;
+  const expresnyPercent = Number((nastavenia || { expresny_priplatok_percent: 10 }).expresny_priplatok_percent) || 0;
+  const expresnyPriplatok = expresne ? subtotal * (expresnyPercent / 100) : 0;
+  const dphPercent = Number(pricingConfig.dphPercent) || 0;
+  const postovneZdarmaOd = Number(nastavenia?.postovne_zdarma_od_eur ?? 150) || 0;
+  const tovarSDph = (subtotal + expresnyPriplatok) * (1 + dphPercent / 100);
+  const doprava = osobnyOdber || (postovneZdarmaOd > 0 && tovarSDph >= postovneZdarmaOd) ? 0 : (Number(nastavenia?.cena_doprava) || 0);
+  const cenaSpolu = Math.round((subtotal + expresnyPriplatok + doprava) * (1 + dphPercent / 100) * 100) / 100;
+
+  // Rozpis finalnej ceny (s DPH) do poloziek draftu v centoch, aby sucet presne sedel
+  const dphK = 1 + dphPercent / 100;
+  const zK = subtotalPredZlavou > 0 ? subtotal / subtotalPredZlavou : 1;
+  const expresK = expresne ? 1 + expresnyPercent / 100 : 1;
+  const celkomCents = Math.round(cenaSpolu * 100);
+  const dopravaCents = Math.round(doprava * dphK * 100);
+  const prislCents = prislSpolu > 0 ? Math.round(prislSpolu * zK * expresK * dphK * 100) : 0;
+  const itemCents: number[] = vlajky.map((v) => Math.round(v.spolu * zK * expresK * dphK * 100));
+  itemCents[itemCents.length - 1] += celkomCents - dopravaCents - prislCents - itemCents.reduce((s, x) => s + x, 0);
+
+  const domain = Deno.env.get('SHOPIFY_STORE_DOMAIN');
+  const clientId = Deno.env.get('SHOPIFY_CLIENT_ID');
+  const clientSecret = Deno.env.get('SHOPIFY_CLIENT_SECRET');
+  if (!domain || !clientId || !clientSecret) throw new Error('SHOPIFY_STORE_DOMAIN, SHOPIFY_CLIENT_ID alebo SHOPIFY_CLIENT_SECRET nie je nastavený v Supabase secrets.');
+  const tokRes = await fetch(`https://${domain}/admin/oauth/access_token`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, grant_type: 'client_credentials' }),
+  });
+  if (!tokRes.ok) throw new Error(`Nepodarilo sa získať Shopify token (${tokRes.status}): ${await tokRes.text()}`);
+  const token = (await tokRes.json())?.access_token as string;
+  if (!token) throw new Error('Shopify nevrátil access_token.');
+
+  const skupinaId = crypto.randomUUID();
+  const lineItems: Record<string, unknown>[] = [];
+  for (let i = 0; i < vlajky.length; i++) {
+    const v = vlajky[i];
+    const f = flagy[i];
+    const properties: Record<string, string> = {
+      _beachflag_order: 'true',
+      _design_id: f.designId || '',
+      _tvar: v.tvar.nazov,
+      _velkost: v.velkost.kod,
+      _material: v.material.nazov,
+      _obojstranna: v.obojstranna ? 'áno (sendvič 3 vrstvy)' : '',
+      _opracovanie: v.dokoncenie?.nazov || '',
+      _pocet_vlajok: String(v.ks),
+      _b2b_kod: b2bZlavaPercent > 0 ? String(b2bKod).trim().toUpperCase() : '',
+      _b2b_zlava_percent: b2bZlavaPercent > 0 ? String(b2bZlavaPercent) : '',
+      _farba_hex: f.farbaHex || '',
+      _farba_poznamka: f.farbaPoznamka || '',
+      _text_na_vlajke: f.textNaVlajke || '',
+      _expresne: expresne ? 'áno' : 'nie',
+      _doprava: doprava.toFixed(2),
+      _osobny_odber: osobnyOdber ? 'áno' : 'nie',
+      _nahlad_url: f.nahladUrl || '',
+      _motiv: `${i + 1}/${vlajky.length}`,
+      _skupina_id: skupinaId,
+    };
+    lineItems.push({
+      title: `Beachvlajka — ${v.tvar.nazov} (${v.velkost.kod})${v.obojstranna ? ' — obojstranná sendvičová' : ''} — ${v.ks} ks, motív ${i + 1}/${vlajky.length}${osobnyOdber ? ' (osobný odber)' : ''}`,
+      price: (itemCents[i] / 100).toFixed(2), quantity: 1, taxable: false, requires_shipping: !osobnyOdber,
+      properties: Object.entries(properties).map(([name, value]) => ({ name, value })),
+    });
+  }
+  if (prislCents > 0) {
+    const stoziarText = stoziarePolozky.map((p) => `${p.mnozstvo}× ${p.nazov}`).join(', ');
+    const podstavecText = podstavcePolozky.map((p) => `${p.mnozstvo}× ${p.nazov}`).join(', ');
+    const doplnkyText = doplnkyVypocet.filter((d) => d.mnozstvo > 0).map((d) => `${d.mnozstvo}× ${d.nazov}`).join(', ');
+    lineItems.push({
+      title: 'Prúty, podstavce a doplnky (spoločné pre všetky motívy)', price: (prislCents / 100).toFixed(2), quantity: 1, taxable: false, requires_shipping: !osobnyOdber,
+      properties: [
+        { name: '_beachflag_prislusenstvo', value: 'true' }, { name: '_stoziar', value: stoziarText }, { name: '_podstavec', value: podstavecText },
+        { name: '_doplnky', value: doplnkyText }, { name: '_skupina_id', value: skupinaId },
+      ],
+    });
+  }
+  if (dopravaCents > 0) lineItems.push({ title: 'Doprava (spoločná pre všetky motívy)', price: (dopravaCents / 100).toFixed(2), quantity: 1, taxable: false, requires_shipping: false });
+
+  const res = await fetch(`https://${domain}/admin/api/2025-01/draft_orders.json`, {
+    method: 'POST', headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ draft_order: {
+      ...zakaznikDoDraftOrder(body.zakaznik),
+      line_items: lineItems,
+      note: `Beachflag objednávka — ${flagy.map((f) => f.designId || '—').join(', ')}`,
+      tags: 'beachflag', use_customer_default_address: true,
+    } }),
+  });
+  if (!res.ok) throw new Error(`Shopify Admin API chyba ${res.status}: ${await res.text()}`);
+  const draftOrder = (await res.json())?.draft_order;
+  if (!draftOrder?.invoice_url) throw new Error('Shopify nevrátil odkaz na platbu draft objednávky.');
+  return odpoved({ draftOrderId: draftOrder.id, checkoutUrl: draftOrder.invoice_url, cenaSpolu });
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -190,6 +369,8 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
+    if (Array.isArray(body.polozky) && body.polozky.length === 1) Object.assign(body, body.polozky[0]); // jeden motiv = bezny rezim
+    if (Array.isArray(body.polozky) && body.polozky.length > 1) return await vytvorKosik(supabase, body);
     const {
       designId, tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod,
       doplnky = [], farbaHex, farbaPoznamka, textNaVlajke,

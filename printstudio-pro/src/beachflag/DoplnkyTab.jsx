@@ -2,6 +2,7 @@ import React from 'react';
 import { Boxes, Zap, ShoppingBag, Loader2, AlertTriangle, Flag, GripVertical, Layers } from 'lucide-react';
 import NumberInput from '../NumberInput';
 import RozpisCeny from './RozpisCeny';
+import { KosikMotivov } from '../kosikMotivov';
 
 // Jednoduchy stepper s priamym zadanim kusov.
 function Stepper({ hodnota, onZmen, min = 0 }) {
@@ -19,7 +20,7 @@ export default function DoplnkyTab({
   tvarKod, velkostKod, stoziareMn, onStoziarMn, podstavceMn, onPodstavecMn,
   expresne, onExpresne, pocetKs, onPocetKs,
   osobnyOdber, onOsobnyOdber,
-  cena, cenaNacitava, cenaChyba, isSubmitting, submitError, onObjednat, onSpat,
+  cena, cenaNacitava, cenaChyba, kos, isSubmitting, submitError, onObjednat, onSpat,
 }) {
   const tvar = katalog.tvary.find(t => t.kod === tvarKod);
   const dostupnePruty = katalog.stoziare.filter(st => st.kod !== 'none' && (!st.tvarIds?.length || st.tvarIds.includes(tvar?.id)));
@@ -47,9 +48,19 @@ export default function DoplnkyTab({
         </div>
 
         <div className="flex items-center justify-between gap-3 p-3 rounded-xl border border-indigo-600 bg-indigo-50/50">
-          <span className="font-bold text-xs text-slate-900">Vlajky</span>
+          <span className="font-bold text-xs text-slate-900">{kos && kos.kosik.length > 0 ? 'Vlajky tohto motívu' : 'Vlajky'}</span>
           <Stepper hodnota={pocetKs} onZmen={(v) => onPocetKs(Math.max(1, v))} min={1} />
         </div>
+
+        {kos && (
+          <div className="space-y-2">
+            <KosikMotivov svetly polozky={kos.kosik} riadky={cena?.vlajky && cena.vlajky.length === kos.kosik.length && kos.kosik.length > 1 ? cena.vlajky.map((r) => ({ cenaKus: r.cenaZaKus, tovar: r.spolu })) : null}
+              onOdober={kos.odober} onPridat={kos.pridaj} bezi={kos.pridavam || isSubmitting}
+              popisKrok={kos.kosik.length === 0 ? 'Chceš viac rôznych návrhov vlajok (rovnaký tvar a veľkosť)? Pridaj tento motív, uprav grafiku a pridaj ďalší — prúty, podstavce a doplnky nižšie sú spoločné pre celú objednávku, doprava je len raz a množstevná cena sa počíta zo všetkých vlajok.' : 'Návrh sa do objednávky dostane až po kliknutí na „Pridať tento motív“ (alebo ho pri objednaní ponúkneme pridať). Prúty a podstavce nastav nižšie pre celú objednávku.'} />
+            {kos.chyba && <p className="text-xs text-rose-600">{kos.chyba}</p>}
+            {kos.info && <p className="text-xs text-emerald-700">{kos.info}</p>}
+          </div>
+        )}
 
         <div>
           <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5 mb-2"><GripVertical className="w-3.5 h-3.5 text-indigo-600" /> Prúty / konštrukcie</span>
