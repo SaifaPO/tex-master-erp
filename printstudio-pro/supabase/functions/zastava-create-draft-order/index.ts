@@ -216,6 +216,55 @@ function zakaznikDoDraftOrder(z: any): Record<string, unknown> {
   return out;
 }
 
+// ---- Košík motívov: viac zástav (rôzne návrhy/rozmery) v jednej objednávke — jedna doprava, množstevná hladina z celkového počtu kusov ----
+// Náklad jedného motívu (jedna zástava s vlastným materiálom, rozmermi, doplnkami)
+async function nakladMotivu(supabase: ReturnType<typeof createClient>, m: any, naklady: any) {
+  const { materialKod, sirkaCm, vyskaCm, vyhotovenie, tunely = [], ocka = [], karabinky = [], popruhy = {}, strapce = [], obojstranna = false } = m;
+  if (!materialKod) throw new Error('Chýba materiál.');
+  if (!sirkaCm || !vyskaCm) throw new Error('Chýbajú rozmery vlajky.');
+  if (vyhotovenie !== 'obsite' && vyhotovenie !== 'laser') throw new Error('Neplatné vyhotovenie okrajov.');
+  const { data: material } = await supabase.from('zastava_materialy').select('*').eq('kod', materialKod).eq('aktivny', true).maybeSingle();
+  if (!material) throw new Error(`Materiál "${materialKod}" sa nenašiel.`);
+  const nakladM2Material = await resolveNakladM2(supabase, material);
+  const { tunelyBm, ockaPocet, karabinkyPocet, popruhBm, strapceBm } = vypocitajHardwareRozmery(Number(sirkaCm), Number(vyskaCm), tunely, ocka, karabinky, popruhy, strapce);
+  const m2 = (Number(sirkaCm) * Number(vyskaCm)) / 10000;
+  const sv = obojstranna ? await nacitajSendvic(supabase, material) : null;
+  // Obojstranna sendvicova zastava: 2 potlacene latky + vnutorna vrstva + spojenie; obsitie trva dlhsie.
+  const nakladMaterial = sv ? m2 * (2 * nakladM2Material + sv.vlozkaM2 + sv.pracaM2) : m2 * nakladM2Material;
+  const nakladVyhotovenieZakl = vyhotovenie === 'laser'
+    ? m2 * Number(naklady.naklad_laser_m2)
+    : m2 * Number(naklady.min_sitia_na_m2) * Number(naklady.naklad_sitia_min);
+  const nakladVyhotovenie = sv && vyhotovenie === 'obsite' ? nakladVyhotovenieZakl * sv.sitieKoef : nakladVyhotovenieZakl;
+  const nakladHardware =
+    tunelyBm * Number(naklady.naklad_tunel_bm) +
+    ockaPocet * Number(naklady.naklad_ocko_ks) +
+    karabinkyPocet * Number(naklady.naklad_karabinka_ks) +
+    popruhBm * Number(naklady.naklad_popruh_bm) +
+    strapceBm * (Number(naklady.naklad_strapce_bm) || 0);
+  const nakladKus = nakladMaterial + nakladVyhotovenie + nakladHardware;
+  const ks = Math.max(1, Math.round(Number(m.pocetKs)) || 1);
+  return { material, m2, sv, nakladM2Material, nakladMaterial, nakladVyhotovenie, nakladVyhotovenieZakl, nakladHardware, nakladKus, ks };
+}
+
+// Cena celej objednávky: množstevná hladina z CELKOVÉHO počtu kusov, B2B zľava a expres z tovaru, doprava raz, DPH z celku
+async function cenaObjednavky(supabase: ReturnType<typeof createClient>, motivy: Awaited<ReturnType<typeof nakladMotivu>>[], naklady: any, cfg: PricingConfig, expresne: boolean, osobnyOdber: boolean, b2bKod: unknown) {
+  const ksSpolu = motivy.reduce((s, m) => s + m.ks, 0);
+  const riadky = motivy.map((m) => {
+    const cenaKus = priceAt(m.nakladKus, ksSpolu, cfg);
+    return { ks: m.ks, cenaKus, subtotal: cenaKus * m.ks };
+  });
+  const subtotal = riadky.reduce((s, r) => s + r.subtotal, 0);
+  const b2bZlavaPercent = await b2bZlava(supabase, b2bKod);
+  const b2bZlavaEur = Math.round(subtotal * b2bZlavaPercent) / 100;
+  const subtotalPoZlave = subtotal - b2bZlavaEur;
+  const expresnyPriplatok = expresne ? subtotalPoZlave * (Number(naklady.expresny_priplatok_percent) / 100) : 0;
+  const doprava = osobnyOdber ? 0 : (Number(naklady.cena_doprava) || 0);
+  const cenaBezDph = subtotalPoZlave + expresnyPriplatok + doprava;
+  const dphSuma = cenaBezDph * (Number(cfg.dphPercent) / 100);
+  const cenaSpolu = cenaBezDph + dphSuma;
+  return { ksSpolu, riadky, subtotal, b2bZlavaPercent, b2bZlavaEur, subtotalPoZlave, expresnyPriplatok, doprava, cenaBezDph, dphSuma, cenaSpolu };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -226,103 +275,101 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const {
-      designId, materialKod, sirkaCm, vyskaCm, vyhotovenie,
-      tunely = [], ocka = [], karabinky = [], popruhy = {}, strapce = [], strapceFarba = null,
-      statnaVlajka, farbaHex, farbaPoznamka, textNaVlajke,
-      expresne = false, pocetKs = 1, osobnyOdber = false, nahladUrl, b2bKod = null, obojstranna = false,
-    } = body;
+    const { expresne = false, osobnyOdber = false, b2bKod = null } = body;
+    // Viac motívov v jednej objednávke: body.polozky = [{ designId, materialKod, sirkaCm, ..., pocetKs, nahladUrl }]; inak sa berie jeden motív z koreňa
+    const vstupne: any[] = Array.isArray(body.polozky) && body.polozky.length > 0 ? body.polozky : [body];
+    if (vstupne.length > 20) throw new Error('Najviac 20 motívov v jednej objednávke.');
 
-    if (!materialKod || !sirkaCm || !vyskaCm) throw new Error('Chýba materiál alebo rozmery vlajky.');
-    if (vyhotovenie !== 'obsite' && vyhotovenie !== 'laser') throw new Error('Neplatné vyhotovenie okrajov.');
-
-    const [{ data: material }, { data: naklady }, { data: cfg }] = await Promise.all([
-      supabase.from('zastava_materialy').select('*').eq('kod', materialKod).eq('aktivny', true).maybeSingle(),
+    const [{ data: naklady }, { data: cfg }] = await Promise.all([
       supabase.from('zastava_nastavenia').select('*').eq('id', 1).maybeSingle(),
       supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
     ]);
-    if (!material) throw new Error(`Materiál "${materialKod}" sa nenašiel.`);
     if (!naklady) throw new Error('Nákladové sadzby (zastava_nastavenia) nie sú nastavené.');
 
     const pricingConfig: PricingConfig = cfg
       ? { coefA: Number(cfg.coef_a), coefB: Number(cfg.coef_b), marginFloor: Number(cfg.margin_floor), coefP: Number(cfg.coef_p), cielovaHodnotaZakazky: Number(cfg.cielova_hodnota_zakazky ?? 25000), dphPercent: Number(cfg.dph_percent ?? 23) }
       : { coefA: 300, coefB: 54, marginFloor: 30, coefP: 1.3, cielovaHodnotaZakazky: 25000, dphPercent: 23 };
 
-    const nakladM2Material = await resolveNakladM2(supabase, material);
-
-    const { tunelyBm, ockaPocet, karabinkyPocet, popruhBm, strapceBm } = vypocitajHardwareRozmery(Number(sirkaCm), Number(vyskaCm), tunely, ocka, karabinky, popruhy, strapce);
-
-    const m2 = (Number(sirkaCm) * Number(vyskaCm)) / 10000;
-    const sv = obojstranna ? await nacitajSendvic(supabase, material) : null;
-    const nakladMaterial = sv ? m2 * (2 * nakladM2Material + sv.vlozkaM2 + sv.pracaM2) : m2 * nakladM2Material;
-    const nakladVyhotovenieZakl = vyhotovenie === 'laser'
-      ? m2 * Number(naklady.naklad_laser_m2)
-      : m2 * Number(naklady.min_sitia_na_m2) * Number(naklady.naklad_sitia_min);
-    const nakladVyhotovenie = sv && vyhotovenie === 'obsite' ? nakladVyhotovenieZakl * sv.sitieKoef : nakladVyhotovenieZakl;
-    const nakladHardware =
-      tunelyBm * Number(naklady.naklad_tunel_bm) +
-      ockaPocet * Number(naklady.naklad_ocko_ks) +
-      karabinkyPocet * Number(naklady.naklad_karabinka_ks) +
-      popruhBm * Number(naklady.naklad_popruh_bm) +
-      strapceBm * (Number(naklady.naklad_strapce_bm) || 0);
-    const nakladKus = nakladMaterial + nakladVyhotovenie + nakladHardware;
-
-    const ks = Math.max(1, Math.round(Number(pocetKs)) || 1);
-    const cenaKus = priceAt(nakladKus, ks, pricingConfig);
-
-    const subtotalPredZlavou = cenaKus * ks;
-    const b2bZlavaPercent = await b2bZlava(supabase, b2bKod);
-    const subtotal = subtotalPredZlavou - Math.round(subtotalPredZlavou * b2bZlavaPercent) / 100;
-    const expresnyPriplatok = expresne ? subtotal * (Number(naklady.expresny_priplatok_percent) / 100) : 0;
-    const doprava = osobnyOdber ? 0 : (Number(naklady.cena_doprava) || 0);
-    const cenaBezDph = subtotal + expresnyPriplatok + doprava;
-    const dphSuma = cenaBezDph * (Number(pricingConfig.dphPercent) / 100);
-    const cenaSpolu = Math.round((cenaBezDph + dphSuma) * 100) / 100;
+    const motivy = [];
+    for (const v of vstupne) motivy.push(await nakladMotivu(supabase, v, naklady));
+    const viac = motivy.length > 1;
+    const c = await cenaObjednavky(supabase, motivy, naklady, pricingConfig, !!expresne, !!osobnyOdber, b2bKod);
+    const cenaSpolu = Math.round(c.cenaSpolu * 100) / 100;
 
     const domain = Deno.env.get('SHOPIFY_STORE_DOMAIN');
-    const token = Deno.env.get('SHOPIFY_ADMIN_TOKEN');
-    if (!domain || !token) throw new Error('SHOPIFY_STORE_DOMAIN alebo SHOPIFY_ADMIN_TOKEN nie je nastavený v Supabase secrets.');
+    const clientId = Deno.env.get('SHOPIFY_CLIENT_ID');
+    const clientSecret = Deno.env.get('SHOPIFY_CLIENT_SECRET');
+    if (!domain || !clientId || !clientSecret) throw new Error('SHOPIFY_STORE_DOMAIN, SHOPIFY_CLIENT_ID alebo SHOPIFY_CLIENT_SECRET nie je nastavený v Supabase secrets.');
+    // Admin token sa získava cez client credentials (rovnako ako v ostatných objednávkových funkciách) — stály SHOPIFY_ADMIN_TOKEN v secrets nie je
+    const tokRes = await fetch(`https://${domain}/admin/oauth/access_token`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, grant_type: 'client_credentials' }),
+    });
+    if (!tokRes.ok) throw new Error(`Nepodarilo sa získať Shopify token (${tokRes.status}): ${await tokRes.text()}`);
+    const token = (await tokRes.json())?.access_token as string;
+    if (!token) throw new Error('Shopify nevrátil access_token.');
 
-    const nazovPolozky = `Zástava — ${material.nazov} (${sirkaCm}×${vyskaCm} cm)${obojstranna ? ' — obojstranná sendvičová' : ''}`;
-    const properties: Record<string, string> = {
-      _zastava_order: 'true',
-      _design_id: designId || '',
-      _material: material.nazov,
-      _obojstranna: obojstranna ? 'áno (sendvič 3 vrstvy)' : '',
-      _rozmery: `${sirkaCm} x ${vyskaCm} cm`,
-      _vyhotovenie: vyhotovenie === 'obsite' ? 'Obšité dookola' : 'Orezané laserom',
-      _tunely: JSON.stringify(tunely),
-      _ocka: JSON.stringify(ocka),
-      _karabinky: JSON.stringify(karabinky),
-      _popruhy: JSON.stringify(popruhy),
-      _strapce: strapce.length > 0 ? JSON.stringify(strapce) : '',
-      _strapce_farba: strapceFarba || '',
-      _statna_vlajka: statnaVlajka || '',
-      _farba_hex: farbaHex || '',
-      _farba_poznamka: farbaPoznamka || '',
-      _text_na_vlajke: textNaVlajke || '',
-      _expresne: expresne ? 'áno' : 'nie',
-      _doprava: doprava.toFixed(2),
-      _osobny_odber: osobnyOdber ? 'áno' : 'nie',
-      _nahlad_url: nahladUrl || '',
-      _b2b_kod: b2bZlavaPercent > 0 ? String(b2bKod).trim().toUpperCase() : '',
-      _b2b_zlava_percent: b2bZlavaPercent > 0 ? String(b2bZlavaPercent) : '',
-    };
+    // Rozpis finálnej ceny (s DPH) do položiek draftu v centoch, aby súčet presne sedel: každý motív má svoj podiel z tovaru
+    // (po B2B zľave a s expresom), doprava ide pri viacerých motívoch ako samostatná položka.
+    const dphK = 1 + Number(pricingConfig.dphPercent) / 100;
+    const zK = c.subtotal > 0 ? c.subtotalPoZlave / c.subtotal : 1;
+    const expresK = expresne ? 1 + Number(naklady.expresny_priplatok_percent) / 100 : 1;
+    const celkomCents = Math.round(cenaSpolu * 100);
+    const dopravaCents = viac ? Math.round(c.doprava * dphK * 100) : 0;
+    const itemCents: number[] = c.riadky.map((r) => Math.round(r.subtotal * zK * expresK * dphK * 100));
+    itemCents[itemCents.length - 1] += celkomCents - dopravaCents - itemCents.reduce((s, x) => s + x, 0);
+    const skupinaId = crypto.randomUUID();
+
+    const lineItems: Record<string, unknown>[] = [];
+    for (let i = 0; i < motivy.length; i++) {
+      const v = vstupne[i];
+      const mo = motivy[i];
+      const { sirkaCm, vyskaCm, vyhotovenie, tunely = [], ocka = [], karabinky = [], popruhy = {}, strapce = [], strapceFarba = null, designId, statnaVlajka, farbaHex, farbaPoznamka, textNaVlajke, nahladUrl, obojstranna = false } = v;
+      const nazovPolozky = `Zástava — ${mo.material.nazov} (${sirkaCm}×${vyskaCm} cm)${obojstranna ? ' — obojstranná sendvičová' : ''}${viac ? ` — motív ${i + 1}/${motivy.length}` : ''}`;
+      const properties: Record<string, string> = {
+        _zastava_order: 'true',
+        _design_id: designId || '',
+        _material: mo.material.nazov,
+        _obojstranna: obojstranna ? 'áno (sendvič 3 vrstvy)' : '',
+        _rozmery: `${sirkaCm} x ${vyskaCm} cm`,
+        _vyhotovenie: vyhotovenie === 'obsite' ? 'Obšité dookola' : 'Orezané laserom',
+        _tunely: JSON.stringify(tunely),
+        _ocka: JSON.stringify(ocka),
+        _karabinky: JSON.stringify(karabinky),
+        _popruhy: JSON.stringify(popruhy),
+        _strapce: strapce.length > 0 ? JSON.stringify(strapce) : '',
+        _strapce_farba: strapceFarba || '',
+        _statna_vlajka: statnaVlajka || '',
+        _farba_hex: farbaHex || '',
+        _farba_poznamka: farbaPoznamka || '',
+        _text_na_vlajke: textNaVlajke || '',
+        _expresne: expresne ? 'áno' : 'nie',
+        _doprava: c.doprava.toFixed(2),
+        _osobny_odber: osobnyOdber ? 'áno' : 'nie',
+        _nahlad_url: nahladUrl || '',
+        _b2b_kod: c.b2bZlavaPercent > 0 ? String(b2bKod).trim().toUpperCase() : '',
+        _b2b_zlava_percent: c.b2bZlavaPercent > 0 ? String(c.b2bZlavaPercent) : '',
+        ...(viac ? { _pocet_ks: String(mo.ks), _motiv: `${i + 1}/${motivy.length}`, _skupina_id: skupinaId } : {}),
+      };
+      lineItems.push({
+        title: nazovPolozky + (osobnyOdber ? ' (osobný odber)' : ''),
+        // Jeden motív: pôvodný zápis (cena za kus × počet kusov). Viac motívov: každý motív ako jedna položka s presným podielom z celku.
+        price: viac ? (itemCents[i] / 100).toFixed(2) : (cenaSpolu / mo.ks).toFixed(2),
+        quantity: viac ? 1 : mo.ks,
+        taxable: false, // cena uz zahrna DPH aj dopravu (vypocitana server-side)
+        requires_shipping: !osobnyOdber,
+        properties: Object.entries(properties).map(([name, value]) => ({ name, value })),
+      });
+    }
+    if (viac && dopravaCents > 0) {
+      lineItems.push({ title: 'Doprava (spoločná pre všetky motívy)', price: (dopravaCents / 100).toFixed(2), quantity: 1, taxable: false, requires_shipping: false });
+    }
 
     const draftPayload = {
       draft_order: {
         ...zakaznikDoDraftOrder(body.zakaznik),
-        line_items: [
-          {
-            title: nazovPolozky + (osobnyOdber ? ' (osobný odber)' : ''),
-            price: (cenaSpolu / ks).toFixed(2),
-            quantity: ks,
-            taxable: false, // cena uz zahrna DPH aj dopravu (vypocitana server-side)
-            requires_shipping: !osobnyOdber,
-            properties: Object.entries(properties).map(([name, value]) => ({ name, value })),
-          },
-        ],
-        note: `Zástava objednávka — dizajn ${designId || '—'}`,
+        line_items: lineItems,
+        note: `Zástava objednávka — ${vstupne.map((v) => v.designId || '—').join(', ')}`,
         tags: 'zastava',
         use_customer_default_address: true,
       },

@@ -11,6 +11,7 @@ import DoplnkyTab from './DoplnkyTab';
 import { rozlozBody } from './okaLayout';
 import { useB2bKod } from '../b2b';
 import B2bKod from '../B2bKod';
+import { useKosikMotivov } from '../kosikMotivov';
 
 const BUCKET = 'print-designs';
 const PREVIEW_MAX_PX_DEFAULT = 480;
@@ -300,6 +301,36 @@ export default function ZastavaApp({ supabase }) {
     setKrok('doplnky');
   };
 
+  // Kosik motivov: viac roznych zastav (ine navrhy/rozmery) v jednej objednavke — jedna doprava, mnozstevna hladina z celkoveho poctu kusov.
+  const snapshotMotivu = () => ({
+    materialKod, sirkaCm, vyskaCm, vyhotovenie, tunely, ocka, karabinky, popruhy, strapce, strapceFarba: strapce.length > 0 ? strapceFarba : null,
+    statnaVlajka: statnaVlajka?.nazov || null, farbaHex: bgColor, farbaPoznamka: pantoneNote, textNaVlajke: customText, obojstranna, pocetKs,
+  });
+  const podpisAktualneho = () => {
+    const c = fabricRef.current;
+    if (!c) return null;
+    try { return JSON.stringify(snapshotMotivu()) + '|' + c.toDataURL({ format: 'jpeg', quality: 0.5, multiplier: 60 / c.getWidth() }); } catch { return null; }
+  };
+  const vytvorPolozku = async () => {
+    const canvas = fabricRef.current;
+    if (!canvas) throw new Error('Plátno nie je pripravené.');
+    const designId = 'zastava_' + crypto.randomUUID();
+    const blob = await fetch(canvas.toDataURL({ format: 'png', quality: 0.92 })).then((r) => r.blob());
+    const cesta = `${designId}/zastava.png`;
+    const { error: upErr } = await supabase.storage.from(BUCKET).upload(cesta, blob, { contentType: 'image/png' });
+    if (upErr) throw new Error('Náhľad sa nepodarilo nahrať: ' + upErr.message);
+    const { data: publicUrlData } = supabase.storage.from(BUCKET).getPublicUrl(cesta);
+    let nahlad = '';
+    try { nahlad = canvas.toDataURL({ format: 'jpeg', quality: 0.8, multiplier: 120 / canvas.getWidth() }); } catch { /* bez náhľadu */ }
+    const mat = katalog?.materialy?.find((m) => m.kod === materialKod);
+    return {
+      id: crypto.randomUUID(), pocetKs, popis: `${mat?.nazov || materialKod}, ${sirkaCm}×${vyskaCm} cm`, nahlad, podpis: podpisAktualneho(),
+      vstup: { ...snapshotMotivu(), designId, nahladUrl: publicUrlData?.publicUrl || null },
+    };
+  };
+  const kos = useKosikMotivov({ vytvorPolozku, podpisAktualneho });
+  const polozkyBezNahladu = kos.kosik.map((p) => { const { nahladUrl, designId, ...v } = p.vstup; return v; });
+
   // Ziva cena — debounced volanie Edge Function pri kazdej zmene konfiguracie.
   useEffect(() => {
     if (!materialKod || !sirkaCm || !vyskaCm) return;
@@ -307,7 +338,9 @@ export default function ZastavaApp({ supabase }) {
     setCenaChyba('');
     const t = setTimeout(async () => {
       const { data, error } = await supabase.functions.invoke('zastava-price-preview', {
-        body: { materialKod, sirkaCm, vyskaCm, vyhotovenie, tunely, ocka, karabinky, popruhy, strapce, pocetKs, expresne, osobnyOdber, obojstranna, b2bKod: b2b.kod },
+        body: kos.kosik.length > 0
+          ? { polozky: polozkyBezNahladu, expresne, osobnyOdber, b2bKod: b2b.kod }
+          : { materialKod, sirkaCm, vyskaCm, vyhotovenie, tunely, ocka, karabinky, popruhy, strapce, pocetKs, expresne, osobnyOdber, obojstranna, b2bKod: b2b.kod },
       });
       setCenaNacitava(false);
       if (error) { setCenaChyba(error.message); return; }
@@ -315,7 +348,8 @@ export default function ZastavaApp({ supabase }) {
       setCena(data.cena);
     }, 400);
     return () => clearTimeout(t);
-  }, [supabase, materialKod, sirkaCm, vyskaCm, vyhotovenie, tunely, ocka, karabinky, popruhy, strapce, pocetKs, expresne, osobnyOdber, obojstranna, b2b.kod]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supabase, materialKod, sirkaCm, vyskaCm, vyhotovenie, tunely, ocka, karabinky, popruhy, strapce, pocetKs, expresne, osobnyOdber, obojstranna, b2b.kod, kos.kosik]);
 
   if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500 text-sm">Načítavam…</div>;
   if (loadError) return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-rose-600 text-sm px-4 text-center">{loadError}</div>;
@@ -327,21 +361,10 @@ export default function ZastavaApp({ supabase }) {
     setSubmitError('');
     setIsSubmitting(true);
     try {
-      const designId = 'zastava_' + Date.now();
-      const dataUrl = canvas.toDataURL({ format: 'png', quality: 0.92 });
-      const blob = await fetch(dataUrl).then(r => r.blob());
-      const cesta = `${designId}/zastava.png`;
-      await supabase.storage.from(BUCKET).upload(cesta, blob, { contentType: 'image/png' });
-      const { data: publicUrlData } = supabase.storage.from(BUCKET).getPublicUrl(cesta);
-
-      const payload = {
-        designId, materialKod, sirkaCm, vyskaCm, vyhotovenie,
-        tunely, ocka, karabinky, popruhy, strapce, strapceFarba: strapce.length > 0 ? strapceFarba : null,
-        statnaVlajka: statnaVlajka?.nazov || null,
-        farbaHex: bgColor, farbaPoznamka: pantoneNote, textNaVlajke: customText,
-        expresne, pocetKs, osobnyOdber, obojstranna, b2bKod: b2b.kod,
-        nahladUrl: publicUrlData?.publicUrl || null,
-      };
+      // Motivy v kosiku + (ak ho ponukneme pridat) aktualny navrh
+      const polozky = await kos.pripravNaObjednanie();
+      if (!polozky) { setIsSubmitting(false); return; }
+      const payload = { polozky: polozky.map((p) => p.vstup), expresne, osobnyOdber, b2bKod: b2b.kod };
 
       const { data, error } = await supabase.functions.invoke('zastava-create-draft-order', { body: payload });
       if (error) throw error;
@@ -406,6 +429,7 @@ export default function ZastavaApp({ supabase }) {
             pocetKs={pocetKs} onPocetKs={setPocetKs}
             osobnyOdber={osobnyOdber} onOsobnyOdber={setOsobnyOdber}
             cena={cena} cenaChyba={cenaChyba} cenaNacitava={cenaNacitava}
+            kos={kos}
             isSubmitting={isSubmitting} submitError={submitError} onObjednat={objednat}
             onSpat={() => setKrok('grafika')}
           />

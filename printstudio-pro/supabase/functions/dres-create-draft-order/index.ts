@@ -193,8 +193,17 @@ Deno.serve(async (req) => {
     }));
 
     const domain = Deno.env.get('SHOPIFY_STORE_DOMAIN');
-    const token = Deno.env.get('SHOPIFY_ADMIN_TOKEN');
-    if (!domain || !token) throw new Error('SHOPIFY_STORE_DOMAIN alebo SHOPIFY_ADMIN_TOKEN nie je nastavený v Supabase secrets.');
+    const clientId = Deno.env.get('SHOPIFY_CLIENT_ID');
+    const clientSecret = Deno.env.get('SHOPIFY_CLIENT_SECRET');
+    if (!domain || !clientId || !clientSecret) throw new Error('SHOPIFY_STORE_DOMAIN, SHOPIFY_CLIENT_ID alebo SHOPIFY_CLIENT_SECRET nie je nastavený v Supabase secrets.');
+    // Admin token sa získava cez client credentials (rovnako ako v ostatných objednávkových funkciách) — stály SHOPIFY_ADMIN_TOKEN v secrets nie je
+    const tokRes = await fetch(`https://${domain}/admin/oauth/access_token`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, grant_type: 'client_credentials' }),
+    });
+    if (!tokRes.ok) throw new Error(`Nepodarilo sa získať Shopify token (${tokRes.status}): ${await tokRes.text()}`);
+    const token = (await tokRes.json())?.access_token as string;
+    if (!token) throw new Error('Shopify nevrátil access_token.');
 
     const rosterText = rosterUlozeny.map((h: { meno: string; cislo: string; velkost: string; maDres: boolean; maTrenirky: boolean; velkostTrenirok: string }) => `${h.cislo} ${h.meno} (${[h.maDres ? `dres ${h.velkost}` : '', h.maTrenirky ? `trenírky ${h.velkostTrenirok}` : ''].filter(Boolean).join(', ')})`).join(', ');
     const nazovPolozky = `Dres 3D — ${produkt.nazov}` + (pocetTrenirok > 0 ? (pocetDresov > 0 ? ' + trenírky' : ' — trenírky') : '');

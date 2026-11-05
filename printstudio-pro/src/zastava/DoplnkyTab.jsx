@@ -3,6 +3,7 @@ import { Scroll, CircleDot, Link as LinkIcon, Ribbon, Sparkle, Plus, Zap, Shoppi
 import NumberInput from '../NumberInput';
 import { CenaB2b } from '../CenaB2b';
 import { rozlozBody } from './okaLayout';
+import { KosikMotivov } from '../kosikMotivov';
 
 const STRANY = [
   { value: 'top', label: 'Hore' }, { value: 'bottom', label: 'Dole' },
@@ -26,7 +27,7 @@ export default function DoplnkyTab({
   expresne, onExpresne, expresnyPriplatokPercent,
   pocetKs, onPocetKs,
   osobnyOdber, onOsobnyOdber,
-  cena, cenaChyba, cenaNacitava,
+  cena, cenaChyba, cenaNacitava, kos,
   isSubmitting, submitError, onObjednat, onSpat,
 }) {
   const pridajTunel = () => onTunely([...tunely, { side: 'bottom' }]);
@@ -202,6 +203,16 @@ export default function DoplnkyTab({
         </div>
       </div>
 
+      {kos && (
+        <div className="bg-white p-3 rounded-xl border border-slate-200 space-y-2">
+          <KosikMotivov svetly polozky={kos.kosik} riadky={cena?.polozky && cena.polozky.length === kos.kosik.length && kos.kosik.length > 1 ? cena.polozky.map((r) => ({ cenaKus: r.cenaKus, tovar: r.subtotal })) : null}
+            onOdober={kos.odober} onPridat={kos.pridaj} bezi={kos.pridavam || isSubmitting}
+            popisKrok={kos.kosik.length === 0 ? 'Chceš viac rôznych zástav? Pridaj túto zástavu, uprav návrh (alebo rozmer) a pridaj ďalšiu — doprava je len raz a množstevná zľava sa počíta zo všetkých kusov.' : 'Návrh v editore sa do objednávky dostane až po kliknutí na „Pridať tento motív“ (alebo ho pri objednaní ponúkneme pridať).'} />
+          {kos.chyba && <p className="text-xs text-rose-600">{kos.chyba}</p>}
+          {kos.info && <p className="text-xs text-emerald-700">{kos.info}</p>}
+        </div>
+      )}
+
       {submitError && <p className="text-xs text-rose-600 bg-rose-50 border border-rose-200 p-3 rounded-lg">{submitError}</p>}
       {cenaChyba && <p className="text-xs text-rose-600 bg-rose-50 border border-rose-200 p-3 rounded-lg">Cenu sa nepodarilo prepočítať: {cenaChyba}</p>}
 
@@ -211,8 +222,10 @@ export default function DoplnkyTab({
           <p className="text-slate-400 flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" /> Prepočítavam…</p>
         ) : cena ? (
           <>
-            <div className="flex justify-between"><span>Cena za kus{cena.obojstranna ? ' (obojstranná sendvičová)' : ''}</span><span className="font-semibold text-right"><CenaB2b v={cena.cenaKus} p={cena.b2bZlavaPercent} staraCls="text-slate-400" novaCls="text-emerald-700" /></span></div>
-            <div className="flex justify-between"><span>Medzisúčet ({pocetKs} ks)</span><span className="font-semibold text-right"><CenaB2b v={cena.subtotal} p={cena.b2bZlavaPercent} staraCls="text-slate-400" novaCls="text-emerald-700" /></span></div>
+            {cena.polozky && cena.polozky.length > 1
+              ? cena.polozky.map((r, i) => <div key={i} className="flex justify-between"><span>Motív {i + 1}: {r.ks} ks × {r.cenaKus.toFixed(2)} €</span><span className="font-semibold text-right"><CenaB2b v={r.subtotal} p={cena.b2bZlavaPercent} staraCls="text-slate-400" novaCls="text-emerald-700" /></span></div>)
+              : <div className="flex justify-between"><span>Cena za kus{cena.obojstranna ? ' (obojstranná sendvičová)' : ''}</span><span className="font-semibold text-right"><CenaB2b v={cena.cenaKus} p={cena.b2bZlavaPercent} staraCls="text-slate-400" novaCls="text-emerald-700" /></span></div>}
+            <div className="flex justify-between"><span>Medzisúčet ({cena.ksSpolu ?? pocetKs} ks)</span><span className="font-semibold text-right"><CenaB2b v={cena.subtotal} p={cena.b2bZlavaPercent} staraCls="text-slate-400" novaCls="text-emerald-700" /></span></div>
             {cena.b2bZlavaEur > 0 && <div className="flex justify-between text-emerald-700 font-semibold"><span>B2B zľava {Number(cena.b2bZlavaPercent)} %</span><span>−{Number(cena.b2bZlavaEur).toFixed(2)} €</span></div>}
             {cena.expresnyPriplatok > 0 && <div className="flex justify-between text-amber-700 font-semibold"><span>Expresný príplatok</span><span>{cena.expresnyPriplatok.toFixed(2)} €</span></div>}
             <div className="flex justify-between"><span>Doprava</span><span className="font-semibold">{!cena.doprava ? 'Zdarma' : `${Number(cena.doprava).toFixed(2)} €`}</span></div>
