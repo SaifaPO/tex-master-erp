@@ -212,19 +212,12 @@ async function nakladJednejVlajky(supabase: ReturnType<typeof createClient>, f: 
 async function vytvorKosik(supabase: ReturnType<typeof createClient>, body: Record<string, any>) {
   const flagy: any[] = body.polozky;
   if (flagy.length > 20) throw new Error('Najviac 20 motívov v jednej objednávke.');
-  const prvy = flagy[0];
-  if (flagy.some((f) => f.tvarKod !== prvy.tvarKod || f.velkostKod !== prvy.velkostKod)) {
-    throw new Error('Všetky motívy v jednej objednávke musia mať rovnaký tvar a veľkosť vlajky (prúty a podstavce sa viažu na veľkosť). Inú veľkosť objednaj samostatne.');
-  }
-  const { stoziarKod = null, podstavecKod = null, doplnky = [], expresne = false, osobnyOdber = false, stoziare = null, podstavce = null, b2bKod = null } = body;
-  const velkostKod: string = prvy.velkostKod;
-  const [{ data: doplnkyDb }, { data: nastavenia }, { data: cfg }, nakladM2Sublimacia, cenaStoziara, cenaPodstavca] = await Promise.all([
+  const { doplnky = [], expresne = false, osobnyOdber = false, b2bKod = null } = body;
+  const [{ data: doplnkyDb }, { data: nastavenia }, { data: cfg }, nakladM2Sublimacia] = await Promise.all([
     supabase.from('vlajka_doplnky').select('*'),
     supabase.from('vlajka_nastavenia').select('*').eq('id', 1).maybeSingle(),
     supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
     resolveNakladSublimacieM2(supabase),
-    resolveStoziarCena(supabase, stoziarKod, velkostKod),
-    resolvePodstavecCena(supabase, podstavecKod, velkostKod),
   ]);
   const pricingConfig: PricingConfig = cfg
     ? { coefA: Number(cfg.coef_a), coefB: Number(cfg.coef_b), marginFloor: Number(cfg.margin_floor), coefP: Number(cfg.coef_p), cielovaHodnotaZakazky: Number(cfg.cielova_hodnota_zakazky ?? 25000), dphPercent: Number(cfg.dph_percent ?? 23) }
@@ -232,38 +225,40 @@ async function vytvorKosik(supabase: ReturnType<typeof createClient>, body: Reco
 
   const ksF = flagy.map((f) => Math.max(1, Math.round(Number(f.pocetKs)) || 1));
   const ksSpolu = ksF.reduce((a, b) => a + b, 0);
+  const sumaPolozky = (pole: { cena: number; mnozstvo: number }[]) => pole.reduce((sum, d) => {
+    const m = Math.round(Number(d.mnozstvo) || 0);
+    return m > 0 ? sum + priceAt(Number(d.cena) || 0, m, pricingConfig) * m : sum;
+  }, 0);
+  const zoznam = (pole: unknown) => (Array.isArray(pole)
+    ? (pole as { kod: string; mnozstvo: number }[]).filter((x) => x?.kod && Number(x.mnozstvo) > 0).map((x) => ({ kod: String(x.kod), mnozstvo: Math.round(Number(x.mnozstvo)) }))
+    : []);
+
+  // kazdy motiv: vlajka (cena pri celkovom pocte vlajok) + jeho pruty a podstavce (cena podla velkosti motivu, vlastny pocet kusov)
   const vlajky = [];
   for (let i = 0; i < flagy.length; i++) {
-    const n = await nakladJednejVlajky(supabase, flagy[i], nastavenia, cfg, nakladM2Sublimacia);
+    const f = flagy[i];
+    const n = await nakladJednejVlajky(supabase, f, nastavenia, cfg, nakladM2Sublimacia);
     const zaklad = priceAt(n.nakladMaterial, ksSpolu, pricingConfig) + priceAt(Number(n.dokoncenie?.cena) || 0, ksSpolu, pricingConfig);
-    vlajky.push({ ...n, ks: ksF[i], zaklad, spolu: zaklad * ksF[i] });
-  }
-
-  // prislusenstvo (spolocne): prúty, podstavce, doplnky — kazda polozka s vlastnym poctom kusov (marza z poctu kusov danej polozky)
-  const zoznamPolozok = (pole: unknown, kodFallback: string | null) => (Array.isArray(pole)
-    ? (pole as { kod: string; mnozstvo: number }[]).filter((x) => x?.kod && Number(x.mnozstvo) > 0).map((x) => ({ kod: String(x.kod), mnozstvo: Math.round(Number(x.mnozstvo)) }))
-    : (kodFallback ? [{ kod: kodFallback, mnozstvo: ksSpolu }] : []));
-  const stoziarePolozky: { cena: number; mnozstvo: number; nazov: string }[] = [];
-  for (const p of zoznamPolozok(stoziare, stoziarKod)) {
-    const { data: st } = await supabase.from('vlajka_stoziare').select('nazov').eq('kod', p.kod).maybeSingle();
-    stoziarePolozky.push({ cena: p.kod === stoziarKod ? cenaStoziara : await resolveStoziarCena(supabase, p.kod, velkostKod), mnozstvo: p.mnozstvo, nazov: st?.nazov || p.kod });
-  }
-  const podstavcePolozky: { cena: number; mnozstvo: number; nazov: string }[] = [];
-  for (const p of zoznamPolozok(podstavce, podstavecKod)) {
-    const { data: pd } = await supabase.from('vlajka_podstavce').select('nazov').eq('kod', p.kod).maybeSingle();
-    podstavcePolozky.push({ cena: p.kod === podstavecKod ? cenaPodstavca : await resolvePodstavecCena(supabase, p.kod, velkostKod), mnozstvo: p.mnozstvo, nazov: pd?.nazov || p.kod });
+    const stoziare: { cena: number; mnozstvo: number; nazov: string }[] = [];
+    for (const p of zoznam(f.stoziare)) {
+      const { data: st } = await supabase.from('vlajka_stoziare').select('nazov').eq('kod', p.kod).maybeSingle();
+      stoziare.push({ cena: await resolveStoziarCena(supabase, p.kod, f.velkostKod), mnozstvo: p.mnozstvo, nazov: st?.nazov || p.kod });
+    }
+    const podstavce: { cena: number; mnozstvo: number; nazov: string }[] = [];
+    for (const p of zoznam(f.podstavce)) {
+      const { data: pd } = await supabase.from('vlajka_podstavce').select('nazov').eq('kod', p.kod).maybeSingle();
+      podstavce.push({ cena: await resolvePodstavecCena(supabase, p.kod, f.velkostKod), mnozstvo: p.mnozstvo, nazov: pd?.nazov || p.kod });
+    }
+    vlajky.push({ ...n, ks: ksF[i], zaklad, spolu: zaklad * ksF[i], stoziare, podstavce, prislSpolu: sumaPolozky(stoziare) + sumaPolozky(podstavce) });
   }
   const doplnkyVypocet = (doplnky as { kod: string; mnozstvo: number }[]).map((d) => {
     const dbRow = (doplnkyDb || []).find((x: any) => x.kod === d.kod);
     return { cena: dbRow ? Number(dbRow.cena) : 0, mnozstvo: Number(d.mnozstvo) || 0, nazov: dbRow?.nazov || d.kod };
   });
-  const sumaPolozky = (pole: { cena: number; mnozstvo: number }[]) => pole.reduce((sum, d) => {
-    const m = Math.round(Number(d.mnozstvo) || 0);
-    return m > 0 ? sum + priceAt(Number(d.cena) || 0, m, pricingConfig) * m : sum;
-  }, 0);
-  const prislSpolu = sumaPolozky(stoziarePolozky) + sumaPolozky(podstavcePolozky) + sumaPolozky(doplnkyVypocet);
+  const doplnkySpolu = sumaPolozky(doplnkyVypocet);
 
   const vlajkySpolu = vlajky.reduce((a, v) => a + v.spolu, 0);
+  const prislSpolu = vlajky.reduce((a, v) => a + v.prislSpolu, 0) + doplnkySpolu;
   const subtotalPredZlavou = vlajkySpolu + prislSpolu;
   const b2bZlavaPercent = await b2bZlava(supabase, b2bKod);
   const b2bZlavaEur = Math.round(subtotalPredZlavou * b2bZlavaPercent) / 100;
@@ -276,15 +271,16 @@ async function vytvorKosik(supabase: ReturnType<typeof createClient>, body: Reco
   const doprava = osobnyOdber || (postovneZdarmaOd > 0 && tovarSDph >= postovneZdarmaOd) ? 0 : (Number(nastavenia?.cena_doprava) || 0);
   const cenaSpolu = Math.round((subtotal + expresnyPriplatok + doprava) * (1 + dphPercent / 100) * 100) / 100;
 
-  // Rozpis finalnej ceny (s DPH) do poloziek draftu v centoch, aby sucet presne sedel
+  // Rozpis finalnej ceny (s DPH) do poloziek draftu v centoch, aby sucet presne sedel: motiv = jeho vlajky + jeho pruty a podstavce;
+  // doplnky a doprava maju vlastne polozky.
   const dphK = 1 + dphPercent / 100;
   const zK = subtotalPredZlavou > 0 ? subtotal / subtotalPredZlavou : 1;
   const expresK = expresne ? 1 + expresnyPercent / 100 : 1;
   const celkomCents = Math.round(cenaSpolu * 100);
   const dopravaCents = Math.round(doprava * dphK * 100);
-  const prislCents = prislSpolu > 0 ? Math.round(prislSpolu * zK * expresK * dphK * 100) : 0;
-  const itemCents: number[] = vlajky.map((v) => Math.round(v.spolu * zK * expresK * dphK * 100));
-  itemCents[itemCents.length - 1] += celkomCents - dopravaCents - prislCents - itemCents.reduce((s, x) => s + x, 0);
+  const doplnkyCents = doplnkySpolu > 0 ? Math.round(doplnkySpolu * zK * expresK * dphK * 100) : 0;
+  const itemCents: number[] = vlajky.map((v) => Math.round((v.spolu + v.prislSpolu) * zK * expresK * dphK * 100));
+  itemCents[itemCents.length - 1] += celkomCents - dopravaCents - doplnkyCents - itemCents.reduce((s, x) => s + x, 0);
 
   const domain = Deno.env.get('SHOPIFY_STORE_DOMAIN');
   const clientId = Deno.env.get('SHOPIFY_CLIENT_ID');
@@ -312,6 +308,8 @@ async function vytvorKosik(supabase: ReturnType<typeof createClient>, body: Reco
       _obojstranna: v.obojstranna ? 'áno (sendvič 3 vrstvy)' : '',
       _opracovanie: v.dokoncenie?.nazov || '',
       _pocet_vlajok: String(v.ks),
+      _stoziar: v.stoziare.map((p) => `${p.mnozstvo}× ${p.nazov}`).join(', '),
+      _podstavec: v.podstavce.map((p) => `${p.mnozstvo}× ${p.nazov}`).join(', '),
       _b2b_kod: b2bZlavaPercent > 0 ? String(b2bKod).trim().toUpperCase() : '',
       _b2b_zlava_percent: b2bZlavaPercent > 0 ? String(b2bZlavaPercent) : '',
       _farba_hex: f.farbaHex || '',
@@ -330,15 +328,13 @@ async function vytvorKosik(supabase: ReturnType<typeof createClient>, body: Reco
       properties: Object.entries(properties).map(([name, value]) => ({ name, value })),
     });
   }
-  if (prislCents > 0) {
-    const stoziarText = stoziarePolozky.map((p) => `${p.mnozstvo}× ${p.nazov}`).join(', ');
-    const podstavecText = podstavcePolozky.map((p) => `${p.mnozstvo}× ${p.nazov}`).join(', ');
-    const doplnkyText = doplnkyVypocet.filter((d) => d.mnozstvo > 0).map((d) => `${d.mnozstvo}× ${d.nazov}`).join(', ');
+  if (doplnkyCents > 0) {
     lineItems.push({
-      title: 'Prúty, podstavce a doplnky (spoločné pre všetky motívy)', price: (prislCents / 100).toFixed(2), quantity: 1, taxable: false, requires_shipping: !osobnyOdber,
+      title: 'Doplnky (spoločné pre všetky motívy)', price: (doplnkyCents / 100).toFixed(2), quantity: 1, taxable: false, requires_shipping: !osobnyOdber,
       properties: [
-        { name: '_beachflag_prislusenstvo', value: 'true' }, { name: '_stoziar', value: stoziarText }, { name: '_podstavec', value: podstavecText },
-        { name: '_doplnky', value: doplnkyText }, { name: '_skupina_id', value: skupinaId },
+        { name: '_beachflag_prislusenstvo', value: 'true' },
+        { name: '_doplnky', value: doplnkyVypocet.filter((d) => d.mnozstvo > 0).map((d) => `${d.mnozstvo}× ${d.nazov}`).join(', ') },
+        { name: '_skupina_id', value: skupinaId },
       ],
     });
   }

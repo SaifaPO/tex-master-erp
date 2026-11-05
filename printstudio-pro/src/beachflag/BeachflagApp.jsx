@@ -84,8 +84,8 @@ export default function BeachflagApp({ supabase }) {
 
   useEffect(() => { katalogRef.current = katalog; }, [katalog]);
 
-  // Kosik motivov: viac roznych navrhov vlajok v jednej objednavke (rovnaky tvar a velkost; prúty, podstavce a doplnky su spolocne pre celu objednavku).
-  const snapshotMotivu = () => ({ tvarKod, velkostKod, materialKod, dokoncenieKod, obojstranna, pocetKs, farbaHex: bgColor, farbaPoznamka: pantoneNote, textNaVlajke: customText });
+  // Kosik motivov: viac roznych vlajok (aj rozne tvary a velkosti) v jednej objednavke; kazdy motiv ma svoje pruty a podstavce, doplnky su spolocne.
+  const snapshotMotivu = () => ({ tvarKod, velkostKod, materialKod, dokoncenieKod, obojstranna, pocetKs, farbaHex: bgColor, farbaPoznamka: pantoneNote, textNaVlajke: customText, stoziare: zoznamMnozstiev(stoziareMn), podstavce: zoznamMnozstiev(podstavceMn) });
   const podpisAktualneho = () => {
     const c = fabricRef.current;
     if (!c) return null;
@@ -94,8 +94,6 @@ export default function BeachflagApp({ supabase }) {
   const vytvorPolozku = async () => {
     const canvas = fabricRef.current;
     if (!canvas) throw new Error('Plátno nie je pripravené.');
-    const prva = kos.kosik[0]?.vstup;
-    if (prva && (prva.tvarKod !== tvarKod || prva.velkostKod !== velkostKod)) throw new Error('Všetky motívy v jednej objednávke musia mať rovnaký tvar a veľkosť vlajky (prúty a podstavce sa viažu na veľkosť). Inú veľkosť objednaj samostatne.');
     const designId = 'vlajka_' + crypto.randomUUID();
     const blob = await fetch(canvas.toDataURL({ format: 'png', quality: 0.92 })).then(r => r.blob());
     const cesta = `${designId}/vlajka.png`;
@@ -114,9 +112,9 @@ export default function BeachflagApp({ supabase }) {
   // Pokial zakaznik pocty prutov/podstavcov nemenil rucne, kopiruju vyber z kroku Parametre x pocet vlajok.
   useEffect(() => {
     if (mnozstvaRucne) return;
-    setStoziareMn(stoziarKod ? { [stoziarKod]: ksVlajokSpolu } : {});
-    setPodstavceMn(podstavecKod ? { [podstavecKod]: ksVlajokSpolu } : {});
-  }, [mnozstvaRucne, stoziarKod, podstavecKod, ksVlajokSpolu]);
+    setStoziareMn(stoziarKod ? { [stoziarKod]: pocetKs } : {});
+    setPodstavceMn(podstavecKod ? { [podstavecKod]: pocetKs } : {});
+  }, [mnozstvaRucne, stoziarKod, podstavecKod, pocetKs]);
 
   const zoznamMnozstiev = (mapa) => Object.entries(mapa).filter(([, m]) => m > 0).map(([kod, mnozstvo]) => ({ kod, mnozstvo }));
   const nastavStoziarMn = (kod, hodnota) => { setMnozstvaRucne(true); setStoziareMn(m => ({ ...m, [kod]: Math.max(0, Math.round(hodnota) || 0) })); };
@@ -283,7 +281,7 @@ export default function BeachflagApp({ supabase }) {
     const t = setTimeout(async () => {
       const { data, error } = await supabase.functions.invoke('beachflag-price-preview', {
         body: kos.kosik.length > 0
-          ? { polozky: polozkyNaCenu(), stoziarKod, podstavecKod, doplnky, expresne, osobnyOdber, stoziare: zoznamMnozstiev(stoziareMn), podstavce: zoznamMnozstiev(podstavceMn), b2bKod: b2b.kod }
+          ? { polozky: polozkyNaCenu(), doplnky, expresne, osobnyOdber, b2bKod: b2b.kod }
           : { tvarKod, velkostKod, materialKod, dokoncenieKod, stoziarKod, podstavecKod, doplnky, pocetKs, expresne, osobnyOdber, obojstranna, stoziare: zoznamMnozstiev(stoziareMn), podstavce: zoznamMnozstiev(podstavceMn), b2bKod: b2b.kod },
       });
       setCenaNacitava(false);
@@ -399,10 +397,8 @@ export default function BeachflagApp({ supabase }) {
       if (!polozky) { setIsSubmitting(false); return; }
       const payload = {
         polozky: polozky.map(p => p.vstup),
-        stoziarKod, podstavecKod,
         doplnky: doplnkyVybrane,
-        expresne, osobnyOdber,
-        stoziare: zoznamMnozstiev(stoziareMn), podstavce: zoznamMnozstiev(podstavceMn), b2bKod: b2b.kod,
+        expresne, osobnyOdber, b2bKod: b2b.kod,
       };
 
       const { data, error } = await supabase.functions.invoke('beachflag-create-draft-order', { body: payload });
@@ -455,7 +451,7 @@ export default function BeachflagApp({ supabase }) {
             stoziareMn={stoziareMn} onStoziarMn={nastavStoziarMn} podstavceMn={podstavceMn} onPodstavecMn={nastavPodstavecMn}
             expresne={expresne} onExpresne={setExpresne} pocetKs={pocetKs} onPocetKs={setPocetKs}
             osobnyOdber={osobnyOdber} onOsobnyOdber={setOsobnyOdber}
-            cena={cena} cenaNacitava={cenaNacitava} cenaChyba={cenaChyba} kos={kos} isSubmitting={isSubmitting} submitError={submitError} onObjednat={objednat}
+            cena={cena} cenaNacitava={cenaNacitava} cenaChyba={cenaChyba} kos={{ ...kos, pridaj: async () => { const p = await kos.pridaj(); if (p) setMnozstvaRucne(false); return p; } }} isSubmitting={isSubmitting} submitError={submitError} onObjednat={objednat}
             onSpat={() => setKrok('grafika')} />
         )}
       </div>

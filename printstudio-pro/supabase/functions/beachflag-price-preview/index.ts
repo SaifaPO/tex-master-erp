@@ -235,31 +235,28 @@ async function spocitaj(supabase: ReturnType<typeof createClient>, v: Record<str
   };
 }
 
-// Kosik motivov: viac roznych navrhov vlajok (rovnaky tvar a velkost) v jednej objednavke. Mnozstevna hladina vlajok sa pocita z CELKOVEHO poctu
-// vlajok; prúty, podstavce a doplnky su spolocne pre celu objednavku (kazda polozka ma svoj pocet kusov, ako pri jednom motive).
+// Kosik motivov: viac roznych vlajok (aj ROZNE tvary a velkosti) v jednej objednavke. Mnozstevna hladina vlajok sa pocita z CELKOVEHO poctu
+// vlajok; kazdy motiv ma svoje pruty a podstavce (cena podla jeho velkosti, vlastny pocet kusov), doplnky su spolocne pre celu objednavku.
 async function spocitajKosik(supabase: ReturnType<typeof createClient>, v: Record<string, any>) {
   const flagy: any[] = v.polozky;
   if (flagy.length > 20) throw new Error('Najviac 20 motívov v jednej objednávke.');
-  const prvy = flagy[0];
-  if (flagy.some((f) => f.tvarKod !== prvy.tvarKod || f.velkostKod !== prvy.velkostKod)) {
-    throw new Error('Všetky motívy v jednej objednávke musia mať rovnaký tvar a veľkosť vlajky (prúty a podstavce sa viažu na veľkosť). Inú veľkosť objednaj samostatne.');
-  }
   const ksF = flagy.map((f) => Math.max(1, Math.round(Number(f.pocetKs)) || 1));
   const ksSpolu = ksF.reduce((a, b) => a + b, 0);
-  // cena samotnych vlajok (bez prutov, podstavcov a doplnkov) pri celkovom pocte vlajok
+  // cena kazdej vlajky pri celkovom pocte vlajok + jej prutov a podstavcov (kazda polozka s vlastnym poctom kusov, cena podla velkosti vlajky)
   const zakl = [];
   for (let i = 0; i < flagy.length; i++) {
     const f = flagy[i];
     zakl.push(await spocitaj(supabase, {
       tvarKod: f.tvarKod, velkostKod: f.velkostKod, materialKod: f.materialKod, dokoncenieKod: f.dokoncenieKod, obojstranna: !!f.obojstranna,
-      pocetKs: ksSpolu, stoziare: [], podstavce: [], doplnky: [], osobnyOdber: true, expresne: false, b2bKod: null,
+      pocetKs: ksSpolu, stoziare: Array.isArray(f.stoziare) ? f.stoziare : [], podstavce: Array.isArray(f.podstavce) ? f.podstavce : [], doplnky: [],
+      osobnyOdber: true, expresne: false, b2bKod: null,
     }));
   }
-  // prislusenstvo (prúty, podstavce, doplnky) — spolocne, cena podla velkosti vlajky
-  const ex = await spocitaj(supabase, {
+  // doplnky (spolocne pre celu objednavku) — cena nezavisi od velkosti
+  const prvy = flagy[0];
+  const dopl = await spocitaj(supabase, {
     tvarKod: prvy.tvarKod, velkostKod: prvy.velkostKod, materialKod: prvy.materialKod, dokoncenieKod: prvy.dokoncenieKod, obojstranna: !!prvy.obojstranna,
-    pocetKs: ksSpolu, stoziarKod: v.stoziarKod, podstavecKod: v.podstavecKod, doplnky: v.doplnky || [], stoziare: v.stoziare ?? null, podstavce: v.podstavce ?? null,
-    osobnyOdber: true, expresne: false, b2bKod: null,
+    pocetKs: ksSpolu, stoziare: [], podstavce: [], doplnky: v.doplnky || [], osobnyOdber: true, expresne: false, b2bKod: null,
   });
   const r2 = (x: number) => Math.round(x * 100) / 100;
   const [{ data: nastavenia }, { data: cfg }] = await Promise.all([
@@ -269,8 +266,10 @@ async function spocitajKosik(supabase: ReturnType<typeof createClient>, v: Recor
   const dphPercent = Number(cfg?.dph_percent ?? 23) || 0;
   const vlajkyRiadky = zakl.map((c, i) => ({ ks: ksF[i], cenaZaKus: r2(c.zaklad), spolu: r2(c.zaklad * ksF[i]) }));
   const vlajkySpolu = vlajkyRiadky.reduce((a, r) => a + r.spolu, 0);
-  const prislSpolu = ex.stoziareSpolu + ex.podstavceSpolu + ex.doplnkySpolu;
-  const subtotal = vlajkySpolu + prislSpolu;
+  const stoziareSpolu = zakl.reduce((a, c) => a + c.stoziareSpolu, 0);
+  const podstavceSpolu = zakl.reduce((a, c) => a + c.podstavceSpolu, 0);
+  const doplnkySpolu = dopl.doplnkySpolu;
+  const subtotal = vlajkySpolu + stoziareSpolu + podstavceSpolu + doplnkySpolu;
   const b2bZlavaPercent = await b2bZlava(supabase, v.b2bKod);
   const b2bZlavaEur = r2(subtotal * b2bZlavaPercent / 100);
   const subtotalPoZlave = subtotal - b2bZlavaEur;
@@ -288,10 +287,15 @@ async function spocitajKosik(supabase: ReturnType<typeof createClient>, v: Recor
     vlajkySpolu: r2(vlajkySpolu),
     ksSpolu,
     vlajky: vlajkyRiadky,
-    rozpis: { vlajka: { mnozstvo: ksSpolu, cenaZaKus: r2(vlajkySpolu / ksSpolu), spolu: r2(vlajkySpolu) }, stoziare: ex.rozpis.stoziare, podstavce: ex.rozpis.podstavce, doplnky: ex.rozpis.doplnky },
+    rozpis: {
+      vlajka: { mnozstvo: ksSpolu, cenaZaKus: r2(vlajkySpolu / ksSpolu), spolu: r2(vlajkySpolu) },
+      stoziare: zakl.flatMap((c, i) => c.rozpis.stoziare.map((x: any) => ({ ...x, nazov: `${x.nazov} (${flagy[i].velkostKod})` }))),
+      podstavce: zakl.flatMap((c, i) => c.rozpis.podstavce.map((x: any) => ({ ...x, nazov: `${x.nazov} (${flagy[i].velkostKod})` }))),
+      doplnky: dopl.rozpis.doplnky,
+    },
     b2bZlavaPercent, b2bZlavaEur, postovneZdarmaOd,
     doDopravyZdarma: osobnyOdber || postovneZdarmaOd <= 0 ? 0 : Math.max(0, r2(postovneZdarmaOd - tovarSDph)),
-    stoziareSpolu: ex.stoziareSpolu, podstavceSpolu: ex.podstavceSpolu, doplnkySpolu: ex.doplnkySpolu,
+    stoziareSpolu: r2(stoziareSpolu), podstavceSpolu: r2(podstavceSpolu), doplnkySpolu: r2(doplnkySpolu),
     subtotal: r2(subtotal), expresnyPriplatok: r2(expresnyPriplatok), doprava: r2(doprava),
     cenaBezDph: r2(cenaBezDph), dphSuma: r2(dphSuma), cenaSpolu: r2(cenaSpolu),
     cenaMaterialKus: zakl[0].cenaMaterialKus, marzaPercent: zakl[0].marzaPercent, obojstranna: null,

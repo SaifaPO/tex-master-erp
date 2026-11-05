@@ -56,7 +56,7 @@ export default function DoplnkyTab({
           <div className="space-y-2">
             <KosikMotivov svetly polozky={kos.kosik} riadky={cena?.vlajky && cena.vlajky.length === kos.kosik.length && kos.kosik.length > 1 ? cena.vlajky.map((r) => ({ cenaKus: r.cenaZaKus, tovar: r.spolu })) : null}
               onOdober={kos.odober} onPridat={kos.pridaj} bezi={kos.pridavam || isSubmitting}
-              popisKrok={kos.kosik.length === 0 ? 'Chceš viac rôznych návrhov vlajok (rovnaký tvar a veľkosť)? Pridaj tento motív, uprav grafiku a pridaj ďalší — prúty, podstavce a doplnky nižšie sú spoločné pre celú objednávku, doprava je len raz a množstevná cena sa počíta zo všetkých vlajok.' : 'Návrh sa do objednávky dostane až po kliknutí na „Pridať tento motív“ (alebo ho pri objednaní ponúkneme pridať). Prúty a podstavce nastav nižšie pre celú objednávku.'} />
+              popisKrok={kos.kosik.length === 0 ? 'Chceš viac vlajok — aj iného tvaru alebo veľkosti? Nastav vlajku (parametre, grafika, prúty a podstavce) a pridaj ju do objednávky, potom nastav ďalšiu. Doprava je len raz a množstevná cena sa počíta zo všetkých vlajok.' : 'Prúty a podstavce, ktoré máš nastavené nižšie, patria k vlajke v editore. Vlajka sa do objednávky dostane až po kliknutí na „Pridať tento motív“ (alebo ju pri objednaní ponúkneme pridať). Doplnky nižšie sú spoločné pre celú objednávku.'} />
             {kos.chyba && <p className="text-xs text-rose-600">{kos.chyba}</p>}
             {kos.info && <p className="text-xs text-emerald-700">{kos.info}</p>}
           </div>
