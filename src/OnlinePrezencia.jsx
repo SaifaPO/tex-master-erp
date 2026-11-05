@@ -1,5 +1,6 @@
 // Kto je práve v ERP: avatary hore v hlavičke (hover = meno, rola, ako dlho je online) + krátka textová správa.
-// Beží cez Supabase Realtime "Presence" a "Broadcast" (žiadna tabuľka, nič sa neukladá) — správa sa doručí len tomu, kto je práve online.
+// Prítomnosť beží cez Supabase Realtime "Presence", okamžité doručenie cez "Broadcast". Každá správa sa ukladá aj do tabuľky erp_spravy,
+// takže ju uvidí aj ten, kto nebol online — neprečítané správy sa mu zobrazia hneď po prihlásení, kým ich nezavrie.
 // Každý prihlásený profil sa hlási ako online; zoznam a písanie správ vidí ten, komu to appka dovolí (mozeVidiet / mozePisat).
 // Každý si môže nastaviť veľkosť písma a zvuk upozornenia (6 zvukov, generujú sa priamo v prehliadači) — uloží sa len v jeho prehliadači.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -49,6 +50,13 @@ function nacitajNastavenia(id) {
 }
 
 const hhmm = (iso) => { try { return new Date(iso).toLocaleTimeString('sk-SK', { hour: '2-digit', minute: '2-digit' }); } catch { return ''; } };
+// Čas správy; ak nie je z dnešného dňa, doplní sa dátum (správa mohla prísť večer a čítaš ju ráno)
+const kedy = (iso) => {
+  try {
+    const d = new Date(iso);
+    return d.toDateString() === new Date().toDateString() ? hhmm(iso) : `${d.toLocaleDateString('sk-SK', { day: 'numeric', month: 'numeric' })} ${hhmm(iso)}`;
+  } catch { return ''; }
+};
 function trvanie(iso, now) {
   const min = Math.max(0, Math.floor((now - new Date(iso).getTime()) / 60000));
   if (min < 1) return 'práve sa prihlásil';
@@ -66,6 +74,7 @@ export default function OnlinePrezencia({ supabase, currentUser, employees = [],
   const [now, setNow] = useState(Date.now());
   const [hover, setHover] = useState(null);
   const [nastOtvorene, setNastOtvorene] = useState(false);
+  const [vyberOtvoreny, setVyberOtvoreny] = useState(false); // zoznam všetkých kolegov (aj offline) na napísanie správy
   const mojeId = currentUser ? String(currentUser.id) : '';
   const mojeMeno = currentUser ? `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() : '';
   const [nast, setNast] = useState(() => nacitajNastavenia(mojeId));
@@ -114,6 +123,34 @@ export default function OnlinePrezencia({ supabase, currentUser, employees = [],
 
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(t); }, []);
 
+  // Neprečítané správy z databázy (prišli, keď som nebol online): pri prihlásení a potom každé 2 minúty ako poistka
+  useEffect(() => {
+    if (!supabase || !mojeId) return undefined;
+    let zrusene = false;
+    let prvy = true;
+    const nacitaj = async () => {
+      const { data, error } = await supabase.from('erp_spravy').select('id, od_id, od_meno, text, created_at').eq('komu_id', mojeId).is('precitane_at', null).order('created_at').limit(30);
+      if (zrusene || error || !data) return;
+      const nove = data.map((r) => ({ id: r.id, komu: mojeId, text: r.text, od: { id: r.od_id, meno: r.od_meno }, cas: r.created_at }));
+      setPrijate((p) => {
+        const nove2 = nove.filter((n) => !p.some((x) => x.id === n.id));
+        if (nove2.length > 0 && nastRef.current.zvukZapnuty && !prvy) prehrajZvuk(nastRef.current.zvuk);
+        return nove2.length ? [...p, ...nove2] : p;
+      });
+      if (prvy && nove.length > 0 && nastRef.current.zvukZapnuty) prehrajZvuk(nastRef.current.zvuk);
+      prvy = false;
+    };
+    nacitaj();
+    const t = setInterval(nacitaj, 120000);
+    return () => { zrusene = true; clearInterval(t); };
+  }, [supabase, mojeId]);
+
+  // Zatvorenie správy = označenie ako prečítanej (aby sa už nezobrazovala po ďalšom prihlásení)
+  const zavriSpravu = (id) => {
+    setPrijate((p) => p.filter((x) => x.id !== id));
+    supabase.from('erp_spravy').update({ precitane_at: new Date().toISOString() }).eq('id', id).is('precitane_at', null).then(() => {}, () => {});
+  };
+
   // Prehliadače zvuk pustia až po prvom kliknutí/stlačení klávesy na stránke — odblokujeme ho hneď pri prvej interakcii.
   useEffect(() => {
     const odomkni = () => { try { const AC = window.AudioContext || window.webkitAudioContext; if (AC) { if (!audioCtx) audioCtx = new AC(); if (audioCtx.state === 'suspended') audioCtx.resume(); } } catch { /* nič */ } };
@@ -130,21 +167,35 @@ export default function OnlinePrezencia({ supabase, currentUser, employees = [],
 
   const odosli = async () => {
     const t = text.trim();
-    if (!t || !komu || !kanalRef.current) return;
+    if (!t || !komu) return;
     const id = crypto.randomUUID();
-    await kanalRef.current.send({ type: 'broadcast', event: 'sprava', payload: { id, komu: String(komu.id), text: t, od: { id: mojeId, meno: mojeMeno }, cas: new Date().toISOString() } });
-    setOdoslane((o) => ({ ...o, [id]: 'odoslana' }));
+    const cas = new Date().toISOString();
+    // 1) uložiť do databázy (aby ju uvidel aj ten, kto nie je online), 2) ak je online, doručiť okamžite
+    const { error } = await supabase.from('erp_spravy').insert({ id, od_id: mojeId, od_meno: mojeMeno, komu_id: String(komu.id), text: t });
+    const jeOnline = online.some((o) => String(o.id) === String(komu.id));
+    if (jeOnline && kanalRef.current) {
+      await kanalRef.current.send({ type: 'broadcast', event: 'sprava', payload: { id, komu: String(komu.id), text: t, od: { id: mojeId, meno: mojeMeno }, cas } });
+    }
+    setOdoslane((o) => ({ ...o, [id]: error ? (jeOnline ? 'odoslana' : 'chyba') : (jeOnline ? 'odoslana' : 'ulozena') }));
     setKomu((k) => ({ ...k, posledna: id }));
     setText('');
   };
 
   const odpovedat = (sprava) => {
-    setPrijate((p) => p.filter((x) => x.id !== sprava.id));
+    zavriSpravu(sprava.id);
     const zaznam = online.find((o) => String(o.id) === String(sprava.od?.id));
     setKomu(zaznam || { id: sprava.od?.id, meno: sprava.od?.meno });
   };
 
   const ostatni = online.filter((o) => String(o.id) !== mojeId);
+  // Všetci kolegovia (online hore, potom abecedne) pre výber adresáta
+  const kolegovia = useMemo(() => {
+    const onlineIds = new Set(online.map((o) => String(o.id)));
+    return employees
+      .filter((e) => String(e.id) !== mojeId)
+      .map((e) => ({ id: String(e.id), meno: `${e.firstName || ''} ${e.lastName || ''}`.trim() || String(e.id), rola: e.role, avatar: e.avatar, online: onlineIds.has(String(e.id)) }))
+      .sort((a, b) => (a.online === b.online ? a.meno.localeCompare(b.meno, 'sk') : a.online ? -1 : 1));
+  }, [employees, online, mojeId]);
   const vsetci = [...online].sort((a, b) => (String(a.id) === mojeId ? -1 : String(b.id) === mojeId ? 1 : 0));
 
   return (
@@ -176,6 +227,33 @@ export default function OnlinePrezencia({ supabase, currentUser, employees = [],
               })}
               {vsetci.length > 2 && <div className="sm:hidden h-8 w-8 rounded-full border-2 border-slate-950 bg-slate-800 text-[11px] font-bold text-slate-300 flex items-center justify-center">+{vsetci.length - 2}</div>}
               {vsetci.length > 8 && <div className="hidden sm:flex h-8 w-8 rounded-full border-2 border-slate-950 bg-slate-800 text-[11px] font-bold text-slate-300 items-center justify-center">+{vsetci.length - 8}</div>}
+            </div>
+          )}
+
+          {/* Napísať správu komukoľvek (aj keď nie je online — uvidí ju po prihlásení) */}
+          {mozePisat && (
+            <div className="relative">
+              <button type="button" onClick={() => { setVyberOtvoreny((o) => !o); setNastOtvorene(false); }} title="Napísať správu kolegovi (aj offline)" className="h-8 w-8 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 flex items-center justify-center">
+                <MessageSquare className="h-4 w-4" />
+              </button>
+              {vyberOtvoreny && (
+                <div className="fixed top-20 right-3 sm:absolute sm:top-full sm:mt-2 sm:right-0 z-50 w-72 max-w-[calc(100vw-1.5rem)] bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-2 text-left">
+                  <div className="flex items-center justify-between px-1 pb-1.5">
+                    <span className="text-xs font-bold text-white">Komu napísať?</span>
+                    <button type="button" onClick={() => setVyberOtvoreny(false)} className="text-slate-400 hover:text-white"><X className="h-4 w-4" /></button>
+                  </div>
+                  <div className="max-h-72 overflow-y-auto space-y-0.5">
+                    {kolegovia.map((k) => (
+                      <button key={k.id} type="button" onClick={() => { setKomu({ id: k.id, meno: k.meno, rola: k.rola }); setText(''); setVyberOtvoreny(false); }} className="w-full flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-800 text-left">
+                        <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${k.online ? 'bg-emerald-400' : 'bg-slate-600'}`} />
+                        <span className="flex-1 min-w-0 truncate text-xs text-slate-100">{k.avatar ? `${k.avatar} ` : ''}{k.meno}</span>
+                        <span className="text-[10px] text-slate-500 shrink-0">{k.online ? 'online' : 'offline'}</span>
+                      </button>
+                    ))}
+                    {kolegovia.length === 0 && <div className="text-[11px] text-slate-400 px-2 py-2">Žiadni kolegovia.</div>}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -231,11 +309,14 @@ export default function OnlinePrezencia({ supabase, currentUser, employees = [],
             <button type="button" onClick={() => setKomu(null)} className="text-slate-400 hover:text-white"><X className="h-4 w-4" /></button>
           </div>
           <div className="p-3 space-y-2">
-            {!ostatni.some((o) => String(o.id) === String(komu.id)) && <p className="text-[11px] text-amber-400">{komu.meno} už nie je online — správa sa nedoručí.</p>}
+            {!ostatni.some((o) => String(o.id) === String(komu.id)) && <p className="text-[11px] text-amber-400">{komu.meno} nie je online — správu uvidí po prihlásení do ERP.</p>}
             <textarea value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); odosli(); } }} rows={3} autoFocus placeholder="Napíš správu… (Enter = odoslať)" style={{ fontSize: pismoPx }} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white" />
             <div className="flex items-center justify-between">
               <span className="text-[11px] text-slate-400 flex items-center gap-1">
-                {komu.posledna && odoslane[komu.posledna] === 'dorucena' ? <><Check className="h-3 w-3 text-emerald-400" /> doručené</> : komu.posledna && odoslane[komu.posledna] ? 'odoslané…' : ''}
+                {komu.posledna && odoslane[komu.posledna] === 'dorucena' ? <><Check className="h-3 w-3 text-emerald-400" /> doručené</>
+                  : komu.posledna && odoslane[komu.posledna] === 'ulozena' ? <><Check className="h-3 w-3 text-amber-400" /> uložené — prečíta si po prihlásení</>
+                  : komu.posledna && odoslane[komu.posledna] === 'chyba' ? <span className="text-rose-400">nepodarilo sa uložiť (má kolega účet v ERP?)</span>
+                  : komu.posledna && odoslane[komu.posledna] ? 'odoslané…' : ''}
               </span>
               <button type="button" onClick={odosli} disabled={!text.trim()} className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-xs font-bold px-3 py-1.5 rounded-lg"><Send className="h-3.5 w-3.5" /> Odoslať</button>
             </div>
@@ -249,8 +330,8 @@ export default function OnlinePrezencia({ supabase, currentUser, employees = [],
           {prijate.map((s) => (
             <div key={s.id} className="bg-slate-900 border border-emerald-500/60 rounded-xl shadow-2xl p-3">
               <div className="flex items-start justify-between gap-2">
-                <div className="text-xs font-bold text-emerald-300 flex items-center gap-1.5"><MessageSquare className="h-3.5 w-3.5" /> {s.od?.meno || 'Správa'} · {hhmm(s.cas)}</div>
-                <button type="button" onClick={() => setPrijate((p) => p.filter((x) => x.id !== s.id))} className="text-slate-400 hover:text-white"><X className="h-4 w-4" /></button>
+                <div className="text-xs font-bold text-emerald-300 flex items-center gap-1.5"><MessageSquare className="h-3.5 w-3.5" /> {s.od?.meno || 'Správa'} · {kedy(s.cas)}</div>
+                <button type="button" onClick={() => zavriSpravu(s.id)} className="text-slate-400 hover:text-white"><X className="h-4 w-4" /></button>
               </div>
               <p className="mt-1.5 text-white whitespace-pre-wrap break-words" style={{ fontSize: pismoPx }}>{s.text}</p>
               {mozePisat && <button type="button" onClick={() => odpovedat(s)} className="mt-2 text-[11px] font-bold text-indigo-300 hover:text-indigo-200">Odpovedať</button>}
