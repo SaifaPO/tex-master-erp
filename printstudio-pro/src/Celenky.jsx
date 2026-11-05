@@ -170,7 +170,25 @@ export default function Celenky({ supabase, onSpat }) {
     if (!engineRef.current) return;
     setDopytBezi(true); setSubmitError(''); setConfirmation('');
     try {
-      const d = await vytvorB2bDopyt(supabase, {
+      // Kosik motivov: dopyt obsahuje vsetky pridane motivy (+ aktualny navrh, ak ho zakaznik potvrdi pridat)
+      let polozky = kosik;
+      if (kosik.length > 0) {
+        const aktJson = engineRef.current.getDesignJson();
+        if (!kosik.some(p => p.dizajnJson === aktJson && p.velkost === aktVariant.velkost_kod && p.material === aktVariant.material_kod)) {
+          if (!window.confirm('Návrh v editore ešte nie je v dopyte. Pridať ho a poslať dopyt na všetky motívy spolu?\n\nOK = pridať a poslať\nZrušiť = vrátiť sa a upraviť')) { setDopytBezi(false); return; }
+          polozky = [...kosik, await vytvorPolozku()];
+        }
+      }
+      let d;
+      if (polozky.length > 0) {
+        const v = vypocitajKosik({ polozky: polozky.map(p => ({ nakladKs: nakladPreVariant(p.velkost, p.material), pocetKs: p.pocetKs })), cfg: pricingConfig, nastavenia, deliverySpeed, osobnyOdber, b2bPercent: b2b.zlavaPercent });
+        const k = 1 - (Number(b2b.zlavaPercent) || 0) / 100;
+        d = await vytvorB2bDopyt(supabase, {
+          typ: 'celenka', produktNazov: 'Čelenky (viac motívov)', popisVarianty: `${polozky.length} motívy`,
+          pocetKs: v.ksSpolu, cenaKusBezDph: v.subtotal / v.ksSpolu, cenaSpoluBezDph: v.subtotal, expres: deliverySpeed === 'express', osobnyOdber, b2b,
+          motivy: polozky.map((p, i) => ({ popis: p.popis, pocetKs: p.pocetKs, cenaKusBezDph: v.riadky[i].cenaKus * k, cenaSpoluBezDph: v.riadky[i].tovar * k, suborCesta: p.suborCesta })),
+        });
+      } else d = await vytvorB2bDopyt(supabase, {
         typ: 'celenka', produktNazov: 'Čelenka',
         popisVarianty: `${aktVariant.velkost_nazov}, ${aktMaterial?.nazov || aktVariant.material_kod}, ${Number(aktVariant.sirka_cm)} × ${Number(aktVariant.vyska_cm)} cm`,
         pocetKs, cenaKusBezDph: subtotal / pocetKs, cenaSpoluBezDph: subtotal, expres: deliverySpeed === 'express', osobnyOdber, b2b, engine: engineRef.current,

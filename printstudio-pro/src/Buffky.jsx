@@ -158,7 +158,25 @@ export default function Buffky({ supabase, onSpat }) {
     if (typ === 'premium' && !materialKod) { setSubmitError('Vyber materiál buffky.'); return; }
     setDopytBezi(true); setSubmitError(''); setConfirmation('');
     try {
-      const d = await vytvorB2bDopyt(supabase, {
+      // Kosik motivov: dopyt obsahuje vsetky pridane motivy (+ aktualny navrh, ak ho zakaznik potvrdi pridat)
+      let polozky = kosik;
+      if (kosik.length > 0) {
+        const aktNahlad = nahladZCanvasu(rootRef.current);
+        if (!(aktNahlad && kosik.some(p => p.nahlad === aktNahlad))) {
+          if (!window.confirm('Návrh v editore ešte nie je v dopyte. Pridať ho a poslať dopyt na všetky motívy spolu?\n\nOK = pridať a poslať\nZrušiť = vrátiť sa a upraviť')) { setDopytBezi(false); return; }
+          polozky = [...kosik, await vytvorPolozku()];
+        }
+      }
+      let d;
+      if (polozky.length > 0) {
+        const v = vypocitajKosik({ polozky: polozky.map(p => ({ nakladKs: nakladPre(p.typ, p.materialKod), pocetKs: p.pocetKs })), cfg: pricingConfig, nastavenia, deliverySpeed, osobnyOdber, b2bPercent: b2b.zlavaPercent });
+        const k = 1 - (Number(b2b.zlavaPercent) || 0) / 100;
+        d = await vytvorB2bDopyt(supabase, {
+          typ: 'buffka', produktNazov: 'Buffky (viac motívov)', popisVarianty: `${polozky.length} motívy`,
+          pocetKs: v.ksSpolu, cenaKusBezDph: v.subtotal / v.ksSpolu, cenaSpoluBezDph: v.subtotal, expres: deliverySpeed === 'express', osobnyOdber, b2b,
+          motivy: polozky.map((p, i) => ({ popis: p.popis, pocetKs: p.pocetKs, cenaKusBezDph: v.riadky[i].cenaKus * k, cenaSpoluBezDph: v.riadky[i].tovar * k, suborCesta: p.suborCesta })),
+        });
+      } else d = await vytvorB2bDopyt(supabase, {
         typ: 'buffka', produktNazov: typ === 'premium' ? 'Buffka Premium' : 'Buffka Tubular Basic',
         popisVarianty: typ === 'premium' ? `${vybranyMaterial?.nazov || ''}, bočný šev, obšitý lem` : 'bezšvová tubulárna',
         pocetKs, cenaKusBezDph: subtotal / pocetKs, cenaSpoluBezDph: subtotal, expres: deliverySpeed === 'express', osobnyOdber, b2b, engine: engineRef.current,

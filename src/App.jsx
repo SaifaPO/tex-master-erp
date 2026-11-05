@@ -4637,19 +4637,28 @@ export default function App() {
       const { data: sig } = await supabase.storage.from('print-designs').createSignedUrl(d.subor_cesta, 60 * 60 * 24 * 14);
       suborOdkaz = sig?.signedUrl || '';
     }
+    // Dopyt s viacerymi motivmi (kosik motivov): kazdy motiv ma vlastny tlacovy subor a pocet kusov
+    const motivyDopytu = Array.isArray(d.motivy) && d.motivy.length > 1 ? d.motivy : null;
+    const motivyOdkazy = motivyDopytu ? await Promise.all(motivyDopytu.map(async (m) => {
+      if (!m.subor_cesta) return '';
+      const { data: sig } = await supabase.storage.from('print-designs').createSignedUrl(m.subor_cesta, 60 * 60 * 24 * 14);
+      return sig?.signedUrl || '';
+    })) : null;
     const norm = (v) => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
     const token = d.produkt_typ === 'celenka' ? 'celenk' : d.produkt_typ === 'buffka' ? 'buff' : norm(d.produkt_nazov).slice(0, 6);
     const zhoda = products.find(p => norm(p.name).includes(token));
     const poznamky = [
       `Dopyt DOPYT-${kod} z PrintStudio (B2B${d.agentura ? `, ${d.agentura}` : ''}): ${d.produkt_nazov}${d.popis_varianty ? ` — ${d.popis_varianty}` : ''}, ${d.pocet_ks} ks.`,
       d.cena_spolu_bez_dph != null ? `Orientačná cena z konfigurátora: ${Number(d.cena_kus_bez_dph).toFixed(2)} €/ks, spolu ${Number(d.cena_spolu_bez_dph).toFixed(2)} € bez DPH.${d.expres ? ' Expres.' : ''}${d.osobny_odber ? ' Osobný odber.' : ''}` : '',
-      suborOdkaz ? `Návrh (tlačový súbor, odkaz platí 14 dní): ${suborOdkaz}` : '',
+      motivyDopytu ? motivyDopytu.map((m, i) => `Motív ${i + 1}: ${m.popis}, ${m.pocet_ks} ks (${Number(m.cena_kus).toFixed(2)} €/ks)${motivyOdkazy[i] ? ` — tlačový súbor (odkaz platí 14 dní): ${motivyOdkazy[i]}` : ''}`).join('\n') : (suborOdkaz ? `Návrh (tlačový súbor, odkaz platí 14 dní): ${suborOdkaz}` : ''),
       ico ? `IČO: ${ico}` : '',
       poznamkaZakaznika ? `Poznámka zákazníka: ${poznamkaZakaznika}` : '',
     ].filter(Boolean).join('\n');
     return {
       customerName: firma || d.agentura || '', deliveryDate, notes: poznamky, dopytKod: kod,
-      items: [{ tempId: 'dopyt-0', productId: zhoda?.id || '', productNameGuess: d.produkt_nazov, qty: d.pocet_ks, gender: 'men', notes: d.popis_varianty || '' }],
+      items: motivyDopytu
+        ? motivyDopytu.map((m, i) => ({ tempId: `dopyt-${i}`, productId: zhoda?.id || '', productNameGuess: d.produkt_typ === 'celenka' ? 'Čelenka' : 'Buffka', qty: m.pocet_ks, gender: 'men', notes: `Motív ${i + 1}: ${m.popis}` }))
+        : [{ tempId: 'dopyt-0', productId: zhoda?.id || '', productNameGuess: d.produkt_nazov, qty: d.pocet_ks, gender: 'men', notes: d.popis_varianty || '' }],
     };
   };
 
