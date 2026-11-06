@@ -15,6 +15,7 @@ import OdovzdanieZakazky from './OdovzdanieZakazky';
 import PrintStudioAdmin from './printstudio/PrintStudioAdmin';
 import NotifikacieZvonec from './NotifikacieZvonec';
 import OnlinePrezencia from './OnlinePrezencia';
+import DopytPredajneTab, { useDopytyPredajne } from './DopytPredajne';
 import { PrintSpecEditor, PrintKarta, stiahnutQrFolie, popisUmiestnenia } from './PrintKarta';
 import PozvankaScreen from './PozvankaScreen';
 import { mapNacrtFromDb, mapNacrtToDb, spoluNacrtu, stavSuhlasov, NacrtModal, NacrtyFronta } from './FakturaNacrty';
@@ -31,7 +32,7 @@ import {
   ClipboardList, Package, Cpu, QrCode, Plus, User, Clock, Layers, Search, Check, X, Calendar,
   Palette, Scissors, Printer, Sliders, Sparkles, ZoomIn, ZoomOut, FileText, PlusCircle, Table,
   Shield, Users, Lock, Edit2, Trash2, Tag, Scale, CalendarDays, FileEdit, Gift, Loader2, AlertTriangle,
-  Shirt, Box, Banknote, GripVertical, Download, Upload, ArrowUp, ArrowDown, BarChart3, Camera, Bot, Zap, Star, RefreshCw, BookOpen, Paperclip, Copy, Menu
+  Shirt, Box, Banknote, Store, GripVertical, Download, Upload, ArrowUp, ArrowDown, BarChart3, Camera, Bot, Zap, Star, RefreshCw, BookOpen, Paperclip, Copy, Menu
 } from 'lucide-react';
 
 // ============================================================
@@ -271,7 +272,7 @@ const PRIJEMCOVIA_POMOCI = [...VEDENIE_VYROBY, 'majster'];
 // Karty v hornom menu — kto ich vidí sa nastavuje v Zamestnanci & Práva -> Globálne Oprávnenia (ACL), riadky "Karta: ...".
 // Tu sú len PREDVOĽBY (kým Master nič neprestaví). Master vidí všetko vždy.
 const TAB_DEFS = [
-  ['planner', 'Plánovacia Matica'], ['orders', 'Konfigurátor Zákaziek'], ['catalog', 'Katalóg Produktov'], ['isolated-station', 'Samostatné Dielne'],
+  ['planner', 'Plánovacia Matica'], ['orders', 'Konfigurátor Zákaziek'], ['dopyt-predajne', 'Dopyt predajne'], ['catalog', 'Katalóg Produktov'], ['isolated-station', 'Samostatné Dielne'],
   ['materials', 'Sklad'], ['profiles', 'Zamestnanci & Práva'], ['qr-terminal', 'Čítačka QR'], ['reports', 'Prehľady'], ['designers', 'Dashboard Grafikov'],
   ['problems', 'Problémy'], ['invoices', 'Financie'], ['quotes', 'Cenové ponuky'], ['archive', 'História Zákaziek'],
   ['cestaky', 'Cestovné príkazy'], ['kniha-jazd', 'Kniha jázd (tachometer, tankovanie)'], ['manual', 'Manuál'],
@@ -280,6 +281,7 @@ const VYROBA_A_VEDENIE = ['master', 'supervisor', 'manazer', 'majster', 'sales',
 const TAB_DEFAULT_ROLES = {
   planner: [...VYROBA_A_VEDENIE, 'predajna'],
   orders: [...VYROBA_A_VEDENIE, 'predajna'],
+  'dopyt-predajne': ['master', 'supervisor', 'manazer', 'majster', 'sales', 'predajna'],
   catalog: VYROBA_A_VEDENIE,
   'isolated-station': VYROBA_A_VEDENIE,
   materials: [...VYROBA_A_VEDENIE, 'uctovnik'],
@@ -1428,6 +1430,7 @@ export default function App() {
   const otvorZNotifikacie = (odkaz) => {
     if (!odkaz?.tab) return;
     setActiveTab(odkaz.tab);
+    if (odkaz.tab === 'dopyt-predajne') setDopytFokus({ id: odkaz.id, nonce: Date.now() });
     if (odkaz.nacrtId) { setFinanceSubTab('queue'); setOtvorenyNacrtId(odkaz.nacrtId); }
     if (odkaz.tab === 'printstudio') {
       setPrintstudioJumpTarget(odkaz.subtab || 'objednavky');
@@ -2057,6 +2060,16 @@ export default function App() {
   const currentUserRef = useRef(currentUser);
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
 
+  // Dopyt predajne: dáta + Realtime + akcie (karta aj značka v menu); nový dopyt = hlasné upozornenie pre určených ľudí
+  const [dopytFokus, setDopytFokus] = useState(null);
+  const dopytyPredajne = useDopytyPredajne({
+    supabase, currentUser, employees,
+    upozorni: (n) => {
+      playAlertBeep(n.priorita === 'urgent' ? 4 : 2, n.priorita === 'urgent' ? 880 : 740);
+      showDesktopNotification(`🛍️ Predajňa hlási${n.priorita === 'urgent' ? ' (URGENTNÉ)' : ''}`, `${n.predajna ? n.predajna + ': ' : ''}${n.polozky}`.slice(0, 140));
+    },
+  });
+
   // Požiadať o povolenie desktop notifikácií, keď sa prihlási niekto, kto rieši problémy
   useEffect(() => {
     if (currentUser && hasPermission('view_problems') && typeof Notification !== 'undefined' && Notification.permission === 'default') {
@@ -2204,7 +2217,8 @@ export default function App() {
     if (!role) return false;
     return aclHodnota(action, role);
   };
-  const canSeeTab = (role, tabId) => aclHodnota('tab_' + tabId, role);
+  // Kartu "Dopyt predajne" vidí aj každý, koho Master určil ako príjemcu (nezávisle od roly)
+  const canSeeTab = (role, tabId) => aclHodnota('tab_' + tabId, role) || (tabId === 'dopyt-predajne' && dopytyPredajne.jeUcastnik);
 
   // Karta je v menu viditeľná len ak ju rola smie vidieť A má aj potrebné právo (financie, prehľady, ponuky, problémy)
   const tabVisible = (id) => {
@@ -2274,6 +2288,7 @@ export default function App() {
     push(entries, 'Rozvrh Zamestnancov', 'Plánovacia Matica', canSeeTab(role, 'planner') && hasPermission('manage_profiles'), () => { setActiveTab('planner'); setPlannerViewMode('staffing'); });
     push(entries, 'Konfigurátor Zákaziek', null, canSeeTab(role, 'orders'), () => setActiveTab('orders'));
     push(entries, 'Katalóg Produktov', null, canSeeTab(role, 'catalog'), () => setActiveTab('catalog'));
+    push(entries, 'Dopyt predajne', null, canSeeTab(role, 'dopyt-predajne'), () => setActiveTab('dopyt-predajne'));
 
     const stanice = [
       ['grafik', 'Grafika'], ['strihanie', 'Strihanie & Kompletáž'], ['transfer', 'Transfer tlač'],
@@ -7061,6 +7076,9 @@ export default function App() {
               {canSeeTab(currentUser.role, 'orders') && (
                 <button onClick={() => setActiveTab('orders')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'orders' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><PlusCircle className="h-3.5 w-3.5" /> Konfigurátor Zákaziek</button>
               )}
+              {canSeeTab(currentUser.role, 'dopyt-predajne') && (
+                <button onClick={() => setActiveTab('dopyt-predajne')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'dopyt-predajne' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Store className="h-3.5 w-3.5" /> Dopyt predajne{dopytyPredajne.pocetAktivnych > 0 && <span className={`${dopytyPredajne.pocetNovych > 0 ? 'bg-rose-600 animate-pulse' : 'bg-amber-500'} text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full ml-1`}>{dopytyPredajne.pocetAktivnych}</span>}</button>
+              )}
               {canSeeTab(currentUser.role, 'catalog') && (
                 <button onClick={() => setActiveTab('catalog')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'catalog' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Tag className="h-3.5 w-3.5" /> Katalóg Produktov</button>
               )}
@@ -7112,7 +7130,7 @@ export default function App() {
                 {menuOtvorene ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}<span className="hidden sm:inline">Menu</span>
               </button>
               <OnlinePrezencia supabase={supabase} currentUser={currentUser} employees={employees} rolaLabely={ROLE_LABELS} mozeVidiet mozePisat />
-              {['master', 'supervisor', 'sales', 'uctovnik'].includes(currentUser.role) && <NotifikacieZvonec supabase={supabase} onOtvor={otvorZNotifikacie} rola={currentUser.role} mojeId={currentUser.id} />}
+              {(['master', 'supervisor', 'sales', 'uctovnik'].includes(currentUser.role) || dopytyPredajne.jeUcastnik || canSeeTab(currentUser.role, 'dopyt-predajne')) && <NotifikacieZvonec supabase={supabase} onOtvor={otvorZNotifikacie} rola={currentUser.role} mojeId={currentUser.id} />}
             </div>
           </div>
         </div>
@@ -12163,6 +12181,10 @@ export default function App() {
             </div>
           );
         })()}
+
+        {activeTab === 'dopyt-predajne' && (
+          <DopytPredajneTab d={dopytyPredajne} currentUser={currentUser} employees={employees} orders={orders} rolaLabely={ROLE_LABELS} fokusId={dopytFokus} triggerNotification={triggerNotification} />
+        )}
 
         {activeTab === 'cestaky' && (() => {
           const isApprover = currentUser.role === 'master' || currentUser.role === 'supervisor';
