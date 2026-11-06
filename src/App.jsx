@@ -15,6 +15,7 @@ import OdovzdanieZakazky from './OdovzdanieZakazky';
 import PrintStudioAdmin from './printstudio/PrintStudioAdmin';
 import NotifikacieZvonec from './NotifikacieZvonec';
 import OnlinePrezencia from './OnlinePrezencia';
+import { PrintSpecEditor, PrintKarta, stiahnutQrFolie, popisUmiestnenia } from './PrintKarta';
 import PozvankaScreen from './PozvankaScreen';
 import { mapNacrtFromDb, mapNacrtToDb, spoluNacrtu, stavSuhlasov, NacrtModal, NacrtyFronta } from './FakturaNacrty';
 import GlobalSearchPalette from './GlobalSearchPalette';
@@ -1673,6 +1674,7 @@ export default function App() {
 
   const [selectedTerminalStation, setSelectedTerminalStation] = useState('grafik');
   const [manualQrInput, setManualQrInput] = useState('');
+  const [kartaTlace, setKartaTlace] = useState(null); // naposledy naskenovaná položka — karta 'čo ide do tlače a kam'
   const [scanNotification, setScanNotification] = useState(null);
 
   const [selectedOrderDetails, setSelectedOrderDetails] = useState(null);
@@ -5854,6 +5856,7 @@ export default function App() {
     const found = findItemByItemId(rawCode);
     if (!found) { triggerNotification('error', `Položka ${rawCode} nebola nájdená.`); setManualQrInput(''); return; }
     const { order, item } = found;
+    setKartaTlace({ orderId: order.id, itemId: item.itemId });
 
     if (!(selectedTerminalStation in (item.stationStatuses || {}))) {
       triggerNotification('error', `Položka ${item.itemId} nie je zaradená na stanicu "${STATION_CONFIGS[selectedTerminalStation].name}".`);
@@ -6333,6 +6336,19 @@ export default function App() {
   };
 
   // --- ULTRA PRIORITA ZÁKAZKY (Funkcia 1) ---
+  // Rozmer a umiestnenie motívu na tričku (DTF/DTG) — zadáva grafik pri položke, zobrazí sa operátorovi po naskenovaní QR
+  const handleSavePrintSpec = async (orderId, itemId, spec) => {
+    if (!hasPermission('update_status')) { triggerNotification('error', 'Nemáte oprávnenie meniť údaje pre tlač.'); return; }
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+    const updatedItems = order.items.map(it => it.itemId !== itemId ? it : { ...it, printSpec: spec });
+    const { error } = await supabase.from('orders').update({ items: updatedItems }).eq('id', orderId);
+    if (error) { triggerNotification('error', error.message); return; }
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, items: updatedItems } : o));
+    if (selectedOrderDetails?.id === orderId) setSelectedOrderDetails({ ...order, items: updatedItems });
+    triggerNotification('success', 'Údaje pre tlač uložené.');
+  };
+
   const handleSetUltraPriority = async (orderId, itemId, active) => {
     if (!hasPermission('edit_priority')) { triggerNotification('error', 'Ultra prioritu môže nastaviť len ten, kto má právo meniť priority.'); return; }
     const order = orders.find(o => o.id === orderId);
@@ -10483,6 +10499,13 @@ export default function App() {
                     <button onClick={() => handleQrScan(manualQrInput)} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs py-2 rounded-lg mt-3">Potvrdiť Sken manuálne</button>
                   </div>
                   {(() => {
+                    const o = kartaTlace && orders.find(x => x.id === kartaTlace.orderId);
+                    const it = o && (o.items || []).find(x => x.itemId === kartaTlace.itemId);
+                    if (!it) return null;
+                    const qrUrl = `${window.location.origin}${window.location.pathname}?scan=${it.itemId}`;
+                    return <PrintKarta order={o} item={it} qrUrl={qrUrl} onStiahnut={() => stiahnutQrFolie(o, it, qrUrl)} onZavriet={() => setKartaTlace(null)} />;
+                  })()}
+                  {(() => {
                     const naj = najdiAktivnuPolozku(selectedTerminalStation);
                     return (
                       <div className="bg-rose-950/20 border border-rose-500/40 p-5 rounded-xl space-y-4">
@@ -13447,8 +13470,12 @@ export default function App() {
                     <div className="bg-white p-3 rounded-xl flex flex-col items-center border border-slate-300 shadow-sm shrink-0">
                       <QRCodeSVG value={`${window.location.origin}${window.location.pathname}?scan=${item.itemId}`} size={88} level="M" />
                       <span className="font-mono text-[9px] text-black font-extrabold mt-1">{item.itemId}</span>
+                      <button type="button" onClick={() => stiahnutQrFolie(selectedOrderDetails, item, `${window.location.origin}${window.location.pathname}?scan=${item.itemId}`)} className="print:hidden mt-1.5 text-[9px] font-bold text-indigo-700 hover:underline">QR pre DTF fóliu (PNG)</button>
                     </div>
                   </div>
+
+                  {item.printSpec && <p className="hidden print:block text-sm font-bold">Tlač {String(item.printSpec.technologia || '').toUpperCase()}: {item.printSpec.sirkaCm} × {item.printSpec.vyskaCm} cm — {popisUmiestnenia(item.printSpec)}{item.printSpec.farbaTricka ? ` • tričko ${item.printSpec.farbaTricka}` : ''}{item.printSpec.poznamka ? ` • ${item.printSpec.poznamka}` : ''}</p>}
+                  <PrintSpecEditor key={`${item.itemId}-${JSON.stringify(item.printSpec || {})}`} item={item} moze={hasPermission('update_status')} onSave={(spec) => handleSavePrintSpec(selectedOrderDetails.id, item.itemId, spec)} />
 
                   {item.imageUrl ? (
                     <div className="relative">
