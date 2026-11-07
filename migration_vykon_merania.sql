@@ -48,12 +48,12 @@ values
  ('sietotlac', 90, 283, 2, 'tričko', 'Excalibur karusel, 2 farby na jednu stranu. Realny priemer: 450 ks za 5 h. Spicka: 12 ks za 2:30 (283 ks/h).', 101, 5.8, 7.4, 'Arctic white plastisol: 950 tričiek, 2/2 vpredu aj vzadu, spolu 7 kg = 7,4 g na tričko; galón 5,8 kg = 101 €'),
  ('dtf', 67.9, null, 1, 'ruksak', 'Transfer, nazehlenie 8+8 s. 950 ruksakov za 7 h na 2 zehlickach = 67,9 ks/h na 1 zehlicku.', null, null, null, null),
  ('sublimacia', null, null, 1, null, 'Zatial nezmerane.', null, null, null, null),
- ('rezany', null, null, 1, null, 'Zatial nezmerane.', null, null, null, null)
+ ('rezany', 67.9, null, 1, 'ruksak', 'Rovnaký výkon ako DTF transfer: nažehlenie 8+8 s (Martin: platí aj pre rezaný). Odvodené z 950 ruksakov za 7 h na 2 žehličkách.', null, null, null, null)
 on conflict (technologia) do nothing;
 
 insert into vykon_merania (datum, technologia, popis, produkt, ks, cas_min, pocet_zariadeni, farby, spotreba_kg, poznamka)
 select * from (values
- ('2026-11-07'::date, 'sietotlac', 'Excalibur karusel, 2x2 záter, 12 ks za 2:30 (výkon 283 ks/h)', 'tričko', 12, 2.5::numeric, 1, 2, null::numeric, 'Zapísané doslovne: „2x2 záter na ťavý textil“ — doplniť, o aký textil išlo'),
+ ('2026-11-07'::date, 'sietotlac', 'Excalibur karusel, 2x2 záter na tmavý textil, 12 ks za 2:30 (výkon 283 ks/h)', 'tričko', 12, 2.5::numeric, 1, 2, null::numeric, 'Tmavý textil (2 vrstvy: podklad + farba)'),
  ('2026-11-07'::date, 'dtf', '950 ruksakov nažehlených na 2 žehličkách, 8+8 s', 'ruksak', 950, 420::numeric, 2, null::integer, null::numeric, 'Transfer (nie sublimácia)'),
  ('2026-11-07'::date, 'sietotlac', '450 tričiek 2/2, tlač jednej strany', 'tričko', 450, 300::numeric, 1, 2, null::numeric, null),
  ('2026-11-07'::date, 'sietotlac', 'Spotreba plastisolu: 950 tričiek 2/2 vpredu aj 2/2 vzadu', 'tričko', 950, null::numeric, 1, 4, 7::numeric, 'Celý galón (5,8 kg) + približne ďalšie kilo = 7 kg → 7,4 g na tričko. Galón 101 € / 5,8 kg = 17,41 €/kg')
