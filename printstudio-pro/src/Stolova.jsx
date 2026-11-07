@@ -15,7 +15,7 @@ function TvarIkona({ kod }) {
   const d = {
     shield: 'M 4 4 L 36 4 L 36 38 Q 20 52 4 38 Z',
     pentagon: 'M 4 4 L 36 4 L 36 38 L 20 50 L 4 38 Z',
-    rectangle: 'M 4 4 L 36 4 L 36 40 Q 20 56 4 40 Z',
+    rectangle: 'M 4 4 L 36 4 L 36 38 A 16 16 0 0 1 4 38 Z',
     triangle: 'M 4 4 L 36 4 L 20 50 Z',
   }[kod] || 'M 4 4 L 36 4 L 36 50 L 4 50 Z';
   return <svg viewBox="0 0 40 58" className="h-16 w-12 mx-auto"><path d={d} fill="#e0e7ff" stroke="#4f46e5" strokeWidth="2" /></svg>;

@@ -5,7 +5,7 @@ import React, { useId } from 'react';
 const TVARY = {
   shield: 'M 4 4 L 36 4 L 36 38 Q 20 52 4 38 Z',
   pentagon: 'M 4 4 L 36 4 L 36 38 L 20 50 L 4 38 Z',
-  rectangle: 'M 4 4 L 36 4 L 36 40 Q 20 56 4 40 Z',
+  rectangle: 'M 4 4 L 36 4 L 36 38 A 16 16 0 0 1 4 38 Z',
   triangle: 'M 4 4 L 36 4 L 20 50 Z',
 };
 
@@ -14,7 +14,7 @@ const TVARY = {
 const BOKY = {
   shield: 'M 36 4 L 36 38 Q 20 52 4 38 L 4 4',
   pentagon: 'M 36 4 L 36 38 L 20 50 L 4 38 L 4 4',
-  rectangle: 'M 36 4 L 36 40 Q 20 56 4 40 L 4 4',
+  rectangle: 'M 36 4 L 36 38 A 16 16 0 0 1 4 38 L 4 4',
   triangle: 'M 36 4 L 20 50 L 4 4',
 };
 

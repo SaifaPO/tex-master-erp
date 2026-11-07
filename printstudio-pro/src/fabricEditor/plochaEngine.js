@@ -28,7 +28,8 @@ export const svgDoDataUri = (svg) => 'data:image/svg+xml;charset=utf-8,' + encod
 export const TVARY_VYREZU = {
   shield: (w, h) => new fabric.Path(`M 0 0 L ${w} 0 L ${w} ${h * 0.75} Q ${w / 2} ${h} 0 ${h * 0.75} Z`, { absolutePositioned: true }),
   pentagon: (w, h) => new fabric.Polygon([{ x: 0, y: 0 }, { x: w, y: 0 }, { x: w, y: h * 0.75 }, { x: w / 2, y: h }, { x: 0, y: h * 0.75 }], { absolutePositioned: true }),
-  rectangle: (w, h) => new fabric.Path(`M 0 0 L ${w} 0 L ${w} ${h * 0.8} Q ${w / 2} ${h * 1.15} 0 ${h * 0.8} Z`, { absolutePositioned: true }),
+  // „Zaoblená“: obdĺžnik s rovnými bokmi a dole polkruh (polomer = polovica šírky), napojený priamo na boky
+  rectangle: (w, h) => { const r = Math.min(w / 2, h); return new fabric.Path(`M 0 0 L ${w} 0 L ${w} ${h - r} A ${w / 2} ${r} 0 0 1 0 ${h - r} Z`, { absolutePositioned: true }); },
   triangle: (w, h) => new fabric.Polygon([{ x: 0, y: 0 }, { x: w, y: 0 }, { x: w / 2, y: h }], { absolutePositioned: true }),
 };
 
