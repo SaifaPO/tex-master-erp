@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Banknote, Calculator, TrendingUp } from 'lucide-react';
 import { priceAt, marginAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 import NumberInput from '../NumberInput';
+import VykonPanel, { VykonCasBlok } from './VykonCas';
 import { vcSublimaciaGarment as vcSublimaciaGarmentZo, vcSublimaciaGarmentRozpis, vcDtfGarment as vcDtfGarmentZo, vcDtfGarmentRozpis, vcRezanyTransferRozpis, vcVysivka as vcVysivkaZo, nakladFarbySietotlac, vcSietotlacZaklad, vcSietotlacCelkom, plochaFormatuSietotlac, vcRezanyTransfer as vcRezanyTransferZo, vcLaserRezanie as vcLaserRezaniaZo } from './vyrobneNaklady';
 
 const inputCls = 'w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white';
@@ -77,6 +78,8 @@ export default function PotlaceTab({ supabase }) {
   const [dtfNaklady, setDtfNaklady] = useState(null);
   const [vysivkaNaklady, setVysivkaNaklady] = useState(null);
   const [sietotlacVelkosti, setSietotlacVelkosti] = useState([]);
+  const [vykonNast, setVykonNast] = useState({});
+  const [vykonMerania, setVykonMerania] = useState([]);
 
   const [testW, setTestW] = useState(10);
   const [testH, setTestH] = useState(10);
@@ -91,7 +94,7 @@ export default function PotlaceTab({ supabase }) {
 
   const nacitaj = async () => {
     setIsLoading(true);
-    const [{ data: tech }, { data: sieto }, { data: fol }, { data: rez }, { data: cfg }, { data: tSub }, { data: sGarment }, { data: dtfNak }, { data: vysNak }, { data: sietoVel }, { data: laserNak }, { data: laserHrub }, { data: metriky }] = await Promise.all([
+    const [{ data: tech }, { data: sieto }, { data: fol }, { data: rez }, { data: cfg }, { data: tSub }, { data: sGarment }, { data: dtfNak }, { data: vysNak }, { data: sietoVel }, { data: laserNak }, { data: laserHrub }, { data: metriky }, { data: vykNast }, { data: vykMer }] = await Promise.all([
       supabase.from('cennik_technologie').select('*'),
       supabase.from('cennik_sietotlac').select('*').eq('id', 1).maybeSingle(),
       supabase.from('cennik_folie').select('*').order('id'),
@@ -105,8 +108,12 @@ export default function PotlaceTab({ supabase }) {
       supabase.from('cennik_laser_rezanie').select('*').eq('id', 1).maybeSingle(),
       supabase.from('cennik_laser_hrubky').select('*').order('poradie'),
       supabase.from('cost_metrics').select('*'),
+      supabase.from('vykon_nastavenia').select('*'),
+      supabase.from('vykon_merania').select('*').order('datum', { ascending: false }).order('created_at', { ascending: false }),
     ]);
     setCostMetrics(metriky || []);
+    setVykonNast(Object.fromEntries((vykNast || []).map(r => [r.technologia, r])));
+    setVykonMerania(vykMer || []);
     const subRow = (tech || []).find(t => t.technologia === 'sublimacia');
     const dtfRow = (tech || []).find(t => t.technologia === 'dtf');
     const vysRow = (tech || []).find(t => t.technologia === 'vysivka');
@@ -229,6 +236,12 @@ export default function PotlaceTab({ supabase }) {
 
   if (isLoading) return <p className="text-sm text-slate-500">Načítavam…</p>;
 
+  // Cas vyroby celej zakazky pri 1 / 2 / 3 zariadeniach (namerane vykony z vykon_nastavenia; ak nie su, odhad z casov v Kostre cien)
+  const odhadKsHod = { sublimacia: sublimaciaGarment?.cas_nazehlovania_min, dtf: dtfNaklady?.cas_nazehlovania_min, rezany: rezany.cas_nazehlovania_min, sietotlac: sietotlac.cas_tlace_min };
+  const casBlok = (key, farby = 1) => (
+    <VykonCasBlok techKey={key} nastav={vykonNast[key]} ks={ks} farby={farby} odhadKsHod={Number(odhadKsHod[key]) > 0 ? 60 / Number(odhadKsHod[key]) : 0} />
+  );
+
   // Prepinac VIP / klientskej zlavy (napr. 15 % pre reklamky) — pouziva sa hore aj v testovacej kalkulacke dole (jeden spolocny stav)
   const klientPrepinac = () => (
     <div className={`mt-3 rounded-xl border px-3 py-2 flex flex-wrap items-center gap-3 ${klientRezim ? 'border-amber-500/60 bg-amber-950/25' : 'border-slate-800 bg-slate-950'}`}>
@@ -270,6 +283,7 @@ export default function PotlaceTab({ supabase }) {
         </div>
         <p className={kostraNoteCls}>Výrobné náklady sa berú živo z <strong>Kostra cien → Sublimácia → Potlač na tričká</strong>.</p>
         <NakladovyVysledok zlavaPercent={klientZlava} casti={rzSub ? dvaCasti(rzSub, 'Sublimačný transfer', 'Nažehlenie na textil') : null} vc={vcSublimacia} ks={ks} config={pricingConfig} plochaCm2={plocha} onPouzit={(cena) => ulozSublimacia({ cena_cm2: Number(cena.toFixed(4)) })} disabled={plocha === 0} />
+        {casBlok('sublimacia')}
       </div>
 
       {/* DTF */}
@@ -285,6 +299,7 @@ export default function PotlaceTab({ supabase }) {
           <>
             <p className={kostraNoteCls}>Výrobné náklady sa berú živo z <strong>Kostra cien → DTF → Potlač textilu</strong>.</p>
             <NakladovyVysledok zlavaPercent={klientZlava} casti={dvaCasti(rzDtf, 'DTF transfer', 'Nažehlenie na textil')} vc={vcDtf} ks={ks} config={pricingConfig} plochaCm2={plocha} onPouzit={(cena) => ulozDtf({ cena_cm2: Number(cena.toFixed(4)) })} disabled={plocha === 0} />
+            {casBlok('dtf')}
           </>
         )}
       </div>
@@ -321,6 +336,7 @@ export default function PotlaceTab({ supabase }) {
               </div>
             </div>
             <NakladovyVysledok zlavaPercent={klientZlava} vc={vcSietotlac} ks={ks} config={pricingConfig} plochaCm2={plochaSietotlacCm2} onPouzit={(cena) => ulozSietotlac(testTmavyTextil ? { cena_cm2_tmavy: Number(cena.toFixed(4)) } : { cena_cm2: Number(cena.toFixed(4)) })} disabled={plochaSietotlacCm2 === 0} />
+            {casBlok('sietotlac', pocetFariebSiet)}
             <p className="text-[11px] text-slate-500 mt-2">VC vyššie je len za <strong>1. farbu</strong> (základná predajná sadzba). Rozpad nižšie pri {pocetFariebSiet} {pocetFariebSiet === 1 ? 'farbe' : 'farbách'} (nastav "Počet farieb" v referenčnej objednávke hore) ukazuje, koľko stojí každá ďalšia farba — spotreba farby klesá o 20% na farbu, sito sa počíta za každú znova:</p>
             <div className="bg-slate-950 rounded-xl border border-indigo-900/40 p-3 mt-1 space-y-1 text-xs">
               {sietotlacFarbyRozpad.map(r => (
@@ -377,6 +393,7 @@ export default function PotlaceTab({ supabase }) {
           </div>
         )}
         <NakladovyVysledok zlavaPercent={klientZlava} casti={dvaCasti(rzRezany, 'Rezaný transfer', 'Nažehlenie na textil')} vc={vcRezany} ks={ks} config={pricingConfig} plochaCm2={plocha} onPouzit={(cena) => testFoliaId && upravFoliu(testFoliaId, { cena_cm2: Number(cena.toFixed(4)) })} disabled={plocha === 0 || !testFoliaId} />
+        {casBlok('rezany')}
       </div>
 
       {/* LASEROVÉ REZANIE */}
@@ -483,11 +500,16 @@ export default function PotlaceTab({ supabase }) {
                   );
                 })()}
                 <p className="text-[10px] text-slate-600 mt-1">VC {vc.toFixed(3)}€ × marža {marza.toFixed(0)}%{plochaZaklad ? ` · ${plochaZaklad} cm²` : ''}</p>
+                {casBlok(key, pocetFariebSiet)}
               </div>
             );
           })}
         </div>
       </div>
+
+      {/* NAMERANE VYKONY A SPOTREBA */}
+      <VykonPanel supabase={supabase} nast={vykonNast} setNast={setVykonNast} merania={vykonMerania} setMerania={setVykonMerania}
+        cenaFarbyKgNastavena={sietotlac.cena_farba_kg} onPouzitCenuFarby={(v) => ulozSietotlac({ cena_farba_kg: v })} />
     </div>
   );
 }
