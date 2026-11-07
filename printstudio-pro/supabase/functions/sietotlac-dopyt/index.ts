@@ -1,10 +1,13 @@
-// Edge Function: sietotlac-dopyt — verejná appka „Sieťotlač“ (?typ=sietotlac): kalkulačka + dopyt (bez platby).
-//   { akcia: 'cennik' }                 -> nastavenia appky + efekty farieb (bez akýchkoľvek nákladov)
-//   { akcia: 'cena', ...vyber }         -> cena za kus a spolu (+ množstevná tabuľka)
-//   { akcia: 'dopyt', ...vyber, kontakt } -> uloží dopyt (sietotlac_dopyty), pošle e-mail zákazníkovi a obchodníkovi
-// Cena = výrobný náklad sieťotlače z Kostry cien (rovnaký vzorec ako dizajner-price-preview) cez maržový modul (Cenotvorba),
-// + príplatok za efekt farby a polyester (nastavuje sa v ERP: Aplikácie → Sieťotlač).
+// Edge Function: sietotlac-dopyt — verejná appka „Sieťotlač“ (?typ=sietotlac): kalkulačka, objednávka s platbou a dopyt.
+//   { akcia: 'cennik' }                      -> nastavenia appky, efekty farieb a umiestnenia potlače (bez akýchkoľvek nákladov)
+//   { preview: true, ...vyber }              -> cena (živý náhľad; rovnaká odpoveď ako ostatné appky pre cenaNahlad.jsx)
+//   { ...vyber }                             -> uloží objednávku (sietotlac_objednavky), vytvorí Shopify draft order, vráti odkaz na platbu
+//   { akcia: 'dopyt', vyber, kontakt }       -> uloží dopyt bez platby (sietotlac_dopyty) + e-maily
+// Výber = textil, počet kusov a ZOZNAM POTLAČÍ na jednom kuse (každá má umiestnenie, rozmer, počet farieb, efekt a súbor s grafikou).
+// Cena kusa = súčet cien potlačí. Cena každej potlače = výrobný náklad sieťotlače z Kostry cien (rovnaký vzorec ako dizajner-price-preview)
+// cez maržový modul (Cenotvorba) + príplatok efektu; + príplatok polyester, B2B zľava, manipulácia, poštovné, DPH.
 // Tabuľky s nákladmi nikdy neopustia server — klient vidí len hotovú cenu.
+// Secrets pre platbu: SHOPIFY_STORE_DOMAIN, SHOPIFY_CLIENT_ID, SHOPIFY_CLIENT_SECRET.
 //
 // POZOR: súbor je zámerne SAMOSTATNÝ (žiadne importy z ../_shared/), vzorce sú duplikát z src/printstudio/vyrobneNaklady.js
 // a pricingEngine.js — pri zmene vzorca uprav VŠETKY miesta rovnako (viď dizajner-price-preview).
@@ -81,68 +84,113 @@ function vcSietotlacCelkom(sietotlac: Riadok | null, velkost: Riadok | null, jeT
 }
 
 const HLADINY = [10, 25, 50, 100, 250, 500, 1000];
+const MAX_TLACI = 6;
 
+type Kontext = Awaited<ReturnType<typeof nacitajKontext>>;
 async function nacitajKontext(supabase: ReturnType<typeof createClient>) {
-  const [nast, efekty, cfgR, metriky, sieto, velkosti] = await Promise.all([
+  const [nast, efekty, umiestnenia, cfgR, metriky, sieto, velkosti] = await Promise.all([
     supabase.from('sietotlac_nastavenia').select('*').eq('id', 1).maybeSingle(),
     supabase.from('sietotlac_efekty').select('*').eq('aktivny', true).order('poradie'),
+    supabase.from('sietotlac_umiestnenia').select('*').eq('aktivny', true).order('poradie'),
     supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
     supabase.from('cost_metrics').select('id, name, value, power_kw, amortizacia_hod'),
     supabase.from('cennik_sietotlac').select('*').eq('id', 1).maybeSingle(),
     supabase.from('cennik_sietotlac_velkosti').select('*'),
   ]);
   if (nast.error || !nast.data) throw new Error('Appka Sieťotlač ešte nie je pripravená (chýba migrácia migration_sietotlac_appka.sql).');
+  if (umiestnenia.error) throw new Error('Appka Sieťotlač ešte nemá umiestnenia (chýba migrácia migration_sietotlac_objednavky.sql).');
   const c = cfgR.data;
   const cfg: PricingConfig = c
     ? { coefA: num(c.coef_a), coefB: num(c.coef_b), marginFloor: num(c.margin_floor), coefP: num(c.coef_p), cielovaHodnotaZakazky: num(c.cielova_hodnota_zakazky, 25000), dphPercent: num(c.dph_percent, 23) }
     : { coefA: 300, coefB: 54, marginFloor: 30, coefP: 1.3, cielovaHodnotaZakazky: 25000, dphPercent: 23 };
-  return { nast: nast.data as Riadok, efekty: (efekty.data || []) as Riadok[], cfg, metriky: (metriky.data || []) as Riadok[], sieto: sieto.data as Riadok | null, velkosti: (velkosti.data || []) as Riadok[] };
+  return { nast: nast.data as Riadok, efekty: (efekty.data || []) as Riadok[], umiestnenia: (umiestnenia.data || []) as Riadok[], cfg, metriky: (metriky.data || []) as Riadok[], sieto: sieto.data as Riadok | null, velkosti: (velkosti.data || []) as Riadok[] };
 }
 
-type Vyber = { material: string; tmavy: boolean; dveVelkosti: boolean; sirkaCm: number; vyskaCm: number; farby: number; efekt: string; pocetKs: number };
+type Tlac = { umiestnenie: string; sirkaCm: number; vyskaCm: number; farby: number; efekt: string; suborCesta: string | null; suborNazov: string | null };
+type Vyber = { material: string; tmavy: boolean; dveVelkosti: boolean; pocetKs: number; tlace: Tlac[]; osobnyOdber: boolean; b2bKod: string };
 
-function normalizuj(ctx: Awaited<ReturnType<typeof nacitajKontext>>, b: Riadok): Vyber {
+function normalizuj(ctx: Kontext, b: Riadok, suborPovinny: boolean): Vyber {
   const { nast } = ctx;
-  const maxS = num(nast.max_sirka_cm, 43), maxV = num(nast.max_vyska_cm, 58);
-  const sirkaCm = Math.min(Math.max(num(b.sirkaCm, 20), 1), maxS);
-  const vyskaCm = Math.min(Math.max(num(b.vyskaCm, 20), 1), maxV);
-  const ks = Math.round(num(b.pocetKs, num(nast.min_ks, 10)));
-  const efekt = ctx.efekty.some((e) => e.kod === b.efekt) ? String(b.efekt) : (ctx.efekty[0]?.kod || 'klasicka');
+  const tlaceVstup: Riadok[] = Array.isArray(b.tlace) ? b.tlace : [];
+  if (tlaceVstup.length === 0) throw new Error('Pridajte aspoň jednu potlač.');
+  if (tlaceVstup.length > MAX_TLACI) throw new Error(`Najviac ${MAX_TLACI} potlačí na jednom kuse.`);
+  const pouzite = new Set<string>();
+  const tlace: Tlac[] = tlaceVstup.map((t) => {
+    const um = ctx.umiestnenia.find((u) => u.kod === t.umiestnenie);
+    if (!um) throw new Error('Vyberte umiestnenie potlače.');
+    if (pouzite.has(um.kod)) throw new Error(`Umiestnenie „${um.nazov}“ máte v objednávke dvakrát.`);
+    pouzite.add(um.kod);
+    const maxS = Math.min(num(um.max_sirka_cm, 43), num(nast.max_sirka_cm, 43)), maxV = Math.min(num(um.max_vyska_cm, 58), num(nast.max_vyska_cm, 58));
+    const efekt = ctx.efekty.some((e) => e.kod === t.efekt) ? String(t.efekt) : (ctx.efekty[0]?.kod || 'klasicka');
+    let suborCesta: string | null = null;
+    if (t.suborCesta) {
+      suborCesta = String(t.suborCesta);
+      if (!suborCesta.startsWith('sietotlac/') || suborCesta.includes('..')) throw new Error('Neplatný nahraný súbor.');
+    }
+    if (suborPovinny && !suborCesta) throw new Error(`Nahrajte grafiku k potlači „${um.nazov}“.`);
+    return {
+      umiestnenie: um.kod, sirkaCm: Math.min(Math.max(num(t.sirkaCm, 10), 1), maxS), vyskaCm: Math.min(Math.max(num(t.vyskaCm, 10), 1), maxV),
+      farby: Math.min(8, Math.max(1, Math.round(num(t.farby, 1)))), efekt, suborCesta, suborNazov: t.suborNazov ? String(t.suborNazov).slice(0, 200) : null,
+    };
+  });
   return {
-    material: b.material === 'polyester' ? 'polyester' : 'bavlna',
-    tmavy: !!b.tmavy, dveVelkosti: !!b.dveVelkosti, sirkaCm, vyskaCm,
-    farby: Math.min(8, Math.max(1, Math.round(num(b.farby, 1)))), efekt, pocetKs: ks,
+    material: b.material === 'polyester' ? 'polyester' : 'bavlna', tmavy: !!b.tmavy, dveVelkosti: !!b.dveVelkosti,
+    pocetKs: Math.round(num(b.pocetKs, num(nast.min_ks, 10))), tlace, osobnyOdber: !!b.osobnyOdber, b2bKod: String(b.b2bKod || '').trim().toUpperCase(),
   };
 }
 
-function cenaPre(ctx: Awaited<ReturnType<typeof nacitajKontext>>, v: Vyber, ks: number) {
-  const plocha = v.sirkaCm * v.vyskaCm;
-  const format = najblizsiFormat(ctx.velkosti, plocha);
+// Cena 1 potlače na 1 kuse pri danom počte kusov
+function cenaTlace(ctx: Kontext, v: Vyber, t: Tlac, ks: number) {
+  const format = najblizsiFormat(ctx.velkosti, t.sirkaCm * t.vyskaCm);
   // Dve veľkosti potlače = dve sady sít: náklad na sitá sa rozpočíta len na polovicu kusov (každá veľkosť má vlastné sitá).
   const ksNaSita = v.dveVelkosti ? Math.max(1, Math.ceil(ks / 2)) : ks;
-  const vc = vcSietotlacCelkom(ctx.sieto, format, v.tmavy, v.farby, ksNaSita, ctx.metriky);
-  const minCena = num(ctx.sieto?.min_cena);
-  const zaklad = Math.max(priceAt(vc, ks, ctx.cfg), minCena);
-  const efekt = ctx.efekty.find((e) => e.kod === v.efekt);
+  const vc = vcSietotlacCelkom(ctx.sieto, format, v.tmavy, t.farby, ksNaSita, ctx.metriky);
+  const zaklad = Math.max(priceAt(vc, ks, ctx.cfg), num(ctx.sieto?.min_cena));
+  const efekt = ctx.efekty.find((e) => e.kod === t.efekt);
   const priplEfekt = num(efekt?.priplatok_percent);
   const priplPoly = v.material === 'polyester' ? num(ctx.nast.polyester_priplatok_percent) : 0;
-  const cenaKs = r2(zaklad * (1 + priplEfekt / 100) * (1 + priplPoly / 100));
-  return { cenaKs, priplEfekt, priplPoly, formatPouzity: format?.label || null };
+  return { cenaKs: r2(zaklad * (1 + priplEfekt / 100) * (1 + priplPoly / 100)), vc, priplEfekt, priplPoly };
+}
+const cenaKusaSpolu = (ctx: Kontext, v: Vyber, ks: number) => r2(v.tlace.reduce((s, t) => s + cenaTlace(ctx, v, t, ks).cenaKs, 0));
+
+async function b2bZlava(supabase: ReturnType<typeof createClient>, kod: string) {
+  if (!kod) return 0;
+  const { data } = await supabase.from('b2b_kody').select('zlava_percent').eq('kod', kod).eq('aktivny', true).maybeSingle();
+  return Math.min(Math.max(num((data as Riadok | null)?.zlava_percent), 0), 90);
 }
 
-function vyhodnot(ctx: Awaited<ReturnType<typeof nacitajKontext>>, v: Vyber) {
+async function vyhodnot(supabase: ReturnType<typeof createClient>, ctx: Kontext, v: Vyber) {
   const minKs = Math.round(num(ctx.nast.min_ks, 10)), maxKs = Math.round(num(ctx.nast.max_ks, 5000));
   if (v.pocetKs < minKs) throw new Error(`Minimálny odber pre sieťotlač je ${minKs} ks (príprava sít).`);
   if (v.pocetKs > maxKs) throw new Error(`Pre objednávky nad ${maxKs} ks nám prosím napíšte.`);
   if (!ctx.sieto) throw new Error('Cenník sieťotlače nie je v ERP vyplnený.');
-  const c = cenaPre(ctx, v, v.pocetKs);
-  const spolu = r2(c.cenaKs * v.pocetKs);
-  const dph = ctx.cfg.dphPercent;
+  const ks = v.pocetKs;
+  const tlaceCeny = v.tlace.map((t) => ({ t, ...cenaTlace(ctx, v, t, ks) }));
+  const cenaKs = r2(tlaceCeny.reduce((s, x) => s + x.cenaKs, 0));
+  const naklad = tlaceCeny.reduce((s, x) => s + x.vc, 0) * ks;
+  const loga = r2(cenaKs * ks);
+  const doplatokMinima = Math.max(0, r2(num(ctx.nast.minimalna_cena_eur) - loga));
+  const logaSpolu = r2(loga + doplatokMinima);
+  const zlavaPercent = await b2bZlava(supabase, v.b2bKod);
+  const zlavaEur = r2(logaSpolu * zlavaPercent / 100);
+  const poZlave = r2(logaSpolu - zlavaEur);
+  const manipulacia = num(ctx.nast.manipulacny_poplatok_eur);
+  const zdarma = num(ctx.nast.postovne_zdarma_od_eur) > 0 && (poZlave + manipulacia) >= num(ctx.nast.postovne_zdarma_od_eur);
+  const postovne = v.osobnyOdber || zdarma ? 0 : num(ctx.nast.cena_doprava);
+  const spoluBezDph = r2(poZlave + manipulacia + postovne);
+  const dph = r2(spoluBezDph * ctx.cfg.dphPercent / 100);
+  const spolu = r2(spoluBezDph + dph);
   const urovne = [...new Set([minKs, ...HLADINY.filter((h) => h > minKs && h <= maxKs)])].sort((a, b) => a - b)
-    .map((ks) => ({ ks, cenaKsBezDph: cenaPre(ctx, v, ks).cenaKs }));
+    .map((k) => ({ ks: k, cenaKsBezDph: cenaKusaSpolu(ctx, v, k) }));
   return {
-    pocetKs: v.pocetKs, cenaKsBezDph: c.cenaKs, spoluBezDph: spolu, dphPercent: dph, dph: r2(spolu * dph / 100), spoluSDph: r2(spolu * (1 + dph / 100)),
-    pocetSit: v.farby * (v.dveVelkosti ? 2 : 1), priplatokEfektPercent: c.priplEfekt, priplatokPolyesterPercent: c.priplPoly, formatPouzity: c.formatPouzity, urovne,
+    interne: { naklad: r2(naklad), tlaceCeny, cenaKs },
+    verejne: {
+      pocetKs: ks, cenaKsBezDph: r2(logaSpolu / ks), logaSpoluBezDph: logaSpolu, zlavaB2bPercent: zlavaPercent, zlavaB2bEur: zlavaEur, manipulaciaBezDph: manipulacia,
+      postovneBezDph: postovne, spoluBezDph, dphPercent: ctx.cfg.dphPercent, dph, spolu, ksSpolu: ks, doplatokMinimaBezDph: doplatokMinima,
+      pocetSit: v.tlace.reduce((s, t) => s + t.farby, 0) * (v.dveVelkosti ? 2 : 1), urovne,
+      tlace: tlaceCeny.map((x) => ({ umiestnenie: x.t.umiestnenie, nazov: ctx.umiestnenia.find((u) => u.kod === x.t.umiestnenie)?.nazov || x.t.umiestnenie, cenaKsBezDph: x.cenaKs, priplatokEfektPercent: x.priplEfekt })),
+      priplatokPolyesterPercent: tlaceCeny[0]?.priplPoly || 0,
+    } as Record<string, unknown>,
   };
 }
 
@@ -157,20 +205,28 @@ async function ziskajCislo(supabase: ReturnType<typeof createClient>, prefix: st
   await supabase.from('print_objednavky_pocitadla').upsert({ prefix, year, next_number: next + 1 }, { onConflict: 'prefix,year' });
   return `${prefix}-${sy}${String(next).padStart(4, '0')}`;
 }
+async function podpisanyOdkaz(supabase: ReturnType<typeof createClient>, cesta: string | null): Promise<string | null> {
+  if (!cesta) return null;
+  const { data } = await supabase.storage.from('print-designs').createSignedUrl(cesta, 60 * 60 * 24 * 365);
+  return data?.signedUrl || null;
+}
 
 const eur = (x: number) => `${x.toFixed(2).replace('.', ',')} €`;
-function textRekapitulacie(ctx: Awaited<ReturnType<typeof nacitajKontext>>, v: Vyber, r: ReturnType<typeof vyhodnot>, k: Riadok, cislo: string) {
-  const efekt = ctx.efekty.find((e) => e.kod === v.efekt);
+const popisTlace = (ctx: Kontext, t: Tlac) => `${ctx.umiestnenia.find((u) => u.kod === t.umiestnenie)?.nazov || t.umiestnenie}: ${t.sirkaCm} × ${t.vyskaCm} cm, ${t.farby} ${t.farby === 1 ? 'farba' : t.farby < 5 ? 'farby' : 'farieb'}, ${ctx.efekty.find((e) => e.kod === t.efekt)?.nazov || t.efekt}`;
+
+function textRekapitulacie(ctx: Kontext, v: Vyber, r: Riadok, k: Riadok, cislo: string) {
   const L = [
     `Dopyt ${cislo} – sieťotlač PBT`,
     `Kontakt: ${k.meno || '–'}, ${k.telefon || '–'}, ${k.email}`,
+    ...(r.zlavaB2bPercent > 0 ? [`B2B kód: ${v.b2bKod} (−${r.zlavaB2bPercent} %)`] : []),
     '',
     `Počet kusov: ${v.pocetKs}`,
     `Textil: ${v.material === 'polyester' ? 'polyester' : 'bavlna'}, ${v.tmavy ? 'tmavý' : 'svetlý'}`,
-    `Motív: ${v.sirkaCm} × ${v.vyskaCm} cm, ${v.farby} ${v.farby === 1 ? 'farba' : v.farby < 5 ? 'farby' : 'farieb'}, ${v.dveVelkosti ? 'dve veľkosti potlače (2 sady sít)' : 'jedna veľkosť potlače'}`,
-    `Efekt: ${efekt?.nazov || v.efekt}`,
+    `Potlače na jednom kuse (${v.tlace.length}):`,
+    ...v.tlace.map((t) => `  • ${popisTlace(ctx, t)}`),
+    v.dveVelkosti ? 'Dve veľkosti potlače (2 sady sít)' : 'Jedna veľkosť potlače',
     `Počet sít: ${r.pocetSit}`,
-    `Orientačná cena: ${eur(r.cenaKsBezDph)}/ks bez DPH, spolu ${eur(r.spoluBezDph)} bez DPH (s DPH ${eur(r.spoluSDph)})`,
+    `Orientačná cena: ${eur(r.cenaKsBezDph)}/ks bez DPH, spolu za potlač ${eur(r.logaSpoluBezDph)} bez DPH (s doručením a DPH ${eur(r.spolu)})`,
   ];
   if (k.poznamka) L.push('', `Poznámka / odkaz na grafiku: ${k.poznamka}`);
   return L.join('\n');
@@ -192,13 +248,40 @@ async function posliEmaily(supabase: ReturnType<typeof createClient>, nast: Riad
   return { odoslany: zakaznik };
 }
 
+// Shopify draft order s presnou cenou (cena už zahŕňa DPH, preto taxable: false) -> odkaz na platbu.
+type DraftPolozka = { title: string; price: number; requiresShipping: boolean; properties?: { name: string; value: string }[] };
+async function vytvorDraft(polozky: DraftPolozka[], note: string, tags: string) {
+  const domain = Deno.env.get('SHOPIFY_STORE_DOMAIN');
+  const clientId = Deno.env.get('SHOPIFY_CLIENT_ID');
+  const clientSecret = Deno.env.get('SHOPIFY_CLIENT_SECRET');
+  if (!domain || !clientId || !clientSecret) throw new Error('SHOPIFY_STORE_DOMAIN, SHOPIFY_CLIENT_ID alebo SHOPIFY_CLIENT_SECRET nie je nastavený v Supabase secrets.');
+  const tokRes = await fetch(`https://${domain}/admin/oauth/access_token`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, grant_type: 'client_credentials' }),
+  });
+  if (!tokRes.ok) throw new Error(`Nepodarilo sa získať Shopify token (${tokRes.status}): ${await tokRes.text()}`);
+  const token = (await tokRes.json())?.access_token as string;
+  if (!token) throw new Error('Shopify nevrátil access_token.');
+  const res = await fetch(`https://${domain}/admin/api/2025-01/draft_orders.json`, {
+    method: 'POST', headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ draft_order: {
+      line_items: polozky.map((p) => ({ title: p.title, price: p.price.toFixed(2), quantity: 1, taxable: false, requires_shipping: p.requiresShipping, ...(p.properties ? { properties: p.properties } : {}) })),
+      note, tags, use_customer_default_address: true,
+    } }),
+  });
+  if (!res.ok) throw new Error(`Shopify Admin API chyba ${res.status}: ${await res.text()}`);
+  const url = (await res.json())?.draft_order?.invoice_url;
+  if (!url) throw new Error('Shopify nevrátil odkaz na platbu draft objednávky.');
+  return url as string;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
   try {
     const body = await req.json();
     const ctx = await nacitajKontext(supabase);
-    const akcia = body.akcia || 'cennik';
+    const akcia = body.akcia || (body.preview ? 'cena' : 'objednat');
 
     if (akcia === 'cennik') {
       const n = ctx.nast;
@@ -209,13 +292,15 @@ Deno.serve(async (req) => {
           polyesterPriplatokPercent: num(n.polyester_priplatok_percent), infoText: n.info_text || '', dphPercent: ctx.cfg.dphPercent,
         },
         efekty: ctx.efekty.map((e) => ({ kod: e.kod, nazov: e.nazov, popis: e.popis || '', priplatokPercent: num(e.priplatok_percent) })),
+        umiestnenia: ctx.umiestnenia.map((u) => ({ kod: u.kod, nazov: u.nazov, popis: u.popis || '', strana: u.strana, maxSirkaCm: Math.min(num(u.max_sirka_cm), num(n.max_sirka_cm, 43)), maxVyskaCm: Math.min(num(u.max_vyska_cm), num(n.max_vyska_cm, 58)), vychodziaSirkaCm: num(u.vychodzia_sirka_cm, 20), vychodziaVyskaCm: num(u.vychodzia_vyska_cm, 20) })),
       });
     }
     if (ctx.nast.aktivny === false) throw new Error('Kalkulačka sieťotlače je dočasne vypnutá.');
 
     if (akcia === 'cena') {
-      const v = normalizuj(ctx, body);
-      return odpoved({ ok: true, cena: vyhodnot(ctx, v) });
+      const v = normalizuj(ctx, body, false);
+      const r = await vyhodnot(supabase, ctx, v);
+      return odpoved({ ok: true, ...r.verejne });
     }
 
     if (akcia === 'dopyt') {
@@ -233,17 +318,47 @@ Deno.serve(async (req) => {
       const { count } = await supabase.from('sietotlac_dopyty').select('id', { count: 'exact', head: true }).eq('ip_hash', ipHash).gte('created_at', odHodiny);
       if ((count || 0) >= 6) throw new Error('Z tejto adresy prišlo príliš veľa dopytov. Skúste to prosím neskôr alebo nám napíšte e-mail.');
 
-      const v = normalizuj(ctx, body.vyber || {});
-      const r = vyhodnot(ctx, v);
+      const v = normalizuj(ctx, body.vyber || {}, false);
+      const r = await vyhodnot(supabase, ctx, v);
       const cislo = await ziskajCislo(supabase, 'SIT');
       const kontakt = { meno, telefon, email, poznamka };
-      const text = textRekapitulacie(ctx, v, r, kontakt, cislo);
+      const text = textRekapitulacie(ctx, v, r.verejne, kontakt, cislo);
       const { error: insErr } = await supabase.from('sietotlac_dopyty').insert({
-        cislo, meno, email, telefon, poznamka, konfig: v, pocet_ks: v.pocetKs, cena_kus_bez_dph: r.cenaKsBezDph, cena_spolu_bez_dph: r.spoluBezDph, ip_hash: ipHash,
+        cislo, meno, email, telefon, poznamka, konfig: v, pocet_ks: v.pocetKs, cena_kus_bez_dph: r.verejne.cenaKsBezDph, cena_spolu_bez_dph: r.verejne.logaSpoluBezDph, ip_hash: ipHash,
+        b2b_kod: (r.verejne.zlavaB2bPercent as number) > 0 ? v.b2bKod : null,
       });
       if (insErr) throw insErr;
       const mail = await posliEmaily(supabase, ctx.nast, kontakt, cislo, text);
       return odpoved({ ok: true, cislo, email: mail.odoslany });
+    }
+
+    if (akcia === 'objednat') {
+      const v = normalizuj(ctx, body, true);
+      const r = await vyhodnot(supabase, ctx, v);
+      const c = r.verejne as Riadok;
+      const cislo = await ziskajCislo(supabase, 'SIE');
+      const objednavkaId = crypto.randomUUID();
+      const odkazy: (string | null)[] = [];
+      for (const t of v.tlace) odkazy.push(await podpisanyOdkaz(supabase, t.suborCesta));
+      const polozky = v.tlace.map((t, i) => ({ ...t, nazov: ctx.umiestnenia.find((u) => u.kod === t.umiestnenie)?.nazov || t.umiestnenie, cenaKs: r.interne.tlaceCeny[i].cenaKs, suborUrl: odkazy[i] }));
+      const { error: insErr } = await supabase.from('sietotlac_objednavky').insert({
+        id: objednavkaId, cislo_objednavky: cislo, pocet_ks: v.pocetKs, material: v.material, tmavy: v.tmavy, dve_velkosti: v.dveVelkosti, polozky,
+        cena_kus: c.cenaKsBezDph, cena_spolu: c.spolu, naklad_spolu: r.interne.naklad, b2b_kod: (c.zlavaB2bPercent as number) > 0 ? v.b2bKod : null, osobny_odber: v.osobnyOdber,
+        subor_nazov: v.tlace[0].suborNazov, subor_cesta: v.tlace[0].suborCesta,
+      });
+      if (insErr) throw insErr;
+      const nazvyUmiestneni = polozky.map((p) => p.nazov).join(', ');
+      const checkoutUrl = await vytvorDraft([{
+        title: `Sieťotlač — ${v.pocetKs}× ${v.material === 'polyester' ? 'polyester' : 'bavlna'}, ${v.tmavy ? 'tmavý' : 'svetlý'} textil (${nazvyUmiestneni})${v.osobnyOdber ? ' (osobný odber)' : ''}`,
+        price: c.spolu as number, requiresShipping: !v.osobnyOdber,
+        properties: [
+          { name: '_cislo_objednavky', value: cislo }, { name: '_objednavka_id', value: objednavkaId }, { name: '_sietotlac', value: 'true' },
+          { name: '_pocet_ks', value: String(v.pocetKs) }, { name: '_textil', value: `${v.material}, ${v.tmavy ? 'tmavý' : 'svetlý'}` }, { name: '_dve_velkosti', value: v.dveVelkosti ? 'áno' : 'nie' },
+          ...polozky.flatMap((p, i) => [{ name: `_potlac_${i + 1}`, value: popisTlace(ctx, p) }, { name: `_subor_link_${i + 1}`, value: p.suborUrl || '' }]),
+          { name: '_osobny_odber', value: v.osobnyOdber ? 'áno' : 'nie' }, { name: '_b2b_kod', value: (c.zlavaB2bPercent as number) > 0 ? v.b2bKod : '' },
+        ],
+      }], `${cislo} (sieťotlač, ${v.pocetKs} ks)\n${polozky.map((p, i) => `${i + 1}. ${popisTlace(ctx, p)}${p.suborUrl ? `\nSúbor: ${p.suborUrl}` : ''}`).join('\n')}`, 'sietotlac');
+      return odpoved({ ok: true, checkoutUrl, cenaSpolu: c.spolu, objednavkaId, cisloObjednavky: cislo });
     }
     throw new Error('Neznáma akcia.');
   } catch (e) {

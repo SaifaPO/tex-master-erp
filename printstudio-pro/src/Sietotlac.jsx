@@ -1,78 +1,127 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Layers, Minus, Plus, Send, CheckCircle2, AlertTriangle, Moon, Sun } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Layers, Minus, Plus, Send, CheckCircle2, Moon, Sun, Upload, Trash2, FileImage, ChevronDown } from 'lucide-react';
 import PbtHeader from './PbtHeader';
 import NumberInput from './NumberInput';
-import { MnozstevneZlavy } from './cenaNahlad';
+import { useB2bKod } from './b2b';
+import B2bKod from './B2bKod';
+import { useCenaNahlad, CenaSuhrn, MnozstevneZlavy } from './cenaNahlad';
 
-// Verejná appka „Sieťotlač“ (?typ=sietotlac): kalkulačka + dopyt (bez platby).
+// Verejná appka „Sieťotlač“ (?typ=sietotlac): na jednom kuse môže byť viac potlačí (srdce, chrbát, rukávy…), každá s vlastným rozmerom,
+// farbami, efektom a grafikou. Objednávka sa platí cez Shopify (ako ostatné appky) alebo sa pošle len dopyt.
 // Cenu počíta Edge Function sietotlac-dopyt z Kostry cien a maržového modulu; klient nikdy nevidí náklady.
 const FUNKCIA = 'sietotlac-dopyt';
+const BUCKET = 'print-designs';
 const RYCHLE_KS = [10, 30, 50, 100, 250];
+const POVOLENE = ['.png', '.jpg', '.jpeg', '.webp', '.svg', '.pdf', '.ai', '.eps'];
+const MAX_MB = 40;
+const PALETA = ['#e11d48', '#2563eb', '#16a34a', '#f59e0b', '#7c3aed', '#0891b2', '#475569', '#db2777'];
 const eur = (v) => `${Number(v).toFixed(2)} €`;
+const jeObrazok = (f) => !!f && /^image\/(png|jpe?g|webp|svg\+xml)$/.test(f.type);
 
-function Volba({ aktivna, onClick, children, podtext }) {
+function Volba({ aktivna, onClick, children, podtext, disabled }) {
   return (
-    <button type="button" onClick={onClick}
-      className={`text-left p-3 rounded-xl border transition ${aktivna ? 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-500' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+    <button type="button" disabled={disabled} onClick={onClick}
+      className={`text-left p-3 rounded-xl border transition disabled:opacity-40 disabled:cursor-not-allowed ${aktivna ? 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-500' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
       <div className={`text-sm font-semibold flex items-center gap-1.5 ${aktivna ? 'text-indigo-800' : 'text-slate-700'}`}>{children}</div>
       {podtext && <div className="text-xs text-slate-500 mt-0.5 leading-snug">{podtext}</div>}
     </button>
   );
 }
 
-function Sekcia({ cislo, nazov, children }) {
+function Sekcia({ cislo, nazov, children, akcia }) {
   return (
     <section className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 space-y-3">
-      <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-        <span className="w-6 h-6 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold">{cislo}</span>{nazov}
-      </h2>
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+          <span className="w-6 h-6 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold">{cislo}</span>{nazov}
+        </h2>
+        {akcia}
+      </div>
       {children}
     </section>
   );
 }
 
-// Tričko so zakreslenou veľkosťou motívu (tričko ≈ 50 cm široké, 70 cm vysoké) — len orientačný náhľad.
-function TrickoNahlad({ sirka, vyska, tmavy, farby }) {
-  const trikoFarba = tmavy ? '#1e293b' : '#f1f5f9';
-  const okraj = tmavy ? '#475569' : '#cbd5e1';
-  const w = Math.min(sirka, 46), h = Math.min(vyska, 62);
-  const x = 50 - w / 2, y = 14;
-  const motivFarba = farby.length ? farby : ['#6366f1'];
+// Náhľad umiestnenia: tričko spredu a zozadu (≈ 50 cm široké), potlače v mierke; rukávy sa kreslia na rukávoch spredu.
+// Súradnice v jednotkách náhľadu (1 cm ≈ 1,12 jednotky).
+const K = 1.12;
+function Tricko({ x0, tmavy, nazov, children }) {
+  const fill = tmavy ? '#1e293b' : '#f1f5f9', stroke = tmavy ? '#64748b' : '#cbd5e1';
   return (
-    <svg viewBox="0 0 100 80" className="w-full max-w-[220px] mx-auto" role="img" aria-label="Náhľad veľkosti potlače na tričku">
-      <path d="M32 4 L18 10 L4 26 L14 34 L22 28 L22 76 L78 76 L78 28 L86 34 L96 26 L82 10 L68 4 Q50 16 32 4 Z" fill={trikoFarba} stroke={okraj} strokeWidth="1" />
-      <rect x={x} y={y} width={w} height={h * 0.9} rx="1.5" fill="none" stroke="#6366f1" strokeWidth="0.8" strokeDasharray="2 1.5" />
-      {motivFarba.map((c, i) => <rect key={i} x={x + 1 + (i * (w - 2)) / motivFarba.length} y={y + 1} width={(w - 2) / motivFarba.length} height={h * 0.9 - 2} fill={c} opacity="0.55" />)}
+    <g transform={`translate(${x0} 0)`}>
+      <path d="M36 6 L20 12 L6 30 L16 38 L22 32 L22 92 L78 92 L78 32 L84 38 L94 30 L80 12 L64 6 Q50 18 36 6 Z" fill={fill} stroke={stroke} strokeWidth="1" />
+      {children}
+      <text x="50" y="99" textAnchor="middle" fontSize="5" fill={tmavy ? '#94a3b8' : '#64748b'}>{nazov}</text>
+    </g>
+  );
+}
+function PotlacRect({ x, y, w, h, nahlad, farby, popis, otocit = 0 }) {
+  return (
+    <g transform={otocit ? `rotate(${otocit} ${x + w / 2} ${y + h / 2})` : undefined}>
+      <rect x={x} y={y} width={w} height={h} rx="0.8" fill="#ffffff" fillOpacity="0.12" stroke="#6366f1" strokeWidth="0.7" strokeDasharray="2 1.2" />
+      {nahlad ? <image href={nahlad} x={x} y={y} width={w} height={h} preserveAspectRatio="xMidYMid meet" />
+        : farby.map((c, i) => <rect key={i} x={x + 0.8 + (i * (w - 1.6)) / farby.length} y={y + 0.8} width={(w - 1.6) / farby.length} height={h - 1.6} fill={c} opacity="0.55" />)}
+      <title>{popis}</title>
+    </g>
+  );
+}
+function NahladTricka({ tlace, umiestnenia, tmavy }) {
+  const najdi = (strana) => tlace.map((t) => ({ t, u: umiestnenia.find((x) => x.kod === t.umiestnenie) })).filter((x) => x.u?.strana === strana);
+  const rozmer = (t) => ({ w: Math.max(3, t.sirka * K), h: Math.max(3, t.vyska * K) });
+  const paleta = (t) => PALETA.slice(0, t.farby);
+  return (
+    <svg viewBox="0 0 208 104" className="w-full max-w-md mx-auto" role="img" aria-label="Náhľad umiestnenia potlače na tričku spredu a zozadu">
+      <Tricko x0={0} tmavy={tmavy} nazov="Spredu">
+        {najdi('predok').map(({ t, u }) => {
+          const { w, h } = rozmer(t);
+          const srdce = u.kod === 'hrud_srdce'; // srdce = ľavá strana nositeľa = pravá strana náhľadu
+          const x = srdce ? 60 : 50 - w / 2, y = srdce ? 18 : 16;
+          return <PotlacRect key={t.id} x={x} y={y} w={Math.min(w, 44)} h={Math.min(h, 70)} nahlad={t.nahlad} farby={paleta(t)} popis={u.nazov} />;
+        })}
+        {najdi('rukav_l').map(({ t, u }) => { const { w, h } = rozmer(t); return <PotlacRect key={t.id} x={86 - Math.min(w, 9) / 2} y={22} w={Math.min(w, 9)} h={Math.min(h, 14)} nahlad={t.nahlad} farby={paleta(t)} popis={u.nazov} otocit={-35} />; })}
+        {najdi('rukav_p').map(({ t, u }) => { const { w, h } = rozmer(t); return <PotlacRect key={t.id} x={14 - Math.min(w, 9) / 2} y={22} w={Math.min(w, 9)} h={Math.min(h, 14)} nahlad={t.nahlad} farby={paleta(t)} popis={u.nazov} otocit={35} />; })}
+        {najdi('rukav_l').length > 0 && <text x="94" y="45" fontSize="4.5" fill="#6366f1" textAnchor="middle">ľavý</text>}
+        {najdi('rukav_p').length > 0 && <text x="6" y="45" fontSize="4.5" fill="#6366f1" textAnchor="middle">pravý</text>}
+      </Tricko>
+      <Tricko x0={108} tmavy={tmavy} nazov="Zozadu">
+        {najdi('zadok').map(({ t, u }) => {
+          const { w, h } = rozmer(t);
+          return <PotlacRect key={t.id} x={50 - Math.min(w, 50) / 2} y={14} w={Math.min(w, 50)} h={Math.min(h, 74)} nahlad={t.nahlad} farby={paleta(t)} popis={u.nazov} />;
+        })}
+      </Tricko>
     </svg>
   );
 }
-const PALETA = ['#e11d48', '#2563eb', '#16a34a', '#f59e0b', '#7c3aed', '#0891b2', '#475569', '#db2777'];
+
+let idCounter = 0;
+const noveId = () => `t${++idCounter}`;
 
 export default function Sietotlac({ supabase }) {
   const [nacitava, setNacitava] = useState(true);
   const [chybaNacitania, setChybaNacitania] = useState('');
   const [nast, setNast] = useState(null);
   const [efekty, setEfekty] = useState([]);
+  const [umiestnenia, setUmiestnenia] = useState([]);
 
   const [material, setMaterial] = useState('bavlna');
   const [tmavy, setTmavy] = useState(false);
   const [dveVelkosti, setDveVelkosti] = useState(false);
-  const [sirka, setSirka] = useState(30);
-  const [vyska, setVyska] = useState(40);
-  const [farby, setFarby] = useState(1);
-  const [efekt, setEfekt] = useState('klasicka');
   const [pocetKs, setPocetKs] = useState(50);
+  const [tlace, setTlace] = useState([]);
+  const [osobnyOdber, setOsobnyOdber] = useState(false);
+  const b2b = useB2bKod(supabase);
 
-  const [cena, setCena] = useState(null);
-  const [chybaCeny, setChybaCeny] = useState('');
-  const idDotazu = useRef(0);
+  const [bezi, setBezi] = useState(false);
+  const [chybaObj, setChybaObj] = useState('');
+  const [potvrdenie, setPotvrdenie] = useState('');
 
-  const [formOtvoreny, setFormOtvoreny] = useState(false);
+  const [dopytOtvoreny, setDopytOtvoreny] = useState(false);
   const [kontakt, setKontakt] = useState({ meno: '', email: '', telefon: '', poznamka: '' });
   const [hp, setHp] = useState('');
   const [odosielam, setOdosielam] = useState(false);
   const [chybaDopytu, setChybaDopytu] = useState('');
   const [hotovo, setHotovo] = useState(null);
+  const fileRefs = useRef({});
 
   const volaj = async (body) => {
     const { data, error } = await supabase.functions.invoke(FUNKCIA, { body });
@@ -86,40 +135,73 @@ export default function Sietotlac({ supabase }) {
     (async () => {
       try {
         const d = await volaj({ akcia: 'cennik' });
-        setNast(d.nastavenia); setEfekty(d.efekty);
-        setEfekt(d.efekty[0]?.kod || 'klasicka');
+        setNast(d.nastavenia); setEfekty(d.efekty); setUmiestnenia(d.umiestnenia);
         setPocetKs((p) => Math.max(d.nastavenia.minKs, p));
-        setSirka((s) => Math.min(s, d.nastavenia.maxSirkaCm)); setVyska((v) => Math.min(v, d.nastavenia.maxVyskaCm));
+        const u = d.umiestnenia.find((x) => x.kod === 'hrud_stred') || d.umiestnenia[0];
+        if (u) setTlace([{ id: noveId(), umiestnenie: u.kod, sirka: u.vychodziaSirkaCm, vyska: u.vychodziaVyskaCm, farby: 1, efekt: d.efekty[0]?.kod || 'klasicka', subor: null, nahlad: null }]);
       } catch (e) { setChybaNacitania(e.message); }
       setNacitava(false);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabase]);
 
-  const vyber = { material, tmavy, dveVelkosti, sirkaCm: sirka, vyskaCm: vyska, farby, efekt, pocetKs };
-  const kluc = JSON.stringify(vyber);
-  useEffect(() => {
-    if (!nast || nast.aktivny === false) return undefined;
-    const id = ++idDotazu.current;
-    const t = setTimeout(async () => {
-      try {
-        const d = await volaj({ akcia: 'cena', ...vyber });
-        if (id !== idDotazu.current) return;
-        setChybaCeny(''); setCena(d.cena);
-      } catch (e) {
-        if (id !== idDotazu.current) return;
-        setCena(null); setChybaCeny(e.message);
-      }
-    }, 350);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nast, kluc]);
+  const uprav = (id, patch) => setTlace((l) => l.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+  const volneUmiestnenia = umiestnenia.filter((u) => !tlace.some((t) => t.umiestnenie === u.kod));
+  const pridajTlac = () => {
+    const u = volneUmiestnenia[0];
+    if (!u) return;
+    setTlace((l) => [...l, { id: noveId(), umiestnenie: u.kod, sirka: u.vychodziaSirkaCm, vyska: u.vychodziaVyskaCm, farby: 1, efekt: efekty[0]?.kod || 'klasicka', subor: null, nahlad: null }]);
+  };
+  const zmenUmiestnenie = (id, kod) => {
+    const u = umiestnenia.find((x) => x.kod === kod);
+    if (u) uprav(id, { umiestnenie: kod, sirka: Math.min(u.vychodziaSirkaCm, u.maxSirkaCm), vyska: Math.min(u.vychodziaVyskaCm, u.maxVyskaCm) });
+  };
+  const zmazTlac = (id) => setTlace((l) => { const t = l.find((x) => x.id === id); if (t?.nahlad) URL.revokeObjectURL(t.nahlad); return l.filter((x) => x.id !== id); });
+  const vyberSubor = (id, f) => {
+    if (!f) return;
+    const pripona = '.' + (f.name.split('.').pop() || '').toLowerCase();
+    if (!POVOLENE.includes(pripona)) { window.alert(`Nahrajte prosím súbor vo formáte: ${POVOLENE.join(', ')}.`); return; }
+    if (f.size > MAX_MB * 1024 * 1024) { window.alert(`Súbor je príliš veľký (max. ${MAX_MB} MB).`); return; }
+    setTlace((l) => l.map((t) => { if (t.id !== id) return t; if (t.nahlad) URL.revokeObjectURL(t.nahlad); return { ...t, subor: f, nahlad: jeObrazok(f) ? URL.createObjectURL(f) : null }; }));
+  };
 
-  const odoslat = async (e) => {
+  const teloCeny = useMemo(() => ({
+    material, tmavy, dveVelkosti, pocetKs, osobnyOdber, b2bKod: b2b.kod,
+    tlace: tlace.map((t) => ({ umiestnenie: t.umiestnenie, sirkaCm: t.sirka, vyskaCm: t.vyska, farby: t.farby, efekt: t.efekt })),
+  }), [material, tmavy, dveVelkosti, pocetKs, osobnyOdber, b2b.kod, tlace]);
+  const { cena, chyba } = useCenaNahlad(supabase, FUNKCIA, teloCeny, !!nast && nast.aktivny !== false && tlace.length > 0);
+
+  const nahrajSubory = async () => {
+    const sk = crypto.randomUUID();
+    const vysledok = [];
+    for (const t of tlace) {
+      if (!t.subor) { vysledok.push({ suborCesta: null, suborNazov: null }); continue; }
+      const cesta = `sietotlac/${sk}/${t.umiestnenie}_${t.subor.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+      const { error } = await supabase.storage.from(BUCKET).upload(cesta, t.subor, { contentType: t.subor.type || undefined });
+      if (error) throw new Error('Súbor sa nepodarilo nahrať: ' + error.message);
+      vysledok.push({ suborCesta: cesta, suborNazov: t.subor.name });
+    }
+    return vysledok;
+  };
+  const telo = (subory) => ({ ...teloCeny, tlace: teloCeny.tlace.map((t, i) => ({ ...t, ...subory[i] })) });
+
+  const chybajuSubory = tlace.some((t) => !t.subor);
+  const objednat = async () => {
+    if (chybajuSubory) { setChybaObj('Nahrajte prosím grafiku ku každej potlači.'); return; }
+    setBezi(true); setChybaObj(''); setPotvrdenie('');
+    try {
+      const subory = await nahrajSubory();
+      const d = await volaj(telo(subory));
+      setPotvrdenie(`Objednávka bola vytvorená — ${Number(d.cenaSpolu).toFixed(2)} €. Presmerúvam na platbu…`);
+      window.location.href = d.checkoutUrl;
+    } catch (e) { setChybaObj('Objednávku sa nepodarilo odoslať: ' + e.message); } finally { setBezi(false); }
+  };
+  const odoslatDopyt = async (e) => {
     e.preventDefault();
     setOdosielam(true); setChybaDopytu('');
     try {
-      const d = await volaj({ akcia: 'dopyt', vyber, kontakt, hp });
+      const subory = await nahrajSubory();
+      const d = await volaj({ akcia: 'dopyt', vyber: telo(subory), kontakt, hp });
       setHotovo({ cislo: d.cislo, email: d.email });
     } catch (err) { setChybaDopytu(err.message); }
     setOdosielam(false);
@@ -129,13 +211,19 @@ export default function Sietotlac({ supabase }) {
   if (chybaNacitania) return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-rose-600 text-sm px-4 text-center">{chybaNacitania}</div>;
   if (nast?.aktivny === false) return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-600 text-sm px-4 text-center">Kalkulačka sieťotlače je dočasne vypnutá.</div>;
 
-  const efektObj = efekty.find((x) => x.kod === efekt);
-  const farbyPaleta = PALETA.slice(0, farby);
   const pole = 'w-full border border-slate-300 rounded-lg p-2.5 text-sm font-medium bg-white';
+  const riadky = cena ? [
+    ['Počet kusov', `${cena.pocetKs} ks`],
+    ['Textil', `${material === 'polyester' ? 'Polyester' : 'Bavlna'} · ${tmavy ? 'tmavý' : 'svetlý'}`],
+    ...(cena.tlace || []).map((t) => [t.nazov, `${eur(t.cenaKsBezDph)} / ks`]),
+    ['Počet sít', String(cena.pocetSit)],
+    ...(cena.priplatokPolyesterPercent > 0 ? [['Príplatok polyester (v cenách vyššie)', `+${cena.priplatokPolyesterPercent} %`]] : []),
+  ] : [];
 
   return (
     <div className="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col">
-      <PbtHeader title="Sieťotlač" subtitle="Kalkulačka a dopyt na potlač tričiek" />
+      <PbtHeader title="Sieťotlač" subtitle="Potlač tričiek: viac potlačí, objednávka a platba online" />
+      <div className="px-4 py-2 bg-white border-b border-slate-200"><B2bKod b2b={b2b} /></div>
       {nast?.infoText && <p className="px-4 pt-3 text-xs text-slate-500 text-center">{nast.infoText}</p>}
 
       <main className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 py-5 grid grid-cols-1 lg:grid-cols-[1fr_24rem] gap-5 items-start">
@@ -161,45 +249,73 @@ export default function Sietotlac({ supabase }) {
             {material === 'polyester' && nast.polyesterPriplatokPercent > 0 && <p className="text-xs text-slate-500">Na polyester počítame príplatok {nast.polyesterPriplatokPercent} %.</p>}
           </Sekcia>
 
-          <Sekcia cislo="2" nazov={`Veľkosť motívu (najviac ${nast.maxSirkaCm} × ${nast.maxVyskaCm} cm)`}>
-            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-4 items-center">
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div><label className="block text-xs font-medium text-slate-500 mb-1">Šírka (cm)</label><NumberInput min="1" max={nast.maxSirkaCm} step="1" value={sirka} onChange={(v) => setSirka(Math.min(nast.maxSirkaCm, Math.max(1, v)))} fallback={20} className={pole} /></div>
-                  <div><label className="block text-xs font-medium text-slate-500 mb-1">Výška (cm)</label><NumberInput min="1" max={nast.maxVyskaCm} step="1" value={vyska} onChange={(v) => setVyska(Math.min(nast.maxVyskaCm, Math.max(1, v)))} fallback={20} className={pole} /></div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <Volba aktivna={!dveVelkosti} onClick={() => setDveVelkosti(false)} podtext="Všetky tričká (XS–XXL) majú rovnako veľký motív. 1 sada sít.">Jedna veľkosť potlače</Volba>
-                  <Volba aktivna={dveVelkosti} onClick={() => setDveVelkosti(true)} podtext="Menšia na XS–M, väčšia na L–XXL. Potrebné sú 2 sady sít. Zadajte rozmer väčšieho motívu.">Dve veľkosti potlače</Volba>
-                </div>
-              </div>
-              <TrickoNahlad sirka={sirka} vyska={vyska} tmavy={tmavy} farby={farbyPaleta} />
+          <Sekcia cislo="2" nazov={`Potlače na jednom kuse (${tlace.length})`}
+            akcia={<button type="button" onClick={pridajTlac} disabled={volneUmiestnenia.length === 0 || tlace.length >= 6} className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-300 text-white text-xs font-semibold flex items-center gap-1.5"><Plus className="w-3.5 h-3.5" /> Pridať potlač</button>}>
+            <p className="text-xs text-slate-500">Napríklad malé logo na srdci a veľká potlač na chrbte, prípadne aj na rukávoch. Každá potlač má vlastný rozmer, počet farieb a grafiku.</p>
+            <NahladTricka tlace={tlace} umiestnenia={umiestnenia} tmavy={tmavy} />
+            <div className="space-y-3">
+              {tlace.map((t, i) => {
+                const u = umiestnenia.find((x) => x.kod === t.umiestnenie);
+                const efektObj = efekty.find((x) => x.kod === t.efekt);
+                const sirkaChyba = u && (t.sirka > u.maxSirkaCm || t.vyska > u.maxVyskaCm);
+                return (
+                  <div key={t.id} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-bold text-indigo-700">Potlač {i + 1}</span>
+                      {tlace.length > 1 && <button type="button" onClick={() => zmazTlac(t.id)} className="text-slate-400 hover:text-rose-500 flex items-center gap-1 text-xs"><Trash2 className="w-3.5 h-3.5" /> Odstrániť</button>}
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-slate-500 mb-1">Umiestnenie</label>
+                        <div className="relative">
+                          <select value={t.umiestnenie} onChange={(e) => zmenUmiestnenie(t.id, e.target.value)} className={`${pole} appearance-none pr-8`}>
+                            {umiestnenia.filter((x) => x.kod === t.umiestnenie || volneUmiestnenia.some((v) => v.kod === x.kod)).map((x) => <option key={x.kod} value={x.kod}>{x.nazov}</option>)}
+                          </select>
+                          <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-3 pointer-events-none" />
+                        </div>
+                        {u?.popis && <p className="text-[11px] text-slate-400 mt-1">{u.popis} (max. {u.maxSirkaCm} × {u.maxVyskaCm} cm)</p>}
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div><label className="block text-xs font-medium text-slate-500 mb-1">Šírka (cm)</label><NumberInput min="1" max={u?.maxSirkaCm} step="0.5" value={t.sirka} onChange={(v) => uprav(t.id, { sirka: Math.min(u?.maxSirkaCm || 43, Math.max(1, v)) })} fallback={10} className={pole} /></div>
+                        <div><label className="block text-xs font-medium text-slate-500 mb-1">Výška (cm)</label><NumberInput min="1" max={u?.maxVyskaCm} step="0.5" value={t.vyska} onChange={(v) => uprav(t.id, { vyska: Math.min(u?.maxVyskaCm || 58, Math.max(1, v)) })} fallback={10} className={pole} /></div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-500 mb-1.5">Počet farieb (1–6)</label>
+                        <div className="flex items-center gap-3">
+                          <button type="button" onClick={() => uprav(t.id, { farby: Math.max(1, t.farby - 1) })} className="w-9 h-9 rounded-lg border border-slate-300 bg-white flex items-center justify-center hover:bg-slate-50" aria-label="Menej farieb"><Minus className="w-4 h-4" /></button>
+                          <span className="text-lg font-bold font-mono w-8 text-center">{t.farby}</span>
+                          <button type="button" onClick={() => uprav(t.id, { farby: Math.min(6, t.farby + 1) })} className="w-9 h-9 rounded-lg border border-slate-300 bg-white flex items-center justify-center hover:bg-slate-50" aria-label="Viac farieb"><Plus className="w-4 h-4" /></button>
+                          <div className="flex -space-x-1.5">{PALETA.slice(0, t.farby).map((c) => <span key={c} className="w-4 h-4 rounded-full border-2 border-white" style={{ background: c }} />)}</div>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-500 mb-1">Typ farby / efekt</label>
+                        <select value={t.efekt} onChange={(e) => uprav(t.id, { efekt: e.target.value })} className={pole}>
+                          {efekty.map((x) => <option key={x.kod} value={x.kod}>{x.nazov}{x.priplatokPercent > 0 ? ` (+${x.priplatokPercent} %)` : ''}</option>)}
+                        </select>
+                        {efektObj?.popis && <p className="text-[11px] text-slate-400 mt-1">{efektObj.popis}</p>}
+                      </div>
+                    </div>
+                    {sirkaChyba && <p className="text-xs text-rose-600">Rozmer presahuje maximum pre toto umiestnenie ({u.maxSirkaCm} × {u.maxVyskaCm} cm).</p>}
+                    <div>
+                      <input ref={(el) => { fileRefs.current[t.id] = el; }} type="file" accept={POVOLENE.join(',')} className="hidden" onChange={(e) => { vyberSubor(t.id, e.target.files?.[0]); e.target.value = ''; }} />
+                      <button type="button" onClick={() => fileRefs.current[t.id]?.click()}
+                        onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); vyberSubor(t.id, e.dataTransfer.files?.[0]); }}
+                        className={`w-full rounded-xl border-2 border-dashed p-3 flex items-center gap-3 text-left transition ${t.subor ? 'border-emerald-400 bg-emerald-50/50' : 'border-slate-300 bg-white hover:border-indigo-400'}`}>
+                        {t.nahlad ? <img src={t.nahlad} alt="" className="w-12 h-12 object-contain rounded bg-slate-100 shrink-0" /> : t.subor ? <FileImage className="w-8 h-8 text-emerald-600 shrink-0" /> : <Upload className="w-7 h-7 text-slate-400 shrink-0" />}
+                        <span className="min-w-0">
+                          <span className="block text-sm font-medium text-slate-700 truncate">{t.subor ? t.subor.name : 'Nahrať grafiku k tejto potlači'}</span>
+                          <span className="block text-[11px] text-slate-400">{t.subor ? 'Kliknutím súbor vymeníte' : `Kliknite alebo pretiahnite súbor (${POVOLENE.join(', ')}, max. ${MAX_MB} MB). Najlepšie vektor alebo PNG s priehľadným pozadím.`}</span>
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </Sekcia>
 
-          <Sekcia cislo="3" nazov="Počet farieb a efekt">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1.5">Počet farieb v motíve (1–6)</label>
-                <div className="flex items-center gap-3">
-                  <button type="button" onClick={() => setFarby((f) => Math.max(1, f - 1))} className="w-10 h-10 rounded-xl border border-slate-300 bg-white flex items-center justify-center hover:bg-slate-50" aria-label="Menej farieb"><Minus className="w-4 h-4" /></button>
-                  <span className="text-xl font-bold font-mono w-10 text-center">{farby}</span>
-                  <button type="button" onClick={() => setFarby((f) => Math.min(6, f + 1))} className="w-10 h-10 rounded-xl border border-slate-300 bg-white flex items-center justify-center hover:bg-slate-50" aria-label="Viac farieb"><Plus className="w-4 h-4" /></button>
-                  <div className="flex -space-x-1.5 ml-1">{farbyPaleta.map((c) => <span key={c} className="w-5 h-5 rounded-full border-2 border-white" style={{ background: c }} />)}</div>
-                </div>
-                <p className="text-[11px] text-slate-400 mt-1.5">Každá farba = jedno sito. Farby pri sieťotlači nemiešame, počítajú sa jednotlivé farby motívu.</p>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1.5">Typ farby / efekt</label>
-                <select value={efekt} onChange={(e) => setEfekt(e.target.value)} className={pole}>
-                  {efekty.map((x) => <option key={x.kod} value={x.kod}>{x.nazov}{x.priplatokPercent > 0 ? ` (+${x.priplatokPercent} %)` : ''}</option>)}
-                </select>
-                {efektObj?.popis && <p className="text-[11px] text-slate-400 mt-1.5">{efektObj.popis}</p>}
-              </div>
-            </div>
-          </Sekcia>
-
-          <Sekcia cislo="4" nazov="Počet kusov">
+          <Sekcia cislo="3" nazov="Počet kusov a veľkosti potlače">
             <div className="flex flex-wrap items-center gap-3">
               <NumberInput min={nast.minKs} max={nast.maxKs} step="1" value={pocetKs} onChange={(v) => setPocetKs(Math.min(nast.maxKs, Math.max(1, Math.round(v))))} fallback={nast.minKs} className="w-36 border border-slate-300 rounded-lg p-2.5 text-lg font-bold font-mono bg-white" />
               <div className="flex flex-wrap gap-2">
@@ -207,72 +323,46 @@ export default function Sietotlac({ supabase }) {
               </div>
             </div>
             <p className="text-xs text-slate-400">Minimálny odber pre sieťotlač je {nast.minKs} ks (príprava sít). Čím viac kusov, tým nižšia cena za kus.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <Volba aktivna={!dveVelkosti} onClick={() => setDveVelkosti(false)} podtext="Všetky tričká (XS–XXL) majú rovnako veľké potlače. 1 sada sít.">Jedna veľkosť potlače</Volba>
+              <Volba aktivna={dveVelkosti} onClick={() => setDveVelkosti(true)} podtext="Menšie potlače na XS–M, väčšie na L–XXL. Potrebné sú 2 sady sít. Zadajte rozmery väčšej verzie.">Dve veľkosti potlače</Volba>
+            </div>
           </Sekcia>
 
-          {cena && <MnozstevneZlavy urovne={cena.urovne} pocetKs={pocetKs} />}
+          {cena?.urovne && <MnozstevneZlavy urovne={cena.urovne} pocetKs={pocetKs} b2bPercent={cena.zlavaB2bPercent} b2bKod={b2b.kod} />}
         </div>
 
         <aside className="lg:sticky lg:top-20 space-y-3 min-w-0">
-          <div className="bg-slate-900 text-white rounded-2xl p-5 space-y-3">
-            <h3 className="text-base font-bold border-b border-slate-700 pb-3 flex items-center justify-between gap-2">
-              <span>Cenový prehľad</span><span className="text-[10px] font-medium px-2 py-1 rounded-lg bg-indigo-500/20 text-indigo-200 border border-indigo-400/30">Predbežná kalkulácia</span>
-            </h3>
-            {chybaCeny ? (
-              <div className="bg-rose-950/60 border border-rose-700 text-rose-200 p-3 rounded-lg text-xs flex gap-2"><AlertTriangle className="w-4 h-4 shrink-0" /> {chybaCeny}</div>
-            ) : cena ? (
-              <>
-                <div className="space-y-1.5 text-xs">
-                  <Riadok l="Počet kusov" v={`${cena.pocetKs} ks`} />
-                  <Riadok l="Farby / sitá" v={`${farby} ${farby === 1 ? 'farba' : farby < 5 ? 'farby' : 'farieb'} · ${cena.pocetSit} ${cena.pocetSit === 1 ? 'sito' : cena.pocetSit < 5 ? 'sitá' : 'sít'}`} />
-                  <Riadok l="Textil" v={`${material === 'polyester' ? 'Polyester' : 'Bavlna'} · ${tmavy ? 'tmavý' : 'svetlý'}`} />
-                  <Riadok l="Efekt" v={efektObj ? efektObj.nazov.split(' (')[0] + (cena.priplatokEfektPercent > 0 ? ` (+${cena.priplatokEfektPercent} %)` : '') : '—'} />
-                  {cena.priplatokPolyesterPercent > 0 && <Riadok l="Príplatok polyester" v={`+${cena.priplatokPolyesterPercent} %`} />}
-                  <Riadok l="Cena za 1 ks potlače (bez DPH)" v={eur(cena.cenaKsBezDph)} />
-                </div>
-                <div className="border-t border-slate-700 pt-3 space-y-1.5 text-xs">
-                  <Riadok l="Spolu bez DPH" v={eur(cena.spoluBezDph)} />
-                  <Riadok l={`DPH ${cena.dphPercent} %`} v={eur(cena.dph)} />
-                </div>
-                <div className="bg-indigo-600 rounded-xl p-3">
-                  <div className="text-indigo-100 text-[11px]">Celkom s DPH:</div>
-                  <div className="text-2xl font-extrabold font-mono">{eur(cena.spoluSDph)}</div>
-                </div>
-                <p className="text-[11px] text-slate-400 leading-snug">Cena je za potlač. Textil, doprava a konečná ponuka sa potvrdia po kontrole podkladov.</p>
-              </>
-            ) : <p className="text-xs text-slate-400">Počítam cenu…</p>}
+          <CenaSuhrn cena={cena} chyba={chyba} osobnyOdber={osobnyOdber} onOsobnyOdber={setOsobnyOdber} onObjednat={objednat} bezi={bezi}
+            chybaObjednavky={chybaObj} potvrdenie={potvrdenie} zakazane={chybajuSubory} poznamkaZakazane="Pred objednávkou nahrajte grafiku ku každej potlači." riadky={riadky} />
 
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
             {hotovo ? (
-              <div className="bg-emerald-950/50 border border-emerald-700 rounded-xl p-3 text-xs text-emerald-200 space-y-1">
-                <div className="flex items-center gap-2 font-bold text-emerald-300"><CheckCircle2 className="w-4 h-4" /> Dopyt {hotovo.cislo} bol odoslaný</div>
+              <div className="text-xs text-emerald-700 space-y-1">
+                <div className="flex items-center gap-2 font-bold"><CheckCircle2 className="w-4 h-4" /> Dopyt {hotovo.cislo} bol odoslaný</div>
                 <p>Ďakujeme, ozveme sa vám s konečnou ponukou do 24 hodín.{hotovo.email ? ' Potvrdenie sme poslali na váš e-mail.' : ''}</p>
               </div>
-            ) : !formOtvoreny ? (
-              <button type="button" disabled={!cena} onClick={() => setFormOtvoreny(true)} className="w-full py-3.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 disabled:bg-slate-700 disabled:text-slate-500 text-white font-bold text-sm flex items-center justify-center gap-2">
-                <Send className="w-4 h-4" /> Odoslať dopyt
-              </button>
+            ) : !dopytOtvoreny ? (
+              <button type="button" onClick={() => setDopytOtvoreny(true)} className="w-full text-sm font-semibold text-indigo-700 hover:text-indigo-600 flex items-center justify-center gap-2"><Send className="w-4 h-4" /> Radšej poslať len dopyt (bez platby)</button>
             ) : (
-              <form onSubmit={odoslat} className="space-y-2.5 border-t border-slate-700 pt-3">
-                <p className="text-xs text-slate-300">Vyplňte kontakt — do 24 hodín vám pošleme záväznú ponuku. Odoslaním dopytu sa nič neplatí.</p>
-                <input value={kontakt.meno} onChange={(e) => setKontakt({ ...kontakt, meno: e.target.value })} required maxLength={120} placeholder="Meno / firma *" className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white placeholder-slate-500" />
-                <input type="email" value={kontakt.email} onChange={(e) => setKontakt({ ...kontakt, email: e.target.value })} required placeholder="E-mail *" className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white placeholder-slate-500" />
-                <input type="tel" value={kontakt.telefon} onChange={(e) => setKontakt({ ...kontakt, telefon: e.target.value })} required maxLength={40} placeholder="Telefón *" className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white placeholder-slate-500" />
-                <textarea value={kontakt.poznamka} onChange={(e) => setKontakt({ ...kontakt, poznamka: e.target.value })} rows={3} maxLength={2000} placeholder="Poznámka alebo odkaz na grafiku (Google Disk, WeTransfer…)" className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white placeholder-slate-500" />
+              <form onSubmit={odoslatDopyt} className="space-y-2.5">
+                <p className="text-xs text-slate-600">Vyplňte kontakt — do 24 hodín vám pošleme záväznú ponuku. Odoslaním dopytu sa nič neplatí. Grafiku môžete nahrať vyššie alebo dať odkaz do poznámky.</p>
+                <input value={kontakt.meno} onChange={(e) => setKontakt({ ...kontakt, meno: e.target.value })} required maxLength={120} placeholder="Meno / firma *" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                <input type="email" value={kontakt.email} onChange={(e) => setKontakt({ ...kontakt, email: e.target.value })} required placeholder="E-mail *" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                <input type="tel" value={kontakt.telefon} onChange={(e) => setKontakt({ ...kontakt, telefon: e.target.value })} required maxLength={40} placeholder="Telefón *" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                <textarea value={kontakt.poznamka} onChange={(e) => setKontakt({ ...kontakt, poznamka: e.target.value })} rows={3} maxLength={2000} placeholder="Poznámka alebo odkaz na grafiku (Google Disk, WeTransfer…)" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
                 <input value={hp} onChange={(e) => setHp(e.target.value)} tabIndex={-1} autoComplete="off" aria-hidden="true" className="hidden" />
-                {chybaDopytu && <p className="text-xs text-rose-300">{chybaDopytu}</p>}
-                <button type="submit" disabled={odosielam || !cena} className="w-full py-3 rounded-xl bg-indigo-500 hover:bg-indigo-400 disabled:bg-slate-700 disabled:text-slate-500 text-white font-bold text-sm flex items-center justify-center gap-2">
+                {chybaDopytu && <p className="text-xs text-rose-600">{chybaDopytu}</p>}
+                <button type="submit" disabled={odosielam || !cena} className="w-full py-3 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white font-bold text-sm flex items-center justify-center gap-2">
                   <Send className="w-4 h-4" /> {odosielam ? 'Odosielam…' : 'Odoslať dopyt'}
                 </button>
-                <p className="text-[11px] text-slate-400 leading-snug">Vaše údaje použijeme len na vypracovanie ponuky. Viac v <a href="https://pbtprint.sk/policies/privacy-policy" target="_blank" rel="noopener noreferrer" className="underline hover:text-slate-200">Zásadách ochrany osobných údajov</a>.</p>
+                <p className="text-[11px] text-slate-400 leading-snug">Vaše údaje použijeme len na vypracovanie ponuky. Viac v <a href="https://pbtprint.sk/policies/privacy-policy" target="_blank" rel="noopener noreferrer" className="underline hover:text-slate-600">Zásadách ochrany osobných údajov</a>.</p>
               </form>
             )}
           </div>
-          <p className="text-[11px] text-slate-400 text-center flex items-center justify-center gap-1.5"><Layers className="w-3.5 h-3.5" /> Sieťotlač plastizolovými farbami, tlač na karusele</p>
+          <p className="text-[11px] text-slate-400 text-center flex items-center justify-center gap-1.5"><Layers className="w-3.5 h-3.5" /> Cena je len za potlač (textil nie je v cene). Platba kartou cez Shopify.</p>
         </aside>
       </main>
     </div>
   );
-}
-
-function Riadok({ l, v }) {
-  return <div className="flex items-center justify-between gap-3"><span className="text-slate-400">{l}</span><span className="font-mono text-slate-100 text-right">{v}</span></div>;
 }

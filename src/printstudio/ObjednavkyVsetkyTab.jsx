@@ -12,6 +12,7 @@ const TYPY = {
   stolova: { nazov: 'Stolové vlajky', farba: 'bg-orange-500/20 text-orange-300 border-orange-500/40', bodka: 'bg-orange-400', karta: 'stolova' },
   snurka: { nazov: 'Šnúrky', farba: 'bg-lime-500/20 text-lime-300 border-lime-500/40', bodka: 'bg-lime-400', karta: 'snurky' },
   folie: { nazov: 'Rezané fólie', farba: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40', bodka: 'bg-cyan-400', karta: 'folie' },
+  sietotlac: { nazov: 'Sieťotlač', farba: 'bg-rose-500/20 text-rose-300 border-rose-500/40', bodka: 'bg-rose-400', karta: 'sietotlac' },
   zastava: { nazov: 'Vlajky',      farba: 'bg-sky-500/20 text-sky-300 border-sky-500/40',         bodka: 'bg-sky-400',    karta: 'vlajky' },
   beach:   { nazov: 'Beachvlajky', farba: 'bg-teal-500/20 text-teal-300 border-teal-500/40',      bodka: 'bg-teal-400',   karta: 'beachvlajky' },
   dtf:     { nazov: 'DTF metráž',  farba: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40', bodka: 'bg-emerald-400', karta: 'metraze' },
@@ -41,9 +42,9 @@ export default function ObjednavkyVsetkyTab({ supabase, onOtvor, fokus = null })
   const nacitaj = async () => {
     setNacitava(true);
     const vyber = (tabulka) => supabase.from(tabulka).select('*').order('created_at', { ascending: false }).limit(60);
-    const [dres, buffka, celenka, zastava, beach, dtf, textil, t3d, stolova, snurka, folie] = await Promise.all([
+    const [dres, buffka, celenka, zastava, beach, dtf, textil, t3d, stolova, snurka, folie, sietotlac] = await Promise.all([
       vyber('dres_objednavky'), vyber('buffky_objednavky'), vyber('celenky_objednavky'), vyber('zastava_objednavky'),
-      vyber('vlajka_objednavky'), vyber('dtf_objednavky'), vyber('textil_objednavky'), vyber('transfer3d_objednavky'), vyber('stolova_objednavky'), vyber('snurka_objednavky'), vyber('folie_objednavky'),
+      vyber('vlajka_objednavky'), vyber('dtf_objednavky'), vyber('textil_objednavky'), vyber('transfer3d_objednavky'), vyber('stolova_objednavky'), vyber('snurka_objednavky'), vyber('folie_objednavky'), vyber('sietotlac_objednavky'),
     ]);
     const r = [];
     (dres.data || []).forEach(o => r.push({ typ: 'dres', id: o.id, cas: o.created_at, cislo: o.shopify_order_number || '', zakaznik: o.zakaznik_meno || '', popis: `${o.produkt_nazov || 'Dres'}${o.tim_text ? ` · ${o.tim_text}` : ''}`, ks: o.pocet_ks, cena: o.cena_spolu, stav: o.status }));
@@ -57,6 +58,7 @@ export default function ObjednavkyVsetkyTab({ supabase, onOtvor, fokus = null })
     (stolova.data || []).forEach(o => r.push({ typ: 'stolova', id: o.id, cas: o.created_at, cislo: o.cislo_objednavky || '', zakaznik: '', popis: `${o.velkost || ''} · ${o.tvar || ''} · ${o.okraj || ''} · ${o.podstavec || ''}`, ks: o.pocet_ks, cena: o.cena_spolu, stav: o.stav, erp: o.erp_cislo || '' }));
     (snurka.data || []).forEach(o => r.push({ typ: 'snurka', id: o.id, cas: o.created_at, cislo: o.cislo_objednavky || '', zakaznik: '', popis: o.model || 'Šnúrka', ks: o.pocet_ks, cena: o.cena_spolu, stav: o.stav, erp: o.erp_cislo || '' }));
     (folie.data || []).forEach(o => r.push({ typ: 'folie', id: o.id, cas: o.created_at, cislo: o.cislo_objednavky || '', zakaznik: '', popis: `${o.druh || ''} · ${o.sirka_mm}×${o.vyska_mm} mm · ${o.dlzka_bm} bm`, ks: o.pocet_ks, cena: o.cena_spolu, stav: o.stav, erp: o.erp_cislo || '' }));
+    (sietotlac.data || []).forEach(o => r.push({ typ: 'sietotlac', id: o.id, cas: o.created_at, cislo: o.cislo_objednavky || '', zakaznik: o.b2b_kod || '', popis: `${o.material === 'polyester' ? 'Polyester' : 'Bavlna'}, ${o.tmavy ? 'tmavý' : 'svetlý'} · ${(o.polozky || []).map(p => p.nazov).join(' + ')}`, ks: o.pocet_ks, cena: o.cena_spolu, stav: o.stav, erp: o.erp_cislo || '' }));
     const { data: dp } = await supabase.from('b2b_dopyty').select('*').order('created_at', { ascending: false }).limit(100);
     setDopyty(dp || []);
     (dp || []).forEach(d => r.push({ typ: 'dopyt', id: d.id, cas: d.created_at, cislo: `DOPYT-${d.kod}`, zakaznik: d.agentura || d.b2b_kod || '', popis: `${d.produkt_nazov}${d.popis_varianty ? ` — ${d.popis_varianty}` : ''} (cena bez DPH)`, ks: d.pocet_ks, cena: d.cena_spolu_bez_dph, stav: d.stav }));
