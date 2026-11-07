@@ -433,6 +433,7 @@ export default function PonukaDresov({ supabase }) {
                 {chybaOdoslania && <p className="text-sm text-rose-600 mb-2">{chybaOdoslania}</p>}
                 <button type="submit" disabled={odosiela || (r.players < 1 && !(V.doplnky.length || V.doplnkyIne.trim()))} className="px-6 py-3.5 rounded-lg bg-blue-700 hover:bg-blue-800 disabled:opacity-45 text-white text-lg font-extrabold uppercase tracking-wider" style={{ fontFamily: '"Barlow Condensed", Arial, sans-serif' }}>{odosiela ? 'Odosielam…' : 'Odoslať dopyt'}</button>
                 <p className="text-xs text-slate-500 mt-2">Odoslaním dopytu sa nezaväzujete k objednávke. Presnú ponuku pošleme do 1 pracovného dňa.</p>
+                <p className="text-xs text-slate-500 mt-1">Vaše údaje použijeme len na prípravu ponuky a komunikáciu k nej. Viac v <a href="https://pbtprint.sk/policies/privacy-policy" target="_blank" rel="noopener noreferrer" className="underline text-blue-700">Zásadách ochrany osobných údajov</a>.</p>
               </div>
             </form>
           </Krok>

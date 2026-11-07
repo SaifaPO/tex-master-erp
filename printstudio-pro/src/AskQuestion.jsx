@@ -100,6 +100,7 @@ export default function AskQuestion({ zdroj, nadListou = false }) {
                 <button type="submit" disabled={odosielam} className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white font-bold text-sm flex items-center justify-center gap-2 transition">
                   <Send className="w-4 h-4" /> {odosielam ? 'Odosielam…' : 'Odoslať otázku'}
                 </button>
+                <p className="text-[11px] text-slate-400 leading-snug">Vaše údaje použijeme len na odpoveď na túto otázku. Viac v <a href="https://pbtprint.sk/policies/privacy-policy" target="_blank" rel="noopener noreferrer" className="underline hover:text-slate-600">Zásadách ochrany osobných údajov</a>.</p>
               </form>
             )}
           </div>
