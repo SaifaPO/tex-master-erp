@@ -33,7 +33,7 @@ const PlochaEditor = forwardRef(function PlochaEditor({
   const [pozadieFarba, setPozadieFarba] = useState('#ffffff');
   const [zalozka, setZalozka] = useState('symboly'); // 'symboly' | 'kniznica'
   // `okno`: nástroje (text, logá, obrázok + úprava vybraného objektu) sú v samostatnom plávajúcom okne (na mobile spodný panel); motív sa upravuje priamo na produkte
-  const [oknoOtv, setOknoOtv] = useState(true);
+  const [oknoOtv, setOknoOtv] = useState(false); // nástroje sa otvoria až keď ich zákazník chce (tlačidlo Nástroje) alebo keď vyberie objekt
   const [oknoPoz, setOknoPoz] = useState(null);
   const tah = useRef(null);
   const zacniTah = (ev) => {
@@ -99,6 +99,8 @@ const PlochaEditor = forwardRef(function PlochaEditor({
   }, [sirkaMm, vyskaMm, tvar]);
 
   useEffect(() => { engineRef.current?.setStrana(strana); }, [strana]);
+  // úchyty objektov musia byť dosť veľké aj pri zmenšenom zobrazení (mobil): ~22 px na obrazovke
+  useEffect(() => { engineRef.current?.nastavOvladace((uzky ? 26 : 20) / Math.max(zoom, 0.15)); }, [zoom, uzky, vybrany]);
   useEffect(() => { if (okno && vybrany) setOknoOtv(true); }, [okno, !!vybrany]); // eslint-disable-line react-hooks/exhaustive-deps
   // zóny (potlačové plochy na produkte) + zóna, do ktorej sa práve vkladá; po výbere zóny sa plocha priblíži na ňu
   useEffect(() => { engineRef.current?.nastavZony(zony || []); }, [zony]);
@@ -143,6 +145,7 @@ const PlochaEditor = forwardRef(function PlochaEditor({
     pocetObjektov: () => engineRef.current?.pocetObjektov() || 0,
     zona: (kod, opts) => engineRef.current?.zona(kod, opts) || null,
     nezaradene: () => engineRef.current?.nezaradene?.() || 0,
+    velkostMm: (mm) => engineRef.current?.velkostMm?.(mm),
     pridajObrazok: (file, kod) => {
       const en = engineRef.current; if (!en) return;
       const z = kod && zony ? zony.find((x) => x.kod === kod) : null;
@@ -186,6 +189,10 @@ const PlochaEditor = forwardRef(function PlochaEditor({
               </div>
             </div>
           )}
+          <div>
+            <label className="text-xs text-slate-600 flex justify-between mb-0.5">Veľkosť <span>{vybrany.sirkaMm} × {vybrany.vyskaMm} mm</span></label>
+            <input type="range" min={5} max={Math.max(vybrany.maxMm || 200, vybrany.sirkaMm)} step={1} value={vybrany.sirkaMm} onChange={(ev) => e()?.velkostMm(Number(ev.target.value))} className="w-full accent-indigo-600" />
+          </div>
           <div>
             <label className="text-xs text-slate-600 flex justify-between mb-0.5">Rotácia <span>{vybrany.uhol}°</span></label>
             <input type="range" min={0} max={360} value={vybrany.uhol} onChange={(ev) => e()?.otoc(Number(ev.target.value))} className="w-full accent-indigo-600" />

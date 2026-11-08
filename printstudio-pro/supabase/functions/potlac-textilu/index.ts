@@ -104,6 +104,52 @@ function vcDtfGarment(n: Riadok | null, costMetrics: Riadok[], plochaCm2: number
   const elektrinaLis = lisEurHod * ((parseFloat(n.cas_nazehlovania_min) || 0) / 60);
   return transfer + (parseFloat(n.naklady_manipulacia) || 0) + praca + elektrinaLis;
 }
+// Sublimácia (kópia z dizajner-price-preview): papier, atrament, ochranný papier, manipulácia, nažehlenie
+function vcSublimaciaGarment(textilSub: Riadok | null, sublimaciaGarment: Riadok | null, costMetrics: Riadok[], plochaCm2: number) {
+  if (!textilSub || !sublimaciaGarment) return 0;
+  const papierBm = plochaCm2 / 16000;
+  const papierCena = papierBm * (parseFloat(textilSub.cena_papier_bm) || 0);
+  const atramentMl = (plochaCm2 / 10000) * (parseFloat(textilSub.spotreba_atrament_ml_m2) || 0);
+  const atramentCena = (atramentMl / 1000) * (parseFloat(textilSub.cena_atrament_l) || 0);
+  const protekcnyPapierCena = parseFloat(sublimaciaGarment.naklady_ochranny_papier) || 0;
+  const manipulacia = parseFloat(sublimaciaGarment.naklady_manipulacia) || 0;
+  const casNazehlovaniaMin = parseFloat(sublimaciaGarment.cas_nazehlovania_min) || 0;
+  const praca = (casNazehlovaniaMin / 60) * (parseFloat(textilSub.cena_prace_hod) || 0);
+  const rychlostMHod = parseFloat(textilSub.rychlost_m_hod) || 0;
+  const casTlaceSekund = rychlostMHod > 0 ? (papierBm / rychlostMHod) * 3600 : 0;
+  const elektrinaTlaciarenCena = elektrinaZariadeniaEurZaHod(costMetrics, textilSub.tlaciaren_zariadenie_id) * (casTlaceSekund / 3600);
+  const elektrinaLisCena = elektrinaZariadeniaEurZaHod(costMetrics, textilSub.lis_zariadenie_id) * (casNazehlovaniaMin / 60);
+  const zaklad = papierCena + atramentCena + protekcnyPapierCena + manipulacia + praca + elektrinaTlaciarenCena + elektrinaLisCena;
+  return zaklad * (1 + (parseFloat(sublimaciaGarment.koeficient_rizika_percent) || 0) / 100);
+}
+// Jedno nažehlenie DTF (manipulácia + práca + elektrina lisu) — pri motíve väčšom ako plocha lisu sa žehlí viackrát
+function nazehlenieDtfNaKus(n: Riadok | null, costMetrics: Riadok[]) {
+  if (!n) return 0;
+  const praca = ((parseFloat(n.cas_nazehlovania_min) || 0) / 60) * (parseFloat(n.cena_prace_hod) || 0);
+  const lisEurHod = elektrinaZariadeniaEurZaHod(costMetrics, n.transferovy_lis_zariadenie_id);
+  return (parseFloat(n.naklady_manipulacia) || 0) + praca + lisEurHod * ((parseFloat(n.cas_nazehlovania_min) || 0) / 60);
+}
+function pocetNazehleni(nast: Riadok, w: number, h: number) {
+  const a = num(nast.lis_sirka_cm, 38), b = num(nast.lis_vyska_cm, 48);
+  return Math.max(1, Math.min(Math.ceil(w / a) * Math.ceil(h / b), Math.ceil(w / b) * Math.ceil(h / a)));
+}
+// Najväčšia možná potlač pre umiestnenie: veľké plochy (hruď stred, chrbát) podľa technológie a podľa najmenšej objednanej veľkosti trička
+function maxPlochy(nast: Riadok, produkt: Riadok, technologia: string, um: Riadok, velkosti: Record<string, number>, vlastnyTextil: boolean) {
+  let s = num(um.max_sirka_cm, 43), v = num(um.max_vyska_cm, 58);
+  if (num(um.max_sirka_cm) >= 30) {
+    const tm = (nast.max_rozmery || {})[technologia];
+    if (tm) { s = num(tm.sirka, s); v = num(tm.vyska, v); }
+    const tab = produkt.velkostna_tabulka as Riadok | null;
+    if (!vlastnyTextil && tab) {
+      for (const k of Object.keys(velkosti)) {
+        const r = tab[k]; if (!r) continue;
+        s = Math.min(s, num(r.A) - num(nast.okraj_sirka_cm, 8)); v = Math.min(v, num(r.B) - num(nast.okraj_vyska_cm, 20));
+      }
+    }
+  }
+  return { sirka: Math.max(1, Math.floor(s)), vyska: Math.max(1, Math.floor(v)) };
+}
+
 function vcRezanyTransfer(rezany: Riadok | null, folia: Riadok | null, costMetrics: Riadok[], plochaCm2: number, pocetFarieb = 1) {
   // Viac farieb: odpad fólie +15 % a čas +0,3 min za každú ďalšiu farbu (Kostra cien), nažehlenie za každú vrstvu zvlášť.
   const nFarieb = Math.max(1, Math.round(pocetFarieb || 1)), dalsie = nFarieb - 1;
@@ -122,13 +168,13 @@ function vcRezanyTransfer(rezany: Riadok | null, folia: Riadok | null, costMetri
   return material + pracaCm2 + elektrinaPloterCm2 + pracaNavyse + ((parseFloat(rezany?.naklady_manipulacia) || 0) + pracaFlat + elektrinaLisFlat) * nFarieb;
 }
 
-const TECHNOLOGIE: Record<string, string> = { dtf: 'DTF transfer', rezany: 'Rezaný transfer', sietotlac: 'Sieťotlač' };
+const TECHNOLOGIE: Record<string, string> = { dtf: 'DTF transfer', rezany: 'Rezaný transfer', sietotlac: 'Sieťotlač', sublimacia: 'Sublimácia' };
 const HLADINY = [5, 10, 25, 50, 100, 250, 500, 1000];
 const MAX_TLACI = 6;
 
 type Kontext = Awaited<ReturnType<typeof nacitajKontext>>;
 async function nacitajKontext(supabase: ReturnType<typeof createClient>) {
-  const [nast, produkty, sNast, efekty, umiestnenia, cfgR, metriky, sieto, sVelkosti, dtf, rezany, folie, tech] = await Promise.all([
+  const [nast, produkty, sNast, efekty, umiestnenia, cfgR, metriky, sieto, sVelkosti, dtf, rezany, folie, tech, subTextil, subGarment] = await Promise.all([
     supabase.from('potlac_nastavenia').select('*').eq('id', 1).maybeSingle(),
     supabase.from('potlac_produkty').select('*').eq('aktivny', true).order('poradie'),
     supabase.from('sietotlac_nastavenia').select('*').eq('id', 1).maybeSingle(),
@@ -142,6 +188,8 @@ async function nacitajKontext(supabase: ReturnType<typeof createClient>) {
     supabase.from('cennik_rezany_transfer').select('*').eq('id', 1).maybeSingle(),
     supabase.from('cennik_folie').select('*'),
     supabase.from('cennik_technologie').select('technologia, min_cena'),
+    supabase.from('textil_naklady').select('*').eq('technologia', 'sublimacia').maybeSingle(),
+    supabase.from('cennik_sublimacia_naklady').select('*').eq('id', 1).maybeSingle(),
   ]);
   if (nast.error || !nast.data) throw new Error('Appka Potlač textilu ešte nie je pripravená (chýba migrácia migration_potlac_textilu.sql).');
   if (produkty.error) throw produkty.error;
@@ -154,7 +202,7 @@ async function nacitajKontext(supabase: ReturnType<typeof createClient>) {
   return {
     nast: nast.data as Riadok, produkty: (produkty.data || []) as Riadok[], sNast: (sNast.data || {}) as Riadok, efekty: (efekty.data || []) as Riadok[],
     umiestnenia: (umiestnenia.data || []) as Riadok[], cfg, metriky: (metriky.data || []) as Riadok[], sieto: sieto.data as Riadok | null,
-    sVelkosti: (sVelkosti.data || []) as Riadok[], dtf: dtf.data as Riadok | null, rezany: rezany.data as Riadok | null, folie: (folie.data || []) as Riadok[], minCeny,
+    sVelkosti: (sVelkosti.data || []) as Riadok[], dtf: dtf.data as Riadok | null, rezany: rezany.data as Riadok | null, folie: (folie.data || []) as Riadok[], minCeny, subTextil: subTextil.data as Riadok | null, subGarment: subGarment.data as Riadok | null,
   };
 }
 
@@ -177,10 +225,16 @@ function normalizuj(ctx: Kontext, b: Riadok, suborPovinny: boolean): Vyber {
   const produkt = ctx.produkty.find((p) => p.id === b.produktId);
   if (!produkt) throw new Error('Vyberte produkt.');
   const technologia = String(b.technologia || '');
-  if (!TECHNOLOGIE[technologia] || !(produkt.technologie || []).includes(technologia)) throw new Error('Táto technológia nie je pre vybraný produkt dostupná.');
+  if (!TECHNOLOGIE[technologia]) throw new Error('Táto technológia nie je dostupná.');
   const vlastnyTextil = !!b.vlastnyTextil;
   const farby: Riadok[] = Array.isArray(produkt.farby) ? produkt.farby : [];
   const farba = farby.find((f) => f.hex === b.farbaHex) || farby[0] || { nazov: '', hex: '#ffffff' };
+
+  const materialTextilu = vlastnyTextil ? (b.material === 'polyester' ? 'polyester' : 'bavlna') : String(produkt.material || 'bavlna');
+  if (technologia === 'sublimacia') {
+    if (!/polyester/i.test(materialTextilu)) throw new Error('Sublimácia sa robí len na 100 % polyester alebo zmesi polyestru.');
+    if (jeTmavaFarba(String(farba.hex || ''))) throw new Error('Sublimácia sa robí len na bielu a svetlú látku.');
+  } else if (!(produkt.technologie || []).includes(technologia)) throw new Error('Táto technológia nie je pre vybraný produkt dostupná.');
 
   let velkosti: Record<string, number> = {};
   let pocetKs: number;
@@ -206,7 +260,9 @@ function normalizuj(ctx: Kontext, b: Riadok, suborPovinny: boolean): Vyber {
     if (!um || !pozicie[um.kod]) throw new Error('Vyberte umiestnenie potlače.');
     if (pouzite.has(um.kod)) throw new Error(`Umiestnenie „${um.nazov}“ máte v objednávke dvakrát.`);
     pouzite.add(um.kod);
-    const maxS = num(um.max_sirka_cm, 43), maxV = num(um.max_vyska_cm, 58);
+    const mx = maxPlochy(ctx.nast, produkt, technologia, um, velkosti, vlastnyTextil);
+    const maxS = mx.sirka, maxV = mx.vyska;
+    if (num(t.sirkaCm, 10) > maxS + 0.01 || num(t.vyskaCm, 10) > maxV + 0.01) throw new Error(`Potlač „${um.nazov}“ je väčšia než maximum ${maxS} × ${maxV} cm pre túto technológiu a veľkosť trička.`);
     const efekt = technologia === 'sietotlac' && ctx.efekty.some((e) => e.kod === t.efekt) ? String(t.efekt) : (technologia === 'sietotlac' ? (ctx.efekty[0]?.kod || 'klasicka') : '');
     let suborCesta: string | null = null;
     if (t.suborCesta) {
@@ -237,8 +293,11 @@ function cenaTlace(ctx: Kontext, v: Vyber, t: Tlac, ks: number) {
     zaklad = Math.max(priceAt(vc, ks, ctx.cfg), num(ctx.sieto?.min_cena));
     priplEfekt = num(ctx.efekty.find((e) => e.kod === t.efekt)?.priplatok_percent);
     priplPoly = v.material === 'polyester' ? num(ctx.sNast.polyester_priplatok_percent) : 0;
+  } else if (v.technologia === 'sublimacia') {
+    vc = vcSublimaciaGarment(ctx.subTextil, ctx.subGarment, ctx.metriky, plocha);
+    zaklad = Math.max(priceAt(vc, ks, ctx.cfg), num(ctx.minCeny.sublimacia));
   } else if (v.technologia === 'dtf') {
-    vc = vcDtfGarment(ctx.dtf, ctx.metriky, plocha);
+    vc = vcDtfGarment(ctx.dtf, ctx.metriky, plocha) + (pocetNazehleni(ctx.nast, t.sirkaCm, t.vyskaCm) - 1) * nazehlenieDtfNaKus(ctx.dtf, ctx.metriky);
     zaklad = Math.max(priceAt(vc, ks, ctx.cfg), num(ctx.minCeny.dtf));
   } else {
     vc = vcRezanyTransfer(ctx.rezany, ctx.folie[0] || null, ctx.metriky, plocha, t.farby);
@@ -261,6 +320,7 @@ async function vyhodnot(supabase: ReturnType<typeof createClient>, ctx: Kontext,
   if (v.technologia === 'sietotlac' && !ctx.sieto) throw new Error('Cenník sieťotlače nie je v ERP vyplnený.');
   if (v.technologia === 'dtf' && !ctx.dtf) throw new Error('Cenník DTF nie je v ERP vyplnený.');
   if (v.technologia === 'rezany' && !ctx.rezany) throw new Error('Cenník rezaného transferu nie je v ERP vyplnený.');
+  if (v.technologia === 'sublimacia' && (!ctx.subTextil || !ctx.subGarment)) throw new Error('Cenník sublimácie nie je v ERP vyplnený.');
   const ks = v.pocetKs;
   const tlaceCeny = v.tlace.map((t) => ({ t, ...cenaTlace(ctx, v, t, ks) }));
   const cenaKs = r2(tlaceCeny.reduce((s, x) => s + x.cenaKs, 0));
@@ -308,7 +368,7 @@ async function podpisanyOdkaz(supabase: ReturnType<typeof createClient>, cesta: 
 
 const popisTlace = (ctx: Kontext, v: Vyber, t: Tlac) => {
   const nazov = ctx.umiestnenia.find((u) => u.kod === t.umiestnenie)?.nazov || t.umiestnenie;
-  const farby = v.technologia === 'dtf' ? '' : `, ${t.farby} ${t.farby === 1 ? 'farba' : t.farby < 5 ? 'farby' : 'farieb'}`;
+  const farby = (v.technologia === 'dtf' || v.technologia === 'sublimacia') ? '' : `, ${t.farby} ${t.farby === 1 ? 'farba' : t.farby < 5 ? 'farby' : 'farieb'}`;
   const efekt = v.technologia === 'sietotlac' ? `, ${ctx.efekty.find((e) => e.kod === t.efekt)?.nazov || t.efekt}` : '';
   return `${nazov}: ${t.sirkaCm} × ${t.vyskaCm} cm${farby}${efekt}`;
 };
@@ -357,12 +417,13 @@ Deno.serve(async (req) => {
         ok: true,
         nastavenia: {
           aktivny: n.aktivny !== false, maxKs: num(n.max_ks, 5000), infoText: n.info_text || '', dphPercent: ctx.cfg.dphPercent,
-          minKs: { dtf: 1, rezany: 1, sietotlac: Math.round(num(s.min_ks, 10)) }, polyesterPriplatokPercent: num(s.polyester_priplatok_percent),
+          minKs: { dtf: 1, rezany: 1, sietotlac: Math.round(num(s.min_ks, 10)), sublimacia: 1 }, polyesterPriplatokPercent: num(s.polyester_priplatok_percent),
+          limity: { maxRozmery: n.max_rozmery || {}, lisSirkaCm: num(n.lis_sirka_cm, 38), lisVyskaCm: num(n.lis_vyska_cm, 48), okrajSirkaCm: num(n.okraj_sirka_cm, 8), okrajVyskaCm: num(n.okraj_vyska_cm, 20) },
         },
         produkty: ctx.produkty.filter((p) => p.foto_predok_url).map((p) => ({
           id: p.id, kod: p.kod, nazov: p.nazov, kategoria: p.kategoria, popis: p.popis || '', material: p.material, cenaTextiluBezDph: num(p.cena_textilu_eur),
           velkosti: p.velkosti || [], farby: p.farby || [], technologie: p.technologie || [], fotoPredok: p.foto_predok_url, fotoZadok: p.foto_zadok_url || null,
-          fotoSirkaCm: num(p.foto_sirka_cm, 100), pozicie: p.pozicie || {},
+          fotoSirkaCm: num(p.foto_sirka_cm, 100), pozicie: p.pozicie || {}, velkostnaTabulka: p.velkostna_tabulka || null,
         })),
         efekty: ctx.efekty.map((e) => ({ kod: e.kod, nazov: e.nazov, popis: e.popis || '', priplatokPercent: num(e.priplatok_percent) })),
         umiestnenia: ctx.umiestnenia.map((u) => ({ kod: u.kod, nazov: u.nazov, popis: u.popis || '', strana: u.strana, maxSirkaCm: num(u.max_sirka_cm), maxVyskaCm: num(u.max_vyska_cm), vychodziaSirkaCm: num(u.vychodzia_sirka_cm, 20), vychodziaVyskaCm: num(u.vychodzia_vyska_cm, 20) })),

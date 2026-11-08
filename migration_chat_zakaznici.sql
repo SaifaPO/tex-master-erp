@@ -34,7 +34,7 @@ create table if not exists public.chat_admin_online (
 );
 create table if not exists public.chat_nastavenia (
   id int primary key default 1 check (id = 1),
-  prijemcovia text[] not null default '{saifasgalaxy@gmail.com}',   -- kam ísť e-mail, keď nie je nikto online
+  prijemcovia text[] not null default '{pbtprint@pbtprint.sk}',   -- kam ísť e-mail, keď nie je nikto online
   odosielatel_meno text not null default 'PBT Print',
   odosielatel_email text not null default 'pbtprint@pbtprint.sk',
   email_pri_offline boolean not null default true,

@@ -77,6 +77,7 @@ export function vytvorEngine({ elFront, elBack, ppm = 2, pozadie = '#ffffff', on
   const priradVsetky = () => { [['front', front], ['back', back]].forEach(([s, c]) => c.getObjects().forEach((o) => { if (!zonaPodla(o.zona)) priradZonu(o, s); })); };
   const info = (obj) => ({
     sirkaMm: Math.round(obj.getScaledWidth() / ppm), vyskaMm: Math.round(obj.getScaledHeight() / ppm),
+    maxMm: Math.round(((obj.zona && zonaPodla(obj.zona)) ? Math.max(zonaPodla(obj.zona).w, zonaPodla(obj.zona).h) * 1.15 : Math.max(rozmer.w, rozmer.h) * 0.9) / ppm),
     uhol: ((Math.round(obj.angle || 0) % 360) + 360) % 360,
     typ: obj.type === 'i-text' || obj.type === 'text' ? 'text' : 'obrazok',
     ...((obj.type === 'i-text' || obj.type === 'text') ? {
@@ -168,7 +169,7 @@ export function vytvorEngine({ elFront, elBack, ppm = 2, pozadie = '#ffffff', on
       const t = new fabric.IText(text, {
         left: c.width / 2, top: c.height / 2, originX: 'center', originY: 'center',
         fontFamily: symbol ? 'sans-serif' : font, fill: farba,
-        fontSize: velkostMm ? velkostMm * ppm : (zonaPreVlozenie() ? Math.max(10, Math.min(zonaPreVlozenie().h * 0.3, 16 * ppm)) * (symbol ? 1.5 : 1) : Math.max(14, Math.min(c.height * 0.4, 40 * (ppm / 2)) * (symbol ? 1.5 : 1))),
+        fontSize: velkostMm ? velkostMm * ppm : (zonaPreVlozenie() ? (symbol ? Math.max(14, Math.min(zonaPreVlozenie().w, zonaPreVlozenie().h) * 0.55) : Math.max(12, Math.min(zonaPreVlozenie().h * 0.3, 40 * ppm))) : Math.max(14, Math.min(c.height * 0.4, 40 * (ppm / 2)) * (symbol ? 1.5 : 1))),
         fontStyle: kurziva && !symbol ? 'italic' : 'normal',
         stroke: hrubkaObrysu > 0 ? obrys : null, strokeWidth: hrubkaObrysu * 2 * ppm, paintFirst: 'stroke', strokeLineJoin: 'round', strokeUniform: true,
       });
@@ -182,7 +183,7 @@ export function vytvorEngine({ elFront, elBack, ppm = 2, pozadie = '#ffffff', on
           const c = dajAktivne();
           const w = zdroj.width, h = zdroj.height;
           const zz = zonaPreVlozenie();
-          const scale = Math.min(((zz ? zz.w : c.width) * 0.8) / w, ((zz ? zz.h : c.height) * 0.8) / h);
+          const scale = Math.min(((zz ? zz.w : c.width) * 0.7) / w, ((zz ? zz.h : c.height) * 0.7) / h);
           const img = new fabric.Image(zdroj, { left: c.width / 2, top: c.height / 2, originX: 'center', originY: 'center', scaleX: scale, scaleY: scale });
           pridaj(img); resolve(true);
         };
@@ -225,6 +226,10 @@ export function vytvorEngine({ elFront, elBack, ppm = 2, pozadie = '#ffffff', on
     zmaz() { const c = dajAktivne(); c.getActiveObjects().forEach((o) => c.remove(o)); c.discardActiveObject(); c.requestRenderAll(); },
     stredH() { const c = dajAktivne(); const o = c.getActiveObject(); if (o) { o.centerH(); o.setCoords(); c.requestRenderAll(); } },
     stredV() { const c = dajAktivne(); const o = c.getActiveObject(); if (o) { o.centerV(); o.setCoords(); c.requestRenderAll(); } },
+    // posuvník veľkosti: šírka vybraného objektu v mm (pomer strán sa zachová)
+    velkostMm(mm) { const c = dajAktivne(); const o = c.getActiveObject(); if (!o || !(mm > 0)) return; const stred = o.getCenterPoint(); o.scaleToWidth(mm * ppm); o.setPositionByOrigin(stred, 'center', 'center'); o.setCoords(); c.requestRenderAll(); onVyber?.(info(o), aktivna); onZmena?.(); },
+    // väčšie úchyty na rohoch (dotyk) — veľkosť v px plátna, prepočítaná podľa priblíženia
+    nastavOvladace(px) { const p = Math.max(10, Math.round(px)); fabric.Object.prototype.cornerSize = p; fabric.Object.prototype.touchCornerSize = p * 2; fabric.Object.prototype.padding = Math.round(p * 0.3); [front, back].forEach((c) => { c.getObjects().forEach((o) => { o.cornerSize = p; o.touchCornerSize = p * 2; o.padding = Math.round(p * 0.3); o.setCoords(); }); c.requestRenderAll(); }); },
     otoc(uhol) { const c = dajAktivne(); const o = c.getActiveObject(); if (o) { o.set('angle', uhol); o.setCoords(); c.requestRenderAll(); onVyber?.(info(o), aktivna); } },
     dopredu() { const c = dajAktivne(); const o = c.getActiveObject(); if (o) { c.bringForward(o); c.requestRenderAll(); } },
     dozadu() { const c = dajAktivne(); const o = c.getActiveObject(); if (o) { c.sendBackwards(o); c.requestRenderAll(); } },
