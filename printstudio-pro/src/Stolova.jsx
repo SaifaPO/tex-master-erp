@@ -122,8 +122,8 @@ export default function Stolova({ supabase }) {
 
       <PlochaEditor ref={editorRef} sirkaMm={vel?.sirka_mm || 150} vyskaMm={vel?.vyska_mm || 220} tvar={tvar || null} ppm={2} rozlozenie="vedla" fonty={d.fonty} grafiky={d.grafiky}>
         {({ nastroje, plocha }) => (
-          <main className="flex-1 w-full max-w-[1500px] mx-auto px-4 sm:px-6 py-5 grid grid-cols-1 lg:grid-cols-[24rem_1fr] gap-5 items-start">
-            <aside className="space-y-4">
+          <main className="flex-1 w-full max-w-[1500px] mx-auto px-4 sm:px-6 py-5 flex flex-col gap-4 lg:gap-5 lg:grid lg:grid-cols-[24rem_1fr] lg:items-start">
+            <aside className="space-y-4 order-2 lg:order-none lg:col-start-1 lg:row-start-1 lg:row-span-2 min-w-0">
               <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-4">
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-2">1. Tvar vlajky</label>
@@ -156,8 +156,9 @@ export default function Stolova({ supabase }) {
               </div>
             </aside>
 
-            <section className="space-y-5 min-w-0">
-              {plocha}
+            {/* mobil: náhľad (plocha) je prilepený hore a ovládacie prvky sú pod ním, takže zmeny vidno hneď bez scrollovania */}
+            <div className="order-1 lg:order-none lg:col-start-2 lg:row-start-1 sticky top-16 z-30 lg:static min-w-0 bg-slate-50/95 backdrop-blur -mx-4 px-4 pb-2 pt-1 lg:mx-0 lg:px-0 lg:pb-0 lg:pt-0 lg:bg-transparent lg:backdrop-blur-none">{plocha}</div>
+            <div className="order-3 lg:order-none lg:col-start-2 lg:row-start-2 space-y-5 min-w-0">
               <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-wrap items-end gap-4">
                 <div className="w-32"><label className="block text-xs font-medium text-slate-500 mb-1">{kos.kosik.length > 0 ? 'Počet kusov tohto motívu' : 'Počet kusov'}</label><NumberInput min="1" step="1" value={pocetKs} onChange={(v) => setPocetKs(Math.max(1, Math.round(v)))} fallback={1} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" /></div>
                 <p className="text-xs text-slate-500 flex-1 min-w-[200px]">Tlačové súbory (líce aj rub, ≈ 300 DPI, priehľadné mimo tvaru) sa vygenerujú automaticky pri odoslaní objednávky.</p>
@@ -172,7 +173,7 @@ export default function Stolova({ supabase }) {
                 </CenaSuhrn>
               </div>
               <MnozstevneZlavy urovne={cena?.urovne} pocetKs={cena?.ksSpolu ?? pocetKs} b2bPercent={b2b.zlavaPercent} b2bKod={b2b.kod} />
-            </section>
+            </div>
           </main>
         )}
       </PlochaEditor>

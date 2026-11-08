@@ -58,6 +58,11 @@ export function vytvorEngine({ elFront, elBack, ppm = 2, pozadie = '#ffffff', on
   const info = (obj) => ({
     sirkaMm: Math.round(obj.getScaledWidth() / ppm), vyskaMm: Math.round(obj.getScaledHeight() / ppm),
     uhol: ((Math.round(obj.angle || 0) % 360) + 360) % 360,
+    typ: obj.type === 'i-text' || obj.type === 'text' ? 'text' : 'obrazok',
+    ...((obj.type === 'i-text' || obj.type === 'text') ? {
+      text: obj.text, font: obj.fontFamily, farba: obj.fill || '#000000', obrys: obj.stroke || '#ffffff',
+      hrubkaMm: obj.stroke ? Math.round((obj.strokeWidth || 0) / (2 * ppm) * 10) / 10 : 0, kurziva: obj.fontStyle === 'italic',
+    } : {}),
   });
 
   [front, back].forEach((canvas, i) => {
@@ -79,6 +84,7 @@ export function vytvorEngine({ elFront, elBack, ppm = 2, pozadie = '#ffffff', on
     canvas.on('object:moving', transform);
     canvas.on('object:scaling', transform);
     canvas.on('object:rotating', (e) => onVyber?.(info(e.target), strana));
+    canvas.on('text:changed', (e) => onVyber?.(info(e.target), strana)); // úprava textu priamo na plátne (dvojklik)
     canvas.on('mouse:up', () => onPrichytenie?.(strana, false, false));
     ['object:added', 'object:removed', 'object:modified'].forEach((ev) => canvas.on(ev, () => onZmena?.()));
   });
@@ -112,7 +118,7 @@ export function vytvorEngine({ elFront, elBack, ppm = 2, pozadie = '#ffffff', on
         fontFamily: symbol ? 'sans-serif' : font, fill: farba,
         fontSize: velkostMm ? velkostMm * ppm : Math.max(14, Math.min(c.height * 0.4, 40 * (ppm / 2)) * (symbol ? 1.5 : 1)),
         fontStyle: kurziva && !symbol ? 'italic' : 'normal',
-        stroke: hrubkaObrysu > 0 ? obrys : null, strokeWidth: hrubkaObrysu * (ppm / 2), paintFirst: 'stroke',
+        stroke: hrubkaObrysu > 0 ? obrys : null, strokeWidth: hrubkaObrysu * 2 * ppm, paintFirst: 'stroke', strokeLineJoin: 'round', strokeUniform: true,
       });
       pridaj(t);
     },
@@ -138,6 +144,22 @@ export function vytvorEngine({ elFront, elBack, ppm = 2, pozadie = '#ffffff', on
         r.readAsDataURL(file);
       });
     },
+    // úprava už vloženého textu (vybraný objekt): text, písmo, farba, obrys (hrúbka v mm VIDITEĽNÁ pod písmenami — obrys sa kreslí pod výplň),
+    // kurzíva. Obrys je vždy pod písmom, takže ho nezjedá.
+    upravText({ text, font, farba, obrys, hrubkaMm, kurziva }) {
+      const c = dajAktivne(); const o = c.getActiveObject();
+      if (!o || (o.type !== 'i-text' && o.type !== 'text')) return;
+      if (text !== undefined) o.set('text', text);
+      if (font !== undefined) o.set('fontFamily', font);
+      if (farba !== undefined) o.set('fill', farba);
+      if (kurziva !== undefined) o.set('fontStyle', kurziva ? 'italic' : 'normal');
+      const nova = hrubkaMm !== undefined ? hrubkaMm : (o.stroke ? (o.strokeWidth || 0) / (2 * ppm) : 0);
+      const farbaObrysu = obrys !== undefined ? obrys : (o.stroke || '#ffffff');
+      o.set({ stroke: nova > 0 ? farbaObrysu : null, strokeWidth: nova * 2 * ppm, paintFirst: 'stroke', strokeLineJoin: 'round', strokeUniform: true });
+      if (obrys !== undefined && !(nova > 0)) o.set('stroke', null);
+      o.dirty = true; o.setCoords(); c.requestRenderAll(); onVyber?.(info(o), aktivna); onZmena?.();
+    },
+    zrusVyber() { [front, back].forEach((c) => { c.discardActiveObject(); c.requestRenderAll(); }); },
     nastavPozadieVzor(svg) {
       const c = dajAktivne();
       fabric.Image.fromURL(svgDoDataUri(svg), (img) => {
