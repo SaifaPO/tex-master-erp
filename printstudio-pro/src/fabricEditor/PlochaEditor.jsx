@@ -26,6 +26,7 @@ const PlochaEditor = forwardRef(function PlochaEditor({
   const [farbaObrysu, setFarbaObrysu] = useState('#ffffff');
   const [hrubkaObrysu, setHrubkaObrysu] = useState(0);
   const [pozadieFarba, setPozadieFarba] = useState('#ffffff');
+  const [zalozka, setZalozka] = useState('symboly'); // 'symboly' | 'kniznica'
   const sirkaPx = Math.round(sirkaMm * ppm), vyskaPx = Math.round(vyskaMm * ppm);
   const pod = rozlozenie === 'pod';
   const MEDZERA = 40;
@@ -127,10 +128,24 @@ const PlochaEditor = forwardRef(function PlochaEditor({
       </div>
 
       <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
-        <h3 className="font-semibold text-slate-800 mb-2 text-sm flex items-center gap-2"><Shapes className="w-4 h-4 text-indigo-500" /> Symboly</h3>
-        <div className="grid grid-cols-5 gap-1.5">
-          {symboly.map((s) => <button key={s} type="button" onClick={() => e()?.pridajText({ text: s, symbol: true })} className="h-10 text-2xl bg-white border border-slate-200 hover:bg-slate-100 rounded-md flex items-center justify-center">{s}</button>)}
-        </div>
+        {grafiky.length > 0 ? (
+          <div className="flex bg-slate-200/70 rounded-lg p-0.5 mb-2">
+            {[['symboly', 'Symboly'], ['kniznica', 'Knižnica grafík a log']].map(([k, n]) => (
+              <button key={k} type="button" onClick={() => setZalozka(k)} className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition flex items-center justify-center gap-1.5 ${zalozka === k ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>
+                {k === 'symboly' ? <Shapes className="w-3.5 h-3.5" /> : <ImageIcon className="w-3.5 h-3.5" />} {n}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <h3 className="font-semibold text-slate-800 mb-2 text-sm flex items-center gap-2"><Shapes className="w-4 h-4 text-indigo-500" /> Symboly</h3>
+        )}
+        {(zalozka === 'symboly' || grafiky.length === 0) ? (
+          <div className="grid grid-cols-5 gap-1.5 max-h-56 overflow-y-auto pr-1">
+            {symboly.map((s) => <button key={s} type="button" onClick={() => e()?.pridajText({ text: s, symbol: true })} className="h-10 text-2xl bg-white border border-slate-200 hover:bg-slate-100 rounded-md flex items-center justify-center">{s}</button>)}
+          </div>
+        ) : (
+          <KniznicaGrafik bezNadpisu grafiky={grafiky} onVloz={(url, farba) => e()?.pridajObrazokZUrl(url, farba)} />
+        )}
       </div>
 
       <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
@@ -140,12 +155,6 @@ const PlochaEditor = forwardRef(function PlochaEditor({
           <input type="file" accept="image/*" className="hidden" onChange={(ev) => { const f = ev.target.files[0]; ev.target.value = ''; if (f) e()?.pridajObrazokZoSuboru(f); }} />
         </label>
       </div>
-
-      {grafiky.length > 0 && (
-        <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
-          <KniznicaGrafik grafiky={grafiky} onVloz={(url, farba) => e()?.pridajObrazokZUrl(url, farba)} />
-        </div>
-      )}
 
       {vybrany && (
         <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 space-y-2.5">

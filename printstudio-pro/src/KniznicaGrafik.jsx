@@ -4,7 +4,7 @@ import React, { useMemo, useState } from 'react';
 // (kategória "Športové ikony" — čierne ikony, ktoré sa pri vložení prefarbia na zvolenú farbu).
 const JEDNOFAREBNE = ['Športové ikony'];
 
-export default function KniznicaGrafik({ grafiky, onVloz, tmava = false }) {
+export default function KniznicaGrafik({ grafiky, onVloz, tmava = false, bezNadpisu = false }) {
   const [farba, setFarba] = useState('#ffffff');
   const [povodna, setPovodna] = useState(false);
   const [otvorena, setOtvorena] = useState(null);
@@ -23,7 +23,7 @@ export default function KniznicaGrafik({ grafiky, onVloz, tmava = false }) {
 
   return (
     <div className="space-y-2 max-w-full">
-      <label className={`block text-[11px] font-semibold uppercase tracking-wider ${trieda.nadpis}`}>Knižnica grafík a log</label>
+      {!bezNadpisu && <label className={`block text-[11px] font-semibold uppercase tracking-wider ${trieda.nadpis}`}>Knižnica grafík a log</label>}
       {skupiny.some(([k]) => JEDNOFAREBNE.includes(k)) && (
         <div className={`flex items-center gap-2 text-[11px] ${trieda.nadpis}`}>
           <span>Farba ikon:</span>
