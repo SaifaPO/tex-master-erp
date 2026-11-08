@@ -11,7 +11,8 @@ import { vytvorEngine, SYMBOLY, FONTY_PREDVOLENE, VZORY_POZADIA, svgDoDataUri } 
 // Cez ref: exportuj() -> { front, back (Blob PNG ≈300 DPI), json }, nahlad(), pocetObjektov(), nastavRozmer().
 const PlochaEditor = forwardRef(function PlochaEditor({
   sirkaMm, vyskaMm, tvar = null, ppm = 2, rozlozenie = 'vedla', nazvyStran = ['Líce', 'Rub'], spadavkaMm = 0, casti = null, medzeraCastiMm = 10,
-  fonty = [], grafiky = [], symboly = SYMBOLY, jednaStrana = false, priehladne = false, podkladFarba = null, onZmena = null, maxVyskaVh = 0.3, popisRozmeru = null, children,
+  fonty = [], grafiky = [], symboly = SYMBOLY, jednaStrana = false, priehladne = false, podkladFarba = null, onZmena = null, maxVyskaVh = 0.3, popisRozmeru = null,
+  podkladUrl = null, jedenPohlad = false, zony = null, aktivnaZona = null, popisVkladania = null, children,
 }, ref) {
   const wrapFront = useRef(null), wrapBack = useRef(null), vonkajsi = useRef(null);
   const guideRefs = useRef({});
@@ -33,7 +34,7 @@ const PlochaEditor = forwardRef(function PlochaEditor({
   // úzky displej (mobil/tablet na výšku): plocha sa zmenší tak, aby sa zmestila nad ovládacie prvky (líce aj rub sú stále vidno naraz)
   const [uzky, setUzky] = useState(() => typeof window !== 'undefined' && window.innerWidth < 1024);
   useEffect(() => { const f = () => setUzky(window.innerWidth < 1024); window.addEventListener('resize', f); return () => window.removeEventListener('resize', f); }, []);
-  const jednaPlocha = jednaStrana; // líce aj rub sú vidno naraz (vedľa seba / nad sebou) aj na mobile
+  const jednaPlocha = jednaStrana || jedenPohlad; // jedenPohlad = produkt (tričko) sa ukazuje po jednej strane (spredu / zozadu); inak sú líce aj rub vidno naraz
   const sirkaPx = Math.round(sirkaMm * ppm), vyskaPx = Math.round(vyskaMm * ppm);
   const pod = rozlozenie === 'pod';
   const MEDZERA = 40;
@@ -68,6 +69,20 @@ const PlochaEditor = forwardRef(function PlochaEditor({
   }, [sirkaMm, vyskaMm, tvar]);
 
   useEffect(() => { engineRef.current?.setStrana(strana); }, [strana]);
+  // zóny (potlačové plochy na produkte) + zóna, do ktorej sa práve vkladá; po výbere zóny sa plocha priblíži na ňu
+  useEffect(() => { engineRef.current?.nastavZony(zony || []); }, [zony]);
+  useEffect(() => {
+    engineRef.current?.nastavVkladanie(aktivnaZona || null);
+    const z = aktivnaZona && zony ? zony.find((x) => x.kod === aktivnaZona) : null;
+    if (!z) return undefined;
+    setStrana(z.strana);
+    const el = vonkajsi.current; if (!el) return undefined;
+    const zoomZ = Math.max(zoomFit, Math.min(1.4, (el.clientWidth - 24) / (z.w * 1.5), (el.clientHeight - 24) / (z.h * 1.5)));
+    setZoomMod(zoomZ);
+    const t = setTimeout(() => el.scrollTo({ left: Math.max(0, z.cx * zoomZ - el.clientWidth / 2 + 12), top: Math.max(0, (z.cy + 24) * zoomZ - el.clientHeight / 2 + 12), behavior: 'smooth' }), 120);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aktivnaZona]);
   useEffect(() => { nacitajGoogleFonty([...FONTY_PREDVOLENE, ...fonty.map((f) => f.nazov || f)]); }, [fonty]);
   useEffect(() => { engineRef.current?.calcOffset(); }, [zoom, strana, uzky]);
 
@@ -76,11 +91,11 @@ const PlochaEditor = forwardRef(function PlochaEditor({
     const el = vonkajsi.current; if (!el) return;
     const dostupne = el.clientWidth - (uzky ? 24 : 48);
     // na mobile sa plocha zmestí aj do výšky (≈ 40 % obrazovky), aby ostalo miesto na ovládacie prvky a bolo vidieť zmeny bez scrollovania
-    const limitVyska = uzky ? (window.innerHeight * maxVyskaVh - 8) / celkovaVyska : Infinity;
+    const limitVyska = uzky ? (window.innerHeight * maxVyskaVh - 8) / celkovaVyska : (jedenPohlad ? (window.innerHeight * 0.7 - 8) / celkovaVyska : Infinity);
     // úzke dlhé plochy (šnúrky) by na mobile boli len pár pixelov vysoké — zväčší sa na čitateľnú výšku a plocha sa dá posúvať do strán
     const minCitatelne = uzky ? 110 / celkovaVyska : 0;
     setZoomFit(Math.max(0.05, Math.min(1, Math.max(minCitatelne, Math.min(dostupne / celkovaSirka, limitVyska)))));
-  }, [celkovaSirka, celkovaVyska, uzky]);
+  }, [celkovaSirka, celkovaVyska, uzky, jedenPohlad, maxVyskaVh]);
   useLayoutEffect(() => {
     prepocitajFit();
     const ro = new ResizeObserver(prepocitajFit);
@@ -95,6 +110,10 @@ const PlochaEditor = forwardRef(function PlochaEditor({
     exportujOrezane: (opts) => engineRef.current?.exportujOrezane(opts) || null,
     nahlad: () => engineRef.current?.nahlad(),
     pocetObjektov: () => engineRef.current?.pocetObjektov() || 0,
+    zona: (kod, opts) => engineRef.current?.zona(kod, opts) || null,
+    pridajObrazok: (file) => engineRef.current?.pridajObrazokZoSuboru(file),
+    odstranZonu: (kod) => engineRef.current?.odstranZonu(kod),
+    presunZonu: (a, b) => engineRef.current?.presunZonu(a, b),
   }), []);
 
   const e = () => engineRef.current;
@@ -104,7 +123,7 @@ const PlochaEditor = forwardRef(function PlochaEditor({
     <div className="space-y-4">
       {vybrany && (
         // mobil: panel úpravy je prilepený dole (spodný panel), plocha ostáva hore — zmeny farby, písma či obrysu vidno hneď, bez scrollovania
-        <div className={`bg-indigo-50 border border-indigo-200 p-3 space-y-2.5 ${uzky ? 'fixed inset-x-0 bottom-0 z-50 max-h-[46vh] overflow-y-auto overflow-x-hidden rounded-t-2xl border-t-2 shadow-[0_-8px_24px_rgba(0,0,0,0.18)]' : 'rounded-xl'}`}>
+        <div className={`bg-indigo-50 border border-indigo-200 p-3 space-y-2.5 ${uzky ? 'fixed inset-x-0 bottom-0 z-50 max-h-[40vh] overflow-y-auto overflow-x-hidden rounded-t-2xl border-t-2 shadow-[0_-8px_24px_rgba(0,0,0,0.18)]' : 'rounded-xl'}`}>
           <div className="flex justify-between items-center gap-2">
             <h3 className="font-semibold text-indigo-800 text-xs uppercase tracking-wider">{vybrany.typ === 'text' ? 'Úprava textu' : 'Úprava objektu'}</h3>
             <span className="text-xs bg-white px-2 py-0.5 rounded border border-indigo-100 font-mono text-indigo-800 whitespace-nowrap">{vybrany.sirkaMm} × {vybrany.vyskaMm} mm</span>
@@ -145,7 +164,8 @@ const PlochaEditor = forwardRef(function PlochaEditor({
         </div>
       )}
 
-      {!jednaStrana && <div>
+      {popisVkladania && <p className="text-xs font-semibold text-indigo-800 bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2">Vkladáte do: {popisVkladania}</p>}
+      {!jednaPlocha && <div>
         <label className="block text-sm font-semibold text-slate-700 mb-2">Kam vložiť nový objekt?</label>
         <div className="flex bg-slate-100 rounded-lg p-1">
           {[['front', nazvyStran[0]], ['back', nazvyStran[1]]].map(([k, n]) => (
@@ -221,14 +241,14 @@ const PlochaEditor = forwardRef(function PlochaEditor({
       <div className="px-3 sm:px-4 py-2 border-b border-slate-200 flex items-center justify-between gap-2 sm:gap-3 flex-wrap bg-slate-50">
         <div className="flex items-center gap-3 text-xs">
           <span className="font-semibold text-slate-700 hidden sm:inline">Plocha pre dizajn</span>
-          {uzky && !jednaStrana && (
+          {(uzky || jedenPohlad) && !jednaStrana && (
             <span className="flex bg-slate-200/70 rounded-lg p-0.5">
               {[['front', nazvyStran[0]], ['back', nazvyStran[1]]].map(([k, n]) => (
                 <button key={k} type="button" onClick={() => setStrana(k)} className={`px-3 py-1 rounded-md font-semibold ${strana === k ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-600'}`}>{n}</button>
               ))}
             </span>
           )}
-          <span className="font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">{sirkaMm} × {vyskaMm} mm</span>
+          {!podkladUrl && <span className="font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">{sirkaMm} × {vyskaMm} mm</span>}
           {popisRozmeru && <span className="text-slate-600 font-medium">{popisRozmeru}</span>}
           {casti && casti.length > 1 && <span className="text-slate-500 hidden sm:inline">Tlač v {casti.length} častiach — medzi nimi šrafovaná medzera {medzeraCastiMm} mm na strih</span>}
           {spadavkaMm > 0 && <span className="text-slate-500 hidden sm:flex items-center gap-2"><span className="inline-block w-3 h-3 border-2 border-red-500 border-dashed" /> okraj výroby <span className="inline-block w-3 h-3 border border-green-600 border-dotted ml-1" /> bezpečná zóna ({spadavkaMm} mm)</span>}
@@ -239,13 +259,14 @@ const PlochaEditor = forwardRef(function PlochaEditor({
           ))}
         </div>
       </div>
-      <div ref={vonkajsi} className="overflow-auto p-3 lg:p-6" style={podkladFarba ? { backgroundColor: podkladFarba } : { backgroundColor: '#e5e5f7', backgroundImage: 'linear-gradient(45deg,#d1d5db 25%,transparent 25%),linear-gradient(-45deg,#d1d5db 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#d1d5db 75%),linear-gradient(-45deg,transparent 75%,#d1d5db 75%)', backgroundSize: '20px 20px', backgroundPosition: '0 0,0 10px,10px -10px,-10px 0' }}>
+      <div ref={vonkajsi} className={`overflow-auto p-3 lg:p-6 ${jedenPohlad ? 'max-h-[46vh] lg:max-h-[72vh]' : ''}`} style={podkladFarba ? { backgroundColor: podkladFarba } : { backgroundColor: '#e5e5f7', backgroundImage: 'linear-gradient(45deg,#d1d5db 25%,transparent 25%),linear-gradient(-45deg,#d1d5db 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#d1d5db 75%),linear-gradient(-45deg,transparent 75%,#d1d5db 75%)', backgroundSize: '20px 20px', backgroundPosition: '0 0,0 10px,10px -10px,-10px 0' }}>
         <div style={{ width: celkovaSirka * zoom, height: celkovaVyska * zoom, margin: '0 auto' }}>
           <div style={{ transform: `scale(${zoom})`, transformOrigin: 'top left', width: celkovaSirka, height: celkovaVyska, display: 'flex', flexDirection: pod ? 'column' : 'row', gap: MEDZERA, alignItems: 'flex-start' }}>
             {[['front', wrapFront, nazvyStran[0]], ['back', wrapBack, nazvyStran[1]]].map(([k, r, n]) => (
-              <div key={k} style={{ width: sirkaPx, paddingTop: 24, display: jednaStrana && k === 'back' ? 'none' : undefined }} className="relative">
-                {!jednaStrana && <span className={`absolute top-0 left-0 text-xs font-bold px-2 py-0.5 rounded ${strana === k ? 'bg-indigo-600 text-white' : 'bg-white/90 text-slate-600'}`}>{n}</span>}
-                <div ref={r} className="relative" style={{ width: sirkaPx, height: vyskaPx, filter: strana === k ? 'drop-shadow(0 0 10px rgba(79,70,229,0.55))' : 'drop-shadow(0 6px 10px rgba(0,0,0,0.12))', opacity: strana === k ? 1 : 0.7, transition: 'opacity .2s' }} onMouseDown={() => setStrana(k)}>
+              <div key={k} style={{ width: sirkaPx, paddingTop: 24, display: (jednaStrana && k === 'back') || (jedenPohlad && k !== strana) ? 'none' : undefined }} className="relative">
+                {!jednaPlocha && <span className={`absolute top-0 left-0 text-xs font-bold px-2 py-0.5 rounded ${strana === k ? 'bg-indigo-600 text-white' : 'bg-white/90 text-slate-600'}`}>{n}</span>}
+                <div ref={r} className="relative" style={{ width: sirkaPx, height: vyskaPx, filter: podkladUrl ? 'none' : (strana === k ? 'drop-shadow(0 0 10px rgba(79,70,229,0.55))' : 'drop-shadow(0 6px 10px rgba(0,0,0,0.12))'), opacity: strana === k ? 1 : 0.7, transition: 'opacity .2s' }} onMouseDown={() => setStrana(k)}>
+                  {podkladUrl && podkladUrl[k] && <img src={podkladUrl[k]} alt="" draggable={false} className="absolute inset-0 w-full h-full select-none pointer-events-none" style={{ zIndex: 0 }} />}
                   {casti && casti.length > 0 ? (
                     <div className="absolute inset-0 pointer-events-none z-10">
                       {casti.map((dl, i) => {

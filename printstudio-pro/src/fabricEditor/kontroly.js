@@ -2,7 +2,7 @@ import { fabric } from 'fabric';
 
 // Tlačidlá priamo na vybranom objekte v náhľade: ⧉ duplikovať (vľavo hore) a ✕ zmazať (vpravo hore).
 // Registrujú sa raz pre všetky Fabric plátna (stolové vlajky, šnúrky, návrhy, plážové vlajky, zástavy…).
-const PRENOS = ['obrysHrubka', 'obrysPoloha'];
+const PRENOS = ['obrysHrubka', 'obrysPoloha', 'zona'];
 let hotovo = false;
 
 function kreslic(znak, farba) {
