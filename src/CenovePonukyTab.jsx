@@ -4,7 +4,7 @@ import {
   Image as ImageIcon, Upload, Award, ListChecks, Clock, ShoppingCart, Loader2, Paperclip, Download
 } from 'lucide-react';
 import { priceAt, marginAt } from './printstudio/pricingEngine';
-import { nacitajKostru, vcSublimaciaGarmentRozpis, vcDtfGarmentRozpis, vcRezanyTransferRozpis, vcVysivka, vcSietotlacCelkom, plochaFormatuSietotlac, vcRezanyTransfer, minCenaPotlace } from './printstudio/vyrobneNaklady';
+import { nacitajKostru, vcSublimaciaGarmentRozpis, vcDtfGarmentRozpis, pocetNazehleniDtf, vcRezanyTransferRozpis, vcVysivka, vcSietotlacCelkom, plochaFormatuSietotlac, vcRezanyTransfer, minCenaPotlace } from './printstudio/vyrobneNaklady';
 
 // --- Lokálne konštanty (duplicitne s App.jsx, aby tento súbor zostal samostatný) ---
 const TIER_LABELS = { standard: 'Standard', bronze: 'Bronze', silver: 'Silver', gold: 'Gold' };
@@ -432,7 +432,7 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
       calcVc = rz?.spolu ?? 0;
       if (rz) calcCasti = [{ label: 'Sublimačný transfer (papier, atrament, tlač)', vc: rz.transfer }, { label: 'Nažehlenie sublimačného papiera na textil', vc: rz.nazehlenie }];
     } else if (calcMethod === 'dtf') {
-      const rz = vcDtfGarmentRozpis(kostra, calcPlocha);
+      const rz = vcDtfGarmentRozpis(kostra, calcPlocha, pocetNazehleniDtf(kostra, calc.sirka, calc.vyska)); // motív väčší než lis (38×48) sa žehlí viackrát
       calcVc = rz.spolu;
       calcCasti = [{ label: `DTF transfer (fólia, farby, tlač, odpad ${Number(rz.odpadPercent).toFixed(0)} %)`, vc: rz.transfer }, { label: 'Nažehlenie DTF transferu na textil', vc: rz.nazehlenie }];
     }

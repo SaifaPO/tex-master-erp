@@ -3,7 +3,7 @@ import { Banknote, Calculator, TrendingUp } from 'lucide-react';
 import { priceAt, marginAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 import NumberInput from '../NumberInput';
 import VykonPanel, { VykonCasBlok } from './VykonCas';
-import { vcSublimaciaGarment as vcSublimaciaGarmentZo, vcSublimaciaGarmentRozpis, vcDtfGarment as vcDtfGarmentZo, vcDtfGarmentRozpis, vcRezanyTransferRozpis, vcVysivka as vcVysivkaZo, nakladFarbySietotlac, vcSietotlacZaklad, vcSietotlacCelkom, plochaFormatuSietotlac, vcRezanyTransfer as vcRezanyTransferZo, vcLaserRezanie as vcLaserRezaniaZo } from './vyrobneNaklady';
+import { vcSublimaciaGarment as vcSublimaciaGarmentZo, vcSublimaciaGarmentRozpis, vcDtfGarment as vcDtfGarmentZo, vcDtfGarmentRozpis, pocetNazehleniDtf, vcRezanyTransferRozpis, vcVysivka as vcVysivkaZo, nakladFarbySietotlac, vcSietotlacZaklad, vcSietotlacCelkom, plochaFormatuSietotlac, vcRezanyTransfer as vcRezanyTransferZo, vcLaserRezanie as vcLaserRezaniaZo } from './vyrobneNaklady';
 
 const inputCls = 'w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white';
 const labelCls = 'text-xs text-slate-400 font-medium';
@@ -79,6 +79,8 @@ export default function PotlaceTab({ supabase }) {
   const [textilSub, setTextilSub] = useState(null);
   const [sublimaciaGarment, setSublimaciaGarment] = useState(null);
   const [dtfNaklady, setDtfNaklady] = useState(null);
+  const [lisDtf, setLisDtf] = useState(null); // rozmer lisu pre viacnásobné nažehlenie (potlac_nastavenia)
+  useEffect(() => { supabase.from('potlac_nastavenia').select('lis_sirka_cm, lis_vyska_cm').eq('id', 1).maybeSingle().then(({ data }) => { if (data) setLisDtf(data); }); }, [supabase]);
   const [vysivkaNaklady, setVysivkaNaklady] = useState(null);
   const [sietotlacVelkosti, setSietotlacVelkosti] = useState([]);
   const [vykonNast, setVykonNast] = useState({});
@@ -191,10 +193,11 @@ export default function PotlaceTab({ supabase }) {
 
   // --- Vyrobne ceny (VC) — vzorce zdielane s Cenovymi ponukami cez vyrobneNaklady.js, nic sa tu
   // uz nezaduva duplicitne (viackrat sposobilo nezhodu cien medzi appkami).
-  const kostraLive = { textilSub, sublimaciaGarment, dtf: dtfNaklady, sietotlac, sietotlacVelkosti, rezany, folie, vysivkaNaklady, laserRezanie: laser, laserHrubky, costMetrics };
+  const kostraLive = { textilSub, sublimaciaGarment, dtf: dtfNaklady, lisDtf, sietotlac, sietotlacVelkosti, rezany, folie, vysivkaNaklady, laserRezanie: laser, laserHrubky, costMetrics };
 
   const vcSublimacia = vcSublimaciaGarmentZo(kostraLive, plocha);
-  const vcDtf = vcDtfGarmentZo(kostraLive, plocha);
+  const nazehleniDtf = pocetNazehleniDtf(kostraLive, testW, testH); // motív väčší než plocha lisu = žehlí sa na viackrát
+  const vcDtf = vcDtfGarmentZo(kostraLive, plocha, nazehleniDtf);
   const vcVysivka = vcVysivkaZo(kostraLive, plocha, ks);
 
   const vybranaVelkost = sietotlacVelkosti.find(v => v.id === testVelkostId);
@@ -215,7 +218,7 @@ export default function PotlaceTab({ supabase }) {
 
   const vcRezany = vcRezanyTransferZo(kostraLive, testFoliaId, plocha, pocetFariebSiet); // horná karta aj porovnanie dole počítajú rovnako pre zadaný počet farieb
   const rzSub = vcSublimaciaGarmentRozpis(kostraLive, plocha);
-  const rzDtf = vcDtfGarmentRozpis(kostraLive, plocha);
+  const rzDtf = vcDtfGarmentRozpis(kostraLive, plocha, nazehleniDtf);
   const rzRezany = vcRezanyTransferRozpis(kostraLive, testFoliaId, plocha, pocetFariebSiet);
   const dvaCasti = (rz, t, n) => [{ label: t, vc: rz?.transfer ?? 0 }, { label: n, vc: rz?.nazehlenie ?? 0 }];
 
@@ -301,6 +304,7 @@ export default function PotlaceTab({ supabase }) {
         ) : (
           <>
             <p className={kostraNoteCls}>Výrobné náklady sa berú živo z <strong>Kostra cien → DTF → Potlač textilu</strong>.</p>
+            {nazehleniDtf > 1 && <p className="text-[11px] text-amber-300 bg-amber-950/30 border border-amber-900/50 rounded-lg px-3 py-2">Motív {testW} × {testH} cm je väčší než plocha lisu ({lisDtf?.lis_sirka_cm || 38} × {lisDtf?.lis_vyska_cm || 48} cm) — žehlí sa na <strong>{nazehleniDtf} krát</strong>; manipulácia a nažehlenie sú v cene započítané {nazehleniDtf}×.</p>}
             <NakladovyVysledok zlavaPercent={klientZlava} casti={dvaCasti(rzDtf, 'DTF transfer', 'Nažehlenie na textil')} vc={vcDtf} ks={ks} config={pricingConfig} plochaCm2={plocha} onPouzit={(cena) => ulozDtf({ cena_cm2: Number(cena.toFixed(4)) })} disabled={plocha === 0} />
             {casBlok('dtf')}
           </>

@@ -7,7 +7,7 @@ import { mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 
 // Jeden spolocny fetch vsetkych Kostra cien tabuliek + pricing_config.
 export async function nacitajKostru(supabase) {
-  const [{ data: tSub }, { data: sGarment }, { data: dtfNak }, { data: sieto }, { data: sietoVel }, { data: rez }, { data: fol }, { data: vysNak }, { data: cfg }, { data: metriky }, { data: tech }, { data: laser }, { data: laserHrub }] = await Promise.all([
+  const [{ data: tSub }, { data: sGarment }, { data: dtfNak }, { data: sieto }, { data: sietoVel }, { data: rez }, { data: fol }, { data: vysNak }, { data: cfg }, { data: metriky }, { data: tech }, { data: laser }, { data: laserHrub }, { data: lisDtf }] = await Promise.all([
     supabase.from('textil_naklady').select('*').eq('technologia', 'sublimacia').maybeSingle(),
     supabase.from('cennik_sublimacia_naklady').select('*').eq('id', 1).maybeSingle(),
     supabase.from('dtf_naklady').select('*').eq('id', 1).maybeSingle(),
@@ -21,11 +21,13 @@ export async function nacitajKostru(supabase) {
     supabase.from('cennik_technologie').select('*'),
     supabase.from('cennik_laser_rezanie').select('*').eq('id', 1).maybeSingle(),
     supabase.from('cennik_laser_hrubky').select('*').order('poradie'),
+    supabase.from('potlac_nastavenia').select('lis_sirka_cm, lis_vyska_cm').eq('id', 1).maybeSingle(),
   ]);
   return {
     textilSub: tSub || null,
     sublimaciaGarment: sGarment || null,
     dtf: dtfNak || null,
+    lisDtf: lisDtf || null,
     sietotlac: sieto || null,
     sietotlacVelkosti: sietoVel || [],
     rezany: rez || null,
@@ -125,7 +127,14 @@ export const DTF_ODPAD_PREDVOLENY_PERCENT = 13;
 //  1) TRANSFER (samotna potlacena folia) — presne to iste ako metraz: folia + lepidlo + CMYK + biela + praca pri tlaci
 //     + elektrina tlaciarne a fixacneho tunela, na plochu logo + odpad na rolke (jedno % pre vsetky velkosti).
 //  2) NAZEHLENIE na textil — manipulacia + cas lisu (praca) + elektrina lisu.
-export function vcDtfGarmentRozpis(kostra, plochaCm2) {
+// Plocha lisu (žehličky) pre DTF — väčší motív sa žehlí na viackrát (Potlač textilu: lis_sirka_cm / lis_vyska_cm, predvolene 38 × 48 cm)
+export function pocetNazehleniDtf(kostra, sirkaCm, vyskaCm) {
+  const a = parseFloat(kostra?.lisDtf?.lis_sirka_cm) || 38, b = parseFloat(kostra?.lisDtf?.lis_vyska_cm) || 48;
+  const w = parseFloat(sirkaCm) || 0, h = parseFloat(vyskaCm) || 0;
+  if (w <= 0 || h <= 0) return 1;
+  return Math.max(1, Math.min(Math.ceil(w / a) * Math.ceil(h / b), Math.ceil(w / b) * Math.ceil(h / a)));
+}
+export function vcDtfGarmentRozpis(kostra, plochaCm2, pocetNazehleni = 1) {
   const n = kostra.dtf;
   if (!n) return { transfer: 0, nazehlenie: 0, spolu: 0, odpadPercent: 0 };
   const sirkaM = DTF_ROLL_WIDTH_CM / 100;
@@ -147,11 +156,11 @@ export function vcDtfGarmentRozpis(kostra, plochaCm2) {
   const praca = ((parseFloat(n.cas_nazehlovania_min) || 0) / 60) * (parseFloat(n.cena_prace_hod) || 0);
   const lisEurHod = elektrinaZariadeniaEurZaHod(kostra.costMetrics, n.transferovy_lis_zariadenie_id);
   const elektrinaLis = lisEurHod * ((parseFloat(n.cas_nazehlovania_min) || 0) / 60);
-  const nazehlenie = (parseFloat(n.naklady_manipulacia) || 0) + praca + elektrinaLis;
-  return { transfer, nazehlenie, spolu: transfer + nazehlenie, odpadPercent };
+  const nazehlenie = ((parseFloat(n.naklady_manipulacia) || 0) + praca + elektrinaLis) * Math.max(1, pocetNazehleni || 1); // každé ďalšie nažehlenie = ďalšia manipulácia + práca + lis
+  return { transfer, nazehlenie, spolu: transfer + nazehlenie, odpadPercent, pocetNazehleni: Math.max(1, pocetNazehleni || 1) };
 }
-export function vcDtfGarment(kostra, plochaCm2) {
-  return vcDtfGarmentRozpis(kostra, plochaCm2).spolu;
+export function vcDtfGarment(kostra, plochaCm2, pocetNazehleni = 1) {
+  return vcDtfGarmentRozpis(kostra, plochaCm2, pocetNazehleni).spolu;
 }
 
 // Vysivka — digitalizacia rozpocitana na pocet kusov + cena od vysivaca na plochu.
