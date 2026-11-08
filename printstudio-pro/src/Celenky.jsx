@@ -215,9 +215,9 @@ export default function Celenky({ supabase, onSpat }) {
       />
       <div className="px-4 py-2 bg-white border-b border-slate-200"><B2bKod b2b={b2b} /></div>
 
-      <main ref={rootRef} className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-4 grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+      <main ref={rootRef} className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-4 flex flex-col gap-3 lg:grid lg:grid-cols-12 lg:gap-4 lg:items-start">
         {/* ĽAVÝ PANEL: nástroje, farby, text, grafiky, vrstvy */}
-        <div className="lg:col-span-4 lg:relative lg:self-stretch">
+        <div className="order-2 lg:order-none lg:col-span-4 lg:relative lg:self-stretch">
         <aside className="lg:absolute lg:inset-0 bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden flex flex-col">
           <div className="p-3 bg-gradient-to-r from-slate-50 to-indigo-50/40 border-b border-slate-200 space-y-2.5">
             <div className="flex items-center justify-between gap-2">
@@ -513,10 +513,12 @@ export default function Celenky({ supabase, onSpat }) {
         </div>
 
         {/* PRAVÝ PANEL: 3D náhľad + 2D editor + objednávka */}
-        <section className="lg:col-span-8 flex flex-col gap-4">
+        <section className="contents lg:flex lg:flex-col lg:gap-4 lg:col-span-8">
+          {/* mobil: 3D mockup a strih (náhľad) sú prilepené hore, ovládacie prvky sú pod nimi — zmenu vidno hneď bez scrollovania */}
+          <div className="order-1 lg:order-none sticky top-16 z-30 lg:static flex flex-col gap-2 lg:gap-4 -mx-3 px-3 sm:mx-0 sm:px-0 pt-1 pb-2 lg:p-0 bg-slate-50/95 backdrop-blur lg:bg-transparent lg:backdrop-blur-none">
           <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
             <div className="p-3 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2">
+              <div className="hidden sm:flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
                 <span className="text-xs font-bold tracking-wide uppercase">3D Realistický Mockup čelenky</span>
                 <span className="text-[10px] bg-white/20 text-white/90 px-1.5 py-0.5 rounded font-mono">Live Sync</span>
@@ -530,7 +532,7 @@ export default function Celenky({ supabase, onSpat }) {
                 </div>
               </div>
             </div>
-            <div className="relative w-full h-72 sm:h-80 bg-gradient-to-b from-slate-950 via-slate-900 to-indigo-950 flex items-center justify-center overflow-hidden">
+            <div className="relative w-full h-36 sm:h-80 bg-gradient-to-b from-slate-950 via-slate-900 to-indigo-950 flex items-center justify-center overflow-hidden">
               <div id="threeContainer" className="w-full h-full cursor-grab active:cursor-grabbing"></div>
               <div className="absolute top-3 right-3 z-10 flex flex-col gap-1.5">
                 <button id="btnZoomIn" type="button" title="Priblížiť" className="w-9 h-9 rounded-xl bg-white/15 hover:bg-white/30 border border-white/30 text-white text-xl font-bold leading-none">+</button>
@@ -552,25 +554,27 @@ export default function Celenky({ supabase, onSpat }) {
                 <span>Zobraziť spadávku a stred</span>
               </label>
             </div>
-            <div className="p-3 sm:p-4 checker-bg flex flex-col items-center justify-center overflow-x-auto custom-scroll">
+            <div className="p-2 sm:p-4 checker-bg flex flex-col items-center justify-center overflow-x-auto custom-scroll">
               <div className="w-full max-w-[960px] flex flex-col items-center">
-                <div className="w-full flex justify-between text-[10px] font-bold text-slate-500 mb-1 px-1">
+                <div className="hidden sm:flex w-full justify-between text-[10px] font-bold text-slate-500 mb-1 px-1">
                   <span>← Ľavý bok (pri uchu)</span>
                   <span className="text-indigo-600 font-black">▼ STRED ČELA (Hlavná grafika) ▼</span>
                   <span>Pravý bok (Zadný šev) →</span>
                 </div>
                 <canvas id="editorCanvas" width="960" height="169" className="w-full h-auto max-h-[190px] rounded-lg bg-slate-900 transition-shadow"></canvas>
-                <div className="w-full flex justify-between text-[10px] text-slate-400 mt-1.5 px-1">
+                <div className="hidden sm:flex w-full justify-between text-[10px] text-slate-400 mt-1.5 px-1">
                   <span>Červené pásy = 5 mm spadávka (vytlačí sa, po vysekaní odpadne) • prerušovaná čiara = hotový výsek</span>
                   <span>Fialová os = stred prednej časti</span>
                 </div>
-                <p className="text-[10px] text-amber-600 mt-2">ℹ️ Toto je len orientačný náhľad v nižšej kvalite — tlačový súbor sa pri odoslaní objednávky vygeneruje v plnej kvalite (300 DPI) a nie je možné ho stiahnuť.</p>
+                <p className="hidden sm:block text-[10px] text-amber-600 mt-2">ℹ️ Toto je len orientačný náhľad v nižšej kvalite — tlačový súbor sa pri odoslaní objednávky vygeneruje v plnej kvalite (300 DPI) a nie je možné ho stiahnuť.</p>
               </div>
             </div>
           </div>
 
+          </div>
+
           {/* SÚHRN OBJEDNÁVKY */}
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-xs p-4 sm:p-5 space-y-4">
+          <div className="order-3 lg:order-none bg-white border border-slate-200 rounded-2xl shadow-xs p-4 sm:p-5 space-y-4">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-2"><Gift className="w-4 h-4 text-indigo-500" /> Súhrn objednávky</h3>
 
             <div className="grid grid-cols-2 gap-3">

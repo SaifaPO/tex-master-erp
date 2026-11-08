@@ -243,6 +243,8 @@ export default function Sietotlac({ supabase }) {
 
       <main className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 py-5 grid grid-cols-1 lg:grid-cols-[1fr_24rem] gap-5 items-start">
         <div className="space-y-4 min-w-0">
+          {/* mobil: náhľad trička je prilepený hore, ovládanie je pod ním */}
+          <div className="lg:hidden sticky top-16 z-30 -mx-4 px-4 pt-1 pb-2 bg-slate-50/95 backdrop-blur"><div className="bg-white rounded-2xl border border-slate-200 p-2 [&_svg]:max-h-[26vh]"><NahladTricka tlace={tlace} umiestnenia={umiestnenia} tmavy={tmavy} /></div></div>
           <Sekcia cislo="1" nazov="Textil">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
@@ -267,7 +269,7 @@ export default function Sietotlac({ supabase }) {
           <Sekcia cislo="2" nazov={`Potlače na jednom kuse (${tlace.length})`}
             akcia={<button type="button" onClick={pridajTlac} disabled={volneUmiestnenia.length === 0 || tlace.length >= 6} className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-300 text-white text-xs font-semibold flex items-center gap-1.5"><Plus className="w-3.5 h-3.5" /> Pridať potlač</button>}>
             <p className="text-xs text-slate-500">Napríklad malé logo na srdci a veľká potlač na chrbte, prípadne aj na rukávoch. Každá potlač má vlastný rozmer, počet farieb a grafiku.</p>
-            <NahladTricka tlace={tlace} umiestnenia={umiestnenia} tmavy={tmavy} />
+            <div className="hidden lg:block"><NahladTricka tlace={tlace} umiestnenia={umiestnenia} tmavy={tmavy} /></div>
             <div className="space-y-3">
               {tlace.map((t, i) => {
                 const u = umiestnenia.find((x) => x.kod === t.umiestnenie);
