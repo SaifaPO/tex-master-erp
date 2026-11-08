@@ -420,8 +420,8 @@ export default function BeachflagApp({ supabase }) {
     <>
     <AskQuestion zdroj="Beachvlajky" nadListou />
     <PbtHeader title="PrintStudio Pro" subtitle="Konfigurátor plážovej vlajky" />
-    <div className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
-      <div className="lg:col-span-7 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+    <div className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 flex flex-col gap-3 lg:grid lg:grid-cols-12 lg:gap-6">
+      <div className="order-2 lg:order-1 lg:col-span-7 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
         <div className="flex border-b border-slate-200 bg-slate-50 text-slate-600 font-medium text-xs sm:text-sm">
           {[{ id: 'parametre', label: 'Parametre' }, { id: 'grafika', label: 'Grafika & AI' }, { id: 'doplnky', label: 'Doplnky & Súhrn' }].map((t, i) => (
             <button key={t.id} onClick={() => setKrok(t.id)} className={`flex-1 py-3 px-3 text-center flex items-center justify-center gap-2 ${krok === t.id ? 'border-b-2 border-indigo-600 text-indigo-600 font-bold' : 'hover:bg-slate-100'}`}>
@@ -456,13 +456,14 @@ export default function BeachflagApp({ supabase }) {
         )}
       </div>
 
-      <div className="lg:col-span-5 space-y-4">
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-5 sticky top-4">
-          <div className="flex items-center justify-between mb-3">
+      {/* mobil: náhľad je prilepený hore a ovládacie prvky sú pod ním — zmeny farby či motívu vidno hneď, bez scrollovania */}
+      <div className="order-1 lg:order-2 lg:col-span-5 space-y-4 sticky top-16 z-30 lg:static -mx-3 px-3 sm:mx-0 sm:px-0 pt-1 pb-2 lg:pt-0 lg:pb-0 bg-slate-50/95 backdrop-blur lg:bg-transparent lg:backdrop-blur-none">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-2 sm:p-5 lg:sticky lg:top-4">
+          <div className="hidden sm:flex items-center justify-between mb-3">
             <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2"><Eye className="w-4 h-4 text-indigo-600" /> Živý náhľad vlajky</h3>
             <span className="text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono flex items-center gap-1"><Flag className="w-3 h-3" /> {tvarKod} · {velkostKod}</span>
           </div>
-          <div className="flex gap-2 items-stretch" style={{ height: 'clamp(440px, 72vh, 680px)' }}>
+          <div className="flex gap-2 items-stretch h-[36vh] lg:h-[clamp(440px,72vh,680px)]">
           <div className="relative flex-1 min-w-0 flex flex-col">
           <div className="absolute top-2 right-2 z-10 bg-slate-900/85 text-white rounded-lg px-2.5 py-1.5 text-[11px] font-mono leading-tight shadow pointer-events-none text-right">
             {selInfo ? (<><div>Objekt: <b>{selInfo.sirkaCm.toFixed(1)} × {selInfo.vyskaCm.toFixed(1)} cm</b></div><div>Otočenie: <b>{selInfo.uhol}°</b></div></>) : rozmerVlajkyCm ? (<><div>Vlajka: <b>{rozmerVlajkyCm.sirkaCm} × {rozmerVlajkyCm.vyskaCm} cm</b></div><div className="text-slate-400">vyber objekt = jeho rozmer</div></>) : null}
@@ -476,9 +477,9 @@ export default function BeachflagApp({ supabase }) {
             <button type="button" onClick={() => setUserZoom(z => Math.min(4, Math.round((z + 0.25) * 100) / 100))} className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm">+</button>
             {userZoom !== 1 && <button type="button" onClick={() => setUserZoom(1)} className="text-[11px] text-indigo-600 hover:text-indigo-700 font-semibold ml-1">Resetovať</button>}
           </div>
-          <p className="mt-2 text-[11px] text-slate-500">Červená čiara je orez, zelená je bezpečná zóna.</p>
+          <p className="hidden sm:block mt-2 text-[11px] text-slate-500">Červená čiara je orez, zelená je bezpečná zóna.</p>
           </div>
-          <div className="w-36 sm:w-44 shrink-0 bg-slate-50 rounded-xl border border-slate-200 p-1.5 flex flex-col">
+          <div className="hidden sm:flex w-36 sm:w-44 shrink-0 bg-slate-50 rounded-xl border border-slate-200 p-1.5 flex-col">
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide text-center mb-1">Porovnanie veľkosti</span>
             <div className="flex-1 min-h-0 flex items-center justify-center">
               <VelkostnePorovnanie kompaktny rozmer={katalog?.tvary.find(t => t.kod === tvarKod)?.rozmery?.[velkostKod]} velkost={velkostPreTvar(katalog, tvarKod, velkostKod)} velkosti={(katalog?.velkosti || []).filter(v => katalog.tvary.find(t => t.kod === tvarKod)?.rozmery?.[v.kod]).map(v => velkostPreTvar(katalog, tvarKod, v.kod))} bgColor={bgColor} nahladUrl={nahladDizajnu} />

@@ -313,10 +313,15 @@ export function initBuffkyEngine(root, opts = {}) {
       ctx.scale((item.scale || 1) * sc, (item.scale || 1) * sc);
 
       if (item.type === 'text') {
-        ctx.font = `${item.fontWeight || 'bold'} ${item.fontSize}px "${item.fontFamily}", sans-serif`;
-        ctx.fillStyle = item.color;
+        ctx.font = `${item.italic ? 'italic ' : ''}${item.fontWeight || 'bold'} ${item.fontSize}px "${item.fontFamily}", sans-serif`;
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 8;
+        // obrys sa kreslí POD písmo (viditeľná hrúbka = strokeMm; 1 mm = 2 jednotky plátna), takže písmo nezjedá
+        if (item.strokeMm > 0) {
+          ctx.save(); ctx.lineJoin = 'round'; ctx.miterLimit = 2; ctx.lineWidth = item.strokeMm * 4; ctx.strokeStyle = item.strokeColor || '#000000';
+          ctx.strokeText(item.text, 0, 0); ctx.restore();
+        }
+        ctx.fillStyle = item.color;
+        ctx.shadowColor = item.strokeMm > 0 ? 'transparent' : 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 8;
         ctx.fillText(item.text, 0, 0);
         const metrics = ctx.measureText(item.text);
         item.width = metrics.width / sc; item.height = item.fontSize;
@@ -647,6 +652,7 @@ export function initBuffkyEngine(root, opts = {}) {
   function onCanvasUp() {
     const bolSnap = state.snap.x != null || state.snap.y != null;
     state.isDragging = false; akcia = null; state.snap = { x: null, y: null };
+    syncTextControls();
     if (bolSnap) kresliVyber();
   }
 
@@ -670,7 +676,24 @@ export function initBuffkyEngine(root, opts = {}) {
     if (r === 'dup') duplikujVybrany(); else if (r === 'del') zmazVybrany();
   });
 
+  // Ovládacie prvky textu ukazujú vlastnosti VYBRANÉHO textu (a menia ho hneď); bez výberu slúžia na nový text.
+  function vybranyText() { const it = state.items[state.selectedItemIndex]; return it && it.type === 'text' ? it : null; }
+  function syncTextControls() {
+    const it = vybranyText();
+    q('#textModeInfo')?.classList.toggle('hidden', !it);
+    q('#textEditActions')?.classList.toggle('hidden', !it);
+    if (!it) return;
+    const set = (sel, v) => { const el = q(sel); if (el) el.value = v; };
+    set('#textInput', it.text); set('#fontSelect', it.fontFamily); set('#textColorPicker', it.color);
+    set('#textStrokeColor', it.strokeColor || '#000000'); set('#textStrokeMm', it.strokeMm || 0); set('#textSizeRange', Math.round(it.fontSize));
+    let r = Math.round(it.rotation || 0) % 360; if (r > 180) r -= 360; if (r < -180) r += 360; set('#textRotation', r);
+    const txt = (sel, v) => { const el = q(sel); if (el) el.textContent = v; };
+    txt('#textStrokeVal', it.strokeMm > 0 ? `${it.strokeMm} mm` : 'bez obrysu'); txt('#textSizeVal', String(Math.round(it.fontSize))); txt('#textRotVal', `${r}°`);
+    [['#btnTextBold', (it.fontWeight || 'bold') !== 'normal'], ['#btnTextItalic', !!it.italic]].forEach(([sel, zap]) => { const b = q(sel); if (b) { b.dataset.on = zap ? '1' : '0'; b.classList.toggle('bg-cyan-700', zap); b.classList.toggle('text-white', zap); } });
+  }
+
   function updateSelectedLabel() {
+    syncTextControls();
     vykresliZoznamVrstiev(true);
     const label = q('#selectedItemLabel');
     if (!label) return;
@@ -712,14 +735,31 @@ export function initBuffkyEngine(root, opts = {}) {
     const defaultItemY = Math.max(500, 20 + hemMargin);
 
     const textInput = q('#textInput'), fontSelect = q('#fontSelect'), textColorPicker = q('#textColorPicker');
+    const strokeColorEl = q('#textStrokeColor'), strokeMmEl = q('#textStrokeMm'), sizeEl = q('#textSizeRange'), rotEl = q('#textRotation');
+    const zapnute = (sel, def) => { const b = q(sel); return b ? b.dataset.on === '1' : def; };
+    const novyText = (x, y, txt) => ({ type: 'text', text: txt, x, y, fontSize: Number(sizeEl && sizeEl.value) || 48, fontFamily: fontSelect.value, fontWeight: zapnute('#btnTextBold', true) ? 'bold' : 'normal', italic: zapnute('#btnTextItalic', false), color: textColorPicker.value, strokeColor: (strokeColorEl && strokeColorEl.value) || '#000000', strokeMm: Number(strokeMmEl && strokeMmEl.value) || 0, scale: 1, rotation: 0 });
+    // úprava už vloženého (vybraného) textu — zmena sa prejaví hneď
+    const uprav = (fn) => { const it = vybranyText(); if (!it) return; fn(it); syncTextControls(); render2D(); };
+    on(textInput, 'input', () => uprav((it) => { it.text = textInput.value || ' '; }));
+    on(fontSelect, 'change', () => uprav((it) => { it.fontFamily = fontSelect.value; }));
+    on(textColorPicker, 'input', () => uprav((it) => { it.color = textColorPicker.value; }));
+    on(strokeColorEl, 'input', () => uprav((it) => { it.strokeColor = strokeColorEl.value; if (!(it.strokeMm > 0)) it.strokeMm = 1; }));
+    on(strokeMmEl, 'input', () => uprav((it) => { it.strokeMm = Number(strokeMmEl.value) || 0; }));
+    on(sizeEl, 'input', () => uprav((it) => { it.fontSize = Number(sizeEl.value) || 48; }));
+    on(rotEl, 'input', () => uprav((it) => { it.rotation = Number(rotEl.value) || 0; }));
+    on(q('#btnTextBold'), 'click', () => { const b = q('#btnTextBold'); b.dataset.on = b.dataset.on === '1' ? '0' : '1'; b.classList.toggle('bg-cyan-700', b.dataset.on === '1'); uprav((it) => { it.fontWeight = b.dataset.on === '1' ? 'bold' : 'normal'; }); });
+    on(q('#btnTextItalic'), 'click', () => { const b = q('#btnTextItalic'); b.dataset.on = b.dataset.on === '1' ? '0' : '1'; b.classList.toggle('bg-cyan-700', b.dataset.on === '1'); uprav((it) => { it.italic = b.dataset.on === '1'; }); });
+    on(q('#btnTextDup'), 'click', duplikujVybrany);
+    on(q('#btnTextDel'), 'click', zmazVybrany);
+    on(q('#btnTextDone'), 'click', () => { state.selectedItemIndex = -1; updateSelectedLabel(); render2D(); });
     on(q('#btnAddTextFront'), 'click', () => {
       const txt = textInput.value.trim() || 'BUFFKA ADVENTURE';
-      state.items.push({ type: 'text', text: txt, x: defaultItemX, y: defaultItemY, fontSize: 48, fontFamily: fontSelect.value, fontWeight: 'bold', color: textColorPicker.value, scale: 1, rotation: 0 });
+      state.items.push(novyText(defaultItemX, defaultItemY, txt));
       state.selectedItemIndex = state.items.length - 1; updateSelectedLabel(); render2D(); toast(isPremium ? 'Text pridaný do návrhu' : 'Text pridaný na Prednú stranu (A)');
     });
     on(q('#btnAddTextBack'), 'click', () => {
       const txt = textInput.value.trim() || 'SLOVAKIA OUTDOOR';
-      state.items.push({ type: 'text', text: txt, x: 750, y: 500, fontSize: 48, fontFamily: fontSelect.value, fontWeight: 'bold', color: textColorPicker.value, scale: 1, rotation: 0 });
+      state.items.push(novyText(750, 500, txt));
       state.selectedItemIndex = state.items.length - 1; updateSelectedLabel(); render2D(); toast('Text pridaný na Zadnú stranu (B)');
     });
 
@@ -904,8 +944,13 @@ export function initBuffkyEngine(root, opts = {}) {
         pctx.rotate(((item.rotation || 0) * Math.PI) / 180);
         pctx.scale((item.scale || 1) * sc, (item.scale || 1) * sc);
         if (item.type === 'text') {
-          pctx.font = `${item.fontWeight || 'bold'} ${item.fontSize}px "${item.fontFamily}", sans-serif`;
-          pctx.fillStyle = item.color; pctx.textAlign = 'center'; pctx.textBaseline = 'middle';
+          pctx.font = `${item.italic ? 'italic ' : ''}${item.fontWeight || 'bold'} ${item.fontSize}px "${item.fontFamily}", sans-serif`;
+          pctx.textAlign = 'center'; pctx.textBaseline = 'middle';
+          if (item.strokeMm > 0) {
+            pctx.save(); pctx.lineJoin = 'round'; pctx.miterLimit = 2; pctx.lineWidth = item.strokeMm * 4; pctx.strokeStyle = item.strokeColor || '#000000';
+            pctx.strokeText(item.text, 0, 0); pctx.restore();
+          }
+          pctx.fillStyle = item.color;
           pctx.fillText(item.text, 0, 0);
         } else if (item.type === 'image' && item.imgElement) {
           pctx.drawImage(item.imgElement, -item.width / 2, -item.height / 2, item.width, item.height);

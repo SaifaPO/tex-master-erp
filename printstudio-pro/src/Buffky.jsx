@@ -232,7 +232,7 @@ export default function Buffky({ supabase, onSpat }) {
       <main ref={rootRef} className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-0 relative">
         {/* ĽAVÝ PANEL: 2D dizajn a nástroje */}
         <section className="lg:col-span-7 flex flex-col border-b lg:border-b-0 lg:border-r border-slate-800 bg-slate-900/60">
-          <div className="sticky top-0 z-30 p-3 md:p-4 border-b border-slate-800 bg-slate-900/95 backdrop-blur-md flex flex-wrap items-center justify-between gap-3 shadow-md">
+          <div className="order-2 lg:order-1 lg:sticky lg:top-16 z-20 lg:z-30 p-3 md:p-4 border-b border-slate-800 bg-slate-900/95 backdrop-blur-md flex flex-wrap items-center justify-between gap-3 shadow-md">
             <div className="flex items-center gap-1.5 p-1 bg-slate-800/90 rounded-xl border border-slate-700/60" id="toolTabs">
               <button data-tab="bg" className="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition bg-cyan-600 text-white flex items-center gap-1.5"><i className="fa-solid fa-fill-drip"></i> Pozadie</button>
               <button data-tab="text" className="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition text-slate-400 hover:text-white flex items-center gap-1.5"><i className="fa-solid fa-font"></i> Text</button>
@@ -248,7 +248,7 @@ export default function Buffky({ supabase, onSpat }) {
             </div>
           </div>
 
-          <div className="relative z-20 p-4 border-b border-slate-800/80 bg-slate-900/90 shrink-0">
+          <div className="order-3 lg:order-2 relative z-10 lg:z-20 p-4 border-b border-slate-800/80 bg-slate-900/90 shrink-0">
             <div id="tabContent-bg" className="tab-content flex flex-wrap items-center gap-4 lg:gap-6">
               <div className="shrink-0">
                 <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Farba podkladu</label>
@@ -289,24 +289,44 @@ export default function Buffky({ supabase, onSpat }) {
               </div>
             </div>
 
-            <div id="tabContent-text" className="tab-content hidden flex flex-wrap items-center gap-3">
-              <input type="text" id="textInput" placeholder="Zadajte text (napr. TATRA RUN)" className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs text-white focus:outline-none focus:border-cyan-500 w-48" />
-              <select id="fontSelect" className="px-2.5 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs text-white focus:outline-none">
-                <option value="Montserrat">Montserrat Extra</option>
-                <option value="Oswald">Oswald Athletic</option>
-                <option value="Plus Jakarta Sans">Modern Sans</option>
-                <option value="Playfair Display">Serif Elegant</option>
-              </select>
-              <input type="color" id="textColorPicker" defaultValue="#ffffff" className="w-8 h-8 rounded-lg border border-slate-700 bg-transparent cursor-pointer" />
-              <div className="flex items-center gap-1.5">
+            <div id="tabContent-text" className="tab-content hidden space-y-3 w-full">
+              <p id="textModeInfo" className="hidden text-[11px] text-cyan-300 font-semibold">✎ Upravuješ vybraný text — zmeny vidíš hneď. Ťukni na prázdne miesto plátna a vložíš nový text.</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input type="text" id="textInput" placeholder="Zadajte text (napr. TATRA RUN)" className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs text-white focus:outline-none focus:border-cyan-500 w-44" />
+                <select id="fontSelect" className="px-2.5 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs text-white focus:outline-none">
+                  <option value="Montserrat">Montserrat Extra</option>
+                  <option value="Oswald">Oswald Athletic</option>
+                  <option value="Plus Jakarta Sans">Modern Sans</option>
+                  <option value="Playfair Display">Serif Elegant</option>
+                </select>
+                <label className="flex items-center gap-1 text-[11px] text-slate-400">Farba <input type="color" id="textColorPicker" defaultValue="#ffffff" className="w-8 h-8 rounded-lg border border-slate-700 bg-transparent cursor-pointer" /></label>
+                <label className="flex items-center gap-1 text-[11px] text-slate-400">Obrys <input type="color" id="textStrokeColor" defaultValue="#000000" className="w-8 h-8 rounded-lg border border-slate-700 bg-transparent cursor-pointer" /></label>
+                <button type="button" id="btnTextBold" data-on="1" className="px-2.5 py-1.5 rounded-lg border border-slate-700 bg-cyan-700 text-white text-xs font-extrabold">B</button>
+                <button type="button" id="btnTextItalic" data-on="0" className="px-2.5 py-1.5 rounded-lg border border-slate-700 text-slate-200 text-xs font-serif italic">I</button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-2">
+                <label className="text-[11px] text-slate-400 block">Hrúbka obrysu: <span id="textStrokeVal" className="text-cyan-300 font-mono">bez obrysu</span>
+                  <input type="range" id="textStrokeMm" min="0" max="10" step="0.5" defaultValue="0" className="w-full accent-cyan-500" />
+                  <span className="text-[10px] text-slate-500">Obrys je pod písmom, nezjedá ho.</span></label>
+                <label className="text-[11px] text-slate-400 block">Veľkosť: <span id="textSizeVal" className="text-cyan-300 font-mono">48</span>
+                  <input type="range" id="textSizeRange" min="16" max="160" step="1" defaultValue="48" className="w-full accent-cyan-500" /></label>
+                <label className="text-[11px] text-slate-400 block">Rotácia: <span id="textRotVal" className="text-cyan-300 font-mono">0°</span>
+                  <input type="range" id="textRotation" min="-180" max="180" step="1" defaultValue="0" className="w-full accent-cyan-500" /></label>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
                 {typ === 'tubular_basic' ? (
                   <>
-                    <button id="btnAddTextFront" className="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-xs font-bold text-white shadow">+ Na prednú stranu (A)</button>
-                    <button id="btnAddTextBack" className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white shadow">+ Na zadnú stranu (B)</button>
+                    <button id="btnAddTextFront" className="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-xs font-bold text-white shadow">+ Nový text na prednú stranu (A)</button>
+                    <button id="btnAddTextBack" className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white shadow">+ Nový text na zadnú stranu (B)</button>
                   </>
                 ) : (
-                  <button id="btnAddTextFront" className="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-xs font-bold text-white shadow">+ Pridať text</button>
+                  <button id="btnAddTextFront" className="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-xs font-bold text-white shadow">+ Pridať nový text</button>
                 )}
+                <span id="textEditActions" className="hidden flex items-center gap-2">
+                  <button type="button" id="btnTextDup" className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs text-slate-100 flex items-center gap-1.5"><i className="fa-solid fa-clone"></i> Duplikovať</button>
+                  <button type="button" id="btnTextDel" className="px-3 py-1.5 rounded-lg bg-rose-950/80 hover:bg-rose-900 border border-rose-700/60 text-xs text-rose-300 flex items-center gap-1.5"><i className="fa-solid fa-trash-can"></i> Zmazať</button>
+                  <button type="button" id="btnTextDone" className="px-3 py-1.5 rounded-lg bg-cyan-700 hover:bg-cyan-600 text-xs font-bold text-white">Hotovo</button>
+                </span>
               </div>
             </div>
 
@@ -365,17 +385,17 @@ export default function Buffky({ supabase, onSpat }) {
             </div>
           </div>
 
-          <div className="flex-1 p-4 md:p-6 flex flex-col items-center justify-start relative select-none">
-            <div className="w-full max-w-[520px] flex flex-col items-center mt-1">
+          <div className="order-1 lg:order-3 sticky top-16 z-30 lg:static bg-slate-900/95 backdrop-blur lg:bg-transparent lg:backdrop-blur-none lg:flex-1 p-2 md:p-6 flex flex-col items-center justify-start relative select-none">
+            <div className="w-full max-w-[min(520px,34vh)] lg:max-w-[520px] flex flex-col items-center mt-1">
               {typ === 'tubular_basic' ? (
-                <div className="w-full grid grid-cols-2 text-center text-xs font-semibold mb-3 gap-2 relative z-10">
-                  <div className="bg-cyan-950/60 border border-cyan-500/40 text-cyan-300 py-2 px-3 rounded-xl flex items-center justify-between shadow-sm">
+                <div className="w-full grid grid-cols-2 text-center text-xs font-semibold mb-1.5 lg:mb-3 gap-2 relative z-10">
+                  <div className="bg-cyan-950/60 border border-cyan-500/40 text-cyan-300 py-1 px-2 lg:py-2 lg:px-3 rounded-xl flex items-center justify-between shadow-sm">
                     <span className="flex items-center gap-1.5 font-bold"><i className="fa-solid fa-shirt text-cyan-400"></i> A: Predná strana</span>
-                    <span className="text-[11px] font-mono text-cyan-300 bg-cyan-900/60 px-2 py-0.5 rounded border border-cyan-500/30">25 × 50 cm</span>
+                    <span className="hidden sm:inline text-[11px] font-mono text-cyan-300 bg-cyan-900/60 px-2 py-0.5 rounded border border-cyan-500/30">25 × 50 cm</span>
                   </div>
-                  <div className="bg-indigo-950/60 border border-indigo-500/40 text-indigo-300 py-2 px-3 rounded-xl flex items-center justify-between shadow-sm">
+                  <div className="bg-indigo-950/60 border border-indigo-500/40 text-indigo-300 py-1 px-2 lg:py-2 lg:px-3 rounded-xl flex items-center justify-between shadow-sm">
                     <span className="flex items-center gap-1.5 font-bold"><i className="fa-regular fa-clone text-indigo-400"></i> B: Zadná strana</span>
-                    <span className="text-[11px] font-mono text-indigo-300 bg-indigo-900/60 px-2 py-0.5 rounded border border-indigo-500/30">25 × 50 cm</span>
+                    <span className="hidden sm:inline text-[11px] font-mono text-indigo-300 bg-indigo-900/60 px-2 py-0.5 rounded border border-indigo-500/30">25 × 50 cm</span>
                   </div>
                 </div>
               ) : (
@@ -426,11 +446,11 @@ export default function Buffky({ supabase, onSpat }) {
                 </div>
               </div>
 
-              <div className="w-full flex items-center justify-between text-[11px] text-slate-400 mt-2 px-1">
+              <div className="w-full hidden sm:flex items-center justify-between text-[11px] text-slate-400 mt-2 px-1">
                 <span className="flex items-center gap-1"><i className="fa-solid fa-arrows-up-down-left-right text-cyan-400"></i> Ťahaj objekt = presun (magneticky zaskočí na stred) • rohy = veľkosť • krúžok hore = otočenie</span>
                 <span className="text-rose-400/90 font-medium">{typ === 'tubular_basic' ? 'Červené línie znázorňujú SPOJ šatky' : 'Červená línia = bočný šev, žlté pásy = obšitý lem'}</span>
               </div>
-              <p className="text-[10px] text-amber-500 mt-2 text-center">ℹ️ Toto je len orientačný náhľad v nižšej kvalite — tlačový súbor sa pri odoslaní objednávky vygeneruje v plnej kvalite (300 DPI) a nie je možné ho stiahnuť.</p>
+              <p className="hidden sm:block text-[10px] text-amber-500 mt-2 text-center">ℹ️ Toto je len orientačný náhľad v nižšej kvalite — tlačový súbor sa pri odoslaní objednávky vygeneruje v plnej kvalite (300 DPI) a nie je možné ho stiahnuť.</p>
             </div>
           </div>
         </section>

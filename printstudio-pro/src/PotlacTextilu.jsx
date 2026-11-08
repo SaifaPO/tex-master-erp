@@ -222,6 +222,8 @@ export default function PotlacTextilu({ supabase }) {
 
       <main className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 py-5 grid grid-cols-1 lg:grid-cols-[1fr_24rem] gap-5 items-start">
         <div className="space-y-4 min-w-0">
+          {/* mobil: vizualizácia je prilepená hore, ovládacie prvky sú pod ňou — zmenu farby či potlače vidno hneď */}
+          <div className="lg:hidden sticky top-16 z-30 -mx-4 px-4 pt-1 pb-2 bg-slate-50/95 backdrop-blur"><div className="bg-white rounded-2xl border border-slate-200 p-2">{nahlad}</div></div>
           <Sekcia cislo="1" nazov="Čo chcete potlačiť?">
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {produkty.map((p) => (
@@ -274,8 +276,6 @@ export default function PotlacTextilu({ supabase }) {
               ))}
             </div>
           </Sekcia>
-
-          <div className="lg:hidden bg-white rounded-2xl border border-slate-200 p-3">{nahlad}</div>
 
           <Sekcia cislo="4" nazov="Potlače a grafika" akcia={volneMiesta.length > 0 && tlace.length < 6 ? (
             <button type="button" onClick={pridajTlac} className="text-xs font-semibold text-indigo-700 hover:text-indigo-600 flex items-center gap-1"><Plus className="w-3.5 h-3.5" /> Pridať potlač</button>

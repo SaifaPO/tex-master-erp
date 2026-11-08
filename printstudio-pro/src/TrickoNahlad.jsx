@@ -35,7 +35,7 @@ export default function TrickoNahlad({ produkt, farbaHex, pohlad, onPohlad, tlac
         </div>
         {pocetNaProtistrane > 0 && <span className="text-[11px] text-slate-500">+ {pocetNaProtistrane} potlač na {pohlad === 'predok' ? 'zadnej' : 'prednej'} strane</span>}
       </div>
-      <div className="relative w-full mx-auto bg-white rounded-xl border border-slate-200 overflow-hidden" style={{ aspectRatio: String(pomer), maxWidth: 460 }}>
+      <div className="relative w-full mx-auto bg-white rounded-xl border border-slate-200 overflow-hidden max-w-[min(460px,30vh)] lg:max-w-[460px]" style={{ aspectRatio: String(pomer) }}>
         {src && <img src={src} alt={`${produkt.nazov} — ${pohlad === 'zadok' ? 'zozadu' : 'spredu'}`} className="absolute inset-0 w-full h-full object-contain select-none" draggable={false} />}
         {!src && !chyba && <div className="absolute inset-0 flex items-center justify-center text-xs text-slate-400">Načítavam fotku…</div>}
         {chyba && <div className="absolute inset-0 flex items-center justify-center text-xs text-rose-500 px-4 text-center">{chyba}</div>}

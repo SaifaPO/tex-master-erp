@@ -384,8 +384,8 @@ export default function ZastavaApp({ supabase }) {
     <>
     <AskQuestion zdroj="Vlajky (Zástava)" />
     <PbtHeader title="PrintStudio Pro" subtitle="Konfigurátor zástav a koruhiev" />
-    <div className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
-      <div className="lg:col-span-7 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+    <div className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 flex flex-col gap-3 lg:grid lg:grid-cols-12 lg:gap-6">
+      <div className="order-2 lg:order-1 lg:col-span-7 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
         <div className="flex border-b border-slate-200 bg-slate-50 text-slate-600 font-medium text-xs sm:text-sm">
           {[{ id: 'rozmery', label: 'Rozmery a materiál' }, { id: 'grafika', label: 'Grafika & AI' }, { id: 'doplnky', label: 'Doplnky & Súhrn' }].map((t, i) => (
             <button key={t.id} onClick={() => setKrok(t.id)} className={`flex-1 py-3 px-3 text-center flex items-center justify-center gap-2 ${krok === t.id ? 'border-b-2 border-indigo-600 text-indigo-600 font-bold' : 'hover:bg-slate-100'}`}>
@@ -436,16 +436,17 @@ export default function ZastavaApp({ supabase }) {
         )}
       </div>
 
-      <div className="lg:col-span-5 space-y-4">
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-5 sticky top-4">
-          <div className="flex items-center justify-between mb-3">
+      {/* mobil: náhľad je prilepený hore a ovládacie prvky sú pod ním — zmeny farby či motívu vidno hneď, bez scrollovania */}
+      <div className="order-1 lg:order-2 lg:col-span-5 space-y-4 sticky top-16 z-30 lg:static -mx-3 px-3 sm:mx-0 sm:px-0 pt-1 pb-2 lg:pt-0 lg:pb-0 bg-slate-50/95 backdrop-blur lg:bg-transparent lg:backdrop-blur-none">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-2 sm:p-5 lg:sticky lg:top-4">
+          <div className="hidden sm:flex items-center justify-between mb-3">
             <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2"><Eye className="w-4 h-4 text-indigo-600" /> Živý náhľad zástavy</h3>
             <span className="text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono flex items-center gap-1"><Flag className="w-3 h-3" /> {sirkaCm}×{vyskaCm} cm</span>
           </div>
-          <div ref={previewBoxRef} className="relative bg-slate-100 rounded-xl border border-slate-300 p-2 flex items-center justify-center min-h-[380px] sm:min-h-[440px] overflow-hidden" onContextMenu={(e) => e.preventDefault()}>
+          <div ref={previewBoxRef} className="relative bg-slate-100 rounded-xl border border-slate-300 p-2 flex items-center justify-center h-[36vh] min-h-[200px] sm:min-h-[440px] sm:h-auto overflow-hidden" onContextMenu={(e) => e.preventDefault()}>
             <canvas ref={canvasElRef} className="shadow-md rounded" />
           </div>
-          <p className="mt-3 text-[11px] text-slate-500">Zelená čiara je odporúčaná bezpečná zóna pre text/logo.</p>
+          <p className="hidden sm:block mt-3 text-[11px] text-slate-500">Zelená čiara je odporúčaná bezpečná zóna pre text/logo.</p>
           <p className="mt-1 text-[10px] text-slate-300 font-mono">build v5 — canvasReady:{String(canvasReady)}, objektov na plátne:{debugObjCount}, {tunely.length} tunel(y), {ocka.length} skup. očiek, {karabinky.length} skup. karabín, popruh: {Object.entries(popruhy).filter(([, v]) => v).map(([k]) => k).join(',') || '—'}</p>
         </div>
       </div>
