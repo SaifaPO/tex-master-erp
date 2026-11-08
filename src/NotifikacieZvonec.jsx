@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Bell, Inbox, FileQuestion, ClipboardList, FileText, Check, X, Trash2, Store } from 'lucide-react';
+import { Bell, Inbox, FileQuestion, ClipboardList, FileText, Check, X, Trash2, Store, MessageCircle } from 'lucide-react';
 
 // Zvonček s notifikáciami v hornej lište ERP: nový dopyt, nová objednávka z konfigurátora, nová zákazka. Záznamy vytvárajú databázové
 // triggery (migration_erp_notifikacie.sql); tu sa zobrazia okamžite cez Realtime ako vyskakovacie okno a ostanú v zozname, kým ich
 // nezmažeš — dajú sa pozrieť aj spätne. Kliknutím na notifikáciu sa otvorí presne to miesto (dopyt / objednávka / zákazka).
-const IKONY = { predajna: Store, dopyt: FileQuestion, objednavka: Inbox, zakazka: ClipboardList, faktura: FileText };
-const FARBY = { predajna: 'text-rose-300 bg-rose-500/20', dopyt: 'text-amber-300 bg-amber-500/15', objednavka: 'text-emerald-300 bg-emerald-500/15', zakazka: 'text-indigo-300 bg-indigo-500/15', faktura: 'text-sky-300 bg-sky-500/15' };
+const IKONY = { chat: MessageCircle, predajna: Store, dopyt: FileQuestion, objednavka: Inbox, zakazka: ClipboardList, faktura: FileText };
+const FARBY = { chat: 'text-emerald-300 bg-emerald-500/20', predajna: 'text-rose-300 bg-rose-500/20', dopyt: 'text-amber-300 bg-amber-500/15', objednavka: 'text-emerald-300 bg-emerald-500/15', zakazka: 'text-indigo-300 bg-indigo-500/15', faktura: 'text-sky-300 bg-sky-500/15' };
 // Notifikácia môže mať cieľ (pre_role = zoznam rolí, pre_employee_id = konkrétna osoba); bez cieľa je len pre Mastra (pôvodné správanie: dopyty, objednávky, zákazky)
 const jeProMna = (n, rola, mojeId) => {
   const maCiel = (n.pre_role && n.pre_role.length > 0) || n.pre_employee_id;

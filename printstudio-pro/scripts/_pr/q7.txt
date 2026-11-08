@@ -1,0 +1,27 @@
+Opýtať sa|Ask a question|Frage stellen
+Chat s PBT print|Chat with PBT print|Chat mit PBT print
+Sme online — odpíšeme hneď|We are online — we will reply right away|Wir sind online — wir antworten sofort
+Momentálne nie sme online — odpovieme čo najskôr|We are not online right now — we will reply as soon as possible|Wir sind derzeit nicht online — wir antworten so bald wie möglich
+Napíšte nám otázku — práve sme online a odpíšeme vám hneď tu v okne.|Write us a question — we are online right now and will reply here in the window straight away.|Schreiben Sie uns eine Frage — wir sind gerade online und antworten Ihnen sofort hier im Fenster.
+Napíšte nám otázku — odpoveď uvidíte tu v okne a dostanete ju aj e-mailom.|Write us a question — you will see the reply here in the window and also receive it by email.|Schreiben Sie uns eine Frage — die Antwort sehen Sie hier im Fenster und erhalten sie auch per E-Mail.
+Meno|Name|Name
+E-mail *|Email *|E-Mail *
+Telefón (voliteľné)|Phone (optional)|Telefon (optional)
+Napíšte, čo vás zaujíma…|Write what you are interested in…|Schreiben Sie, was Sie interessiert …
+Začať chat|Start chat|Chat starten
+Odosielam…|Sending…|Wird gesendet …
+Zadajte platný e-mail.|Please enter a valid email.|Bitte geben Sie eine gültige E-Mail-Adresse ein.
+Odoslanie zlyhalo — skúste to prosím znova.|Sending failed — please try again.|Senden fehlgeschlagen — bitte versuchen Sie es erneut.
+Otázka bola odoslaná e-mailom.|Your question was sent by email.|Ihre Frage wurde per E-Mail gesendet.
+Načítavam konverzáciu…|Loading conversation…|Konversation wird geladen …
+Napíšte správu…|Write a message…|Nachricht schreiben …
+Začať novú konverzáciu|Start a new conversation|Neue Konversation starten
+Zavrieť|Close|Schließen
+Odoslať|Send|Senden
+Zásadách ochrany osobných údajov|Privacy Policy|Datenschutzerklärung
+Napíšte správu.|Please write a message.|Bitte schreiben Sie eine Nachricht.
+Dnes ste už poslali veľa otázok — napíšte nám prosím e-mailom.|You have already sent many questions today — please write to us by email.|Sie haben heute bereits viele Fragen gesendet — bitte schreiben Sie uns eine E-Mail.
+Príliš veľa správ naraz — chvíľu počkajte.|Too many messages at once — please wait a moment.|Zu viele Nachrichten auf einmal — bitte warten Sie einen Moment.
+Konverzácia sa nenašla.|Conversation not found.|Konversation nicht gefunden.
+Napíšte nám otázku — práve sme online a odpíšeme vám hneď tu v okne.|Write us a question — we are online right now and will reply here in the window straight away.|Schreiben Sie uns eine Frage — wir sind gerade online und antworten Ihnen sofort hier im Fenster.
+Momentálne nie sme online. Odpoveď sa zobrazí tu a príde aj e-mailom na|We are not online right now. The reply will appear here and will also be sent by email to|Wir sind derzeit nicht online. Die Antwort erscheint hier und wird auch per E-Mail gesendet an

@@ -14,6 +14,7 @@ import MesacnyReportTab from './MesacnyReportTab';
 import OdovzdanieZakazky from './OdovzdanieZakazky';
 import PrintStudioAdmin from './printstudio/PrintStudioAdmin';
 import NotifikacieZvonec from './NotifikacieZvonec';
+import ChatTab, { useChat } from './ChatZakaznici';
 import OnlinePrezencia from './OnlinePrezencia';
 import DopytPredajneTab, { useDopytyPredajne } from './DopytPredajne';
 import { PrintSpecEditor, PrintKarta, stiahnutQrFolie, popisUmiestnenia } from './PrintKarta';
@@ -32,7 +33,7 @@ import {
   ClipboardList, Package, Cpu, QrCode, Plus, User, Clock, Layers, Search, Check, X, Calendar,
   Palette, Scissors, Printer, Sliders, Sparkles, ZoomIn, ZoomOut, FileText, PlusCircle, Table,
   Shield, Users, Lock, Edit2, Trash2, Tag, Scale, CalendarDays, FileEdit, Gift, Loader2, AlertTriangle,
-  Shirt, Box, Banknote, Store, GripVertical, Download, Upload, ArrowUp, ArrowDown, BarChart3, Camera, Bot, Zap, Star, RefreshCw, BookOpen, Paperclip, Copy, Menu
+  Shirt, Box, Banknote, Store, GripVertical, Download, Upload, ArrowUp, ArrowDown, BarChart3, Camera, Bot, Zap, Star, RefreshCw, BookOpen, Paperclip, Copy, Menu, MessageCircle
 } from 'lucide-react';
 
 // ============================================================
@@ -272,16 +273,19 @@ const PRIJEMCOVIA_POMOCI = [...VEDENIE_VYROBY, 'majster'];
 // Karty v hornom menu — kto ich vidí sa nastavuje v Zamestnanci & Práva -> Globálne Oprávnenia (ACL), riadky "Karta: ...".
 // Tu sú len PREDVOĽBY (kým Master nič neprestaví). Master vidí všetko vždy.
 const TAB_DEFS = [
-  ['planner', 'Plánovacia Matica'], ['orders', 'Konfigurátor Zákaziek'], ['dopyt-predajne', 'Dopyt predajne'], ['catalog', 'Katalóg Produktov'], ['isolated-station', 'Samostatné Dielne'],
+  ['planner', 'Plánovacia Matica'], ['orders', 'Konfigurátor Zákaziek'], ['dopyt-predajne', 'Dopyt predajne'], ['chat', 'Zákaznícky chat'], ['catalog', 'Katalóg Produktov'], ['isolated-station', 'Samostatné Dielne'],
   ['materials', 'Sklad'], ['profiles', 'Zamestnanci & Práva'], ['qr-terminal', 'Čítačka QR'], ['reports', 'Prehľady'], ['designers', 'Dashboard Grafikov'],
   ['problems', 'Problémy'], ['invoices', 'Financie'], ['quotes', 'Cenové ponuky'], ['archive', 'História Zákaziek'],
   ['cestaky', 'Cestovné príkazy'], ['kniha-jazd', 'Kniha jázd (tachometer, tankovanie)'], ['manual', 'Manuál'],
 ];
+// Zákaznícky chat: karta 'chat' je predvolene len pre Mastra; ak ju Master povolí inej role (ACL), aj tá je v chate "online"
+const aclHodnotaChat = (acl, role) => acl?.['tab_chat']?.[role] === true;
 const VYROBA_A_VEDENIE = ['master', 'supervisor', 'manazer', 'majster', 'sales', 'employee'];
 const TAB_DEFAULT_ROLES = {
   planner: [...VYROBA_A_VEDENIE, 'predajna'],
   orders: [...VYROBA_A_VEDENIE, 'predajna'],
   'dopyt-predajne': ['master', 'supervisor', 'manazer', 'majster', 'sales', 'predajna'],
+  chat: ['master'],
   catalog: VYROBA_A_VEDENIE,
   'isolated-station': VYROBA_A_VEDENIE,
   materials: [...VYROBA_A_VEDENIE, 'uctovnik'],
@@ -1431,6 +1435,7 @@ export default function App() {
     if (!odkaz?.tab) return;
     setActiveTab(odkaz.tab);
     if (odkaz.tab === 'dopyt-predajne') setDopytFokus({ id: odkaz.id, nonce: Date.now() });
+    if (odkaz.tab === 'chat') setChatFokus({ id: odkaz.id, nonce: Date.now() });
     if (odkaz.nacrtId) { setFinanceSubTab('queue'); setOtvorenyNacrtId(odkaz.nacrtId); }
     if (odkaz.tab === 'printstudio') {
       setPrintstudioJumpTarget(odkaz.subtab || 'objednavky');
@@ -2062,6 +2067,9 @@ export default function App() {
 
   // Dopyt predajne: dáta + Realtime + akcie (karta aj značka v menu); nový dopyt = hlasné upozornenie pre určených ľudí
   const [dopytFokus, setDopytFokus] = useState(null);
+  const [chatFokus, setChatFokus] = useState(null);
+  // Zákaznícky chat: kým je prihlásený Master (alebo kto má kartu povolenú) a má zapnuté Online, zákazníci v appkách vidia "Sme online"
+  const chat = useChat(supabase, !!currentUser && (currentUser.role === 'master' || aclHodnotaChat(acl, currentUser.role)), currentUser);
   const dopytyPredajne = useDopytyPredajne({
     supabase, currentUser, employees,
     upozorni: (n) => {
@@ -7075,6 +7083,9 @@ export default function App() {
               )}
               {canSeeTab(currentUser.role, 'orders') && (
                 <button onClick={() => setActiveTab('orders')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'orders' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><PlusCircle className="h-3.5 w-3.5" /> Konfigurátor Zákaziek</button>
+              )}
+              {canSeeTab(currentUser.role, 'chat') && (
+                <button onClick={() => setActiveTab('chat')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'chat' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><MessageCircle className="h-3.5 w-3.5" /> Chat{chat.neprecitane > 0 && <span className="bg-rose-600 animate-pulse text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full ml-1">{chat.neprecitane}</span>}</button>
               )}
               {canSeeTab(currentUser.role, 'dopyt-predajne') && (
                 <button onClick={() => setActiveTab('dopyt-predajne')} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${activeTab === 'dopyt-predajne' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Store className="h-3.5 w-3.5" /> Dopyt predajne{dopytyPredajne.pocetAktivnych > 0 && <span className={`${dopytyPredajne.pocetNovych > 0 ? 'bg-rose-600 animate-pulse' : 'bg-amber-500'} text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full ml-1`}>{dopytyPredajne.pocetAktivnych}</span>}</button>
@@ -12181,6 +12192,10 @@ export default function App() {
             </div>
           );
         })()}
+
+        {activeTab === 'chat' && (
+          <ChatTab supabase={supabase} chat={chat} currentUser={currentUser} fokus={chatFokus} />
+        )}
 
         {activeTab === 'dopyt-predajne' && (
           <DopytPredajneTab d={dopytyPredajne} currentUser={currentUser} employees={employees} orders={orders} rolaLabely={ROLE_LABELS} fokusId={dopytFokus} triggerNotification={triggerNotification} />
