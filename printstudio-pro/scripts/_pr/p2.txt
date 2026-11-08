@@ -1,0 +1,380 @@
+700|Rotate with the mouse • Zoom with the wheel|Mit der Maus drehen • Mit dem Mausrad zoomen
+701|Oval|Oval
+702|We will get back to you as soon as possible at the contact provided.|Wir melden uns so bald wie möglich unter dem angegebenen Kontakt bei Ihnen.
+703|The eyelets are spaced evenly from the corners (first and last in the corner). At the tunnel they start right next to it; with a reinforcing strap they go across the strap. Total:|Die Ösen sind gleichmäßig ab den Ecken verteilt (erste und letzte in der Ecke). Am Tunnel beginnen sie direkt daneben, bei einem Verstärkungsgurt verlaufen sie über den Gurt. Insgesamt:
+704|Eyelets around the whole perimeter|Ösen am gesamten Umfang
+705|PBT · pbtprint.sk · Prices are indicative|PBT · pbtprint.sk · Preise sind unverbindlich
+706|PNG, JPG or SVG (max 5 MB)|PNG, JPG oder SVG (max. 5 MB)
+707|PNG, JPG, SVG. A transparent background is ideal.|PNG, JPG, SVG. Ein transparenter Hintergrund ist ideal.
+708|RIGHT SLEEVE|RECHTER ÄRMEL
+709|=|=
+710|Palestine|Palästina
+711|Colour palette|Farbpalette
+712|DTF colour palette|DTF-Farbpalette
+713|Panel A — front ({0} × {1} cm)|Panel A — Vorderseite ({0} × {1} cm)
+714|Panel B — back ({0} × {1} cm)|Panel B — Rückseite ({0} × {1} cm)
+715|The paper always has its nominal width|Das Papier hat immer seine Nennbreite
+716|Papua New Guinea|Papua-Neuguinea
+717|Parameters|Parameter
+718|Pattern parameters|Musterparameter
+719|Order parameters|Auftragsparameter
+720|Print personalisation|Individualisierung des Drucks
+721|Card payment via Shopify.|Kartenzahlung über Shopify.
+722|Prepayment by card (Shopify Pay)|Vorauszahlung per Karte (Shopify Pay)
+723|Prepayment by card (Shopify)|Vorauszahlung per Karte (Shopify)
+724|Knitted|Gestrickt
+725|Full-colour print including photos and colour gradients. From {0} piece, on all colours and materials.|Vollfarbdruck auch mit Fotos und Farbverläufen. Ab {0} Stück, auf allen Farben und Materialien.
+726|Solid areas, text and numbers in foil ({0} colour = {1} foil). From {2} piece, very durable.|Vollflächen, Texte und Zahlen in Folie ({0} Farbe = {1} Folie). Ab {2} Stück, sehr langlebig.
+727|Material area|Materialfläche
+728|Design area|Gestaltungsfläche
+729|Fence banner|Zaunbanner
+730|The canvas is not ready.|Die Zeichenfläche ist nicht bereit.
+731|After adding the design, upload another file. The file in the uploader only gets into the order after you click "Add this design" (or we will offer to add it when you order).|Laden Sie nach dem Hinzufügen des Motivs eine weitere Datei hoch. Die Datei im Upload gelangt erst nach einem Klick auf „Dieses Motiv hinzufügen“ in die Bestellung (oder wir bieten das Hinzufügen beim Bestellen an).
+732|Below the logo in the centre|Unter dem Logo in der Mitte
+733|Below the text|Unter dem Text
+734|Below the crest on the heart side|Unter dem Wappen auf der Herzseite
+735|Bases|Standfüße
+736|Base|Standfuß
+737|Base / stand|Standfuß / Ständer
+738|Same as the jersey|Wie das Trikot
+739|Cup|Pokal
+740|Front view|Ansicht von vorn
+741|Back view|Ansicht von hinten
+742|Continue to Extras →|Weiter zu Extras →
+743|Continue to Graphics →|Weiter zu Grafik →
+744|Polo with buttons|Polo mit Knöpfen
+745|Outline position|Position der Kontur
+746|Polyester|Polyester
+747|=|=
+748|The aspect ratio of the file does not match|Das Seitenverhältnis der Datei passt nicht zu
+749|The aspect ratio of the file does not match the print format|Das Seitenverhältnis der Datei passt nicht zum Druckformat
+750|Crew-length|Kurzschaft
+751|The jersey offer is temporarily switched off.|Das Trikotangebot ist vorübergehend deaktiviert.
+752|Offer for clubs|Angebot für Vereine
+753|Offer for clubs, schools and agencies|Angebot für Vereine, Schulen und Agenturen
+754|The offer could not be loaded (is the function ponuka-dresy deployed in Supabase?).|Das Angebot konnte nicht geladen werden (ist die Funktion ponuka-dresy in Supabase bereitgestellt?).
+755|Design description (prompt)|Motivbeschreibung (Prompt)
+756|Popular headband colours:|Beliebte Stirnbandfarben:
+757|Order of elements on the headband:|Reihenfolge der Elemente auf dem Stirnband:
+758|Size comparison|Größenvergleich
+759|Gradual daily dispatch in parts|Schrittweiser täglicher Versand in Teilen
+760|Offset {0}/{1} (half-drop)|Versatz {0}/{1} (Half-Drop)
+761|Move forward|Nach vorne verschieben
+762|Move backward|Nach hinten verschieben
+763|Move down|Nach unten verschieben
+764|Move up|Nach oben verschieben
+765|Print|Druck
+766|Print and fabric from us|Druck und Stoff von uns
+767|Printing on sublimation paper only|Druck nur auf Sublimationspapier
+768|Printing on textiles supplied by you (the customer).|Druck auf von Ihnen (dem Kunden) gelieferte Textilien.
+769|Printing on your material|Druck auf Ihr Material
+770|Printing on a selected material from our range|Druck auf ein ausgewähltes Material aus unserem Angebot
+771|Printing on polyester fabrics of various kinds using sublimation technology — vibrant, durable colours that dye the fibre itself and cannot be felt to the touch. Fluorescent colours are also possible.|Druck auf Polyesterstoffe verschiedener Art im Sublimationsverfahren — leuchtende, langlebige Farben, die die Faser selbst einfärben und sich nicht anfühlen. Auch Neonfarben sind möglich.
+772|Textile printing|Textildruck
+773|T-shirt printing: multiple prints, online order and payment|T-Shirt-Druck: mehrere Drucke, Bestellung und Bezahlung online
+774|Prints and graphics|Drucke und Grafik
+775|Prints on one item ({{0}})|Drucke auf einem Stück ({{0}})
+776|Required roll length|Erforderliche Rollenlänge
+777|We have sent the confirmation to your email.|Die Bestätigung haben wir an Ihre E-Mail-Adresse gesendet.
+778|I confirm that this is printing on|Ich bestätige, dass es sich um einen Druck auf
+779|Please confirm that this is printing on textiles supplied by you.|Bitte bestätigen Sie, dass es sich um einen Druck auf von Ihnen gelieferte Textilien handelt.
+780|Please confirm that you will supply the textile.|Bitte bestätigen Sie, dass Sie das Textil liefern.
+781|Use:|Verwendung:
+782|Use|Verwenden
+783|Your finished logo is being used. Changes below will take effect after you return to the generator.|Ihr fertiges Logo wird verwendet. Änderungen unten wirken sich erst nach der Rückkehr zum Generator aus.
+784|Surface texture used as the background of your logo. A detail of the pattern is shown (approx. {0} × {1} cm). The price does not change.|Oberflächenstruktur, die als Hintergrund Ihres Logos verwendet wird. Gezeigt wird ein Ausschnitt des Musters (ca. {0} × {1} cm). Der Preis ändert sich nicht.
+785|Background|Hintergrund
+786|Background (active side)|Hintergrund (aktive Seite)
+787|Background (colour, pattern or uploaded graphic)|Hintergrund (Farbe, Muster oder hochgeladene Grafik)
+788|Note or link to the graphic (Google Drive, WeTransfer…)|Anmerkung oder Link zur Grafik (Google Drive, WeTransfer …)
+789|Colour note / special shade|Farbhinweis / Sonderton
+790|Note:|Anmerkung:
+791|Number of goalkeepers|Anzahl der Torhüter
+792|You enter the number of goalkeepers in the Players step.|Die Anzahl der Torhüter geben Sie im Schritt „Spieler“ an.
+793|Number of colours ({0}–{1})|Anzahl der Farben ({0}–{1})
+794|Number of foil colours ({0}–{1})|Anzahl der Folienfarben ({0}–{1})
+795|Number of players|Anzahl der Spieler
+796|Qty (pcs)|Anz. (Stk.)
+797|Number of pieces|Stückzahl
+798|Number of pieces and print size|Stückzahl und Druckgröße
+799|Total number of pieces|Gesamtstückzahl
+800|Number of pieces of this design|Stückzahl dieses Motivs
+801|Number of pieces:|Stückzahl:
+802|Number of pieces: {{0}}|Stückzahl: {{0}}
+803|Number of screens|Anzahl der Siebe
+804|Quantity:|Anzahl:
+805|Please wait, the price is being recalculated…|Bitte warten, der Preis wird neu berechnet …
+806|Calculating the price…|Preis wird berechnet …
+807|Poland|Polen
+808|You send or bring your own pieces, we only print them (the price is for printing only).|Sie senden oder bringen Ihre eigenen Stücke, wir bedrucken sie nur (der Preis gilt nur für den Druck).
+809|Postage and packaging|Porto und Verpackung
+810|Postage is free automatically from|Porto ist automatisch kostenlos ab
+811|Free postage for orders from|Kostenloses Porto bei Bestellungen ab
+812|Free postage, the order is over|Kostenloses Porto, die Bestellung liegt über
+813|Required number of pieces|Benötigte Stückzahl
+814|Right side|Rechte Seite
+815|Right side (back seam) →|Rechte Seite (hintere Naht) →
+816|Right sleeve|Rechter Ärmel
+817|The Shopify Variant ID is not set for "{{0}}" ({{1}} / {{2}}) — add it in Master Admin → Shopify connection.|Für „{{0}}“ ({{1}} / {{2}}) ist keine Shopify-Variant-ID hinterlegt — ergänzen Sie sie unter Master Admin → Shopify-Verbindung.
+818|For graphic designers who draw the graphic themselves. It contains {0} lines:|Für Grafiker, die die Grafik selbst zeichnen. Enthält {0} Linien:
+819|Not available for this product.|Für dieses Produkt nicht verfügbar.
+820|For this sport we use one standard material (quick-drying functional polyester) — jersey from|Für diese Sportart verwenden wir ein Standardmaterial (schnell trocknendes Funktionspolyester) — Trikot ab
+821|Before ordering, add a graphic to each print (upload a file or design one).|Fügen Sie vor der Bestellung zu jedem Druck eine Grafik hinzu (Datei hochladen oder selbst gestalten).
+822|Before ordering, add a graphic to each print.|Fügen Sie vor der Bestellung zu jedem Druck eine Grafik hinzu.
+823|Front side|Vorderseite
+824|Front side (A)|Vorderseite (A)
+825|Front and back parts of the trousers|Vorder- und Rückenteile der Hose
+826|Front|Vorne
+827|The front and back have a free strip between them (bleed). The generator adds the manufacturer's logo, name, number and collar.|Zwischen Vorder- und Rückseite liegt ein freier Streifen (Beschnitt). Herstellerlogo, Name, Nummer und Kragen fügt der Generator hinzu.
+828|Quantity discount overview|Übersicht der Mengenrabatte
+829|Quantity discount overview (width {0} cm)|Übersicht der Mengenrabatte (Breite {0} cm)
+830|Premium|Premium
+831|Conversion €/m²|Umrechnung €/m²
+832|Recalculating…|Wird neu berechnet …
+833|Racing stripes added|Rennstreifen hinzugefügt
+834|Remove the white background of the image on upload|Weißen Hintergrund des Bildes beim Hochladen entfernen
+835|For this sport {{0}}.|Bei dieser Sportart {{0}}.
+836|Direct pigment printing on cotton fabrics — plain weave, filling, woven fabrics.|Direkter Pigmentdruck auf Baumwollstoffe — Single Jersey, Füllstoffe, Webware.
+837|Zoom in|Vergrößern
+838|Please add a graphic to each print (upload a file or design one).|Bitte fügen Sie zu jedem Druck eine Grafik hinzu (Datei hochladen oder selbst gestalten).
+839|Added to cart|Zum Warenkorb hinzugefügt
+840|Add|Hinzufügen
+841|Add to cart|In den Warenkorb
+842|Add carabiners|Karabiner hinzufügen
+843|Add eyelets|Ösen hinzufügen
+844|Add a print|Druck hinzufügen
+845|Add a side|Seite hinzufügen
+846|Add this design to the order|Dieses Motiv zur Bestellung hinzufügen
+847|Add text|Text hinzufügen
+848|Add a tunnel|Tunnel hinzufügen
+849|Add your own text|Eigenen Text hinzufügen
+850|Add another player|Weiteren Spieler hinzufügen
+851|Transparent PNG recommended|Transparentes PNG empfohlen
+852|=|=
+853|Prepared roll {{0}} cm ({1}-{2} DPI)|Vorbereitete Rolle {{0}} cm ({1}-{2} DPI)
+854|Ready|Bereit
+855|Print file ready ({0} DPI)|Druckdatei bereit ({0} DPI)
+856|Prepare the image for printing (AI)|Bild für den Druck aufbereiten (KI)
+857|Prepare the graphic for printing for me (+{0} €)|Bereiten Sie die Grafik für mich druckfertig auf (+{0} €)
+858|Adjust the colour of each part separately.|Passen Sie die Farbe jedes Teils einzeln an.
+859|Product|Produkt
+860|Product not found.|Produkt nicht gefunden.
+861|Professional|Professionell
+862|Please fill in:|Bitte ergänzen:
+863|Please upload a vector format (PDF, EPS, AI, SVG, DXF).|Bitte laden Sie ein Vektorformat hoch (PDF, EPS, AI, SVG, DXF).
+864|Stripes|Streifen
+865|The element was duplicated|Das Element wurde dupliziert
+866|The element was removed|Das Element wurde entfernt
+867|The first {{0}} m today as express, the rest the following day|Die ersten {{0}} m heute im Express, der Rest am Folgetag
+868|You are currently designing|Sie gestalten gerade
+869|Express surcharge|Expresszuschlag
+870|Polyester surcharge (included in the prices above)|Polyester-Aufpreis (in den Preisen oben enthalten)
+871|Express surcharge|Expresszuschlag
+872|Graphic preparation for printing|Aufbereitung der Grafik für den Druck
+873|Accessories|Zubehör
+874|Accessories / extras|Zubehör / Extras
+875|Poles / frames|Stangen / Gestelle
+876|The poles and bases set below belong to the flag in the editor. The flag only reaches the order after you click "Add this design" (or we will offer to add it when you order). The extras below are shared by the whole order.|Die unten eingestellten Stangen und Standfüße gehören zur Fahne im Editor. Die Fahne gelangt erst nach einem Klick auf „Dieses Motiv hinzufügen“ in die Bestellung (oder wir bieten das Hinzufügen beim Bestellen an). Die Extras unten gelten für die gesamte Bestellung.
+877|=|=
+878|Waistband (elastic)|Bund (Gummizug)
+879|Trouser waist|Hosenbund
+880|Stripes and graphic elements|Streifen und Grafikelemente
+881|Font|Schriftart
+882|Font|Schriftart
+883|Font:|Schriftart:
+884|=|=
+885|Rather send an enquiry only (no payment)|Lieber nur eine Anfrage senden (ohne Zahlung)
+886|Austria|Österreich
+887|Reflective flex|Reflex-Flex
+888|Reset|Zurücksetzen
+889|Reset position|Position zurücksetzen
+890|Reset|Zurücksetzen
+891|Reset configuration|Konfiguration zurücksetzen
+892|Cut and weeded|Geschnitten und entgittert
+893|Cut foils|Schneidefolien
+894|Cut vinyl transfer|Flex-Transfer (geschnitten)
+895|Real size on the flag:|Tatsächliche Größe auf der Fahne:
+896|Corner pennants|Eckwimpel
+897|Rotation|Drehung
+898|Rotation paused|Drehung pausiert
+899|Rotation started|Drehung gestartet
+900|Rotation:|Drehung:
+901|Same as the jersey|Wie das Trikot
+902|Parallel (grid)|Parallel (Raster)
+903|Equatorial Guinea|Äquatorialguinea
+904|Split in half|In der Mitte geteilt
+905|Layout|Layout
+906|Design size|Motivgröße
+907|Design size:|Motivgröße:
+908|The print size is determined automatically from the design.|Die Druckgröße wird automatisch aus dem Motiv bestimmt.
+909|The size exceeds the maximum for this placement (|Die Größe überschreitet das Maximum für diese Platzierung (
+910|The size was set automatically from the design on the T-shirt (|Die Größe wurde automatisch aus dem Motiv auf dem T-Shirt festgelegt (
+911|The size is set from the design — place it on the product and change its size.|Die Größe ergibt sich aus dem Motiv — platzieren Sie es auf dem Produkt und ändern Sie seine Größe.
+912|Lanyard size {{0}} × {{1}} mm.|Schlüsselbandgröße {{0}} × {{1}} mm.
+913|Size chart|Größentabelle
+914|Dimensions|Maße
+915|Dimensions and material|Maße und Material
+916|The dimensions and quantity must be greater than {0}.|Maße und Menge müssen größer als {0} sein.
+917|Flag dimensions (cm)|Fahnenmaße (cm)
+918|Spacing between logos|Abstand zwischen den Logos
+919|Price breakdown|Preisaufstellung
+920|Sleeve|Ärmel
+921|Sleeves and cuffs|Ärmel und Bündchen
+922|=|=
+923|=|=
+924|Russo One (Heavy)|Russo One (Kräftig)
+925|Pink|Rosa
+926|Quick colours for the zone:|Schnellfarben für die Zone:
+927|Quick colour inspirations|Schnelle Farbinspirationen
+928|Quick production templates|Schnelle Fertigungsvorlagen
+929|Quick sports icons:|Schnelle Sportsymbole:
+930|Dispatch speed|Versandgeschwindigkeit
+931|Quick scarf design ({0} modern styles)|Schnelles Tuch-Design ({0} moderne Stile)
+932|Quick choice of background colour|Schnelle Auswahl der Hintergrundfarbe
+933|With a B2B code you can send an enquiry instead of paying by card: your email app opens with the selection and price pre-filled, you just add the delivery date and send it. The design is saved with the enquiry.|Mit einem B2B-Code können Sie statt der Kartenzahlung eine Anfrage senden: Ihr E-Mail-Programm öffnet sich mit vorausgefüllter Auswahl und Preis, Sie ergänzen nur den Liefertermin und senden sie ab. Das Design wird mit der Anfrage gespeichert.
+934|With B2B discount (−|Mit B2B-Rabatt (−
+935|SEAM ({0} cm)|NAHT ({0} cm)
+936|=|=
+937|Printing rate (excl. VAT)|Druckpreis (ohne MwSt.)
+938|Rate for this quantity (excl. VAT)|Preis bei dieser Menge (ohne MwSt.)
+939|Shrinking rate (excl. VAT)|Preis für das Einlaufen (ohne MwSt.)
+940|El Salvador|El Salvador
+941|Separate designs|Separate Motive
+942|San Marino|San Marino
+943|Saudi Arabia|Saudi-Arabien
+944|We recommend the sandwich only for sizes S and M — larger flags are too heavy and strain the pole.|Die Sandwich-Ausführung empfehlen wir nur für die Größen S und M — größere Fahnen sind zu schwer und belasten die Stange.
+945|Serif elegant|Serif elegant
+946|The server did not return a payment link.|Der Server hat keinen Zahlungslink zurückgegeben.
+947|The server did not return a response.|Der Server hat keine Antwort zurückgegeben.
+948|North Korea|Nordkorea
+949|North Macedonia|Nordmazedonien
+950|Shopify returned error {{0}}|Shopify hat den Fehler {{0}} zurückgegeben
+951|Screen printing|Siebdruck
+952|Grey|Grau
+953|Stock jerseys have a classic relaxed fit. Check the size in the size chart.|Lagertrikots haben einen klassischen, lockeren Schnitt. Prüfen Sie die Größe in der Größentabelle.
+954|Copied ✓|Kopiert ✓
+955|Copy text|Text kopieren
+956|Copy the text:|Text kopieren:
+957|Copy the Name, Number, Size columns from Excel and paste them here|Kopieren Sie die Spalten Name, Nummer, Größe aus Excel und fügen Sie sie hier ein
+958|Hide breakdown ▼|Aufstellung ausblenden ▼
+959|Slovak tricolour added|Slowakische Trikolore hinzugefügt
+960|Service|Leistung
+961|Somalia|Somalia
+962|Bleed ({0} cm beyond the cut)|Beschnitt ({0} cm über den Zuschnitt hinaus)
+963|Reinforced left side|Verstärkte linke Seite
+964|Foam-reinforced hips on the shorts|Mit Schaumstoff verstärkte Hüften an den Shorts
+965|Foam-reinforced elbows on the jersey|Mit Schaumstoff verstärkte Ellbogen am Trikot
+966|Reinforcing strap|Verstärkungsgurt
+967|Bottom hem of the trouser leg|Unterer Saum des Hosenbeins
+968|United Arab Emirates|Vereinigte Arabische Emirate
+969|United Kingdom|Vereinigtes Königreich
+970|United States|Vereinigte Staaten
+971|Total excl. VAT|Gesamt ohne MwSt.
+972|Total for|Gesamt für
+973|Total for production (excl. VAT)|Gesamt für die Herstellung (ohne MwSt.)
+974|Total for production ({{0}} pcs, excl. VAT)|Gesamt für die Herstellung ({{0}} Stk., ohne MwSt.)
+975|Sponsor — logo on the chest|Sponsor — Logo auf der Brust
+976|Sponsor — logo below the number|Sponsor — Logo unter der Nummer
+977|Material consumption|Materialverbrauch
+978|Processing…|Wird verarbeitet …
+979|Front|Vorne
+980|Back to the generator|Zurück zum Generator
+981|Printing method|Druckverfahren
+982|Hearts|Herzen
+983|Sri Lanka|Sri Lanka
+984|Download the shorts pattern template, draw your own design on it (e.g. in Canva or Photoshop) and upload the finished image (PNG/JPG, {0} × {1} px). The generator adds the manufacturer's logo, crest and number on the trousers.|Laden Sie die Schnittvorlage der Shorts herunter, zeichnen Sie Ihr eigenes Design hinein (z. B. in Canva oder Photoshop) und laden Sie das fertige Bild hoch (PNG/JPG, {0} × {1} px). Herstellerlogo, Wappen und Nummer an der Hose fügt der Generator hinzu.
+985|Download the template, draw your own design on it (e.g. in Canva or Photoshop) and upload the finished image. It replaces the jersey pattern.|Laden Sie die Vorlage herunter, zeichnen Sie Ihr eigenes Design hinein (z. B. in Canva oder Photoshop) und laden Sie das fertige Bild hoch. Es ersetzt das Trikotmuster.
+986|Download JSON|JSON herunterladen
+987|Download design|Design herunterladen
+988|Download preview image|Vorschaubild herunterladen
+989|Table flags|Tischfahnen
+990|Flagpole flag|Mastfahne
+991|Centre X|Mitte X
+992|Centre Y|Mitte Y
+993|Central African Republic|Zentralafrikanische Republik
+994|Pattern|Schnitt
+995|Download pattern (PDF, scale {0}:{1})|Schnitt herunterladen (PDF, Maßstab {0}:{1})
+996|=|=
+997|Sublimation|Sublimation
+998|Sublimation can only be printed on white fabric.|Sublimation kann nur auf weißen Stoff gedruckt werden.
+999|Sudan|Sudan
+1000|The Supabase client is not configured (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY are missing).|Der Supabase-Client ist nicht konfiguriert (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY fehlen).
+1001|The Supabase client is not configured.|Der Supabase-Client ist nicht konfiguriert.
+1002|Light blue|Hellblau
+1003|Light|Hell
+1004|Light beige environment (room)|Helle beige Umgebung (Raum)
+1005|Light|Hell
+1006|Symbols|Symbole
+1007|Symbols (smileys, stars, arrows…) are only available for DTF printing.|Symbole (Smileys, Sterne, Pfeile …) sind nur beim DTF-Druck verfügbar.
+1008|The file is too large (max. {{0}} MB).|Die Datei ist zu groß (max. {{0}} MB).
+1009|The file must be in|Die Datei muss im Format
+1010|File ready: {{0}}|Datei bereit: {{0}}
+1011|The file could not be uploaded:|Die Datei konnte nicht hochgeladen werden:
+1012|The file could not be read. Try .xlsx or .csv with the columns Name, Number, Size.|Die Datei konnte nicht gelesen werden. Versuchen Sie .xlsx oder .csv mit den Spalten Name, Nummer, Größe.
+1013|Order summary|Bestellübersicht
+1014|Roster|Spielerliste
+1015|Syria|Syrien
+1016|=|=
+1017|TIFF or PSD|TIFF oder PSD
+1018|=|=
+1019|Tajikistan|Tadschikistan
+1020|Tanzania|Tansania
+1021|Technical detail|Technisches Detail
+1022|Technical production sheet|Technisches Fertigungsblatt
+1023|Technology|Technologie
+1024|Printing technology|Drucktechnologie
+1025|Phone|Telefon
+1026|Phone *|Telefon *
+1027|Thin stripes at the seams|Dünne Streifen an den Nähten
+1028|We do not recognise this code. Please check it or write to us.|Diesen Code kennen wir nicht. Bitte prüfen Sie ihn oder schreiben Sie uns.
+1029|This code is not valid.|Dieser Code ist nicht gültig.
+1030|Pulse|Puls
+1031|Heat-sealed edge|Thermisch versiegelter Rand
+1032|Tracksuit bottoms|Jogginghose
+1033|Delivery date|Liefertermin
+1034|Delivery date (by when you need it):|Liefertermin (bis wann Sie es brauchen):
+1035|Deadline ·|Termin ·
+1036|Text|Text
+1037|Text (up to {0} lines)|Text (bis zu {0} Zeilen)
+1038|Add text and logos directly on the product (the tools are next to it) and set their size — the price is calculated from the size of the design. The dashed rectangle is only a hint of the maximum size. Without a design you can simply enter the dimensions above.|Fügen Sie Text und Logos direkt auf dem Produkt hinzu (die Werkzeuge befinden sich daneben) und legen Sie ihre Größe fest — der Preis wird aus der Größe des Motivs berechnet. Das gestrichelte Rechteck ist nur ein Hinweis auf die maximale Größe. Ohne Motiv können Sie einfach oben die Maße eingeben.
+1039|Add text and logos directly on the T-shirt (the tools are next to it) and set their size — the price is calculated from the size of the design. The dashed rectangle is only a hint of the maximum size. Without a design you can simply enter the dimensions above.|Fügen Sie Text und Logos direkt auf dem T-Shirt hinzu (die Werkzeuge befinden sich daneben) und legen Sie ihre Größe fest — der Preis wird aus der Größe des Motivs berechnet. Das gestrichelte Rechteck ist nur ein Hinweis auf die maximale Größe. Ohne Motiv können Sie einfach oben die Maße eingeben.
+1040|Text added to the design|Text in das Design eingefügt
+1041|Text added to the front side (A)|Text auf der Vorderseite (A) eingefügt
+1042|Text added to the back side (B)|Text auf der Rückseite (B) eingefügt
+1043|Text placed in the centre|Text in der Mitte platziert
+1044|Textile|Textil
+1045|Textile and colour|Textil und Farbe
+1046|Textile from us ({{0}} pcs × {{1}})|Textil von uns ({{0}} Stk. × {{1}})
+1047|Textile from us|Textil von uns
+1048|Textile by the metre|Textil als Meterware
+1049|Textile by the metre and sublimation paper — sublimation & digital cotton|Textil als Meterware und Sublimationspapier — Sublimation & digitale Baumwolle
+1050|Background texture|Hintergrundstruktur
+1051|Tip: you can also move the crest and logos by dragging them with the mouse on the 3D jersey model.|Tipp: Wappen und Logos lassen sich auch per Ziehen mit der Maus auf dem 3D-Trikotmodell verschieben.
+1052|Roll printing (width {0} cm). Print resolution {1} DPI, TIFF/PNG format without background.|Rollendruck (Breite {0} cm). Druckauflösung {1} DPI, Format TIFF/PNG ohne Hintergrund.
+1053|Roll printing up to {0} cm wide (sublimation) / up to {1} cm (cotton). Upload a repeating pattern or a finished roll ({2}-{3} DPI, TIFF/PNG/PDF).|Rollendruck bis {0} cm Breite (Sublimation) / bis {1} cm (Baumwolle). Laden Sie ein Wiederholmuster oder eine fertige Rolle hoch ({2}-{3} DPI, TIFF/PNG/PDF).
+1054|Printed in|Gedruckt in
+1055|Printed in {{0}} parts ({{1}} cm), height {{2}} mm.|Gedruckt in {{0}} Teilen ({{1}} cm), Höhe {{2}} mm.
+1056|Print area|Druckfläche
+1057|Print zone ·|Druckzone ·
+1058|Print files (front and back, ≈ {0} DPI) are generated automatically when you submit the order. Keep important text inside the green frame (safe zone).|Die Druckdateien (Vorder- und Rückseite, ≈ {0} DPI) werden beim Absenden der Bestellung automatisch erzeugt. Platzieren Sie wichtige Texte im grünen Rahmen (Sicherheitszone).
+1059|Print files (front and back, ≈ {0} DPI, transparent outside the shape) are generated automatically when you submit the order.|Die Druckdateien (Vorder- und Rückseite, ≈ {0} DPI, außerhalb der Form transparent) werden beim Absenden der Bestellung automatisch erzeugt.
+1060|We print on|Wir drucken auf
+1061|Dark blue|Dunkelblau
+1062|Dark blue to black environment (room)|Dunkelblaue bis schwarze Umgebung (Raum)
+1063|Dark|Dunkel
+1064|Dark|Dunkel
+1065|Goods total (excl. VAT)|Waren gesamt (ohne MwSt.)
+1066|We cut the transfers into individual pieces so you receive them ready to apply. The price is added to the metre price|Wir schneiden die Transfers in einzelne Stücke, sodass Sie sie applikationsfertig erhalten. Der Preis wird zum Meterpreis addiert
+1067|Transformation reset|Transformation zurückgesetzt
+1068|Shorts|Shorts
+1069|The shorts can have the jersey colours or their own.|Die Shorts können die Trikotfarben oder eigene Farben haben.
+1070|The shorts now take the jersey colours. Changing a colour below switches them to their own colours.|Die Shorts übernehmen jetzt die Trikotfarben. Wenn Sie unten eine Farbe ändern, wechseln sie zu eigenen Farben.
+1071|Tricolour|Trikolore
+1072|T-shirts|T-Shirts
+1073|T-shirts, sweatshirts and more: DTF, cut vinyl transfer or screen printing|T-Shirts, Sweatshirts und mehr: DTF, Flex-Transfer oder Siebdruck
+1074|Training kits|Trainingsausstattung
+1075|=|=
+1076|Tubular Basic — material|Tubular Basic — Material
+1077|Tubular, seamless|Schlauchform, nahtlos
+1078|Tunnel at the top + carabiners on the left|Tunnel oben + Karabiner links
+1079|Tunnels / sleeves|Tunnel / Hohlsäume

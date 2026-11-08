@@ -1,0 +1,330 @@
+0|% (min.|% (min.
+1|% (already included)|% (bereits enthalten)
+2|%, prices are shown excl. VAT|%, Preise werden ohne MwSt. angezeigt
+3|(price is for printing only).|(der Preis gilt nur für den Druck).
+4|(we will send the price in the quote)|(den Preis senden wir im Angebot)
+5|(material + finishing|(Material + Verarbeitung
+6|(material + finishing)|(Material + Verarbeitung)
+7|(max.|(max.
+8|(not used for sandwich flags)|(wird bei Sandwich-Fahnen nicht verwendet)
+9|(double-sided sandwich)|(doppelseitig, Sandwich)
+10|(the window can be moved)|(das Fenster lässt sich verschieben)
+11|(rotated)|(gedreht)
+12|(based on the design on the product)|(entsprechend dem Motiv auf dem Produkt)
+13|(calculating…)|(wird berechnet…)
+14|(at {0} DPI|(bei {0} DPI
+15|(the corner where two sides meet is a single eyelet).|(die Ecke, an der sich zwei Seiten treffen, ist eine einzelne Öse).
+16|(bleed {0} cm all around), at {1} DPI|(Beschnitt {0} cm rundherum), bei {1} DPI
+17|(we also print in lower quality, but the result will reflect that)|(wir drucken auch in geringerer Qualität, das Ergebnis fällt dann aber entsprechend aus)
+18|(width 160 cm)|(Breite 160 cm)
+19|=|=
+20|, objects on canvas:|, Objekte auf der Fläche:
+21|, double-sided sandwich|, doppelseitig, Sandwich
+22|, valid as of {{0}}|, gültig ab {{0}}
+23|, always with long sleeves.|, immer mit langen Ärmeln.
+24|. Keep important elements away from the edges and outside the {0} cm hem at the top and bottom.|. Platziere wichtige Elemente abseits der Ränder und außerhalb des {0} cm breiten Saums oben und unten.
+25|. Panel A is the front, panel B is the back.|. Panel A ist die Vorderseite, Panel B die Rückseite.
+26|. We will send an exact quote within {0} business days.|. Ein genaues Angebot senden wir innerhalb von {0} Werktagen.
+27|. We will send you an exact quote within {0} business days.|. Ein genaues Angebot senden wir Ihnen innerhalb von {0} Werktagen.
+28|3D elastic knit|3D-Elastikstrick
+29|3D preview|3D-Vorschau
+30|3D realistic headband mockup|Realistisches 3D-Mockup des Stirnbands
+31|3D seam|3D-Naht
+32|3D seam hidden|3D-Naht ausgeblendet
+33|3D seam shown|3D-Naht eingeblendet
+34|3D effect|3D-Effekt
+35|3D transfers|3D-Transfers
+36|A4 ({0} pcs)|A4 ({0} Stk.)
+37|A: Front|A: Vorderseite
+38|AI generator|KI-Generator
+39|AI designs|KI-Motive
+40|AI order brief|KI-Auftragsbeschreibung
+41|Accepted: .pdf, .eps, .ai, .svg, .dxf|Akzeptiert: .pdf, .eps, .ai, .svg, .dxf
+42|How to prepare logos for DTF printing|So bereiten Sie Logos für den DTF-Druck vor
+43|The current design is not in the order yet. Add it and order all designs together? (OK = add and order, Cancel = go back and edit)|Das aktuelle Motiv ist noch nicht in der Bestellung. Hinzufügen und alle Motive zusammen bestellen? (OK = hinzufügen und bestellen, Abbrechen = zurück und bearbeiten)
+44|Current object:|Aktuelles Objekt:
+45|Albania|Albanien
+46|Algeria|Algerien
+47|Team discount applied {{0}}%|Teamrabatt angewendet {{0}}%
+48|Applied design: {{0}}|Angewendetes Motiv: {{0}}
+49|Apply to jersey|Auf Trikot anwenden
+50|The app is temporarily switched off.|Die App ist vorübergehend deaktiviert.
+51|Argentina|Argentinien
+52|=|=
+53|Armenia|Armenien
+54|Australia|Australien
+55|Automatic (based on collar and hems)|Automatisch (nach Kragen und Säumen)
+56|Azerbaijan|Aserbaidschan
+57|B (Bold)|B (Fett)
+58|B2B code|B2B-Code
+59|B2B code for advertising agencies|B2B-Code für Werbeagenturen
+60|B2B discount|B2B-Rabatt
+61|B2B discount {{0}} %|B2B-Rabatt {{0}} %
+62|B2B discount {{0}} % applied|B2B-Rabatt {{0}} % angewendet
+63|B2B discount:|B2B-Rabatt:
+64|B: Back|B: Rückseite
+65|Bangladesh|Bangladesch
+66|=|=
+67|Cotton|Baumwolle
+68|Bebas Neue (Athletic)|Bebas Neue (Sportlich)
+69|None|Ohne
+70|No minimum order, reorder any time|Keine Mindestabnahme, Nachbestellung jederzeit möglich
+71|No preview|Keine Vorschau
+72|No base|Ohne Standfuß
+73|No surcharge|Ohne Aufpreis
+74|Sleeveless|Ärmellos
+75|No texture|Ohne Struktur
+76|No seams, no hemming — printed directly onto seamless tubular knitted fabric.|Keine Nähte, kein Säumen — Druck direkt auf nahtlosen, schlauchförmig gestrickten Stoff.
+77|Safe zone ({0} cm inwards)|Sicherheitszone ({0} cm nach innen)
+78|Safety|Sicherheit
+79|No-show (low-cut)|Sneaker-Socken
+80|Runner|Läufer
+81|Bhutan|Bhutan
+82|Bicycle|Fahrrad
+83|White|Weiß
+84|White|Weiß
+85|White background|Weißer Hintergrund
+86|White with blue stripe|Weiß mit blauem Streifen
+87|Dots|Punkte
+88|Bolivia|Bolivien
+89|Box lacrosse always has long sleeves (|Box-Lacrosse hat immer lange Ärmel (
+90|Side panels|Seitenpaneele
+91|Side stripes|Seitenstreifen
+92|Side SEAM|Seitennaht
+93|Side SEAM (A/B)|Seitennaht (A/B)
+94|Side SEAM (B/A)|Seitennaht (B/A)
+95|Goalkeeper|Torwart
+96|Goalkeepers|Torhüter
+97|The goalkeeper jersey is a long-sleeved sweatshirt made of a different material +|Das Torwarttrikot ist ein langärmliges Sweatshirt aus einem anderen Material +
+98|Goalkeeper cut +|Torwartschnitt +
+99|Brazil|Brasilien
+100|Buffs (multiple designs)|Buffs (mehrere Motive)
+101|Total incl. VAT|Gesamt inkl. MwSt.
+102|Total incl. VAT (including shipping)|Gesamt inkl. MwSt. (inkl. Versand)
+103|Total incl. VAT:|Gesamt inkl. MwSt.:
+104|Total price incl. VAT (including shipping)|Gesamtpreis inkl. MwSt. (inkl. Versand)
+105|Total price:|Gesamtpreis:
+106|The total discount is limited to|Der Gesamtrabatt ist begrenzt auf
+107|Whole shipment at once on business day {0}|Gesamte Lieferung auf einmal am {0}. Werktag
+108|Whole shipment at once on business day {0} (express fee not refundable on cancellation)|Gesamte Lieferung auf einmal am {0}. Werktag (Expressgebühr wird bei Stornierung nicht erstattet)
+109|The whole jersey in your design, by sublimation.|Das ganze Trikot in Ihrem Design, im Sublimationsdruck.
+110|Price|Preis
+111|Price excl. VAT|Preis ohne MwSt.
+112|Colour swatch price incl. VAT|Preis Farbfächer inkl. MwSt.
+113|The price is for printing only (textile not included). Card payment via Shopify.|Der Preis gilt nur für den Druck (Textil nicht enthalten). Kartenzahlung über Shopify.
+114|The price is for printing only (your own textile).|Der Preis gilt nur für den Druck (eigenes Textil).
+115|The price is for printing only — you deliver the textile yourself.|Der Preis gilt nur für den Druck — das Textil liefern Sie selbst.
+116|Price includes VAT|Preis inkl. MwSt.
+117|Pallet price incl. VAT|Palettenpreis inkl. MwSt.
+118|Total price|Gesamtpreis
+119|Sample price incl. VAT|Musterpreis inkl. MwSt.
+120|Price per piece|Preis pro Stück
+121|Price per piece (excl. VAT)|Preis pro Stück (ohne MwSt.)
+122|Price per printed piece|Preis pro bedrucktem Stück
+123|The price per piece drops slightly with the quantity of the item. The exact price is in the breakdown below.|Der Stückpreis sinkt mit der Menge des jeweiligen Artikels leicht. Der genaue Preis steht in der Aufstellung unten.
+124|Price for {0} pcs (excl. VAT)|Preis für {0} Stk. (ohne MwSt.)
+125|The price also includes postage|Der Preis enthält auch das Porto
+126|Price €/m (excl. VAT)|Preis €/m (ohne MwSt.)
+127|Price €/pc (excl. VAT)|Preis €/Stk. (ohne MwSt.)
+128|Printing price list|Preisliste Druck
+129|Could not recalculate the price:|Der Preis konnte nicht neu berechnet werden:
+130|Could not calculate the price (is the function {{0}} deployed?).|Der Preis konnte nicht berechnet werden (ist die Funktion {{0}} bereitgestellt?).
+131|Could not calculate the price.|Der Preis konnte nicht berechnet werden.
+132|Prices in the table are excl. VAT.|Die Preise in der Tabelle verstehen sich ohne MwSt.
+133|I also want printing on textiles from you (T-shirts, sweatshirts…) →|Ich möchte auch Druck auf Textilien von Ihnen (T-Shirts, Sweatshirts …) →
+134|Want several different graphics? Add this graphic, upload another file and add the next one — you pay postage only once and the quantity discount is calculated from all pieces.|Mehrere verschiedene Grafiken gewünscht? Fügen Sie diese Grafik hinzu, laden Sie eine weitere Datei hoch und fügen Sie die nächste hinzu — das Porto zahlen Sie nur einmal, und der Mengenrabatt wird aus allen Stücken berechnet.
+135|Want several different logos? Add this logo, upload another file and add the next one — you pay postage and handling only once and the quantity discount is calculated from all pieces.|Mehrere verschiedene Logos gewünscht? Fügen Sie dieses Logo hinzu, laden Sie eine weitere Datei hoch und fügen Sie das nächste hinzu — Porto und Bearbeitung zahlen Sie nur einmal, und der Mengenrabatt wird aus allen Stücken berechnet.
+136|Want several different designs (e.g. {0} buffs with different graphics)? Add this design, edit the layout and add the next one — you pay postage only once and the quantity discount is calculated from all pieces.|Mehrere verschiedene Motive gewünscht (z. B. {0} Buffs mit unterschiedlichen Grafiken)? Fügen Sie dieses Motiv hinzu, bearbeiten Sie das Layout und fügen Sie das nächste hinzu — das Porto zahlen Sie nur einmal, und der Mengenrabatt wird aus allen Stücken berechnet.
+137|Want several different designs (e.g. {0} headbands with different graphics)? Add this design, edit the layout and add the next one — you pay postage only once and the quantity discount is calculated from all pieces.|Mehrere verschiedene Motive gewünscht (z. B. {0} Stirnbänder mit unterschiedlichen Grafiken)? Fügen Sie dieses Motiv hinzu, bearbeiten Sie das Layout und fügen Sie das nächste hinzu — das Porto zahlen Sie nur einmal, und der Mengenrabatt wird aus allen Stücken berechnet.
+138|Want several different designs? Add this design, edit the layout and add the next one — you pay postage only once and the quantity discount is calculated from all pieces.|Mehrere verschiedene Motive gewünscht? Fügen Sie dieses Motiv hinzu, bearbeiten Sie das Layout und fügen Sie das nächste hinzu — das Porto zahlen Sie nur einmal, und der Mengenrabatt wird aus allen Stücken berechnet.
+139|Want several different flags? Add this flag, edit the layout (or size) and add the next one — shipping is paid only once and the quantity discount is calculated from all pieces.|Mehrere verschiedene Fahnen gewünscht? Fügen Sie diese Fahne hinzu, bearbeiten Sie das Layout (oder die Größe) und fügen Sie die nächste hinzu — der Versand wird nur einmal berechnet, und der Mengenrabatt wird aus allen Stücken berechnet.
+140|Want several flags — also of a different shape or size? Set up the flag (parameters, graphics, poles and bases) and add it to the order, then set up the next one. Shipping is paid only once and the quantity price is calculated from all flags.|Mehrere Fahnen gewünscht — auch in anderer Form oder Größe? Konfigurieren Sie die Fahne (Parameter, Grafik, Stangen und Standfüße) und fügen Sie sie der Bestellung hinzu, dann konfigurieren Sie die nächste. Der Versand wird nur einmal berechnet, und der Mengenpreis wird aus allen Fahnen berechnet.
+141|Croatia|Kroatien
+142|Back|Rücken
+143|Shin guards|Schienbeinschoner
+144|Error calculating the printing price (Edge Function) — using the fallback fixed rate:|Fehler bei der Berechnung des Druckpreises (Edge Function) — es wird der pauschale Ersatzsatz verwendet:
+145|Zigzag|Zickzack
+146|ADDITIONAL TEXT|ZUSÄTZLICHER TEXT
+147|DTF by the metre|DTF-Meterware
+148|DTF transfer|DTF-Transfer
+149|DTF transfers by the metre|DTF-Transfers pro Meter
+150|Democratic Republic of the Congo|Demokratische Republik Kongo
+151|Design library|Design-Bibliothek
+152|Details and gradients|Details und Verläufe
+153|Diagonal|Diagonal
+154|Diamonds|Rauten
+155|Child|Kind
+156|Digital cotton|Digitale Baumwolle
+157|Digital cotton printing|Digitaldruck auf Baumwolle
+158|Digital transfer (DTF)|Digitaler Transfer (DTF)
+159|The design was cleaned up|Das Design wurde bereinigt
+160|Design ready for production.|Design bereit für die Produktion.
+161|Shorts design|Shorts-Design
+162|Table flag designer with your own design|Tischfahnen-Designer mit eigenem Design
+163|Lanyard designer with your own print|Schlüsselband-Designer mit eigenem Druck
+164|Long|Lang
+165|Long sleeve – cuff (R)|Langer Ärmel – Bündchen (R)
+166|Long sleeve – cuff (L)|Langer Ärmel – Bündchen (L)
+167|No longer available today (only until|Heute nicht mehr verfügbar (nur bis
+168|Hello,|Guten Tag,
+169|Please supply the transfers pre-cut (+|Bitte liefern Sie die Transfers zugeschnitten (+
+170|We will supply the textile together with the print — you choose the sizes and colour.|Wir liefern das Textil samt Druck — Sie wählen Größen und Farbe.
+171|You supply your own fabric, you only pay for the printing|Sie liefern den Stoff selbst und zahlen nur den Druck
+172|Down|Unten
+173|Dominant colour|Dominante Farbe
+174|Dominican Republic|Dominikanische Republik
+175|Surcharge up to the minimum order price|Aufpreis bis zum Mindestbestellwert
+176|Surcharge up to the minimum order value ({{0}} €)|Aufpreis bis zum Mindestbestellwert ({{0}} €)
+177|Additional applications|Zusätzliche Applikationen
+178|Additional accent|Zusätzlicher Akzent
+179|Extras & summary|Extras & Zusammenfassung
+180|Design extras:|Design-Extras:
+181|Extras for the enquiry|Extras zur Anfrage
+182|Extras for the enquiry:|Extras zur Anfrage:
+183|Shipping|Versand
+184|Shipping (DPD courier)|Versand (DPD-Kurier)
+185|Forward|Nach vorne
+186|Enquiry|Anfrage
+187|Enquiry DOPYT-{{0}} has been saved. Your email app is opening — add your company and delivery date and send it.|Die Anfrage DOPYT-{{0}} wurde gespeichert. Ihr E-Mail-Programm wird geöffnet — ergänzen Sie Firma und Liefertermin und senden Sie sie ab.
+188|The enquiry could not be sent. Please try again or write to us by email.|Die Anfrage konnte nicht gesendet werden. Bitte versuchen Sie es erneut oder schreiben Sie uns eine E-Mail.
+189|The enquiry could not be prepared:|Die Anfrage konnte nicht vorbereitet werden:
+190|We have received your enquiry|Wir haben Ihre Anfrage erhalten
+191|Email enquiries are not enabled yet (migration_b2b_dopyty.sql).|E-Mail-Anfragen sind noch nicht aktiviert (migration_b2b_dopyty.sql).
+192|Dortmund Neon Yellow|Dortmund Neongelb
+193|Delivery everywhere|Lieferung überall hin
+194|Adult — standard|Erwachsene — Standard
+195|Add-on printing (names/numbers)|Nachdruck (Name/Nummer)
+196|Backward|Nach hinten
+197|Jersey|Trikot
+198|Jersey 3D configurator|Trikot-3D-Konfigurator
+199|Express jerseys|Express-Trikots
+200|Jerseys for your team|Trikots für Ihr Team
+201|Jerseys for your team,|Trikots für Ihr Team,
+202|Second|Zweite
+203|Second (outer) outline|Zweite (äußere) Kontur
+204|Duplicate|Duplizieren
+205|Two print sizes|Zwei Druckgrößen
+206|Double stitch with thread|Doppelnaht mit Faden
+207|Denmark|Dänemark
+208|Length|Länge
+209|Fabric length (m)|Stofflänge (m)
+210|Roll length (m)|Rollenlänge (m)
+211|Length of your fabric for shrinking (m)|Länge Ihres Stoffs zum Einlaufen (m)
+212|Length: {{0}} m|Länge: {{0}} m
+213|Djibouti|Dschibuti
+214|Email *|E-Mail *
+215|=|=
+216|=|=
+217|The editor on the T-shirt could not be loaded — you can upload graphics for each print below.|Der Editor auf dem T-Shirt konnte nicht geladen werden — Sie können unten für jeden Druck eine Grafik hochladen.
+218|Ecuador|Ecuador
+219|Crest|Wappen
+220|Estonia|Estland
+221|Ethiopia|Äthiopien
+222|=|=
+223|Express (+|Express (+
+224|Express — on the day of the order|Express — am Tag der Bestellung
+225|Express: {{0}}|Express: {{0}}
+226|Express on the day of the order|Express am Tag der Bestellung
+227|Express production|Expressfertigung
+228|Express surcharge|Expresszuschlag
+229|=|=
+230|FC TEAM|FC TEAM
+231|Colour|Farbe
+232|Icon colour:|Symbolfarbe:
+233|Icon colour:|Symbolfarbe:
+234|Piping colour|Farbe der Paspel
+235|Name and number colour|Farbe von Name und Nummer
+236|Object colour|Objektfarbe
+237|Outline colour|Konturfarbe
+238|Outline colour {0}|Konturfarbe {0}
+239|Base colour|Grundfarbe
+240|Base colour set|Grundfarbe festgelegt
+241|Flag background colour and Pantone swatch book|Fahnen-Hintergrundfarbe und Pantone-Farbfächer
+242|Text colour|Schriftfarbe
+243|Sleeve colour|Ärmelfarbe
+244|Tassel colour|Farbe der Quasten
+245|Textile colour|Textilfarbe
+246|Text colour|Textfarbe
+247|Text colour:|Textfarbe:
+248|T-shirt colour in the preview (preview only)|T-Shirt-Farbe in der Vorschau (nur zur Ansicht)
+249|Crest inner colour|Innenfarbe des Wappens
+250|Colour of your textile (for the preview and price)|Farbe Ihres Textils (für Vorschau und Preis)
+251|Stitching colour|Nahtfarbe
+252|Colours|Farben
+253|Colours (e.g. blue, yellow, white)|Farben (z. B. blau, gelb, weiß)
+254|Colours of individual parts|Farben der einzelnen Teile
+255|Colours taken from the jersey|Farben vom Trikot übernommen
+256|Shorts colours matching the jersey|Shorts-Farben passend zum Trikot
+257|Number colours (independent of the name)|Nummernfarben (unabhängig vom Namen)
+258|Colours, logo, deadline, notes|Farben, Logo, Termin, Anmerkungen
+259|Swatch book —|Farbfächer —
+260|Coloured tassels are supplied subject to current availability — we will confirm after the order.|Farbige Quasten liefern wir je nach aktueller Verfügbarkeit — wir bestätigen nach der Bestellung.
+261|Jersey colour zones|Farbzonen des Trikots
+262|Shorts colour zones|Farbzonen der Shorts
+263|=|=
+264|Purple|Violett
+265|Purple / white|Violett / Weiß
+266|Fiji|Fidschi
+267|Philippines|Philippinen
+268|Font|Schriftart
+269|A4 format, {0} piece|A4-Format, {0} Stück
+270|Ideal file format|Ideales Dateiformat
+271|The product photo could not be loaded.|Das Produktfoto konnte nicht geladen werden.
+272|France|Frankreich
+273|Full service|Full-Service
+274|Footballs|Fußbälle
+275|Football object in the crest|Fußball-Objekt im Wappen
+276|Football stadium all around — pitch, stands, floodlights|Fußballstadion rundum — Rasen, Tribünen, Flutlicht
+277|Finland|Finnland
+278|Foil|Folie
+279|We cut the foil and remove (weed) the excess foil around the designs for you.|Wir schneiden die Folie und entfernen (entgittern) die überschüssige Folie um die Motive für Sie.
+280|We cut the foil according to your file. You weed it yourself (removing the excess foil around the designs).|Wir schneiden die Folie nach Ihrer Datei. Das Entgittern (Entfernen der überschüssigen Folie um die Motive) übernehmen Sie selbst.
+281|Bottles|Flaschen
+282|Guaranteed delivery within {0} business days of print file approval.|Garantierte Lieferung innerhalb von {0} Werktagen nach Freigabe der Druckdaten.
+283|Generating…|Wird erstellt…
+284|=|=
+285|Collar|Kragen
+286|Collar & hems|Kragen & Säume
+287|=|=
+288|=|=
+289|Graphics & AI|Grafik & KI
+290|The graphic must be|Die Grafik muss sein
+291|The graphic does not fit on the roll — one of the dimensions must be at most {{0}} mm.|Die Grafik passt nicht auf die Rolle — eine der Abmessungen darf höchstens {{0}} mm betragen.
+292|Graphic added to the design|Grafik in das Design eingefügt
+293|Graphic placed on the whole headband|Grafik auf das gesamte Stirnband gesetzt
+294|Graphic placed on the headband|Grafik auf das Stirnband gesetzt
+295|The graphic could not be loaded|Die Grafik konnte nicht geladen werden
+296|Please attach the graphic/logo (if it differs from the design in the configurator) to this email. We already have the configurator design saved under the enquiry number.|Bitte fügen Sie dieser E-Mail die Grafik/das Logo bei (falls es vom Design im Konfigurator abweicht). Das Design aus dem Konfigurator haben wir bereits unter der Anfragenummer gespeichert.
+297|Georgia|Georgien
+298|Greece|Griechenland
+299|PLAYER {{0}}|SPIELER {{0}}
+300|Delivery schedule|Lieferplan
+301|Hexagon pattern|Sechseck-Muster
+302|Smooth minimal|Glatt minimal
+303|Main|Haupt
+304|Main body (base)|Hauptkörper (Basis)
+305|Main pattern|Hauptmuster
+306|Up|Oben
+307|Mountains|Berge
+308|Done|Fertig
+309|Finished graphic for the whole headband (ready for print):|Fertige Grafik für das gesamte Stirnband (druckfertig):
+310|Finished graphic ready for print|Fertige, druckfertige Grafik
+311|Finished graphic inserted (|Fertige Grafik eingefügt (
+312|The finished scarf is {0} × {1} cm, the file should be|Das fertige Tuch ist {0} × {1} cm groß, die Datei sollte
+313|Ready-made jerseys with add-on printing in as little as {0} days|Fertige Trikots mit Nachdruck schon in {0} Tagen
+314|Finished logo (replaces the whole crest)|Fertiges Logo (ersetzt das gesamte Wappen)
+315|Ready-sewn jerseys, we print the name, number and logo on top.|Fertig genähte Trikots, wir drucken Name, Nummer und Logo dazu.
+316|The finished die-cut is|Der fertige Stanzzuschnitt ist
+317|Chest|Brust
+318|Player {{0}} is a goalkeeper|Spieler {{0}} ist Torwart
+319|Players|Spieler
+320|Players × pieces|Spieler × Stück
+321|Thickness (mm)|Stärke (mm)
+322|Piping thickness|Stärke der Paspel
+323|Outline thickness|Konturstärke
+324|Outline thickness {0}|Konturstärke {0}
+325|Outline thickness:|Konturstärke:
+326|Thickness of the outer piping|Stärke der äußeren Paspel
+327|Star|Stern
+328|Stars|Sterne
+329|Search the Pantone library|In der Pantone-Bibliothek suchen

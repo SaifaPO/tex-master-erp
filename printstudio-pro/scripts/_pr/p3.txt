@@ -1,0 +1,279 @@
+1080|Turkmenistan|Turkmenistan
+1081|Shape|Form
+1082|Colour type / effect|Farbtyp / Effekt
+1083|Foil type|Folientyp
+1084|Collar type & cut|Kragenart & Schnitt
+1085|Pattern repeat type|Art der Musterwiederholung
+1086|Font type|Schriftart
+1087|Production type|Fertigungsart
+1088|Lanyard type|Schlüsselbandtyp
+1089|Turquoise|Türkis
+1090|Team roster & sizes|Teamliste & Größen
+1091|Angle|Winkel
+1092|Angle / rotation:|Winkel / Drehung:
+1093|Street flag|Straßenfahne
+1094|Placement on the roll|Anordnung auf der Rolle
+1095|Save roster|Spielerliste speichern
+1096|Placement|Platzierung
+1097|Placement of the front logo (or drag it directly on the model)|Platzierung des vorderen Logos (oder direkt am Modell ziehen)
+1098|Apply|Anwenden
+1099|Edit|Bearbeiten
+1100|Edit configuration|Konfiguration bearbeiten
+1101|The prices shown apply only to graphics prepared exactly according to these requirements.|Die angegebenen Preise gelten nur für Grafiken, die genau nach diesen Vorgaben vorbereitet sind.
+1102|No price tier is set for "Print personalisation" in Master Admin → Shopify connection.|Für „Individualisierung des Drucks“ ist unter Master Admin → Shopify-Verbindung keine Preisstufe festgelegt.
+1103|Included|Inklusive
+1104|The price includes both the textile and the print.|Im Preis sind Textil und Druck enthalten.
+1105|To scale|Maßstabsgetreu
+1106|In the centre (text below)|In der Mitte (Text darunter)
+1107|In the centre of the chest|In der Brustmitte
+1108|In the centre of the chest, higher|In der Brustmitte, weiter oben
+1109|V-neck|V-Ausschnitt
+1110|V-neck with insert|V-Ausschnitt mit Einsatz
+1111|The V-neck is not available yet — the collar is part of the 3D model's pattern, not just a colour, so it needs a separate model with a genuinely modelled V-neck.|Der V-Ausschnitt ist noch nicht verfügbar — der Kragen ist Teil des 3D-Schnitts des Modells und nicht nur eine Farbe, daher wird ein eigenes Modell mit echt modelliertem V-Ausschnitt benötigt.
+1112|Vatican City|Vatikanstadt
+1113|Laurel wreath|Lorbeerkranz
+1114|Your graphic is on the jersey.|Ihre Grafik ist auf dem Trikot.
+1115|Your graphic does not meet the requirements above, or you are not sure? We will prepare it for printing for you.|Ihre Grafik erfüllt die obigen Anforderungen nicht, oder Sie sind unsicher? Wir bereiten sie für Sie druckfertig auf.
+1116|We will use your data only to answer this question. More in|Ihre Daten verwenden wir nur, um diese Frage zu beantworten. Mehr in der
+1117|We will use your data only to prepare the offer and communicate about it. More in|Ihre Daten verwenden wir nur zur Erstellung des Angebots und zur Kommunikation dazu. Mehr in der
+1118|We will use your data only to prepare the offer. More in|Ihre Daten verwenden wir nur zur Erstellung des Angebots. Mehr in der
+1119|Vector cut transfer for textiles|Vektor-Schneidetransfer für Textilien
+1120|Jersey size|Trikotgröße
+1121|Shorts size|Shortsgröße
+1122|Large-volume order over {{0}} m (capacity within 48 h)|Großauftrag über {{0}} m (Kapazität innerhalb von 48 h)
+1123|Large-volume order over {{0}} m (standard capacity)|Großauftrag über {{0}} m (Standardkapazität)
+1124|Sizes and number of pieces|Größen und Stückzahl
+1125|Size chart|Größentabelle
+1126|Size chart —|Größentabelle —
+1127|We are currently adding the size chart for this product.|Die Größentabelle für dieses Produkt ergänzen wir gerade.
+1128|Size|Größe
+1129|Size (scale):|Größe (Maßstab):
+1130|Size of player {{0}}|Größe von Spieler {{0}}
+1131|Object size|Objektgröße
+1132|Image size|Bildgröße
+1133|Font size (cm)|Schriftgröße (cm)
+1134|Text size|Textgröße
+1135|Shorts size|Shortsgröße
+1136|Size:|Größe:
+1137|Large on the back|Groß hinten
+1138|More|Mehr
+1139|More colours|Mehr Farben
+1140|More logos|Mehr Logos
+1141|You are inserting into:|Sie fügen ein in:
+1142|Flag|Fahne
+1143|Flags (|Fahnen (
+1144|Flags (banner)|Fahnen (Banner)
+1145|Flags of this design|Fahnen dieses Motivs
+1146|Custom colour|Eigene Farbe
+1147|Custom fabric colour:|Eigene Stofffarbe:
+1148|Your own graphic has been uploaded.|Ihre eigene Grafik wurde hochgeladen.
+1149|Custom graphic for the shorts|Eigene Grafik für die Shorts
+1150|Own designs|Eigene Designs
+1151|Own logo / image (PNG, SVG, JPG):|Eigenes Logo / Bild (PNG, SVG, JPG):
+1152|Custom background patterns:|Eigene Hintergrundmuster:
+1153|Custom ({{0}})|Eigene ({{0}})
+1154|Own image in the crest (e.g. municipal coat of arms)|Eigenes Bild im Wappen (z. B. Gemeindewappen)
+1155|Inserted logo|Eingefügtes Logo
+1156|Add to cart|In den Warenkorb legen
+1157|Paste from Excel|Aus Excel einfügen
+1158|Horizontal stripes|Horizontale Streifen
+1159|Optional|Optional
+1160|Optional jersey effects, price per piece.|Optionale Trikoteffekte, Preis pro Stück.
+1161|Outer piping|Äußere Paspel
+1162|Outside (behind the lettering)|Außen (hinter der Schrift)
+1163|Right|Rechts
+1164|The front and the back of the neck are always part of the design — they can only be moved (front).|Vorderseite und Nacken hinten sind immer Teil des Designs — sie lassen sich nur verschieben (vorn).
+1165|Layers|Ebenen
+1166|Layers (logos and texts on the flag)|Ebenen (Logos und Texte auf der Fahne)
+1167|Return to the original position|An die ursprüngliche Position zurücksetzen
+1168|Return to the original position (moved by dragging)|An die ursprüngliche Position zurücksetzen (durch Ziehen verschoben)
+1169|Built-in vectors & icons|Integrierte Vektoren & Symbole
+1170|Choose a category and then a specific product from stock.|Wählen Sie eine Kategorie und dann ein bestimmtes Produkt aus dem Lager.
+1171|Choose a material|Material wählen
+1172|Choose the buff material.|Wählen Sie das Buff-Material.
+1173|Choose the lanyard type.|Wählen Sie den Schlüsselbandtyp.
+1174|Choose the size, shape, edges and base.|Wählen Sie Größe, Form, Ränder und Standfuß.
+1175|Choose the export file (TIFF / PNG, {0} DPI, width {1} cm)|Exportdatei wählen (TIFF / PNG, {0} DPI, Breite {1} cm)
+1176|Choose the export file (TIFF/PNG/PDF, {0}-{1} DPI, width {{2}} cm)|Exportdatei wählen (TIFF/PNG/PDF, {0}-{1} DPI, Breite {{2}} cm)
+1177|Choose the construction and material finish of the jersey.|Wählen Sie Konstruktion und Materialausführung des Trikots.
+1178|Choose a finished design and then adjust it part by part as you like.|Wählen Sie ein fertiges Design und passen Sie es dann teilweise beliebig an.
+1179|Choose a finished design motif:|Wählen Sie ein fertiges Designmotiv:
+1180|Choose the structure and graphic style of the jersey.|Wählen Sie Struktur und Grafikstil des Trikots.
+1181|Choose the sport, production type, cut and quality, upload the roster and you will see the price including discounts straight away. We will prepare the design with your colours and logo.|Wählen Sie Sportart, Fertigungsart, Schnitt und Qualität, laden Sie die Spielerliste hoch, und Sie sehen sofort den Preis inklusive Rabatten. Das Design mit Ihren Farben und Ihrem Logo bereiten wir vor.
+1182|Selected from the palette: {{0}}|Aus der Palette gewählt: {{0}}
+1183|Choose the icon colour|Symbolfarbe wählen
+1184|Choose a file|Datei auswählen
+1185|Choose a file from your computer|Datei vom Computer auswählen
+1186|Centred on the forehead|Auf der Stirn zentriert
+1187|Centre the view|Ansicht zentrieren
+1188|Walking outfits|Ausgehausstattung
+1189|Generate design|Motiv erzeugen
+1190|Generates a new design from the description. Only a reduced preview is shown — the app also prepares a high-quality print version for you.|Erzeugt ein neues Motiv aus der Beschreibung. Angezeigt wird nur eine verkleinerte Vorschau — die App bereitet für Sie auch eine hochwertige Druckversion vor.
+1191|Fill in what you need — the name and number go on the back, the league and sponsor on the front. You can leave the other fields empty.|Füllen Sie aus, was Sie brauchen — Name und Nummer kommen auf den Rücken, Liga und Sponsor nach vorn. Die übrigen Felder können Sie leer lassen.
+1192|Please fill in at least your email and your question.|Bitte füllen Sie mindestens Ihre E-Mail-Adresse und Ihre Frage aus.
+1193|Fill in your contact details — we will send you a binding offer within {0} hours. Submitting an enquiry costs nothing. You can upload the graphic above or put a link in the note.|Tragen Sie Ihren Kontakt ein — innerhalb von {0} Stunden senden wir Ihnen ein verbindliches Angebot. Das Absenden einer Anfrage kostet nichts. Die Grafik können Sie oben hochladen oder als Link in die Anmerkung setzen.
+1194|Fill in the details, copy the prepared text, paste it into ChatGPT or Gemini (a regular free account with daily limits), download the generated image and upload it above. We will remove the white background.|Füllen Sie die Angaben aus, kopieren Sie den vorbereiteten Text, fügen Sie ihn in ChatGPT oder Gemini ein (normales kostenloses Konto mit Tageslimit), laden Sie das erzeugte Bild herunter und oben wieder hoch. Den weißen Hintergrund entfernen wir.
+1195|We cut it, weed it and also supply the designs pre-cut — individual pieces ready to use.|Wir schneiden und entgittern die Motive und liefern sie auch zugeschnitten — einzelne, gebrauchsfertige Stücke.
+1196|Straighten to {0}°|Auf {0}° ausrichten
+1197|We print directly on our material|Wir drucken direkt auf unser Material
+1198|We print your graphic on transfer paper, you iron it on yourself|Wir drucken Ihre Grafik auf Transferpapier, Sie bügeln sie selbst auf
+1199|Create your own crest, logo and extra logos on the sleeves.|Erstellen Sie Ihr eigenes Wappen, Logo und zusätzliche Logos auf den Ärmeln.
+1200|Creating the order…|Bestellung wird erstellt …
+1201|You will collect the shipment in person in Prešov or Košice — you pay no postage.|Sie holen die Sendung persönlich in Prešov oder Košice ab — Sie zahlen kein Porto.
+1202|Clear the design|Design leeren
+1203|Clear the zone|Zone leeren
+1204|Embroidered applications|Gestickte Applikationen
+1205|Embroidered logo on the chest|Gesticktes Logo auf der Brust
+1206|Embroidered logos and numbers on an ice hockey jersey, price per jersey.|Gestickte Logos und Nummern auf einem Eishockeytrikot, Preis pro Trikot.
+1207|Embroidered sponsor logos|Gestickte Sponsorenlogos
+1208|Embroidered small numbers on the sleeves|Gestickte kleine Nummern auf den Ärmeln
+1209|Embroidered large number on the back|Gestickte große Nummer auf dem Rücken
+1210|Request a quote by email|Angebot per E-Mail anfordern
+1211|Background pattern changed|Hintergrundmuster geändert
+1212|The pattern could not be loaded|Das Muster konnte nicht geladen werden
+1213|Sample of your own graphic (A4)|Muster Ihrer eigenen Grafik (A4)
+1214|Sample of your own graphic —|Muster Ihrer eigenen Grafik —
+1215|Samples (A4)|Muster (A4)
+1216|Patterns|Muster
+1217|Patterns and logo|Muster und Logo
+1218|Your order|Ihre Bestellung
+1219|Your text here…|Ihr Text hier …
+1220|Your text…|Ihr Text …
+1221|Choose the jersey design|Trikotdesign wählen
+1222|Choose a colour|Farbe wählen
+1223|East Timor|Osttimor
+1224|Fill|Füllung
+1225|Made in Slovakia, we ship anywhere — even to Japan or Finland|Hergestellt in der Slowakei, wir liefern überallhin — auch nach Japan oder Finnland
+1226|Height (cm)|Höhe (cm)
+1227|Height (mm)|Höhe (mm)
+1228|Logo height (cm)|Logohöhe (cm)
+1229|Design height (cm)|Motivhöhe (cm)
+1230|Height/length (cm)|Höhe/Länge (cm)
+1231|Left|Links
+1232|All sides (no tunnel)|Alle Seiten (ohne Tunnel)
+1233|All T-shirts (XS–XXL) get prints of the same size. {0} set of screens.|Alle T-Shirts (XS–XXL) erhalten gleich große Drucke. {0} Siebsatz.
+1234|Enter a B2B code|B2B-Code eingeben
+1235|Enter at least {{0}} pcs.|Geben Sie mindestens {{0}} Stk. ein.
+1236|Enter the players' names, numbers and clothing sizes.|Geben Sie Namen, Nummern und Konfektionsgrößen der Spieler ein.
+1237|Enter the number of players|Anzahl der Spieler eingeben
+1238|Enter a text (e.g. TATRA RUN)|Text eingeben (z. B. TATRA RUN)
+1239|Enter your text...|Geben Sie Ihren Text ein ...
+1240|Enter the size and number of pieces|Maße und Stückzahl eingeben
+1241|Back side (B)|Rückseite (B)
+1242|Back|Hinten
+1243|I will enter the number|Anzahl eingeben
+1244|Turn the {0}° rotation on / off|{0}°-Drehung ein-/ausschalten
+1245|Start / stop rotation|Drehung starten / stoppen
+1246|No product is available yet.|Noch ist kein Produkt verfügbar.
+1247|No material is set yet — add it in the admin panel (PrintStudio Pro → Beach flags → Materials).|Es ist noch kein Material festgelegt — ergänzen Sie es im Admin-Panel (PrintStudio Pro → Beachflags → Materialien).
+1248|No text or logo has been added yet.|Es wurde noch kein Text oder Logo hinzugefügt.
+1249|Nothing yet — add a product to the cart.|Noch nichts — legen Sie ein Produkt in den Warenkorb.
+1250|No carabiners yet.|Noch keine Karabiner.
+1251|No objects yet — add a text, icon or logo.|Noch keine Objekte — fügen Sie Text, Symbol oder Logo hinzu.
+1252|No eyelets yet.|Noch keine Ösen.
+1253|No tunnel yet.|Noch kein Tunnel.
+1254|Close|Schließen
+1255|Close tools|Werkzeuge schließen
+1256|Start typing the name of a country…|Beginnen Sie, den Namen eines Landes einzugeben …
+1257|Share the design|Design teilen
+1258|Green|Grün
+1259|The green line is the recommended safe zone for text/logos.|Die grüne Linie ist die empfohlene Sicherheitszone für Texte/Logos.
+1260|Green with a white edge|Grün mit weißem Rand
+1261|Cape Verde|Kap Verde
+1262|Order summary|Zusammenfassung der Bestellung
+1263|Gold|Gold
+1264|Gold|Gold
+1265|Delete|Löschen
+1266|Delete selected|Ausgewählte löschen
+1267|Delete the chosen one|Gewähltes löschen
+1268|You move the crest by dragging it with the mouse directly on the jersey model.|Das Wappen verschieben Sie, indem Sie es mit der Maus direkt auf dem Trikotmodell ziehen.
+1269|From stock + add-on printing|Ab Lager + Nachdruck
+1270|From stock, fast|Ab Lager, schnell
+1271|First shown|Zuerst angezeigt
+1272|Show bleed and centre|Beschnitt und Mitte anzeigen
+1273|Show the seam in 3D|Naht in 3D anzeigen
+1274|Show the size chart|Größentabelle anzeigen
+1275|Show/hide seam lines|Nahtlinien ein-/ausblenden
+1276|Back|Hinten
+1277|We shrink the material you supply by calendering, without printing (the cheapest service)|Wir lassen das von Ihnen gelieferte Material durch Kalandrieren einlaufen, ohne Druck (günstigster Service)
+1278|Cancel|Abbrechen
+1279|Remove code|Code entfernen
+1280|Shrinking applies only to your supplied material. No ink or transfer paper is used, the material passes through the calender with protective paper, which is why it is the cheapest service.|Das Einlaufen gilt nur für Ihr geliefertes Material. Es werden weder Farbe noch Transferpapier verwendet, das Material läuft mit Schutzpapier durch den Kalander — deshalb ist es der günstigste Service.
+1281|Shrinking material by calendering|Einlaufen des Materials durch Kalandrieren
+1282|Material shrinking is not available at the moment, please try later or write to us.|Das Einlaufen von Material ist derzeit nicht verfügbar, bitte versuchen Sie es später oder schreiben Sie uns.
+1283|Shrinking material {{0}} cm|Einlaufen von Material {{0}} cm
+1284|Vertical stripes|Vertikale Streifen
+1285|Vertical stripes|Vertikale Streifen
+1286|Selected object|Ausgewähltes Objekt
+1287|Choose how many pieces of what you want.|Wählen Sie, wie viele Stück Sie wovon möchten.
+1288|Custom all-over print|Individueller Rundum-Druck
+1289|Customer from the configurator|Kunde aus dem Konfigurator
+1290|Base|Basis
+1291|Privacy Policy|Datenschutzerklärung
+1292|Discount|Rabatt
+1302|and|und
+1303|and we will send you a printed sample before a larger order.|und wir senden Ihnen vor einer größeren Bestellung ein gedrucktes Muster zu.
+1304|and all texts must be|und alle Texte müssen
+1305|and a cord for hanging at the top|und eine Kordel zum Aufhängen oben
+1306|also for cold days|auch für kalte Tage
+1307|athletic, close-fitting|sportlich, enganliegend
+1308|auto|auto
+1310|excl. VAT|ohne MwSt.
+1311|no outline|keine Kontur
+1312|no background|ohne Hintergrund
+1313|no surcharge|ohne Aufpreis
+1314|no texture|ohne Struktur
+1315|no number|ohne Nummer
+1316|safe zone|Sicherheitszone
+1317|safe zone (|Sicherheitszone (
+1318|seamless tubular|nahtlos, schlauchförmig
+1319|white number, black inner outline, coloured outer outline|weiße Nummer, schwarze innere Kontur, farbige äußere Kontur
+1320|m|m
+1321|m.|m.
+1322|has been sent|wurde gesendet
+1329|all-over print|Rundum-Druck
+1330|instant price|Preis sofort
+1331|back and chest|Rücken und Brust
+1332|cm|cm
+1333|cm (according to the width of this fabric)|cm (entsprechend der Breite dieses Stoffs)
+1334|cm foil. The maximum graphic size is|cm Folie. Die maximale Grafikgröße beträgt
+1335|cm above the ground|cm über dem Boden
+1336|cm for this technology|cm für diese Technologie
+1337|cm ×|cm ×
+1338|cm — the graphic will be cropped/stretched|cm — die Grafik wird zugeschnitten/gestreckt
+1339|cm — no fabric is ordered or printed on.|cm — es wird kein Stoff bestellt und nicht darauf gedruckt.
+1340|cm)|cm)
+1341|cm).|cm).
+1342|cm, printed with {0} mm bleed all around, so the file should be|cm, gedruckt mit {0} mm Beschnitt rundherum, die Datei sollte also
+1343|cm.|cm.
+1344|digital cotton printing|Digitaldruck auf Baumwolle
+1347|jersey|Trikot
+1353|material photo|Materialfoto
+1355|smooth base|glatter Untergrund
+1356|the finished lanyard is {{0}} mm wide, print data {{1}} mm (bleed {2} mm)|das fertige Schlüsselband ist {{0}} mm breit, Druckdaten {{1}} mm (Beschnitt {2} mm)
+1357|thicker material|dickeres Material
+1358|thicker, more durable material|dickeres, strapazierfähigeres Material
+1359|players|Spieler
+1360|players ·|Spieler ·
+1373|is|ist
+1374|plain stock colours|einfarbige Lagerfarben
+1375|finer material, better moisture wicking|feineres Material, bessere Schweißableitung
+1376|classic cap cut|klassischer Cap-Schnitt
+1377|pcs|Stk.
+1378|pcs (screen preparation). The more pieces, the lower the price per piece.|Stk. (Siebvorbereitung). Je mehr Stücke, desto niedriger der Stückpreis.
+1379|pcs ×|Stk. ×
+1380|pcs)|Stk.)
+1381|pcs.|Stk.
+1382|pieces.|Stück.
+1383|a bit of colour|ein Hauch Farbe
+1384|summer beach wave, tropical palms|sommerliche Strandwelle, tropische Palmen
+1388|club logo embroidered on the chest|Vereinslogo auf der Brust aufgestickt
+1389|m|m
+1390|small|klein
+1391|small number, {{0}} on the front{{1}}|kleine Nummer, {{0}} vorn{{1}}
+1394|minimalist, simple shapes|minimalistisch, einfache Formen
+1395|mm|mm
+1396|mm for cutting|mm zum Zuschneiden
+1397|mm)|mm)
+1398|modern, flat vector style|modern, flacher Vektorstil
+1399|m² • The width is limited by the width of the material roll, the length is not (usually up to approx. {0} cm).|m² • Die Breite ist durch die Rollenbreite des Materials begrenzt, die Länge nicht (üblicherweise bis ca. {0} cm).

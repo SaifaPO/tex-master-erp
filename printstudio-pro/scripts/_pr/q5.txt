@@ -1,0 +1,310 @@
+PrintStudio Pro — Konfigurátor potlače|PrintStudio Pro — Print Configurator|PrintStudio Pro — Druck-Konfigurator
+Feather (Pierko)|Feather|Feder
+Wave (Slza/Kvapka)|Wave (teardrop)|Welle (Tropfen)
+Blade (Čepeľ)|Blade|Klinge
+Wing (Krídlo)|Wing|Flügel
+Square|Square|Quadrat
+Štandardný materiál - {0}% polyester|Standard material - {0}% polyester|Standardmaterial - {0} % Polyester
+exteriér a interiér|outdoor and indoor|Außen- und Innenbereich
+materiál s jemnou perforáciou vo veľkosti ryžového zrnka - {0}% polyester|material with fine perforation the size of a grain of rice - {0}% polyester|Material mit feiner Perforation in Reiskorngröße - {0} % Polyester
+do veľmi veterných oblastí|for very windy areas|für sehr windige Gebiete
+Obšitie okrajov dookola|Hemmed edges all around|Rundum gesäumte Ränder
+Spevnené prešitie po obvode.|Reinforced stitching around the perimeter.|Verstärkte Naht rundum.
+Čistý zatavený okraj bez nití.|Clean heat-sealed edge without threads.|Sauberer thermisch versiegelter Rand ohne Fäden.
+Bez konštrukcie|No frame|Ohne Gestell
+Iba samotná vytlačená plachta vlajky.|Only the printed flag fabric itself.|Nur das bedruckte Fahnentuch selbst.
+Basic Hliník + Laminát prút|Basic aluminium + fibreglass pole|Basic Aluminium + Laminatstange
+Pružný sklolaminát + hliník (vhodný pre bežné, aj exteriérové podmienky).|Flexible fibreglass + aluminium (suitable for normal and outdoor conditions).|Flexibles Glasfaserlaminat + Aluminium (geeignet für normale und Außenbedingungen).
+PRO Hliník + Laminát prút|PRO aluminium + fibreglass pole|PRO Aluminium + Laminatstange
+Extra spevnená sklolaminátová konštrukcia.|Extra-reinforced fibreglass construction.|Extra verstärkte Glasfaserkonstruktion.
+Krížový skladací {0} kg|Folding cross base {0} kg|Faltbares Kreuz {0} kg
+Ľahký skladací kovový kríž, rýchle zloženie/rozloženie (bez rotátora).|Light folding metal cross, quick to set up and take down (without rotator).|Leichtes faltbares Metallkreuz, schnell auf- und abgebaut (ohne Rotator).
+Krížový skladací PRO {0} kg|Folding cross base PRO {0} kg|Faltbares Kreuz PRO {0} kg
+Ťažký skladací kovový kríž, rýchle zloženie/rozloženie (s rotátorom).|Heavy folding metal cross, quick to set up and take down (with rotator).|Schweres faltbares Metallkreuz, schnell auf- und abgebaut (mit Rotator).
+Oceľová platňa {0} kg|Steel plate {0} kg|Stahlplatte {0} kg
+Ťažká stabilná platňa, najlepšia voľba do vetra (bez rotátora).|Heavy, stable plate, the best choice for wind (without rotator).|Schwere, stabile Platte, beste Wahl bei Wind (ohne Rotator).
+Ťažká stabilná platňa, najlepšia voľba do vetra na veľké vlajky (bez rotátora).|Heavy, stable plate, the best choice for wind on large flags (without rotator).|Schwere, stabile Platte, beste Wahl bei Wind für große Fahnen (ohne Rotator).
+Ťažká stabilná platňa, najlepšia voľba do vetra na najväčšie vlajky (bez rotátora).|Heavy, stable plate, the best choice for wind on the largest flags (without rotator).|Schwere, stabile Platte, beste Wahl bei Wind für die größten Fahnen (ohne Rotator).
+Plastová podstava na vodu {0} kg|Plastic water base {0} kg|Wassergefüllter Kunststofffuß {0} kg
+Lacná alternatíva ku ťažkým kovovým podstavám - naplníte vodou a hotovo (vrátane rotátora).|A cheap alternative to heavy metal bases — fill it with water and you're done (rotator included).|Günstige Alternative zu schweren Metallfüßen — mit Wasser füllen, fertig (inklusive Rotator).
+Umelohmotný vrták|Plastic ground screw|Kunststoff-Erdbohrer
+Zavŕta sa priamo do trávy alebo piesku (vrátane rotátora).|Screws directly into grass or sand (rotator included).|Wird direkt in Gras oder Sand gedreht (inklusive Rotator).
+Oceľový vrták PRO|PRO steel ground screw|PRO-Stahl-Erdbohrer
+Zapichovací tŕň|Ground spike|Erdspieß
+Zapichuje sa priamo do trávy alebo spevneného podkladu (vrátane rotátora).|Is pushed directly into grass or firm ground (rotator included).|Wird direkt in Gras oder festen Untergrund gesteckt (inklusive Rotator).
+Len do tvrdého podkladu (tráva) — nie na dlažbu ani betón.|Only for firm ground (grass) — not for paving or concrete.|Nur für festen Untergrund (Gras) — nicht für Pflaster oder Beton.
+pierko|feather|Feder
+Vlajka:|Flag:|Fahne:
+vyber objekt = jeho rozmer|select an object = its size|Objekt wählen = seine Größe
++ prúty / podstavce / príslušenstvo|+ poles / bases / accessories|+ Stangen / Standfüße / Zubehör
+· doprava {0} €|· shipping {0} €|· Versand {0} €
+{0} € s DPH|{0} € incl. VAT|{0} € inkl. MwSt.
+Rozpis ceny ▲|Price breakdown ▲|Preisaufstellung ▲
+Plocha:|Area:|Fläche:
+Klasická vlajkovina, {0}% polyester, lesklá, presvit farby cca {1}%.|Classic flag fabric, {0}% polyester, glossy, colour show-through approx. {1}%.|Klassischer Fahnenstoff, {0} % Polyester, glänzend, Farbdurchschein ca. {1} %.
+Stožiarové vlajky, uličné zástavy, interiérové vlajky.|Flagpole flags, street flags, indoor flags.|Mastfahnen, Straßenfahnen, Innenraumfahnen.
+Flag Mesh 110g (Dierkovaná)|Flag Mesh 110g (perforated)|Flag Mesh 110g (perforiert)
+Odvetraná dierkovaná sieťovina vhodná do veterných oblastí.|Ventilated perforated mesh suitable for windy areas.|Belüftetes, perforiertes Netzgewebe, geeignet für windige Gebiete.
+Stožiare na veterných miestach, výškové budovy.|Flagpoles in windy places, high-rise buildings.|Fahnenmasten an windigen Standorten, Hochhäuser.
+Satén 140g (Lesklá)|Satin 140g (glossy)|Satin 140g (glänzend)
+Cordura Banner 220g (Pevná)|Cordura Banner 220g (strong)|Cordura Banner 220g (robust)
+Extrémne pevná hrubšia tkanina pre dlhodobé uličné bannery.|Extremely strong, thicker fabric for long-term street banners.|Extrem robustes, dickeres Gewebe für langlebige Straßenbanner.
+Uličné bannery medzi stĺpmi, plotové transparenty.|Street banners between posts, fence banners.|Straßenbanner zwischen Pfosten, Zaunbanner.
+Saten|Satin|Satin
+Ľahká saténová (hodvábna) tkanina, hladký lesklý povrch, dobrý presvit farby.|Light satin (silky) fabric, smooth glossy surface, good colour show-through.|Leichter Satin (seidiger Stoff), glatte glänzende Oberfläche, guter Farbdurchschein.
+Dekoratívne vlajky, interiér, príležitosti kde zaleží na vzhľade viac než na odolnosti voči počasiu.|Decorative flags, indoors, occasions where appearance matters more than weather resistance.|Dekorative Fahnen, Innenbereich, Anlässe, bei denen das Aussehen wichtiger ist als die Wetterbeständigkeit.
+tunel(y),|tunnel(s),|Tunnel,
+Dospelý — vysoká|Adult — tall|Erwachsene — groß
+Detská — štandard|Children's — standard|Kinder — Standard
+Hladký (smooth)|Smooth|Glatt (smooth)
+Počesaný (combed)|Brushed (combed)|Gebürstet (combed)
+Mäkký, jemne počesaný úplet — hrejivejší a príjemnejší na dotyk.|Soft, lightly brushed knit — warmer and more pleasant to the touch.|Weicher, leicht gebürsteter Strick — wärmer und angenehmer auf der Haut.
++ Vložiť|+ Insert|+ Einfügen
+Farba:|Colour:|Farbe:
+10K štítok|10K tag|10K-Label
+Basketbal|Basketball|Basketball
+Batoh|Backpack|Rucksack
+Bežec {0}|Runner {0}|Läufer {0}
+Bežecká dráha|Running track|Laufbahn
+Bicykel {0}|Bicycle {0}|Fahrrad {0}
+Blesk|Lightning|Blitz
+Chata|Cabin|Hütte
+Chata A|Cabin A|Hütte A
+Činka|Dumbbell|Hantel
+Cyklistická prilba|Cycling helmet|Fahrradhelm
+Futbalová lopta|Football|Fußball
+Hokej|Ice hockey|Eishockey
+Hory s hviezdami|Mountains with stars|Berge mit Sternen
+Karabína s lanom|Carabiner with rope|Karabiner mit Seil
+Kompas|Compass|Kompass
+Kvapka|Drop|Tropfen
+Lotos|Lotus|Lotus
+Medveď|Bear|Bär
+Nekonečno|Infinity|Unendlichkeit
+Nekonečno {0}|Infinity {0}|Unendlichkeit {0}
+Okrídlená teniska|Winged sneaker|Geflügelter Sneaker
+Okrídlená teniska {0}|Winged sneaker {0}|Geflügelter Sneaker {0}
+Okuliare|Glasses|Brille
+Ozubené koleso|Cogwheel|Zahnrad
+Päsť|Fist|Faust
+Píšťalka|Whistle|Pfeife
+Plameň|Flame|Flamme
+Pľúca|Lungs|Lunge
+Šípky|Arrows|Pfeile
+Smerovník|Signpost|Wegweiser
+Smerovník {0}|Signpost {0}|Wegweiser {0}
+Stan s hviezdami|Tent with stars|Zelt mit Sternen
+Štít s horami|Shield with mountains|Schild mit Bergen
+Štít s horami {0}|Shield with mountains {0}|Schild mit Bergen {0}
+Stopky|Stopwatch|Stoppuhr
+Stopky {0}|Stopwatch {0}|Stoppuhr {0}
+Stromy|Trees|Bäume
+Švihadlo|Skipping rope|Springseil
+Táborák|Campfire|Lagerfeuer
+Tenisové rakety|Tennis rackets|Tennisschläger
+Tep a stúpanie|Heartbeat and climb|Puls und Anstieg
+Trekingové palice|Trekking poles|Trekkingstöcke
+Tričko|T-shirt|T-Shirt
+Turistická topánka|Hiking boot|Wanderschuh
+Volejbal|Volleyball|Volleyball
+Volejbal {0}|Volleyball {0}|Volleyball {0}
+Vrstevnice|Contour lines|Höhenlinien
+Východ slnka|Sunrise|Sonnenaufgang
+Značka polohy s horami|Location marker with mountains|Standortmarkierung mit Bergen
+Červené pásy = {0} mm spadávka (vytlačí sa, po vysekaní odpadne) • prerušovaná čiara = hotový výsek|Red stripes = {0} mm bleed (printed, falls off after die-cutting) • dashed line = finished die-cut|Rote Streifen = {0} mm Beschnitt (wird mitgedruckt, fällt nach dem Stanzen weg) • gestrichelte Linie = fertiger Stanzzuschnitt
+Fialová os = stred prednej časti|Purple axis = centre of the front part|Violette Achse = Mitte des Vorderteils
++ Nový text na prednú stranu (A)|+ New text on the front side (A)|+ Neuer Text auf der Vorderseite (A)
++ Nový text na zadnú stranu (B)|+ New text on the back side (B)|+ Neuer Text auf der Rückseite (B)
+Poradie vrstiev: hore = navrchu (vpredu), dole = naspodku. Klikni na riadok pre výber objektu.|Layer order: top = on top (in front), bottom = at the bottom. Click a row to select the object.|Ebenenreihenfolge: oben = zuoberst (vorn), unten = zuunterst. Klicken Sie auf eine Zeile, um das Objekt auszuwählen.
+Ťahaj objekt = presun (magneticky zaskočí na stred) • rohy = veľkosť • krúžok hore = otočenie|Drag the object = move (snaps magnetically to the centre) • corners = size • ring at the top = rotate|Objekt ziehen = verschieben (rastet magnetisch in der Mitte ein) • Ecken = Größe • Ring oben = drehen
+{0}% Polyester CoolMax|{0}% CoolMax polyester|{0} % CoolMax-Polyester
+navrchu|on top|oben
+Súbor s logom (vektor: PDF, AI, EPS; alebo PNG / JPG)|Logo file (vector: PDF, AI, EPS; or PNG / JPG)|Logo-Datei (Vektor: PDF, AI, EPS; oder PNG / JPG)
+Nízky 3D|Low 3D|Niedriges 3D
+Jemné vystúpenie nad povrch|Slight raise above the surface|Leichte Erhebung über der Oberfläche
+Stredný 3D|Medium 3D|Mittleres 3D
+Zlatá stredná cesta|The golden mean|Der goldene Mittelweg
+Vysoký 3D|High 3D|Hohes 3D
+Maximálny a výrazný efekt|Maximum, pronounced effect|Maximaler, ausgeprägter Effekt
+Bez laku (matný)|No varnish (matt)|Ohne Lack (matt)
+Matný povrch bez laku|Matt surface without varnish|Matte Oberfläche ohne Lack
+Čiastočný lak (pololesk)|Partial varnish (semi-gloss)|Teillack (seidenglänzend)
+Lak len na vybraných detailoch motívu|Varnish only on selected details of the design|Lack nur auf ausgewählten Details des Motivs
+Lak na plno (vysoký lesk)|Full varnish (high gloss)|Vollflächiger Lack (Hochglanz)
+Lak na celom motíve|Varnish on the whole design|Lack auf dem gesamten Motiv
+Bodky / šachovnica|Dots / checkerboard|Punkte / Schachbrett
+Jemné bodky v šachovnicovom rastri|Fine dots in a checkerboard grid|Feine Punkte im Schachbrettraster
+Hexagóny|Hexagons|Sechsecke
+Včelie plásty|Honeycomb|Bienenwaben
+Štruktúra karbónového vlákna|Carbon fibre texture|Carbonfaser-Struktur
+Čiarky {0}°|Lines {0}°|Striche {0}°
+Šikmé rovnobežné čiarky|Diagonal parallel lines|Schräge parallele Striche
+Vlnky|Waves|Wellen
+Jemné vlnovky|Fine wavy lines|Feine Wellenlinien
+Rybia kosť|Herringbone|Fischgrät
+Klasický vzor rybej kosti|Classic herringbone pattern|Klassisches Fischgrätmuster
+Slzičkový plech|Tread plate|Riffelblech
+Protišmykový rebrovaný plech|Non-slip ribbed plate|Rutschfestes Riffelblech
+Štvorčeky|Little squares|Quadrate
+Jemná štvorcová mriežka|Fine square grid|Feines Quadratgitter
+Trojuholníky|Triangles|Dreiecke
+Mozaika z trojuholníkov|Triangle mosaic|Dreiecksmosaik
+Šupiny|Scales|Schuppen
+Rybie šupiny|Fish scales|Fischschuppen
+{0} ks|{0} pcs|{0} Stk.
+Cena vychádza z dodaných rozmerov; konečnú kontrolu grafiky robíme pred výrobou.|The price is based on the supplied dimensions; we do the final check of the graphic before production.|Der Preis basiert auf den gelieferten Maßen; die endgültige Prüfung der Grafik erfolgt vor der Produktion.
+Špic|Pointed|Spitz
+Zaoblená|Rounded|Abgerundet
+Trojuholník|Triangle|Dreieck
+Malá|Small|Klein
+cca {0} × {1} cm|approx. {0} × {1} cm|ca. {0} × {1} cm
+Stredná|Medium|Mittel
+Veľká|Large|Groß
+Biele strapce|White tassels|Weiße Quasten
+Zlaté strapce|Gold tassels|Goldene Quasten
+Biela šnúrka|White cord|Weiße Kordel
+Čierna šnúrka|Black cord|Schwarze Kordel
+Trikolóra (biela, modrá, červená)|Tricolour (white, blue, red)|Trikolore (Weiß, Blau, Rot)
+strapce po bokoch a dole|tassels at the sides and bottom|Quasten an den Seiten und unten
+Žiadny (len závesná šnúrka)|None (hanging cord only)|Keine (nur Aufhängekordel)
+Základný kovový|Basic metal|Einfaches Metall
+Chrómový|Chrome|Verchromt
+Strieborný|Silver|Silber
+Zlatý|Gold|Golden
+Drevený|Wooden|Holz
+líce|front|Vorderseite
+rub|back|Rückseite
+Rub|Back|Rückseite
+Okraje|Edges|Ränder
+Klasická|Classic|Klassisch
+Obojstranná tlačená šnúrka|Double-sided printed lanyard|Beidseitig bedrucktes Schlüsselband
+So sponou|With clip|Mit Schnalle
+Dvojdielna tlač: dlhšia časť {0} cm + kratšia {1} cm|Two-part print: longer part {0} cm + shorter {1} cm|Zweiteiliger Druck: längerer Teil {0} cm + kürzerer {1} cm
+Spona + poistka|Clip + safety breakaway|Schnalle + Sicherheitsverschluss
+Tlač: {0} × dlhšia časť {1} cm + kratšia časť {2} cm|Print: {0} × longer part {1} cm + shorter part {2} cm|Druck: {0} × längerer Teil {1} cm + kürzerer Teil {2} cm
+Kľúčenka|Key ring|Schlüsselanhänger
+Jedna krátka časť {0} cm|One short part {0} cm|Ein kurzer Teil {0} cm
+hotová šnúrka je {0} mm široká, tlačové dáta {1} mm (spadávka {2} mm)|the finished lanyard is {0} mm wide, print data {1} mm (bleed {2} mm)|das fertige Schlüsselband ist {0} mm breit, Druckdaten {1} mm (Beschnitt {2} mm)
+Rozmer šnúrky {0} × {1} mm.|Lanyard size {0} × {1} mm.|Schlüsselbandgröße {0} × {1} mm.
+Rozmer|Size|Größe
+Základné|Basic|Basis
+{0}-sekundové|{0}-second|{0}-Sekunden-
+Sublistop|Sublistop|Sublistop
+Flock|Flock|Flock
+Reflexné|Reflective|Reflektierend
+Metalické|Metallic|Metallic
+Trblietavé|Glitter|Glitzer
+Elastické|Stretch|Elastisch
+Elastické – nízka teplota|Stretch – low temperature|Elastisch – niedrige Temperatur
+Na nylon a náročné materiály|For nylon and demanding materials|Für Nylon und anspruchsvolle Materialien
+Kompostovateľné|Compostable|Kompostierbar
+Metalické lesklé|Metallic glossy|Metallic glänzend
+Zrkadlové (chróm)|Mirror (chrome)|Spiegel (Chrom)
+Metalická fólia|Metallic foil|Metallfolie
+Trblietavé lesklé|Glitter glossy|Glitzer glänzend
+Trblietavé jemné|Glitter fine|Glitzer fein
+Holografické|Holographic|Holografisch
+Efektové – textilný povrch|Effect – textile surface|Effekt – Textiloberfläche
+Lakované|Varnished|Lackiert
+Hrubé {0} mm|Thick {0} mm|Dick {0} mm
+Extra hrubé {0} mm|Extra thick {0} mm|Extra dick {0} mm
+Reflexné – vysoká odolnosť|Reflective – high durability|Reflektierend – hohe Haltbarkeit
+UV – mení farbu na slnku|UV – changes colour in the sun|UV – ändert die Farbe in der Sonne
+Svietiace v tme|Glow in the dark|Nachleuchtend
+Tabuľová (na kriedu)|Chalkboard|Tafelfolie (für Kreide)
+Perforované|Perforated|Perforiert
+Prémiová matná PU fólia pre jemné detaily a vrstvenie. Univerzálna a tenká.|Premium matt PU foil for fine details and layering. Universal and thin.|Premium matte PU-Folie für feine Details und Layering. Universell und dünn.
+Tlak:|Pressure:|Druck:
+Za tepla / studena|Hot / cold peel|Heiß / kalt abziehen
+Pranie do {0}°C|Wash up to {0}°C|Wäsche bis {0}°C
+Biela matná|Matt white|Weiß matt
+Krémová|Cream|Creme
+Citrónová|Lemon|Zitrone
+Slnečná žltá|Sunny yellow|Sonnengelb
+Ibištek|Hibiscus|Hibiskus
+Jasná červená|Bright red|Leuchtend rot
+Stredne ružová|Medium pink|Mittelrosa
+Svetloružová|Light pink|Hellrosa
+Bordová|Burgundy|Bordeaux
+Mätová|Mint|Minze
+Jablkovo zelená|Apple green|Apfelgrün
+Tmavozelená|Dark green|Dunkelgrün
+Aqua zelená|Aqua green|Aquagrün
+Oceánska modrá|Ocean blue|Ozeanblau
+Bledomodrá|Pale blue|Blassblau
+Nebeská modrá|Sky blue|Himmelblau
+Námornícka modrá|Navy blue|Marineblau
+Orgovánová|Lilac|Flieder
+Orchidea|Orchid|Orchidee
+Svetlofialová|Light purple|Hellviolett
+Hnedá|Brown|Braun
+Orgovánovo šedá|Lilac grey|Fliedergrau
+Šedá|Grey|Grau
+Antracitová|Anthracite|Anthrazit
+Čierna matná|Matt black|Schwarz matt
+Zlatá|Gold|Gold
+Strieborná|Silver|Silber
+ Okrová|Ochre|Ocker
+Piesková|Sand|Sand
+Perlová|Pearl|Perlweiß
+Fluo žltá|Fluo yellow|Neongelb
+Fluo oranžová|Fluo orange|Neonorange
+Fluo koralová|Fluo coral|Neonkoralle
+Fluo ružová|Fluo pink|Neonrosa
+Fluo malinová|Fluo raspberry|Neonhimbeere
+Fluo zelená|Fluo green|Neongrün
+Fluo modrá|Fluo blue|Neonblau
+Fluo fialová|Fluo purple|Neonviolett
+Vegas zlatá|Vegas gold|Vegas-Gold
+Sýta fialová|Deep purple|Sattviolett
+Texaská oranžová|Texas orange|Texas-Orange
+Columbia modrá|Columbia blue|Columbia-Blau
+Čokoládová|Chocolate|Schokolade
+Morská zelená|Sea green|Meergrün
+Stredne modrá|Medium blue|Mittelblau
+Fluo sýta ružová|Fluo deep pink|Neon-Pink satt
+Horčicová|Mustard|Senf
+Cappuccino|Cappuccino|Cappuccino
+Šalviová|Sage|Salbei
+Spotreba:|Consumption:|Verbrauch:
+Od {0} kusu|From {0} piece|Ab {0} Stück
+Grafika zadarmo|Free graphics|Grafik kostenlos
+Futbal|Football|Fußball
+zo skladu od {0} €|from stock from {0} €|ab Lager ab {0} €
+Hádzaná|Handball|Handball
+Florbal|Floorball|Floorball
+Motokros|Motocross|Motocross
+/ ks|/ pc|/ Stk.
+/ks)|/pc)|/Stk.)
+/ks|/pc|/Stk.
+klasika|classic|klassisch
+Vyhotovenie|Version|Ausführung
+Bez zhonu|Flawless|Makellos
+{0}–{1} týždňov|{0}–{1} weeks|{0}–{1} Wochen
+zľava {0} %|{0} % discount|{0} % Rabatt
+do {0} dní|within {0} days|innerhalb von {0} Tagen
+Expres|Express|Express
+do {0} pracovných dní|within {0} business days|innerhalb von {0} Werktagen
+príplatok +{0} %|surcharge +{0} %|Aufpreis +{0} %
+{0} € na hráča|{0} € per player|{0} € pro Spieler
+{0} ({1} brank.) × {2} = {3} ks|{0} ({1} goalkeepers) × {2} = {3} pcs|{0} ({1} Torhüter) × {2} = {3} Stk.
+Cena bez zliav|Price without discounts|Preis ohne Rabatte
+Futbal · celopotlač · Dres + Trenírky · Premium · štandardný strih · krátky rukáv · golier okrúhly|Football · all-over print · Jersey + Shorts · Premium · standard cut · short sleeve · round collar|Fußball · Rundum-Druck · Trikot + Shorts · Premium · Standardschnitt · kurzer Ärmel · runder Kragen
+, platné k {0}. {1}. {2}|, valid as of {0}. {1}. {2}|, gültig ab {0}. {1}. {2}
+Potlače na jednom kuse ({0})|Prints on one item ({0})|Drucke auf einem Stück ({0})
+Počet farieb ({0}–{1}) — každá farba navyše = ďalšie sito|Number of colours ({0}–{1}) — each extra colour = another screen|Anzahl der Farben ({0}–{1}) — jede zusätzliche Farbe = ein weiteres Sieb
+Klasická farba|Classic ink|Klassische Farbe
+Puffina (3D nadúvaná)|Puff (3D expanding)|Puff (3D aufschäumend)
+Semiš (zamatový povrch)|Suede (velvety surface)|Wildleder (samtige Oberfläche)
+Silikón (gumový 3D reliéf)|Silicone (rubbery 3D relief)|Silikon (gummiartiges 3D-Relief)
+Plastizolová farba — štandardná potlač|Plastisol ink — standard print|Plastisolfarbe — Standarddruck
+Bavlna · svetlý|Cotton · light|Baumwolle · hell
+{0} € / ks|{0} € / pc|{0} € / Stk.
+€/bm|€/m|€/m
+{0} bm|{0} m|{0} m
+Čo presne potrebujete?|What exactly do you need?|Was genau brauchen Sie?
+Náhľad látky ({0} cm)|Fabric preview ({0} cm)|Stoffvorschau ({0} cm)
+Zdarma|Free|Kostenlos
+Sublimácia na dodaný materiál|Sublimation on supplied material|Sublimation auf geliefertem Material
+Čo chceš potlačiť?|What do you want to print?|Was möchten Sie bedrucken?
+Ostatne|Other|Sonstiges

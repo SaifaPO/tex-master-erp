@@ -1,0 +1,301 @@
+1400|on the back|auf den Rücken
+1401|on the chest|auf die Brust
+1402|at the end:|am Ende:
+1403|on our material|auf unser Material
+1404|for training and recreational sport|für Training und Freizeitsport
+1405|for training and competitive teams|für Training und Wettkampfteams
+1406|for training and recreational hockey|für Training und Freizeit-Eishockey
+1407|on your material|auf Ihr Material
+1408|for matches and demanding use|für Spiele und anspruchsvollen Einsatz
+1409|uploads the files and returns|lädt die Dateien hoch und gibt zurück
+1410|cheapest and fastest|am günstigsten und am schnellsten
+1411|fastest|am schnellsten
+1412|highest quality|höchste Qualität
+1413|e.g. AGENCY…|z. B. AGENTUR …
+1414|e.g. FK Michalovce U15|z. B. FK Michalovce U15
+1415|e.g. SMITH|z. B. MÜLLER
+1416|e.g. exact colour according to our guide|z. B. genaue Farbe laut unserem Leitfaden
+1417|e.g. A cute cat in an astronaut suit, retro style...|z. B. Eine niedliche Katze im Astronautenanzug, Retro-Stil ...
+1418|e.g. {0}, Yellow, Blue…|z. B. {0}, Gelb, Blau …
+1419|appeared|ist erschienen
+1420|at the bottom|ganz unten
+1421|normal|normal
+1422|circumference {0} × length {1} cm (gathered in 3D)|Umfang {0} × Länge {1} cm (in 3D gerafft)
+1423|from|ab
+1424|production edge|Fertigungsrand
+1427|crop|Zuschnitt
+1428|oval|oval
+1429|print on|Druck auf
+1430|right leg|rechtes Bein
+1431|for professionals|für Profis
+1432|for competitive teams|für Wettkampfteams
+1433|not in stock for this sport|für diese Sportart nicht auf Lager
+1434|for the selected material|für das gewählte Material
+1435|takes the jersey colour|übernimmt die Trikotfarbe
+1436|converted to curves|in Kurven umgewandelt
+1437|product|Produkt
+1438|professional finishing|professionelle Verarbeitung
+1439|please send me a quote and production time according to the selection in the configurator.|bitte senden Sie mir ein Angebot und die Produktionszeit entsprechend der Auswahl im Konfigurator.
+1440|surcharge +{{0}} %|Aufpreis +{{0}} %
+1441|px|px
+1442|px). Keep important elements at least {0} mm from the finished edge.|px). Platzieren Sie wichtige Elemente mindestens {0} mm vom fertigen Rand entfernt.
+1443|original (black)|Original (schwarz)
+1444|original position|ursprüngliche Position
+1445|of rows|Reihen
+1446|retro, like an old football badge collection|retro, wie aus einer alten Fußball-Abzeichensammlung
+1447|ripped|zerrissen
+1448|sleeve|Ärmel
+1449|sleeve with a diagonal seam from the neck|Ärmel mit schräger Naht vom Hals
+1450|quick-drying functional polyester|schnell trocknendes Funktionspolyester
+1451|VAT rate|MwSt.-Satz
+1452|saddle-shoulder cut|Sattelschulter-Schnitt
+1453|strong, aggressive, with an animal in the crest (e.g. lion, eagle, bull)|stark, aggressiv, mit einem Tier im Wappen (z. B. Löwe, Adler, Stier)
+1454|stock + add-on printing|Lager + Nachdruck
+1455|hide|ausblenden
+1456|carabiner group, strap:|Karabinergruppe, Gurt:
+1457|eyelet group,|Ösengruppe,
+1458|bleed|Beschnitt
+1459|side|Seite
+1460|long-sleeve cut|Schnitt mit langen Ärmeln
+1461|sublimation|Sublimation
+1462|glows under light|leuchtet bei Beleuchtung
+1464|textile supplied by me|von mir gelieferte Textilien
+1465|textile from us|Textil von uns
+1466|to|bis
+1467|traditional club crest with shield and decorative border|traditionelles Vereinswappen mit Schild und Zierrand
+1468|glitter effect|Glitzereffekt
+1470|stiffer|steifer
+1471|narrower at the waist|schmaler in der Taille
+1472|on the day of the order|am Tag der Bestellung
+1473|in a row ×|in einer Reihe ×
+1474|vector format|Vektorformat
+1475|ventilation zones, reinforced seams|Belüftungszonen, verstärkte Nähte
+1476|sizes|Größen
+1477|large|groß
+1478|inner|innere
+1479|loose, comfortable|locker, bequem
+1480|off|aus
+1481|off|aus
+1482|shooting|schießend
+1483|raised 3D logo|erhabenes 3D-Logo
+1484|choice of cut, collar and material|Auswahl von Schnitt, Kragen und Material
+1486|of which goalkeepers|davon Torhüter
+1487|of which cutting of transfers (excl. VAT)|davon Zuschnitt der Transfers (ohne MwSt.)
+1488|for each logo per jersey|für jedes Logo pro Trikot
+1489|frozen|gefroren
+1490|gold or silver|Gold oder Silber
+1491|show|anzeigen
+1492|discount {{0}} %|Rabatt {{0}} %
+1493|{0} % shading|{0} % Schattierung
+1494|{0} side seam, hemmed edge|{0} Seitennaht, gesäumter Rand
+1495|{0} cm|{0} cm
+1496|{0} px|{0} px
+1497|{0} corners|{0} Ecken
+1498|{0} × {1} cm|{0} × {1} cm
+1499|{0} × {1} px|{0} × {1} px
+1501|{0}. Digital cotton printing|{0}. Digitaldruck auf Baumwolle
+1502|{0}. Club crest (on the heart side)|{0}. Vereinswappen (auf der Herzseite)
+1503|{0}. Frame / pole|{0}. Gestell / Stange
+1504|{0}. Logo and dimensions|{0}. Logo und Maße
+1505|{0}. Manufacturer's logo|{0}. Herstellerlogo
+1506|{0}. Logos on the sleeves|{0}. Logos auf den Ärmeln
+1507|{0}. Material|{0}. Material
+1508|{0}. Upload a finished roll|{0}. Fertige Rolle hochladen
+1509|{0}. Edge finishing|{0}. Randverarbeitung
+1510|{0}. Base (optional)|{0}. Standfuß (optional)
+1511|{0}. Surface finish (varnish)|{0}. Oberflächenveredelung (Lack)
+1512|{0}. Graphic dimensions and quantity|{0}. Grafikmaße und Anzahl
+1513|{0}. Arranging from the logo|{0}. Anordnung aus dem Logo
+1514|{0}. Sublimation printing|{0}. Sublimationsdruck
+1515|{0}. Logo background texture|{0}. Hintergrundstruktur des Logos
+1516|{0}. Beach flag shape|{0}. Beachflag-Form
+1517|{0}. Flag shape|{0}. Fahnenform
+1518|{0}. Foil type and colour|{0}. Folientyp und Farbe
+1519|{0}. Lanyard type|{0}. Schlüsselbandtyp
+1520|{0}. Edge finish|{0}. Randabschluss
+1521|{0}. Vector file|{0}. Vektordatei
+1522|{0}. Size and dimensions|{0}. Größe und Maße
+1523|{0}. Custom graphic across the whole jersey|{0}. Eigene Grafik über das ganze Trikot
+1524|{0}. Own design|{0}. Eigenes Design
+1525|{0}. Repeating pattern|{0}. Wiederholmuster
+1526|{0}. Height of the 3D effect|{0}. Höhe des 3D-Effekts
+1527|{0}. Service level|{0}. Serviceart
+1528|{0}° 3D preview|{0}° 3D-Vorschau
+1529|{{0}} designs|{{0}} Motive
+1530|{{0}} on supplied material|{{0}} auf geliefertem Material
+1531|{{0}} per player|{{0}} pro Spieler
+1532|{{0}} shorts|{{0}} Shorts
+1533|{{0}} on the front{{1}}|{{0}} vorn{{1}}
+1534|{{0}} · {{1}} · print: {{2}} · {{3}} pcs — {{4}} € (rounded personalisation: {{5}} €/pc)|{{0}} · {{1}} · Druck: {{2}} · {{3}} Stk. — {{4}} € (gerundete Personalisierung: {{5}} €/Stk.)
+1535|{{0}}, side seam, hemmed edge|{{0}}, Seitennaht, gesäumter Rand
+1536|{{0}}, {{1}} × {{2}} mm|{{0}}, {{1}} × {{2}} mm
+1537|· A (front)|· A (vorn)
+1538|· B (back)|· B (hinten)
+1539|· in total|· insgesamt
+1540|· cutting width:|· Schnittbreite:
+1541|Ireland|Irland
+1542|× material + finishing)|× Material + Verarbeitung)
+1543|× flag|× Fahne
+1544|Object editing|Objekt bearbeiten
+1545|Edge finishing|Randverarbeitung
+1546|Edit the selected text|Ausgewählten Text bearbeiten
+1547|Text editing|Text bearbeiten
+1548|Edit saved|Änderung gespeichert
+1549|Service level|Serviceart
+1550|Chad|Tschad
+1551|Part|Teil
+1552|Headband|Stirnband
+1553|Headbands (multiple designs)|Stirnbänder (mehrere Motive)
+1554|Red|Rot
+1555|Red line = side seam, yellow stripes = hemmed edge|Rote Linie = Seitennaht, gelbe Streifen = gesäumter Rand
+1556|The red line is the cut, the green one is the safe zone.|Die rote Linie ist der Zuschnitt, die grüne die Sicherheitszone.
+1557|Red lines show the SEAM of the scarf|Rote Linien zeigen die NAHT des Tuchs
+1558|Red, white sides|Rot, weiße Seiten
+1559|Czechia|Tschechien
+1560|Black|Schwarz
+1561|Montenegro|Montenegro
+1562|Black classic|Schwarz klassisch
+1563|Black, neon sides|Schwarz, neonfarbene Seiten
+1564|Chile|Chile
+1565|What you need|Was Sie brauchen
+1566|The more pieces, the lower the price per piece.|Je mehr Stücke, desto niedriger der Stückpreis.
+1567|The higher the effect, the longer the printing and the higher the ink consumption — hence the higher price.|Je höher der Effekt, desto länger der Druck und desto höher der Farbverbrauch — daher auch der höhere Preis.
+1568|China|China
+1569|Number|Nummer
+1570|Enquiry number:|Anfragenummer:
+1571|Jersey number|Trikotnummer
+1572|Number of player {{0}}|Nummer von Spieler {{0}}
+1573|Number on the shorts|Nummer auf den Shorts
+1574|Number on the right, crest on the left|Nummer rechts, Wappen links
+1575|Number on the left, crest on the right|Nummer links, Wappen rechts
+1576|parts — with a hatched gap between them|Teilen — dazwischen ein schraffierter Spalt
+1577|player number on the back|Spielernummer auf dem Rücken
+1578|number on both sleeves|Nummer auf beiden Ärmeln
+1579|Thank you|Danke
+1580|Thank you, we will get back to you with the final offer within {0} hours.|Vielen Dank, wir melden uns innerhalb von {0} Stunden mit dem endgültigen Angebot.
+1581|LEFT SLEEVE|LINKER ÄRMEL
+1582|Left leg: manufacturer's logo + crest above it • Right leg: number|Linkes Bein: Herstellerlogo + Wappen darüber • Rechtes Bein: Nummer
+1583|Left leg: manufacturer's logo + number above it • Right leg: crest|Linkes Bein: Herstellerlogo + Nummer darüber • Rechtes Bein: Wappen
+1584|Left side|Linke Seite
+1585|Left sleeve|Linker Ärmel
+1586|Any number, stacked on top of each other — you set the order and size.|Beliebig viele, übereinander gestapelt — Reihenfolge und Größe legen Sie fest.
+1587|light material|leichtes Material
+1588|lighter, airy material|leichteres, luftiges Material
+1589|left leg|linkes Bein
+1590|left leg at the front (same size as on the jersey)|linkes Bein vorn (gleich groß wie am Trikot)
+1591|left leg, above the manufacturer's logo|linkes Bein, über dem Herstellerlogo
+1592|any colours, patterns and logos|beliebige Farben, Muster und Logos
+1593|JERSEY TEMPLATE {0} × {1} px — draw only in the coloured frames, hide/remove them at the end and save as PNG or JPG.|TRIKOTVORLAGE {0} × {1} px — zeichnen Sie nur in die farbigen Rahmen, blenden Sie diese am Ende aus bzw. entfernen Sie sie und speichern Sie als PNG oder JPG.
+1594|SEAM|NAHT
+1595|SEAM (back)|NAHT (hinten)
+1596|SPORT|SPORTART
+1597|The template only pre-fills the tunnels/carabiners/strap in the next step — you can always fine-tune them there.|Die Vorlage füllt im nächsten Schritt nur Tunnel/Karabiner/Gurt vor — Sie können sie dort jederzeit feinjustieren.
+1598|Checkerboard|Schachbrett
+1599|Hexagon|Sechseck
+1600|Diagonal stripe|Diagonalstreifen
+1601|Wide side inserts|Breite Seiteneinsätze
+1602|Lace-up|Schnürung
+1603|Lanyards|Schlüsselbänder
+1604|Lace-up hexagon|Sechseck-Schnürung
+1605|Lace-up retro|Retro-Schnürung
+1606|Spain|Spanien
+1607|Specification for production including the roster|Spezifikation für die Produktion einschließlich Spielerliste
+1608|Specifications:|Spezifikationen:
+1609|Sport|Sportart
+1610|Sports colour gradients:|Sport-Farbverläufe:
+1611|Sports icons|Sportsymbole
+1612|Stadium|Stadion
+1613|Standard|Standard
+1614|Standard — within {0} hours|Standard — innerhalb von {0} Stunden
+1615|Normally within {0} hours|Normalerweise innerhalb von {0} Stunden
+1616|Standard|Standard
+1617|Standard ratio {0}:{1}|Standardverhältnis {0}:{1}
+1618|Football socks|Stutzen
+1619|National flag (optional)|Landesflagge (optional)
+1620|Shield|Schild
+1621|Shield {0}|Schild {0}
+1622|Label (collar)|Etikett (Kragen)
+1623|Switzerland|Schweiz
+1624|Sweden|Schweden
+1625|Width (cm)|Breite (cm)
+1626|Width (cm) — max|Breite (cm) — max.
+1627|Width (mm)|Breite (mm)
+1628|The chest width is measured on a flat jersey {0} cm below the armpit, from one side to the other. The length is measured from the highest point of the shoulder to the bottom edge. Tolerance ±{1} cm.|Die Brustbreite wird am flach liegenden Trikot {0} cm unter der Achsel von einer Seite zur anderen gemessen. Die Länge wird vom höchsten Punkt der Schulter bis zum unteren Rand gemessen. Toleranz ±{1} cm.
+1629|Logo width (cm)|Logobreite (cm)
+1630|Design width (cm)|Motivbreite (cm)
+1631|Roll width:|Rollenbreite:
+1632|Print width:|Druckbreite:
+1633|Width of your fabric (cm) — max|Breite Ihres Stoffs (cm) — max.
+1634|Width of your material (cm), max|Breite Ihres Materials (cm), max.
+1635|stitching|Naht
+1636|shell|Schale
+1637|shell|Schale
+1638|cord at the sides and bottom|Kordel an den Seiten und unten
+1639|Women|Damen
+1640|No colours are set for this product.|Für dieses Produkt sind keine Farben festgelegt.
+1641|No bases.|Keine Standfüße.
+1642|No products in this category.|Keine Produkte in dieser Kategorie.
+1643|No elements.|Keine Elemente.
+1644|No sizes are set for this product.|Für dieses Produkt sind keine Größen festgelegt.
+1645|No further accessories. The base is chosen in the Parameters step.|Kein weiteres Zubehör. Der Standfuß wird im Schritt „Parameter“ gewählt.
+1646|None|Keiner
+1647|No object selected|Kein Objekt ausgewählt
+1648|None selected|Keine ausgewählt
+1649|Live 3D preview ({0}° rotation)|Live-3D-Vorschau ({0}° Drehung)
+1650|Live flag preview|Live-Vorschau der Fahne
+1651|Live flag preview|Live-Vorschau der Fahne
+1652|Yellow|Gelb
+1653|Yellow / black|Gelb / Schwarz
+1654|— minimum order for|— Mindestabnahme für
+1655|— exceeds the zone!|— überschreitet die Zone!
+1656|— you save {{0}} €|— Sie sparen {{0}} €
+1657|— the table also shows the prices after discount|— die Tabelle zeigt auch die Preise nach Rabatt
+1658|€ (another|€ (noch
+1659|€ / m)|€ / m)
+1660|€ excl. VAT per piece|€ ohne MwSt. pro Stück
+1661|€ incl. VAT).|€ inkl. MwSt.).
+1662|ℹ️ This is only an indicative, lower-quality preview — the print file is generated in full quality ({0} DPI) when the order is submitted and cannot be downloaded.|ℹ️ Dies ist nur eine unverbindliche Vorschau in geringerer Qualität — die Druckdatei wird beim Absenden der Bestellung in voller Qualität ({0} DPI) erzeugt und kann nicht heruntergeladen werden.
+1663|← Catalogue|← Katalog
+1664|← Back to Graphics|← Zurück zu Grafik
+1665|← Back to Parameters|← Zurück zu Parameter
+1666|← Back to categories|← Zurück zu den Kategorien
+1667|← Left side (by the ear)|← Linke Seite (am Ohr)
+1668|↑ Top edge of the scarf (open end) ↑|↑ Oberer Rand des Tuchs (offenes Ende) ↑
+1669|↓ Bottom edge of the scarf (open end) ↓|↓ Unterer Rand des Tuchs (offenes Ende) ↓
+1670|⏸️ Pause rotation|⏸️ Drehung pausieren
+1671|■ Solid|■ Einfarbig
+1672|▸ show all|▸ alle anzeigen
+1673|▼ CENTRE OF THE FOREHEAD (main graphic) ▼|▼ STIRNMITTE (Hauptgrafik) ▼
+1674|⚙ Technical details (Shopify cart payload) — visible to the developer only|⚙ Technische Details (Shopify-Warenkorb-Payload) — nur für Entwickler sichtbar
+1675|⚠ Do not place content here — hemmed edge 2 cm (folds inwards)|⚠ Hier keinen Inhalt platzieren — gesäumter Rand 2 cm (wird nach innen umgeschlagen)
+1676|⚡ Hex Honeycomb|⚡ Hex-Waben
+1677|⚡ Neon Cyber|⚡ Neon Cyber
+1678|⛰️ Mountains|⛰️ Berge
+1679|✂️ Cut:|✂️ Schnitt:
+1680|✎ You are editing the selected text — you see changes immediately. Tap an empty spot on the canvas to insert new text.|✎ Sie bearbeiten den ausgewählten Text — Änderungen sehen Sie sofort. Tippen Sie auf eine freie Stelle der Fläche, um neuen Text einzufügen.
+1681|✖ Plain colour|✖ Einfarbig
+1682|❄️ Nordic Frost|❄️ Nordic Frost
+1683|⬆ Upload finished graphic|⬆ Fertige Grafik hochladen
+1684|⬇ Download template (PNG, {0} × {1} px)|⬇ Vorlage herunterladen (PNG, {0} × {1} px)
+1685|⬇ Download shorts template (PNG, {0} × {1} px)|⬇ Shorts-Vorlage herunterladen (PNG, {0} × {1} px)
+1686|⭐ Designs|⭐ Motive
+1687|🇸🇰 Tricolour|🇸🇰 Trikolore
+1688|🌈 Gradient|🌈 Verlauf
+1689|🌋 Lava & Smoke|🌋 Lava & Rauch
+1690|🌲 Alpine Trail|🌲 Alpine Trail
+1691|🌲 Camo|🌲 Camo
+1692|🎨 Colour|🎨 Farbe
+1693|🎨 Paint Splash|🎨 Farbspritzer
+1694|🎯 Centre|🎯 Mitte
+1695|🎯 Centre it|🎯 Zentrieren
+1696|🏁 Racing stripes|🏁 Rennstreifen
+1697|🏁 Speed Racing|🏁 Speed Racing
+1698|🏆 Patterns ({0})|🏆 Muster ({0})
+1699|👆 Drag with the mouse to rotate the headband model|👆 Ziehen Sie mit der Maus, um das Stirnbandmodell zu drehen
+1700|💡 Tip:|💡 Tipp:
+1701|📐 Geometry|📐 Geometrie
+1702|📐 Flat pattern of the headband|📐 Abgewickelter Schnitt des Stirnbands
+1703|📑 Layers (|📑 Ebenen (
+1704|🔤 Text|🔤 Text
+1705|🔥 Fire Race|🔥 Fire Race
+1706|🗺️ Topo Map|🗺️ Topo-Karte

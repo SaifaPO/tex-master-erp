@@ -1,0 +1,370 @@
+330|I (Italic)|I (Kursiv)
+331|Ideal|Ideal
+332|Ideally the file saved as|Idealerweise die Datei gespeichert als
+333|Icon added to the headband|Symbol auf das Stirnband gesetzt
+334|Icon added to the design|Symbol in das Design eingefügt
+335|Illustrative comparison with the height of an adult ({0} cm) — schematic, not an exact preview of the graphic.|Illustrativer Vergleich mit der Körpergröße eines Erwachsenen ({0} cm) — schematisch, keine exakte Vorschau der Grafik.
+336|Illustrative preview:|Illustrative Vorschau:
+337|Illustration of a flag with tassels|Abbildung einer Fahne mit Quasten
+338|Illustration of a flag with a cord all around|Abbildung einer Fahne mit Kordel rundherum
+339|Indonesia|Indonesien
+340|Other extras you need (e.g. bags, scarves, flags…)|Weitere Extras, die Sie brauchen (z. B. Taschen, Schals, Fahnen …)
+341|Iran|Iran
+342|Company ID (IČO):|Firmen-ID (IČO):
+343|One side seam, hemmed at top and bottom edge (like a T-shirt sleeve).|Eine Seitennaht, oberer und unterer Rand gesäumt (wie ein T-Shirt-Ärmel).
+344|One single image (wraps around the whole scarf)|Ein einziges Bild (umschließt das ganze Tuch)
+345|One colour|Eine Farbe
+346|One colour for everything, everywhere — the piping stripe at the neck and hem and the double stitching at the end of the sleeves and at the bottom of the jersey.|Eine Farbe für alles — der Paspelstreifen am Hals und am Saum sowie die Doppelnaht am Ärmelende und am unteren Trikotsaum.
+347|One print size|Eine Druckgröße
+348|Simple cord edging|Einfache Einfassung mit Kordel
+349|Plain blue|Einfarbig blau
+350|Plain background|Einfarbiger Hintergrund
+351|Jordan|Jordanien
+352|South Africa|Südafrika
+353|South Korea|Südkorea
+354|South Sudan|Südsudan
+355|John Smith|Max Mustermann
+356|The screen printing calculator is temporarily switched off.|Der Siebdruck-Rechner ist vorübergehend deaktiviert.
+357|Calculation|Kalkulation
+358|Cambodia|Kambodscha
+359|Express printing capacity limit (max {{0}} m/day)|Kapazitätsgrenze für Expressdruck (max. {{0}} m/Tag)
+360|Carabiners + strap|Karabiner + Gurt
+361|The carabiners are spaced evenly from the corners, not on the tunnel side (at the tunnel they start right next to it), across the reinforcing strap if there is one. Total:|Die Karabiner sind gleichmäßig ab den Ecken verteilt, nicht auf der Tunnelseite (am Tunnel beginnen sie direkt daneben), über den Verstärkungsgurt, falls vorhanden. Insgesamt:
+362|Carbon|Carbon
+363|Catalogue|Katalog
+364|The beach flag catalogue is empty for now — add shapes and sizes in the admin panel.|Der Beachflag-Katalog ist noch leer — ergänzen Sie Formen und Größen im Admin-Panel.
+365|The materials catalogue is empty for now.|Der Materialkatalog ist noch leer.
+366|The catalogue could not be loaded.|Der Katalog konnte nicht geladen werden.
+367|The flag catalogue is empty for now — add materials in the admin panel (PrintStudio Pro → Flags).|Der Fahnenkatalog ist noch leer — ergänzen Sie Materialien im Admin-Panel (PrintStudio Pro → Fahnen).
+368|Each panel is finished at {0} × {1} cm, the panel file should be|Jedes Panel ist fertig {0} × {1} cm groß, die Panel-Datei sollte
+369|Where I want printing — several places at once are possible|Wo ich den Druck möchte — mehrere Stellen gleichzeitig möglich
+370|Kenya|Kenia
+371|Classic|Klassisch
+372|Click or drag a file|Klicken oder Datei hierher ziehen
+373|Click or drag a file ({{0}}, max. {{1}} MB). Best is a vector or a PNG with a transparent background.|Klicken oder Datei hierher ziehen ({{0}}, max. {{1}} MB). Am besten Vektor oder PNG mit transparentem Hintergrund.
+374|Click to upload or drag a file here.|Zum Hochladen klicken oder Datei hierher ziehen.
+375|Click to upload (PNG/JPG)|Zum Hochladen klicken (PNG/JPG)
+376|Click to upload a logo|Zum Hochladen eines Logos klicken
+377|Click to choose (PNG / TIFF / PDF, {0}-{1} DPI)|Zum Auswählen klicken (PNG / TIFF / PDF, {0}-{1} DPI)
+378|Click to choose (PNG / TIFF, {0} DPI)|Zum Auswählen klicken (PNG / TIFF, {0} DPI)
+379|Click to choose a file|Zum Auswählen einer Datei klicken
+380|Click to choose a pattern (PNG/TIFF/PDF, {0}-{1} DPI)|Zum Auswählen eines Musters klicken (PNG/TIFF/PDF, {0}-{1} DPI)
+381|Click to replace the file (PDF/AI/EPS are sent as they are)|Klicken, um die Datei zu ersetzen (PDF/AI/EPS werden unverändert gesendet)
+382|Click to choose a different file.|Klicken, um eine andere Datei auszuwählen.
+383|Club / school / company|Verein / Schule / Firma
+384|Club crest (as on the heart side of the jersey)|Vereinswappen (wie auf der Herzseite des Trikots)
+385|Club crest and logos|Vereinswappen und Logos
+386|Graphics and logo library|Bibliothek für Grafiken und Logos
+387|Complete set|Komplett
+388|Complete shipment at once on business day {0}|Komplette Lieferung auf einmal am {0}. Werktag
+389|Complete shipment at once on business day {0}–{1}|Komplette Lieferung auf einmal am {0}.–{1}. Werktag
+390|Confetti|Konfetti
+391|Jersey configuration completed|Trikot-Konfiguration abgeschlossen
+392|Print configurator and designer|Druck-Konfigurator und Designer
+393|Multifunctional scarf (buff) configurator|Konfigurator für Multifunktionstücher (Buffs)
+394|Beach flag configurator|Beachflag-Konfigurator
+395|Flag and banner configurator|Konfigurator für Fahnen und Banner
+396|Sports headband configurator|Konfigurator für Sport-Stirnbänder
+397|Congo (Republic of the Congo)|Kongo (Republik Kongo)
+398|Frame|Gestell
+399|Frame / pole|Gestell / Stange
+400|Football boot|Fußballschuh
+401|Football boots|Fußballschuhe
+402|Crown|Krone
+403|Rhombus|Raute
+404|Metal carabiners|Metallkarabiner
+405|Metal grommets (eyelets)|Metallösen (Ösen)
+406|Draw directly here — the design is shown on the product preview straight away. The area is the maximum for this placement (|Zeichnen Sie direkt hier — das Motiv erscheint sofort in der Produktvorschau. Die Fläche ist das Maximum für diese Platzierung (
+407|Circle|Kreis
+408|Short|Kurz
+409|Royal blue|Königsblau
+410|Royal Madrid|Königliches Madrid
+411|Italic|Kursiv
+412|Pieces|Stück
+413|The code could not be verified, please try again.|Der Code konnte nicht geprüft werden, bitte versuchen Sie es erneut.
+414|Varnish|Lack
+415|The varnish can cover the whole design, only selected details, or none at all — it affects both the look and the price.|Der Lack kann das gesamte Motiv, nur ausgewählte Details oder gar nichts bedecken — das beeinflusst Aussehen und Preis.
+416|Neck binding|Halsbündchen
+417|Piping|Paspeln
+418|Trouser hems|Hosensäume
+419|Cut foil only|Nur geschnittene Folie
+420|Sublimation paper only|Nur Sublimationspapier
+421|Material shrinking only|Nur Einlaufen des Materials
+422|Liberia|Liberia
+423|Liechtenstein|Liechtenstein
+424|League / competition — logo on the heart side|Liga / Wettbewerb — Logo auf der Herzseite
+425|Lime|Limette
+426|=|=
+427|Limitless —|Limitless —
+428|=|=
+429|The logo was uploaded successfully|Das Logo wurde erfolgreich hochgeladen
+430|Logo added to the headband|Logo auf das Stirnband gesetzt
+431|The manufacturer's logo is always on the left leg (same size as on the jersey). Sides are from the wearer's point of view.|Das Herstellerlogo befindet sich immer am linken Bein (gleich groß wie am Trikot). Die Seiten sind aus Sicht des Trägers angegeben.
+432|Free logo via ChatGPT or Gemini|Kostenloses Logo mit ChatGPT oder Gemini
+433|Logos|Logos
+434|Logos and number on the front of the shorts|Logos und Nummer vorn an der Hose
+435|Ball|Ball
+436|Latvia|Lettland
+437|Fabric: {{0}} (excl. VAT)|Stoff: {{0}} (ohne MwSt.)
+438|Libya|Libyen
+439|Front|Vorderseite
+440|Seam lines|Nahtlinien
+441|Seam lines hidden|Nahtlinien ausgeblendet
+442|Seam lines on|Nahtlinien eingeblendet
+443|=|=
+444|PLAYER NAME|SPIELERNAME
+445|=|=
+446|Small on the front|Klein vorn
+447|Small number on the front|Kleine Nummer vorn
+448|Handling fee|Bearbeitungsgebühr
+449|Material|Material
+450|Jersey material and finish|Trikotmaterial und Ausführung
+451|Material for shrinking ({{0}} cm)|Material zum Einlaufen ({{0}} cm)
+452|Flag fabric|Fahnenstoff
+453|Material:|Material:
+454|Mauritania|Mauretanien
+455|Mauritius|Mauritius
+456|The maximum design size is {{0}} × {{1}} cm.|Die maximale Motivgröße beträgt {{0}} × {{1}} cm.
+457|Hungary|Ungarn
+458|Letter spacing|Buchstabenabstand
+459|Subtotal (|Zwischensumme (
+460|Less|Weniger
+461|Fewer colours|Weniger Farben
+462|Fewer logos|Weniger Logos
+463|Name|Name
+464|Name / company *|Name / Firma *
+465|Player name and number on the jersey|Spielername und Nummer auf dem Trikot
+466|Player name (back)|Spielername (Rücken)
+467|Player name {{0}}|Spielername {{0}}
+468|Contact person name|Name der Kontaktperson
+469|Name on the jersey|Name auf dem Trikot
+470|Name on the jersey|Name auf dem Trikot
+471|You can add names, numbers and sizes later, or straight away on the Roster tab.|Namen, Nummern und Größen können Sie später ergänzen oder gleich im Reiter „Spielerliste“.
+472|Smaller prints on XS–M, larger ones on L–XXL. {0} sets of screens are needed. Enter the dimensions of the larger version.|Kleinere Drucke auf XS–M, größere auf L–XXL. Es werden {0} Siebsätze benötigt. Geben Sie die Maße der größeren Version ein.
+473|Metallic flex|Metallic-Flex
+474|By the metre|Meterware
+475|By the metre and paper|Meterware und Papier
+476|Total metres (excl. VAT)|Meter gesamt (ohne MwSt.)
+477|Micronesia|Mikronesien
+478|Milan Black-Red|Mailand Schwarz-Rot
+479|The minimum order for screen printing is|Die Mindestabnahme beim Siebdruck beträgt
+480|The minimum order for {{0}} is {{1}} pcs (screen preparation).|Die Mindestabnahme für {{0}} beträgt {{1}} Stk. (Siebvorbereitung).
+481|The minimum graphic size is {{0}} mm.|Die Mindestgröße der Grafik beträgt {{0}} mm.
+482|Quantity discount|Mengenrabatt
+483|Quantity discounts|Mengenrabatte
+484|Quantity discounts —|Mengenrabatte —
+485|Quantity|Menge
+486|The shorts model is still loading — please try again in a moment.|Das Shorts-Modell wird noch geladen — bitte versuchen Sie es gleich noch einmal.
+487|=|=
+488|=|=
+489|Blue and white, we will send the logo by email, our tournament is on {0} March.|Blau-Weiß, das Logo senden wir per E-Mail, unser Turnier ist am {0}. März.
+490|Blue|Blau
+491|Blue|Blau
+492|Blue, red sides|Blau, rote Seiten
+493|Currently not available|Derzeit nicht verfügbar
+494|Montserrat (Modern)|Montserrat (Modern)
+495|=|=
+496|Design|Motiv
+497|The design is empty — add text, a logo or an image.|Das Motiv ist leer — fügen Sie Text, ein Logo oder ein Bild hinzu.
+498|The design is in the order. You can edit it and add another design, or complete the order.|Das Motiv ist in der Bestellung. Sie können es bearbeiten und ein weiteres Motiv hinzufügen oder die Bestellung abschließen.
+499|The design is in the order. You can edit the layout in the editor and add another design, or complete the order.|Das Motiv ist in der Bestellung. Sie können das Layout im Editor bearbeiten und ein weiteres Motiv hinzufügen oder die Bestellung abschließen.
+500|The design is larger than the maximum size for this placement — please make it smaller.|Das Motiv ist größer als das Maximum für diese Platzierung — bitte verkleinern Sie es.
+501|The design is readable from both sides — two printed fabrics and an inner blackout layer to prevent show-through. The flag is heavier and more expensive.|Das Motiv ist von beiden Seiten lesbar — zwei bedruckte Stoffe und eine innere Verdunklungsschicht gegen Durchscheinen. Die Fahne ist schwerer und teurer.
+502|The design is readable from both sides — two printed fabrics and an inner blackout layer that prevents show-through. The flag is heavier and more expensive.|Das Motiv ist von beiden Seiten lesbar — zwei bedruckte Stoffe und eine innere Verdunklungsschicht, die ein Durchscheinen verhindert. Die Fahne ist schwerer und teurer.
+503|We rotate the design by {0}° on the roll — this gives a shorter (and therefore cheaper) length.|Wir drehen das Motiv auf der Rolle um {0}° — so ergibt sich eine kürzere (und damit günstigere) Länge.
+504|The design could not be loaded.|Das Motiv konnte nicht geladen werden.
+505|The design could not be added:|Das Motiv konnte nicht hinzugefügt werden:
+506|Design {{0}}: {{1}} pcs × {{2}} €|Motiv {{0}}: {{1}} Stk. × {{2}} €
+507|Designs ({{0}}):|Motive ({{0}}):
+508|Designs total (excl. VAT)|Motive gesamt (ohne MwSt.)
+509|Designs total ({{0}} pcs, excl. VAT)|Motive gesamt ({{0}} Stk., ohne MwSt.)
+510|Designs in the order (|Motive in der Bestellung (
+511|=|=
+512|Men|Herren
+513|I have a B2B code|Ich habe einen B2B-Code
+514|I have a B2B code (advertising agencies and companies)|Ich habe einen B2B-Code (Werbeagenturen und Firmen)
+515|I have my own textile|Ich habe eigenes Textil
+516|You have entered a B2B code|Sie haben einen B2B-Code eingegeben
+517|=|=
+518|SMITH|MUSTERMANN
+519|On|Auf
+520|At which end of the side the single carabiner goes|An welchem Ende der Seite der einzelne Karabiner sitzt
+521|At which end of the side the single eyelet goes|An welchem Ende der Seite die einzelne Öse sitzt
+522|For polyester we charge a surcharge of|Für Polyester berechnen wir einen Aufpreis von
+523|You have a design on the product outside a print area (e.g. on the back with no print added). Add a print with this placement or delete the design.|Sie haben ein Motiv außerhalb eines Druckbereichs auf dem Produkt (z. B. auf dem Rücken ohne hinzugefügten Druck). Fügen Sie einen Druck mit dieser Platzierung hinzu oder löschen Sie das Motiv.
+524|In the centre (eats into the inside)|In der Mitte (geht ins Innere)
+525|There is a tunnel on this side — carabiners can't go there. Choose another side.|Auf dieser Seite ist ein Tunnel — Karabiner sind dort nicht möglich. Wählen Sie eine andere Seite.
+526|There is a tunnel on this side — eyelets can't go there. Choose another side.|Auf dieser Seite ist ein Tunnel — Ösen sind dort nicht möglich. Wählen Sie eine andere Seite.
+527|On dark textiles we print in two layers (underbase + colour) so that the colours cover well. This is included in the price.|Auf dunklem Textil drucken wir in zwei Schichten (Unterlage + Farbe), damit die Farben gut decken. Das ist im Preis enthalten.
+528|You have a design on the T-shirt outside a print area (e.g. on the back with no print added). Add a print with this placement or delete the design.|Sie haben ein Motiv außerhalb eines Druckbereichs auf dem T-Shirt (z. B. auf dem Rücken ohne hinzugefügten Druck). Fügen Sie einen Druck mit dieser Platzierung hinzu oder löschen Sie das Motiv.
+529|Above the text|Über dem Text
+530|Please upload a logo file.|Bitte laden Sie eine Logo-Datei hoch.
+531|Upload a logo, set the dimensions and choose a 3D version.|Laden Sie ein Logo hoch, legen Sie die Maße fest und wählen Sie eine 3D-Ausführung.
+532|Please upload a graphic for each print or design one.|Bitte laden Sie für jeden Druck eine Grafik hoch oder gestalten Sie sie selbst.
+533|Please upload a file in the format: {{0}}.|Bitte laden Sie eine Datei im Format {{0}} hoch.
+534|Please upload a vector file.|Bitte laden Sie eine Vektordatei hoch.
+535|Upload a graphic file for the A4 sample.|Laden Sie eine Grafikdatei für das A4-Muster hoch.
+536|Upload a graphic file for the sample.|Laden Sie eine Grafikdatei für das Muster hoch.
+537|Uploaded graphic removed|Hochgeladene Grafik entfernt
+538|Uploaded: {{0}}|Hochgeladen: {{0}}
+539|Upload Excel / CSV|Excel / CSV hochladen
+540|Upload the whole scarf ({0} × {1} cm)|Ganzes Tuch hochladen ({0} × {1} cm)
+541|Upload the whole pattern (PNG / JPG)|Gesamten Schnitt hochladen (PNG / JPG)
+542|Upload a finished graphic (PNG or JPG, {0} × {1} px):|Fertige Grafik hochladen (PNG oder JPG, {0} × {1} px):
+543|Upload a finished, prepared roll|Fertig vorbereitete Rolle hochladen
+544|Upload a finished, prepared roll (|Fertig vorbereitete Rolle hochladen (
+545|Upload league logo|Liga-Logo hochladen
+546|Upload sponsor logo|Sponsorenlogo hochladen
+547|Upload an image or file (PDF, AI, EPS)|Bild oder Datei hochladen (PDF, AI, EPS)
+548|Upload your own finished logo (.PNG, .JPG, .SVG):|Eigenes fertiges Logo hochladen (.PNG, .JPG, .SVG):
+549|Upload your own logo / graphic|Eigenes Logo / eigene Grafik hochladen
+550|Upload your own logo / graphic (PNG, JPG, SVG)|Eigenes Logo / eigene Grafik hochladen (PNG, JPG, SVG)
+551|Upload your own image / logo|Eigenes Bild / Logo hochladen
+552|Cheapest for larger runs. Simple solid areas and text, {0}–{1} colours.|Am günstigsten bei größeren Serien. Einfache Vollflächen und Texte, {0}–{1} Farben.
+553|Please upload a logo file first.|Bitte laden Sie zuerst eine Logo-Datei hoch.
+554|Please upload a vector file first.|Bitte laden Sie zuerst eine Vektordatei hoch.
+555|Namibia|Namibia
+556|E.g. RUNNER, SLOVAKIA...|z. B. RUNNER, SLOWAKEI ...
+557|For example a small logo on the heart side and a large print on the back, possibly also on the sleeves. Each print has its own size, number of colours and graphic.|Zum Beispiel ein kleines Logo auf der Herzseite und ein großer Druck auf dem Rücken, gegebenenfalls auch auf den Ärmeln. Jeder Druck hat eine eigene Größe, Farbanzahl und Grafik.
+558|Write your question right here — it reaches us just like a message sent via the Contact page.|Schreiben Sie Ihre Frage direkt hier — sie erreicht uns wie eine Nachricht über die Kontaktseite.
+559|Write down your idea (e.g. "summer beach wave, tropical palms") in one of the free AI tools and upload the result here using the button above.|Schreiben Sie Ihre Idee (z. B. „sommerliche Strandwelle, tropische Palmen“) in eines der kostenlosen KI-Tools und laden Sie das Ergebnis mit der Schaltfläche oben hier hoch.
+560|Write what you are interested in…|Schreiben Sie, was Sie interessiert …
+561|Design #{{0}} loaded|Design #{{0}} geladen
+562|{{0}} players loaded.|{{0}} Spieler geladen.
+563|Loading|Wird geladen
+564|Loading photo…|Foto wird geladen …
+565|Loading offer…|Angebot wird geladen …
+566|Loading product…|Produkt wird geladen …
+567|Loading…|Wird geladen …
+568|Load|Laden
+569|We will have it prepared for printing — remove the background and improve the quality.|Wir bereiten es für den Druck vor — Hintergrund entfernen und Qualität verbessern.
+570|Don't have a graphic? Create one for free|Keine Grafik? Erstellen Sie sich kostenlos eine
+571|Not recommended for this size|Für diese Größe nicht empfohlen
+572|Neon green|Neongrün
+573|The print file could not be uploaded:|Die Druckdatei konnte nicht hochgeladen werden:
+574|The 3D jersey model could not be loaded:|Das 3D-Trikotmodell konnte nicht geladen werden:
+575|The 3D shorts model could not be loaded:|Das 3D-Shortsmodell konnte nicht geladen werden:
+576|The design could not be saved:|Das Design konnte nicht gespeichert werden:
+577|Nepal|Nepal
+578|=|=
+579|Not sure about the quality? Upload your logo/graphic and we will arrange it onto one sheet|Sie sind sich bei der Qualität nicht sicher? Laden Sie Ihr Logo/Ihre Grafik hoch, wir ordnen sie auf einem Bogen an
+580|Not sure about the quality? Upload your graphic and we will print it with this technology on a small sample cut-out and send it to you before you place a larger order.|Sie sind sich bei der Qualität nicht sicher? Laden Sie Ihre Grafik hoch, wir drucken sie mit dieser Technologie auf ein kleines Musterstück und senden es Ihnen vor einer größeren Bestellung zu.
+581|Not sure which colours and shades we can really print? We will send you a physical colour swatch printed on our printer with this technology so you can choose exactly according to the real print.|Sie sind sich nicht sicher, welche Farben und Töne wir tatsächlich drucken können? Wir senden Ihnen einen physischen Farbfächer, auf unserem Drucker mit dieser Technologie gedruckt, damit Sie genau nach dem echten Druck wählen können.
+582|Not sure which colours and shades we can really print? We will send you a physical sample palette straight from our printer so you can choose exactly according to the real print.|Sie sind sich nicht sicher, welche Farben und Töne wir tatsächlich drucken können? Wir senden Ihnen eine physische Musterpalette direkt aus unserem Drucker, damit Sie genau nach dem echten Druck wählen können.
+583|A design is larger than the maximum size for its placement (sleeve max. {0} × {1} cm). Make it smaller — the order cannot be submitted.|Ein Motiv ist größer als das Maximum für seine Platzierung (Ärmel max. {0} × {1} cm). Verkleinern Sie es — die Bestellung kann sonst nicht abgeschickt werden.
+584|A design is larger than the maximum size for its placement.|Ein Motiv ist größer als das Maximum für seine Platzierung.
+585|Nigeria|Nigeria
+586|Trousers (main body)|Hose (Hauptteil)
+587|New Zealand|Neuseeland
+588|SPONSOR / TEAM NAME|NAME DES SPONSORS / TEAMS
+589|Jersey preview|Trikotvorschau
+590|Fabric preview ({{0}} cm)|Stoffvorschau ({{0}} cm)
+591|Design preview for this print|Motivvorschau für diesen Druck
+592|Paper preview ({{0}} cm)|Papiervorschau ({{0}} cm)
+593|Layout preview ({0} cm)|Layout-Vorschau ({0} cm)
+594|The preview could not be uploaded:|Die Vorschau konnte nicht hochgeladen werden:
+595|The preview could not be loaded.|Die Vorschau konnte nicht geladen werden.
+596|Idea (e.g. lion with a ball, castle, mountain peak)|Idee (z. B. Löwe mit Ball, Burg, Berggipfel)
+597|Headband text:|Schriftzug auf dem Stirnband:
+598|Text above the number (chest)|Text über der Nummer (Brust)
+599|Text below the number (chest)|Text unter der Nummer (Brust)
+600|Tools|Werkzeuge
+601|Design tools|Motiv-Werkzeuge
+602|The design was cleaned up|Das Design wurde bereinigt
+603|The design was updated successfully|Das Design wurde erfolgreich aktualisiert
+604|Design proposal based on your colours and logo|Designvorschlag nach Ihren Farben und Ihrem Logo
+605|The design in the editor is not in the enquiry yet. Add it and send the enquiry for all designs together? OK = add and send, Cancel = go back and edit|Das Design im Editor ist noch nicht in der Anfrage. Hinzufügen und die Anfrage für alle Motive zusammen senden? OK = hinzufügen und senden, Abbrechen = zurück und bearbeiten
+606|The design in the editor is not in the order yet. Add it and order all designs together? OK = add and order, Cancel = go back and edit|Das Design im Editor ist noch nicht in der Bestellung. Hinzufügen und alle Motive zusammen bestellen? OK = hinzufügen und bestellen, Abbrechen = zurück und bearbeiten
+607|The design in the editor only reaches the order after you click "Add this design" (or we will offer to add it when you order).|Das Design im Editor gelangt erst nach einem Klick auf „Dieses Motiv hinzufügen“ in die Bestellung (oder wir bieten das Hinzufügen beim Bestellen an).
+608|Club name|Vereinsname
+609|Norway|Norwegen
+610|Order {0}+ pcs and get a discount|Bestellen Sie {0}+ Stk. und erhalten Sie einen Rabatt
+611|You ordered {{0}} m. On the day of the order the printer can print at most {{1}} m express with this technology.|Sie haben {{0}} m bestellt. Der Drucker schafft am Bestelltag mit dieser Technologie höchstens {{1}} m im Express.
+612|You ordered {{0}} m. On the day of the order the printer can print at most {{1}} m express.|Sie haben {{0}} m bestellt. Der Drucker schafft am Bestelltag höchstens {{1}} m im Express.
+613|Ordered length|Bestellte Länge
+614|The ordered length {{0}} m exceeds the capacity of standard 48h dispatch.|Die bestellte Länge von {{0}} m übersteigt die Kapazität des Standardversands in 48 Stunden.
+615|The ordered length {{0}} m exceeds the standard daily capacity of this technology.|Die bestellte Länge von {{0}} m übersteigt die tägliche Standardkapazität dieser Technologie.
+616|Order|Bestellen
+617|Order and pay|Bestellen und bezahlen
+618|Order a colour swatch|Farbfächer bestellen
+619|Order the colour swatch and pay|Farbfächer bestellen und bezahlen
+620|Order by the metre|Meterware bestellen
+621|Order the pallet and pay|Palette bestellen und bezahlen
+622|Order a sample|Muster bestellen
+623|Order a sample and pay|Muster bestellen und bezahlen
+624|Ordering of 3D transfers is temporarily switched off.|Die Bestellung von 3D-Transfers ist vorübergehend deaktiviert.
+625|Ordering of cut foils is temporarily switched off.|Die Bestellung von Schneidefolien ist vorübergehend deaktiviert.
+626|Ordering of table flags is temporarily switched off.|Die Bestellung von Tischfahnen ist vorübergehend deaktiviert.
+627|Ordering of lanyards is temporarily switched off.|Die Bestellung von Schlüsselbändern ist vorübergehend deaktiviert.
+628|3D transfers order|Bestellung von 3D-Transfers
+629|Ordering 3D transfers is not ready yet (migration migration_transfer3d.sql is missing).|Die Bestellung von 3D-Transfers ist noch nicht bereit (Migration migration_transfer3d.sql fehlt).
+630|DTF transfers by the metre — order|Bestellung von DTF-Transfers als Meterware
+631|The order has been created — {{0}} m, {{1}} €. Redirecting to payment…|Die Bestellung wurde erstellt — {{0}} m, {{1}} €. Weiterleitung zur Zahlung …
+632|The order has been created — {{0}} €. Redirecting to payment…|Die Bestellung wurde erstellt — {{0}} €. Weiterleitung zur Zahlung …
+633|Ordering cut foils is not ready yet (migration migration_stolove_snurky_folie.sql is missing).|Die Bestellung von Schneidefolien ist noch nicht bereit (Migration migration_stolove_snurky_folie.sql fehlt).
+634|Ordering table flags is not ready yet (migration migration_stolove_snurky_folie.sql is missing).|Die Bestellung von Tischfahnen ist noch nicht bereit (Migration migration_stolove_snurky_folie.sql fehlt).
+635|Transfers order based on your logo|Transfer-Bestellung nach Ihrem Logo
+636|Ordering lanyards is not ready yet (migration migration_stolove_snurky_folie.sql is missing).|Die Bestellung von Schlüsselbändern ist noch nicht bereit (Migration migration_stolove_snurky_folie.sql fehlt).
+637|The order could not be submitted (|Die Bestellung konnte nicht abgeschickt werden (
+638|The order could not be submitted:|Die Bestellung konnte nicht abgeschickt werden:
+639|Object|Objekt
+640|You can rotate the object with the top handle ⟳, resize it by the corners or with the sliders on the left.|Sie können das Objekt am oberen Griff ⟳ drehen und an den Ecken oder mit den Schiebereglern links skalieren.
+641|Object removed|Objekt entfernt
+642|Reset {0}% and {1}°|{0}% und {1}° zurücksetzen
+643|Double-sided sandwich flag ({0} layers)|Doppelseitige Sandwich-Fahne ({0} Lagen)
+644|Double-sided sandwich flag ({0} layers)|Doppelseitige Sandwich-Fahne ({0} Lagen)
+645|Double-sided tunnel at the top and bottom|Beidseitiger Tunnel oben und unten
+646|Outline|Kontur
+647|Outline (stroke):|Kontur (Strich):
+648|The outline is under the lettering, so it does not eat into it.|Die Kontur liegt unter der Schrift und frisst sie daher nicht an.
+649|The outline is always under the lettering, so it does not eat into it.|Die Kontur liegt immer unter der Schrift und frisst sie daher nicht an.
+650|Text outline|Textkontur
+651|Text outline (name/lettering)|Textkontur (Name/Schriftzüge)
+652|Outline {0}|Kontur {0}
+653|Images|Bilder
+654|The image (PNG, JPG, SVG) is placed directly on the product — you can move and resize it.|Das Bild (PNG, JPG, SVG) wird direkt auf das Produkt gesetzt — Sie können es verschieben und anpassen.
+655|The image (PNG, JPG, SVG) is placed directly on the T-shirt — you can move and resize it.|Das Bild (PNG, JPG, SVG) wird direkt auf das T-Shirt gesetzt — Sie können es verschieben und anpassen.
+656|Image / logo|Bild / Logo
+657|Image / logo{{0}}|Bild / Logo{{0}}
+658|The image looks low quality or has a background|Das Bild wirkt qualitativ schlecht oder hat einen Hintergrund
+659|Fitted|Anliegend
+660|Edging with tassels|Einfassung mit Quasten
+661|Hemmed all around|Rundum gesäumt
+662|Zoom out|Verkleinern
+663|Sending failed — please try again or write to us via the Contact page.|Das Senden ist fehlgeschlagen — bitte versuchen Sie es erneut oder schreiben Sie uns über die Kontaktseite.
+664|By sending the enquiry you are not committing to an order. We will send an exact quote within {0} business days.|Mit dem Absenden der Anfrage verpflichten Sie sich nicht zu einer Bestellung. Ein genaues Angebot senden wir innerhalb von {0} Werktagen.
+665|Send enquiry|Anfrage senden
+666|Send question|Frage senden
+667|Remove|Entfernen
+668|Remove player {{0}}|Spieler {{0}} entfernen
+669|Remove design|Motiv entfernen
+670|Remove uploaded graphic|Hochgeladene Grafik entfernen
+671|Remove print|Druck entfernen
+672|Remove selected|Ausgewählte entfernen
+673|Remove pattern|Muster entfernen
+674|Besides jerseys, we can also supply other team equipment. We do not state prices for these items — choose what interests you and we will send a current offer after you submit the enquiry.|Neben Trikots können wir auch weitere Teamausrüstung liefern. Für diese Artikel nennen wir keine Preise — wählen Sie, was Sie interessiert, und wir senden Ihnen nach Absenden der Anfrage ein aktuelles Angebot.
+675|Round|Rund
+676|Oman|Oman
+677|Opposite the heart (original position)|Gegenüber dem Herzen (ursprüngliche Position)
+678|Opposite the heart, higher (if there is a number below it)|Gegenüber dem Herzen, weiter oben (wenn darunter eine Nummer steht)
+679|Ask a question|Frage stellen
+680|Orange|Orange
+681|Orange / black|Orange / Schwarz
+682|Crop|Zuschnitt
+683|Laser cut|Laser-geschnitten
+684|Indicative price excl. VAT|Richtpreis ohne MwSt.
+685|Indicative price incl. VAT|Richtpreis inkl. MwSt.
+686|Indicative price:|Richtpreis:
+687|Personal pickup|Selbstabholung
+688|Personal pickup in Prešov or Košice (no postage)|Selbstabholung in Prešov oder Košice (kein Porto)
+689|Personal pickup: {{0}}|Selbstabholung: {{0}}
+690|Other|Sonstiges
+691|Oswald (Narrow sporty)|Oswald (Schmal, sportlich)
+692|=|=
+693|Rotation & scale|Drehung & Maßstab
+694|Rotation (°) — dragging the handle snaps every {0}°|Drehung (°) — beim Ziehen am Griff rastet es alle {0}° ein
+695|Rotation:|Drehung:
+696|Open ChatGPT|ChatGPT öffnen
+697|Open Gemini|Gemini öffnen
+698|Question *|Frage *
+699|The question has been sent.|Die Frage wurde gesendet.
