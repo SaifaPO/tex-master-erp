@@ -439,10 +439,10 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
     else if (calcMethod === 'vysivka') calcVc = vcVysivka(kostra, calcPlocha, calcKs);
     else if (calcMethod === 'sietotlac') { calcVc = vcSietotlacCelkom(kostra, calc.velkostId, calc.tmavy, calcFarby, calcKs, calcPlocha); calcPlochaPouzita = plochaFormatuSietotlac(kostra, calc.velkostId, calcPlocha); }
     else if (calcMethod === 'rezany') {
-      const rz = vcRezanyTransferRozpis(kostra, calc.foliaId, calcPlocha);
-      calcVc = rz.spolu * calcFarby;
-      calcCasyRezany = { rezanie: rz.casRezaniaMin * calcFarby, vylupovanie: rz.casVylupovaniaMin * calcFarby, nazehlenie: rz.casNazehlovaniaMin * calcFarby };
-      calcCasti = [{ label: `Rezaný transfer (fólia, rezanie, vyľupovanie${calcFarby > 1 ? `, ${calcFarby} farby` : ''})`, vc: rz.transfer * calcFarby }, { label: 'Nažehlenie rezaného transferu na textil', vc: rz.nazehlenie * calcFarby }];
+      const rz = vcRezanyTransferRozpis(kostra, calc.foliaId, calcPlocha, calcFarby);
+      calcVc = rz.spolu;
+      calcCasyRezany = { rezanie: rz.casRezaniaMin, vylupovanie: rz.casVylupovaniaMin, nazehlenie: rz.casNazehlovaniaMin };
+      calcCasti = [{ label: `Rezaný transfer (fólia, rezanie, vyľupovanie${calcFarby > 1 ? `, ${calcFarby} farby` : ''})`, vc: rz.transfer }, { label: 'Nažehlenie rezaného transferu na textil', vc: rz.nazehlenie }];
     }
   }
   const calcUnitPrice = kostra ? Math.max(priceAt(calcVc, calcKs, kostra.pricingConfig), minCenaPotlace(kostra, calcMethod)) : 0;

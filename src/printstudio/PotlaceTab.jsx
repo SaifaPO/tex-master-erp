@@ -16,7 +16,10 @@ function NakladovyVysledok({ vc, ks, config, plochaCm2, jednotka, onPouzit, disa
   const marza = marginAt(vc, ks, config);
   const cenaCm2 = plochaCm2 > 0 ? predajna / plochaCm2 : 0;
   // Rezim klienta: len nahlad ceny po zlave (predajna sadzba ulozena tlacidlom ostava BEZ zlavy)
-  const cenaKlient = Math.round(predajna * (1 - zlavaPercent / 100) * 100) / 100;
+  // Zľava sa obmedzí tak, aby marža po zľave nikdy nespadla pod minimum z Cenotvorby (napr. 30 %).
+  const maxZlava = predajna > 0 && vc > 0 ? Math.max(0, (1 - (vc * (1 + config.marginFloor / 100)) / predajna) * 100) : zlavaPercent;
+  const ucinnaZlava = Math.min(zlavaPercent, Math.floor(maxZlava * 10) / 10);
+  const cenaKlient = Math.round(predajna * (1 - ucinnaZlava / 100) * 100) / 100;
   const marzaKlient = vc > 0 ? ((cenaKlient / vc) - 1) * 100 : 0;
   return (
     <div className="bg-slate-950 rounded-xl border border-indigo-900/40 p-4 mt-3 space-y-2">
@@ -35,9 +38,9 @@ function NakladovyVysledok({ vc, ks, config, plochaCm2, jednotka, onPouzit, disa
       )}
       {zlavaPercent > 0 && (
         <div className="rounded-lg border border-amber-500/50 bg-amber-950/25 px-3 py-2 text-xs space-y-0.5">
-          <div className="flex justify-between gap-3"><span className="text-amber-300 font-semibold">Cena pre klienta bez DPH (−{zlavaPercent} %)</span><span className="text-amber-300 font-bold">{cenaKlient.toFixed(2)} €/ks • {(cenaKlient * ks).toFixed(2)} € spolu za {ks} ks</span></div>
+          <div className="flex justify-between gap-3"><span className="text-amber-300 font-semibold">Cena pre klienta bez DPH (−{ucinnaZlava} %{ucinnaZlava < zlavaPercent ? `, obmedzené z ${zlavaPercent} %` : ''})</span><span className="text-amber-300 font-bold">{cenaKlient.toFixed(2)} €/ks • {(cenaKlient * ks).toFixed(2)} € spolu za {ks} ks</span></div>
           <div className="flex justify-between gap-3 text-slate-400"><span>Rozdiel oproti bežnej cene</span><span className="font-mono">−{(predajna - cenaKlient).toFixed(2)} €/ks • −{((predajna - cenaKlient) * ks).toFixed(2)} € za {ks} ks</span></div>
-          <div className={`flex justify-between gap-3 ${marzaKlient < config.marginFloor ? 'text-rose-400' : 'text-slate-400'}`}><span>Marža po zľave{marzaKlient < config.marginFloor ? ' (pod minimom z Cenotvorby!)' : ''}</span><span className="font-mono">{marzaKlient.toFixed(0)} %</span></div>
+          <div className={`flex justify-between gap-3 ${marzaKlient < config.marginFloor ? 'text-rose-400' : 'text-slate-400'}`}><span>Marža po zľave{ucinnaZlava < zlavaPercent ? ` — zľava obmedzená, aby marža neklesla pod ${config.marginFloor} %` : ''}</span><span className="font-mono">{marzaKlient.toFixed(0)} %</span></div>
         </div>
       )}
       <button onClick={() => onPouzit(cenaCm2)} disabled={disabled} className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs py-2 rounded-lg flex items-center justify-center gap-1.5"><TrendingUp className="w-3.5 h-3.5" /> Použiť ako predajnú sadzbu</button>
@@ -210,10 +213,10 @@ export default function PotlaceTab({ supabase }) {
   // (rovnako ako v e-shope a v Cenovych ponukach). Sekcie vyssie ostavaju pri "1. farbe" + priplatok za dalsiu farbu.
   const vcSietotlacTest = sietotlacPlatny ? vcSietotlacCelkom(kostraLive, testVelkostId, testTmavyTextil, pocetFariebSiet, ks, plochaVlastnaSiet) : 0;
 
-  const vcRezany = vcRezanyTransferZo(kostraLive, testFoliaId, plocha);
+  const vcRezany = vcRezanyTransferZo(kostraLive, testFoliaId, plocha, pocetFariebSiet); // horná karta aj porovnanie dole počítajú rovnako pre zadaný počet farieb
   const rzSub = vcSublimaciaGarmentRozpis(kostraLive, plocha);
   const rzDtf = vcDtfGarmentRozpis(kostraLive, plocha);
-  const rzRezany = vcRezanyTransferRozpis(kostraLive, testFoliaId, plocha);
+  const rzRezany = vcRezanyTransferRozpis(kostraLive, testFoliaId, plocha, pocetFariebSiet);
   const dvaCasti = (rz, t, n) => [{ label: t, vc: rz?.transfer ?? 0 }, { label: n, vc: rz?.nazehlenie ?? 0 }];
 
   const vybranaHrubka = laserHrubky.find(h => h.id === testHrubkaId);
@@ -474,7 +477,7 @@ export default function PotlaceTab({ supabase }) {
             { key: 'sublimacia', label: 'Sublimácia', vc: vcSublimacia, plochaZaklad: plocha, minCena: sublimacia.min_cena },
             { key: 'dtf', label: 'DTF', vc: vcDtf, plochaZaklad: plocha, minCena: dtf.min_cena },
             { key: 'sietotlac', label: `Sieťotlač · ${pocetFariebSiet} ${pocetFariebSiet === 1 ? 'farba' : pocetFariebSiet < 5 ? 'farby' : 'farieb'}`, vc: vcSietotlacTest, plochaZaklad: plochaSietotlacCm2, minCena: sietotlac.min_cena },
-            { key: 'rezany', label: `Rezaný transfer (flex) · ${pocetFariebSiet} ${pocetFariebSiet === 1 ? 'farba' : pocetFariebSiet < 5 ? 'farby' : 'farieb'}`, vc: vcRezany * pocetFariebSiet, plochaZaklad: plocha, minCena: rezany.min_cena },
+            { key: 'rezany', label: `Rezaný transfer (flex) · ${pocetFariebSiet} ${pocetFariebSiet === 1 ? 'farba' : pocetFariebSiet < 5 ? 'farby' : 'farieb'}`, vc: vcRezany, plochaZaklad: plocha, minCena: rezany.min_cena },
             { key: 'laser', label: `Laserové rezanie${vybranaHrubka ? ` (${vybranaHrubka.label})` : ''}`, vc: vcLaser, plochaZaklad: plocha, minCena: laser.min_cena },
           ].map(({ key, label, vc, plochaZaklad, minCena }) => {
             // "min. cena úkonu" (nastavená vyššie pri danej technológii) je FLOOR na skutočne
@@ -490,10 +493,12 @@ export default function PotlaceTab({ supabase }) {
                 <p className="text-xl font-black text-emerald-400">{cena.toFixed(2)} €<span className="text-xs text-slate-500 font-normal"> /ks</span></p>
                 <p className="text-sm text-slate-400">{(cena * ks).toFixed(2)} € spolu za {ks}ks</p>
                 {klientZlava > 0 && (() => {
-                  const cenaVip = Math.round(cena * (1 - klientZlava / 100) * 100) / 100;
+                  const maxZl = cena > 0 && vc > 0 ? Math.max(0, (1 - (vc * (1 + pricingConfig.marginFloor / 100)) / cena) * 100) : klientZlava;
+                  const ucinna = Math.min(klientZlava, Math.floor(maxZl * 10) / 10);
+                  const cenaVip = Math.round(cena * (1 - ucinna / 100) * 100) / 100;
                   return (
                     <div className="mt-2 pt-2 border-t border-amber-500/30">
-                      <p className="text-[10px] font-bold text-amber-400">VIP cena (−{klientZlava} %)</p>
+                      <p className="text-[10px] font-bold text-amber-400">VIP cena (−{ucinna} %{ucinna < klientZlava ? `, obmedzené z ${klientZlava} % — marža min. ${pricingConfig.marginFloor} %` : ''})</p>
                       <p className="text-xl font-black text-amber-300">{cenaVip.toFixed(2)} €<span className="text-xs text-amber-200/60 font-normal"> /ks</span></p>
                       <p className="text-sm text-amber-200/70">{(cenaVip * ks).toFixed(2)} € spolu · ušetrí {((cena - cenaVip) * ks).toFixed(2)} €</p>
                     </div>

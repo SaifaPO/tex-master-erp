@@ -413,6 +413,8 @@ export default function KostraCienTab({ supabase }) {
           <Field label="Čas vyľupovania (min/cm²)" value={rezany.cas_vylupovania_min} step="0.001" onChange={(v) => ulozRezany({ cas_vylupovania_min: v })} hint={casNaCm2Hint(rezany.cas_vylupovania_min, REF_PLOCHA_CM2)} />
           <Field label="Čas nažehlovania (min/ks)" value={rezany.cas_nazehlovania_min} step="0.1" onChange={(v) => ulozRezany({ cas_nazehlovania_min: v })} hint={casFlatHint(rezany.cas_nazehlovania_min)} />
           <Field label="Manipulácia (€/ks)" value={rezany.naklady_manipulacia} step="0.01" onChange={(v) => ulozRezany({ naklady_manipulacia: v })} />
+          <Field label="Viac farieb: fólia navyše za každú ďalšiu farbu (%)" value={rezany.priplatok_odpad_farba_percent ?? 15} step="1" onChange={(v) => ulozRezany({ priplatok_odpad_farba_percent: v })} hint="Odpad pri samostatných kusoch fólie. Nažehlenie a manipulácia sa počítajú za každú farbu (vrstvu) zvlášť." />
+          <Field label="Viac farieb: čas navyše za každú ďalšiu farbu (min)" value={rezany.cas_navyse_farba_min ?? 0.3} step="0.1" onChange={(v) => ulozRezany({ cas_navyse_farba_min: v })} hint="Strihanie a vyberanie navyše pri každej ďalšej farbe." />
         </div>
         <VysledokVC label={`Práca + manipulácia pri ${REF_PLOCHA_CM2}cm² (10×10cm)`} value={rezanyPraca} unit="€/ks" />
         <p className="text-[11px] text-slate-500 -mt-2">≈ {(rezanyPraca / REF_PLOCHA_CM2).toFixed(4)} €/cm² priemerne pri tejto ploche</p>

@@ -248,12 +248,20 @@ export function plochaFormatuSietotlac(kostra, velkostId, plochaVlastnaCm2) {
 // cas rezania/vylupovania zavisi od plochy motivu, nazehlovanie a manipulacia su fixne na kus.
 // Elektrina: PLOTTER bezi pocas rezania (cas_rezania_min je uz min/cm², vylupovanie je rucna
 // praca, nie strojovy cas), TRANSFEROVY LIS bezi pocas flat casu nazehlovania.
-export function vcRezanyTransferRozpis(kostra, foliaId, plochaCm2) {
+// Viac farieb (flex): každá farba je samostatný kus fólie — fólia navyše (odpad) +15 % a čas navyše (strihanie/vyberanie) +0,3 min za KAŽDÚ ďalšiu farbu (nastaviteľné v Kostre cien);
+// rezanie/vyľupovanie podľa plochy motívu je spolu 1x (plocha sa len rozdelí medzi farby); nažehlenie je za každú vrstvu zvlášť (x počet farieb).
+export function vcRezanyTransferRozpis(kostra, foliaId, plochaCm2, pocetFarieb = 1) {
   const rezany = kostra.rezany;
+  const nFarieb = Math.max(1, Math.round(parseFloat(pocetFarieb) || 1));
+  const dalsie = nFarieb - 1;
+  const cisloAleboDef = (v, def) => (v == null || v === '' ? def : (parseFloat(v) || 0));
+  const odpadFarba = cisloAleboDef(rezany?.priplatok_odpad_farba_percent, 15) / 100;
+  const casNavyseFarba = cisloAleboDef(rezany?.cas_navyse_farba_min, 0.3);
   const folia = (kostra.folie || []).find(f => f.id === foliaId);
   const sirkaVyuz = parseFloat(rezany?.sirka_vyuzitelna_cm) || 49;
   const naklad_cm2 = folia ? (((parseFloat(folia.naklad_bm) || 0) / sirkaVyuz) / 100) : 0;
-  const material = plochaCm2 * naklad_cm2;
+  const material = plochaCm2 * naklad_cm2 * (1 + odpadFarba * dalsie);
+  const pracaNavyseFarby = (casNavyseFarba * dalsie / 60) * (parseFloat(rezany?.cena_prace_hod) || 0);
   const pracaCm2 = ((parseFloat(rezany?.cas_rezania_min) || 0) + (parseFloat(rezany?.cas_vylupovania_min) || 0)) / 60 * (parseFloat(rezany?.cena_prace_hod) || 0) * plochaCm2;
   const pracaFlat = ((parseFloat(rezany?.cas_nazehlovania_min) || 0) / 60) * (parseFloat(rezany?.cena_prace_hod) || 0);
   const ploterEurHod = elektrinaZariadeniaEurZaHod(kostra.costMetrics, rezany?.ploter_zariadenie_id);
@@ -261,16 +269,16 @@ export function vcRezanyTransferRozpis(kostra, foliaId, plochaCm2) {
   const lisEurHod = elektrinaZariadeniaEurZaHod(kostra.costMetrics, rezany?.transferovy_lis_zariadenie_id);
   const elektrinaLisFlat = lisEurHod * ((parseFloat(rezany?.cas_nazehlovania_min) || 0) / 60);
   // TRANSFER = folia + rezanie + vylupovanie (+ plotter); NAZEHLENIE = manipulacia + cas lisu (+ elektrina lisu)
-  const transfer = material + pracaCm2 + elektrinaPloterCm2;
-  const nazehlenie = (parseFloat(rezany?.naklady_manipulacia) || 0) + pracaFlat + elektrinaLisFlat;
+  const transfer = material + pracaCm2 + elektrinaPloterCm2 + pracaNavyseFarby;
+  const nazehlenie = ((parseFloat(rezany?.naklady_manipulacia) || 0) + pracaFlat + elektrinaLisFlat) * nFarieb;
   // Casy v minutach na 1 ks (rezanie a vylupovanie sa nasobia plochou, nazehlenie je flat) — len na prehlad pri porovnavani cien.
   const casRezaniaMin = (parseFloat(rezany?.cas_rezania_min) || 0) * plochaCm2;
-  const casVylupovaniaMin = (parseFloat(rezany?.cas_vylupovania_min) || 0) * plochaCm2;
-  const casNazehlovaniaMin = parseFloat(rezany?.cas_nazehlovania_min) || 0;
+  const casVylupovaniaMin = (parseFloat(rezany?.cas_vylupovania_min) || 0) * plochaCm2 + casNavyseFarba * dalsie;
+  const casNazehlovaniaMin = (parseFloat(rezany?.cas_nazehlovania_min) || 0) * nFarieb;
   return { transfer, nazehlenie, spolu: transfer + nazehlenie, casRezaniaMin, casVylupovaniaMin, casNazehlovaniaMin };
 }
-export function vcRezanyTransfer(kostra, foliaId, plochaCm2) {
-  return vcRezanyTransferRozpis(kostra, foliaId, plochaCm2).spolu;
+export function vcRezanyTransfer(kostra, foliaId, plochaCm2, pocetFarieb = 1) {
+  return vcRezanyTransferRozpis(kostra, foliaId, plochaCm2, pocetFarieb).spolu;
 }
 
 // Laserove rezanie vlastnych dielcov zo zakazkovej latky (nie potlac) — cas rezania zavisi od

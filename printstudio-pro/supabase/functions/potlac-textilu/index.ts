@@ -104,17 +104,22 @@ function vcDtfGarment(n: Riadok | null, costMetrics: Riadok[], plochaCm2: number
   const elektrinaLis = lisEurHod * ((parseFloat(n.cas_nazehlovania_min) || 0) / 60);
   return transfer + (parseFloat(n.naklady_manipulacia) || 0) + praca + elektrinaLis;
 }
-function vcRezanyTransfer(rezany: Riadok | null, folia: Riadok | null, costMetrics: Riadok[], plochaCm2: number) {
+function vcRezanyTransfer(rezany: Riadok | null, folia: Riadok | null, costMetrics: Riadok[], plochaCm2: number, pocetFarieb = 1) {
+  // Viac farieb: odpad fólie +15 % a čas +0,3 min za každú ďalšiu farbu (Kostra cien), nažehlenie za každú vrstvu zvlášť.
+  const nFarieb = Math.max(1, Math.round(pocetFarieb || 1)), dalsie = nFarieb - 1;
+  const cislo = (v: unknown, def: number) => (v == null || v === '' ? def : (parseFloat(String(v)) || 0));
+  const odpadFarba = cislo(rezany?.priplatok_odpad_farba_percent, 15) / 100, casNavyse = cislo(rezany?.cas_navyse_farba_min, 0.3);
   const sirkaVyuz = parseFloat(rezany?.sirka_vyuzitelna_cm) || 49;
   const naklad_cm2 = folia ? (((parseFloat(folia.naklad_bm) || 0) / sirkaVyuz) / 100) : 0;
-  const material = plochaCm2 * naklad_cm2;
+  const material = plochaCm2 * naklad_cm2 * (1 + odpadFarba * dalsie);
   const pracaCm2 = ((parseFloat(rezany?.cas_rezania_min) || 0) + (parseFloat(rezany?.cas_vylupovania_min) || 0)) / 60 * (parseFloat(rezany?.cena_prace_hod) || 0) * plochaCm2;
+  const pracaNavyse = (casNavyse * dalsie / 60) * (parseFloat(rezany?.cena_prace_hod) || 0);
   const pracaFlat = ((parseFloat(rezany?.cas_nazehlovania_min) || 0) / 60) * (parseFloat(rezany?.cena_prace_hod) || 0);
   const ploterEurHod = elektrinaZariadeniaEurZaHod(costMetrics, rezany?.ploter_zariadenie_id);
   const elektrinaPloterCm2 = ploterEurHod * ((parseFloat(rezany?.cas_rezania_min) || 0) / 60) * plochaCm2;
   const lisEurHod = elektrinaZariadeniaEurZaHod(costMetrics, rezany?.transferovy_lis_zariadenie_id);
   const elektrinaLisFlat = lisEurHod * ((parseFloat(rezany?.cas_nazehlovania_min) || 0) / 60);
-  return material + (parseFloat(rezany?.naklady_manipulacia) || 0) + pracaFlat + pracaCm2 + elektrinaPloterCm2 + elektrinaLisFlat;
+  return material + pracaCm2 + elektrinaPloterCm2 + pracaNavyse + ((parseFloat(rezany?.naklady_manipulacia) || 0) + pracaFlat + elektrinaLisFlat) * nFarieb;
 }
 
 const TECHNOLOGIE: Record<string, string> = { dtf: 'DTF transfer', rezany: 'Rezaný transfer', sietotlac: 'Sieťotlač' };
@@ -236,7 +241,7 @@ function cenaTlace(ctx: Kontext, v: Vyber, t: Tlac, ks: number) {
     vc = vcDtfGarment(ctx.dtf, ctx.metriky, plocha);
     zaklad = Math.max(priceAt(vc, ks, ctx.cfg), num(ctx.minCeny.dtf));
   } else {
-    vc = vcRezanyTransfer(ctx.rezany, ctx.folie[0] || null, ctx.metriky, plocha) * t.farby;
+    vc = vcRezanyTransfer(ctx.rezany, ctx.folie[0] || null, ctx.metriky, plocha, t.farby);
     zaklad = Math.max(priceAt(vc, ks, ctx.cfg), num(ctx.rezany?.min_cena));
   }
   return { cenaKs: r2(zaklad * (1 + priplEfekt / 100) * (1 + priplPoly / 100)), vc, priplEfekt, priplPoly };
