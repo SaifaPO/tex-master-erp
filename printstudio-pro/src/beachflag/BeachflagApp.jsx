@@ -45,6 +45,7 @@ export default function BeachflagApp({ supabase }) {
   const [podstavecKod, setPodstavecKod] = useState('');
   const [doplnkyMnozstva, setDoplnkyMnozstva] = useState({});
   const [bgColor, setBgColor] = useState('#ffffff');
+  const bgColorRef = useRef('#ffffff'); // aktuálna farba vlajky pre prekreslenie tvaru
   const [pantoneNote, setPantoneNote] = useState('');
   const [customText, setCustomText] = useState('');
   const [expresne, setExpresne] = useState(false);
@@ -182,11 +183,12 @@ export default function BeachflagApp({ supabase }) {
   // Inicializácia Fabric plátna, keď je <canvas> reálne v DOM
   useEffect(() => {
     if (isLoading || !canvasElRef.current || fabricRef.current) return;
-    const canvas = new fabric.Canvas(canvasElRef.current, { backgroundColor: bgColor });
+    // Plátno je vždy biele; zvolená farba vlajky vypĺňa LEN tvar vlajky (objekt isFarbaVlajky), nie celé plátno s okrajom.
+    const canvas = new fabric.Canvas(canvasElRef.current, { backgroundColor: '#ffffff' });
     fabricRef.current = canvas;
     const aktualizujInfo = () => {
       const o = canvas.getActiveObject();
-      if (!o || o.isMaskOverlay) { setSelInfo(null); return; }
+      if (!o || o.isMaskOverlay || o.isFarbaVlajky) { setSelInfo(null); return; }
       const m = mierkaCmRef.current;
       const nova = { sirkaCm: o.getScaledWidth() * m.x, vyskaCm: o.getScaledHeight() * m.y, uhol: ((Math.round(o.angle || 0) % 360) + 360) % 360 };
       setSelInfo(p => (p && Math.abs(p.sirkaCm - nova.sirkaCm) < 0.05 && Math.abs(p.vyskaCm - nova.vyskaCm) < 0.05 && p.uhol === nova.uhol ? p : nova));
@@ -225,7 +227,11 @@ export default function BeachflagApp({ supabase }) {
     canvas.setZoom(zoom);
     canvas.setDimensions({ width: w * zoom, height: h * zoom });
 
-    canvas.getObjects().filter(o => o.isMaskOverlay).forEach(o => canvas.remove(o));
+    canvas.getObjects().filter(o => o.isMaskOverlay || o.isFarbaVlajky).forEach(o => canvas.remove(o));
+    // Výplň farbou vlajky len v tvare vlajky (vrátane spadávky = tlačová plocha), vždy úplne vzadu
+    const tvarVlajky = new fabric.Path(rozmer.bleed_path || rozmer.cut_path, { fill: bgColorRef.current, stroke: null, strokeWidth: 0, selectable: false, evented: false, hoverCursor: 'default', isFarbaVlajky: true });
+    canvas.add(tvarVlajky);
+    canvas.sendToBack(tvarVlajky);
     // Hrubka ciar je v RIADKOVYCH (cm) jednotkach, nie fyzickych px — pri velkom priblizeni
     // (velky zoom) sa 2cm cesta zobrazovala neprimerane hrubo, znizene na cca 2-4mm.
     if (rozmer.bleed_path) {
@@ -269,7 +275,11 @@ export default function BeachflagApp({ supabase }) {
   }, [canvasVersion]);
 
   useEffect(() => {
-    fabricRef.current?.setBackgroundColor(bgColor, () => fabricRef.current?.renderAll());
+    bgColorRef.current = bgColor;
+    const c = fabricRef.current;
+    if (!c) return;
+    c.getObjects().filter(o => o.isFarbaVlajky).forEach(o => o.set('fill', bgColor));
+    c.renderAll();
   }, [bgColor]);
 
   // Ziva cena — debounced volanie Edge Function pri kazdej zmene konfiguracie (rovnaky vzor ako

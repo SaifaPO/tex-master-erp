@@ -34,12 +34,12 @@ export default function LayersPanel({ canvas, rezim = 'plny' }) {
   }, [canvas]);
 
   if (!canvas) return null;
-  const objekty = canvas.getObjects().filter(o => !o.isMaskOverlay).slice().reverse();
+  const objekty = canvas.getObjects().filter(o => !o.isMaskOverlay && !o.isFarbaVlajky).slice().reverse();
 
   const vyber = (o) => { canvas.setActiveObject(o); canvas.renderAll(); refresh(); };
   const zmaz = (o) => { canvas.remove(o); canvas.discardActiveObject(); canvas.renderAll(); refresh(); };
   const posunHore = (o) => { canvas.bringForward(o); canvas.renderAll(); refresh(); };
-  const posunDole = (o) => { canvas.sendBackwards(o); canvas.renderAll(); refresh(); };
+  const posunDole = (o) => { canvas.sendBackwards(o); canvas.getObjects().filter(x => x.isFarbaVlajky).forEach(x => canvas.sendToBack(x)); /* farba vlajky ostáva vždy úplne vzadu */ canvas.renderAll(); refresh(); };
   const aktualizuj = (patch) => { if (!selected) return; selected.set(patch); canvas.renderAll(); refresh(); };
   const duplikuj = () => { if (!selected) return; const o = selected; o.clone((k) => { k.set({ left: (o.left || 0) + 24, top: (o.top || 0) + 24, evented: true }); canvas.add(k); canvas.setActiveObject(k); canvas.requestRenderAll(); refresh(); }, ['obrysHrubka', 'obrysPoloha']); };
   const mierka = canvas.mierkaCm || { x: 1, y: 1 }; // cm na jednotku plátna
