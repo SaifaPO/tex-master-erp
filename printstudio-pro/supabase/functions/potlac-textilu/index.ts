@@ -135,6 +135,9 @@ function pocetNazehleni(nast: Riadok, w: number, h: number) {
 }
 // Najväčšia možná potlač pre umiestnenie: veľké plochy (hruď stred, chrbát) podľa technológie a podľa najmenšej objednanej veľkosti trička
 function maxPlochy(nast: Riadok, produkt: Riadok, technologia: string, um: Riadok, velkosti: Record<string, number>, vlastnyTextil: boolean) {
+  // Produkt môže mať vlastné obmedzenie miesta (pozicie[kod].max = { sirka, vyska }, napr. hruď mikiny nad vreckom) a vlastné okraje (pozicie[kod].okraj)
+  const ov = (((produkt.pozicie || {}) as Riadok)[um.kod] || {}) as Riadok;
+  const okrS = num(ov.okraj?.sirka, num(nast.okraj_sirka_cm, 8)), okrV = num(ov.okraj?.vyska, num(nast.okraj_vyska_cm, 20));
   let s = num(um.max_sirka_cm, 43), v = num(um.max_vyska_cm, 58);
   if (num(um.max_sirka_cm) >= 30) {
     const tm = (nast.max_rozmery || {})[technologia];
@@ -143,10 +146,11 @@ function maxPlochy(nast: Riadok, produkt: Riadok, technologia: string, um: Riado
     if (!vlastnyTextil && tab) {
       for (const k of Object.keys(velkosti)) {
         const r = tab[k]; if (!r) continue;
-        s = Math.min(s, num(r.A) - num(nast.okraj_sirka_cm, 8)); v = Math.min(v, num(r.B) - num(nast.okraj_vyska_cm, 20));
+        s = Math.min(s, num(r.A) - okrS); v = Math.min(v, num(r.B) - okrV);
       }
     }
   }
+  if (ov.max) { s = Math.min(s, num(ov.max.sirka, s)); v = Math.min(v, num(ov.max.vyska, v)); }
   return { sirka: Math.max(1, Math.floor(s)), vyska: Math.max(1, Math.floor(v)) };
 }
 
@@ -305,6 +309,8 @@ function cenaTlace(ctx: Kontext, v: Vyber, t: Tlac, ks: number) {
   }
   return { cenaKs: r2(zaklad * (1 + priplEfekt / 100) * (1 + priplPoly / 100)), vc, priplEfekt, priplPoly };
 }
+// Predajná cena textilu za kus: ak má produkt nákupnú cenu, počíta sa cez maržový modul podľa počtu kusov (rovnako ako potlač); inak pevná cena z karty produktu
+const cenaTextilu = (ctx: Kontext, produkt: Riadok, ks: number) => { const nakup = num(produkt.nakupna_cena_eur); return nakup > 0 ? priceAt(nakup, ks, ctx.cfg) : num(produkt.cena_textilu_eur); };
 const cenaKusaSpolu = (ctx: Kontext, v: Vyber, ks: number) => r2(v.tlace.reduce((s, t) => s + cenaTlace(ctx, v, t, ks).cenaKs, 0));
 
 async function b2bZlava(supabase: ReturnType<typeof createClient>, kod: string) {
@@ -331,7 +337,7 @@ async function vyhodnot(supabase: ReturnType<typeof createClient>, ctx: Kontext,
   const zlavaPercent = await b2bZlava(supabase, v.b2bKod);
   const zlavaEur = r2(logaSpolu * zlavaPercent / 100);
   const poZlave = r2(logaSpolu - zlavaEur);
-  const cenaTextilKs = v.vlastnyTextil ? 0 : num(v.produkt.cena_textilu_eur);
+  const cenaTextilKs = v.vlastnyTextil ? 0 : cenaTextilu(ctx, v.produkt, ks);
   const textilSpolu = r2(cenaTextilKs * ks);
   const manipulacia = num(ctx.nast.manipulacny_poplatok_eur);
   const zdarma = num(ctx.nast.postovne_zdarma_od_eur) > 0 && (poZlave + textilSpolu + manipulacia) >= num(ctx.nast.postovne_zdarma_od_eur);
@@ -421,7 +427,7 @@ Deno.serve(async (req) => {
           limity: { maxRozmery: n.max_rozmery || {}, lisSirkaCm: num(n.lis_sirka_cm, 38), lisVyskaCm: num(n.lis_vyska_cm, 48), okrajSirkaCm: num(n.okraj_sirka_cm, 8), okrajVyskaCm: num(n.okraj_vyska_cm, 20) },
         },
         produkty: ctx.produkty.filter((p) => p.foto_predok_url).map((p) => ({
-          id: p.id, kod: p.kod, nazov: p.nazov, kategoria: p.kategoria, popis: p.popis || '', material: p.material, cenaTextiluBezDph: num(p.cena_textilu_eur),
+          id: p.id, kod: p.kod, nazov: p.nazov, kategoria: p.kategoria, popis: p.popis || '', material: p.material, cenaTextiluBezDph: num(p.nakupna_cena_eur) > 0 ? cenaTextilu(ctx, p, 1000) : num(p.cena_textilu_eur),
           velkosti: p.velkosti || [], farby: p.farby || [], technologie: p.technologie || [], fotoPredok: p.foto_predok_url, fotoZadok: p.foto_zadok_url || null, fotoLavy: p.foto_lavy_url || null, fotoPravy: p.foto_pravy_url || null,
           fotoSirkaCm: num(p.foto_sirka_cm, 100), pozicie: p.pozicie || {}, velkostnaTabulka: p.velkostna_tabulka || null,
         })),

@@ -52,7 +52,7 @@ function Sekcia({ cislo, nazov, children, akcia }) {
 }
 
 // veľkostné tabuľky produktov (obrázky vo /public/produkty); ďalšie produkty sa dopĺňajú sem
-const TABULKY = { 'tricko-panske': '/produkty/velkostna-tabulka-tricko-panske.jpg', 'tricko-damske': '/produkty/velkostna-tabulka-tricko-damske.jpg' };
+const TABULKY = { 'tricko-panske': '/produkty/velkostna-tabulka-tricko-panske.jpg', 'tricko-damske': '/produkty/velkostna-tabulka-tricko-damske.jpg', 'tricko-detske': '/produkty/velkostna-tabulka-tricko-detske.jpg' };
 
 let idCounter = 0;
 const noveId = () => `t${++idCounter}`;
@@ -105,18 +105,21 @@ export default function PotlacTextilu({ supabase }) {
   const zvoleneVelkosti = Object.entries(velkosti).filter(([, q]) => Number(q) > 0).map(([k]) => k);
   const maxPlochy = (u) => {
     let sMax = u.maxSirkaCm, vMax = u.maxVyskaCm, dovod = '';
+    const ov = produkt?.pozicie?.[u.kod] || {}; // produkt môže mať vlastný max. rozmer miesta (napr. hruď mikiny nad vreckom) a vlastné okraje
+    const okrS = ov.okraj?.sirka ?? limity.okrajSirkaCm ?? 8, okrV = ov.okraj?.vyska ?? limity.okrajVyskaCm ?? 20;
     if (u.maxSirkaCm >= 30) { // veľké plochy (hruď stred, chrbát): limit technológie + limit podľa veľkosti trička
       const tm = limity.maxRozmery?.[technologia];
       if (tm) { sMax = tm.sirka; vMax = tm.vyska; }
       if (!vlastnyTextil && produkt?.velkostnaTabulka) {
         for (const k of zvoleneVelkosti) {
           const r = produkt.velkostnaTabulka[k]; if (!r) continue;
-          const ds = r.A - (limity.okrajSirkaCm ?? 8), dv = r.B - (limity.okrajVyskaCm ?? 20);
+          const ds = r.A - okrS, dv = r.B - okrV;
           if (ds < sMax) { sMax = ds; dovod = `veľkosť ${k}`; }
           if (dv < vMax) { vMax = dv; dovod = `veľkosť ${k}`; }
         }
       }
     }
+    if (ov.max) { if (ov.max.sirka < sMax) sMax = ov.max.sirka; if (ov.max.vyska < vMax) vMax = ov.max.vyska; }
     return { sirka: Math.max(1, Math.floor(sMax)), vyska: Math.max(1, Math.floor(vMax)), dovod };
   };
   const umiestneniaEf = umiestnenia.map((u) => { const m = maxPlochy(u); return { ...u, maxSirkaCm: m.sirka, maxVyskaCm: m.vyska, dovodMax: m.dovod }; });

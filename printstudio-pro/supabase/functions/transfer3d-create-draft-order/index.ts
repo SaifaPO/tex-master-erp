@@ -280,6 +280,18 @@ Deno.serve(async (req) => {
         spotreba: { cmykMl: r2(v.cmykMl), bielaMl: r2(v.bielaMl), lakMl: r2(v.lakMl), folieM2: r2(v.folieM2), potlacM2: Math.round(v.potlacM2 * 10000) / 10000, tlacMin: r2(v.tlacMin), rezMin: r2(v.rezMin), pracaMin: r2(v.pracaMin) },
       };
     }
+    // Cenové úrovne podľa počtu kusov (tabuľka „Množstevné zľavy“) — rovnaký výpočet pre iný počet kusov, bez B2B zľavy a poštovného (podľa prvého motívu)
+    if (body.urovne) {
+      const urovneKs: { ks: number; cenaKsBezDph: number }[] = [];
+      for (const l of [1, 5, 10, 25, 50, 100, 200, 500]) {
+        try {
+          const vp = vypocitaj(nast, p0.ur, p0.lk, metriky || [], p0.w, p0.h, l);
+          const cc = await spoluCena(supabase, nast, pricingConfig, vp.nakladSpolu, l, true, null);
+          urovneKs.push({ ks: l, cenaKsBezDph: r2(cc.logaSpolu / l) });
+        } catch { /* pri tomto počte sa motív nezmestí */ }
+      }
+      vysledok.urovne = urovneKs;
+    }
     if (preview) return odpoved({ ok: true, ...vysledok });
 
     // ---- skutočná objednávka ----

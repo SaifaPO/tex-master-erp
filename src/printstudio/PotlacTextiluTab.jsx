@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Shirt, AlertTriangle, Plus, Trash2, RefreshCw, ExternalLink, Upload, ChevronDown, ChevronRight } from 'lucide-react';
 import NumberInput from '../NumberInput';
+import { priceAt } from './pricingEngine';
 import { Pole, Karta, ObchodneNastavenia, useErpProdukty, useNastavenia } from './AdminPomocky';
 
 // POTLAČ TEXTILU (verejná stránka ?typ=potlac): zákazník vyberie produkt (tričko, mikina…), farbu, technológiu (DTF / rezaný transfer / sieťotlač),
@@ -45,7 +46,7 @@ function FotoPole({ supabase, produkt, strana, hodnota, onZmena }) {
   );
 }
 
-function ProduktKarta({ supabase, p, umiestnenia, zmen, zmaz, otvoreny, prepni }) {
+function ProduktKarta({ supabase, p, umiestnenia, zmen, zmaz, otvoreny, prepni, cfg }) {
   const farby = Array.isArray(p.farby) ? p.farby : [];
   const poz = p.pozicie || {};
   const nastavPoz = (kod, pohlad, patch) => {
@@ -82,7 +83,14 @@ function ProduktKarta({ supabase, p, umiestnenia, zmen, zmaz, otvoreny, prepni }
               <input value={p.popis || ''} onChange={(e) => zmen(p.id, { popis: e.target.value })} className={vstup} />
               {/FIKT[ÍI]VN/i.test(p.popis || '') && <p className="text-[10px] text-amber-400 mt-0.5">Text obsahuje „FIKTÍVNA CENA“ — po doplnení skutočnej ceny ho zmažte (zákazník ho vtedy nevidí, ale nech tam nezostane).</p>}
             </div>
-            <Pole label="Predajná cena textilu za kus" jednotka="€ bez DPH" value={p.cena_textilu_eur} onChange={(v) => zmen(p.id, { cena_textilu_eur: v })} pomoc="Platí, keď si zákazník objedná textil od nás." />
+            <Pole label="Nákupná cena textilu za kus" jednotka="€ bez DPH" value={p.nakupna_cena_eur} onChange={(v) => zmen(p.id, { nakupna_cena_eur: v > 0 ? v : null })} pomoc="Ak je vyplnená, predajná cena textilu sa počíta z marže (Cenotvorba) podľa počtu kusov — pri 1 ks vyššia marža, pri veľa kusoch nižšia, rovnako ako pri potlači. Vtedy sa pevná predajná cena nižšie nepoužije." />
+            {Number(p.nakupna_cena_eur) > 0 && cfg && (
+              <div className="rounded-lg border border-slate-700 bg-slate-900/60 p-2 text-[11px] text-slate-300 leading-relaxed sm:col-span-2">
+                <div className="text-slate-400 mb-0.5">Predajná cena textilu podľa počtu kusov (bez DPH):</div>
+                {[1, 5, 10, 25, 50, 100, 250, 500, 1000].map((k) => { const c = priceAt(Number(p.nakupna_cena_eur), k, cfg); return <span key={k} className="inline-block mr-3 whitespace-nowrap"><strong className="text-white">{k} ks</strong>: {eur(c)} <span className="text-slate-500">(+{Math.round((c / Number(p.nakupna_cena_eur) - 1) * 100)} %)</span></span>; })}
+              </div>
+            )}
+            <Pole label="Pevná predajná cena textilu za kus" jednotka="€ bez DPH" value={p.cena_textilu_eur} onChange={(v) => zmen(p.id, { cena_textilu_eur: v })} pomoc="Platí, keď nie je vyplnená nákupná cena (jedna cena bez ohľadu na počet kusov)." />
             <div>
               <label className="block text-slate-400 mb-1 text-xs">Materiál</label>
               <select value={p.material} onChange={(e) => zmen(p.id, { material: e.target.value })} className={vstup}><option value="bavlna">Bavlna</option><option value="polyester">Polyester (príplatok pri sieťotlači)</option></select>
@@ -174,6 +182,8 @@ export default function PotlacTextiluTab({ supabase }) {
   const [umiestnenia, setUmiestnenia] = useState([]);
   const [objednavky, setObjednavky] = useState([]);
   const [otvoreny, setOtvoreny] = useState(null);
+  const [cfg, setCfg] = useState(null); // maržový modul (Cenotvorba)
+  useEffect(() => { supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle().then(({ data: c }) => { if (c) setCfg({ coefA: Number(c.coef_a), coefB: Number(c.coef_b), marginFloor: Number(c.margin_floor), coefP: Number(c.coef_p), cielovaHodnotaZakazky: Number(c.cielova_hodnota_zakazky) || 25000 }); }); }, [supabase]);
   const casovace = useRef({});
 
   const nacitaj = useCallback(async () => {
@@ -263,7 +273,7 @@ export default function PotlacTextiluTab({ supabase }) {
         </div>
         <div className="space-y-2">
           {produkty.map((p) => (
-            <ProduktKarta key={p.id} supabase={supabase} p={p} umiestnenia={umiestnenia} zmen={zmenProdukt} zmaz={() => zmazProdukt(p)} otvoreny={otvoreny === p.id} prepni={() => setOtvoreny(otvoreny === p.id ? null : p.id)} />
+            <ProduktKarta key={p.id} supabase={supabase} cfg={cfg} p={p} umiestnenia={umiestnenia} zmen={zmenProdukt} zmaz={() => zmazProdukt(p)} otvoreny={otvoreny === p.id} prepni={() => setOtvoreny(otvoreny === p.id ? null : p.id)} />
           ))}
           {produkty.length === 0 && <p className="text-xs text-slate-500">Zatiaľ žiadne produkty.</p>}
         </div>

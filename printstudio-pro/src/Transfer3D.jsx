@@ -5,7 +5,7 @@ import NumberInput from './NumberInput';
 import { useB2bKod } from './b2b';
 import B2bKod from './B2bKod';
 import { CenaB2b } from './CenaB2b';
-import { useCenaNahlad } from './cenaNahlad';
+import { useCenaNahlad, MnozstevneZlavy } from './cenaNahlad';
 import { KosikMotivov, useKosikMotivov, riadkyZCeny } from './kosikMotivov';
 
 const BUCKET = 'print-designs';
@@ -102,7 +102,7 @@ export default function Transfer3D({ supabase }) {
   const kos = useKosikMotivov({ vytvorPolozku, podpisAktualneho });
 
   // Živý náhľad ceny — počíta server (Edge Function), zákazník nikdy nevidí nákupné ceny ani spotreby
-  const teloCeny = kos.kosik.length > 0 ? { polozky: kos.kosik.map((p) => p.vstup), osobnyOdber, b2bKod: b2b.kod } : { sirkaCm: sirka, vyskaCm: vyska, pocetKs, uroven, lak, osobnyOdber, b2bKod: b2b.kod };
+  const teloCeny = kos.kosik.length > 0 ? { polozky: kos.kosik.map((p) => p.vstup), osobnyOdber, b2bKod: b2b.kod, urovne: true } : { sirkaCm: sirka, vyskaCm: vyska, pocetKs, uroven, lak, osobnyOdber, b2bKod: b2b.kod, urovne: true };
   const { cena, chyba: chybaCeny } = useCenaNahlad(supabase, 'transfer3d-create-draft-order', teloCeny, kos.kosik.length > 0 || !!(nastavenia && uroven && lak && !rozmerChyba));
   const cenaChyba = (kos.kosik.length === 0 && rozmerChyba) || chybaCeny;
 
@@ -276,6 +276,7 @@ export default function Transfer3D({ supabase }) {
               </button>
               {!subor && kos.kosik.length === 0 && <p className="text-[11px] text-slate-400 text-center">Najprv nahrajte súbor s logom.</p>}
             </div>
+            <MnozstevneZlavy urovne={cena?.urovne} pocetKs={cena?.ksSpolu ?? pocetKs} b2bPercent={b2b.zlavaPercent} b2bKod={b2b.kod} />
           </aside>
         </div>
       </main>
