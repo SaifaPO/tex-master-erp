@@ -50,9 +50,8 @@ const TrickoEditor = forwardRef(function TrickoEditor({ supabase, produkt, farba
     const poz = produkt.pozicie?.[t.umiestnenie]; const u = umiestnenia.find((x) => x.kod === t.umiestnenie);
     if (!poz || !u) return null;
     const jePredok = !!poz.predok; const v = poz.predok || poz.zadok; if (!v) return null;
-    const sleeve = /^rukav/.test(t.umiestnenie);
-    const w = u.maxSirkaCm * 10 * ppm, h = Math.min(u.maxVyskaCm, sleeve ? 12 : u.maxVyskaCm) * 10 * ppm;
-    return { kod: t.umiestnenie, strana: jePredok ? 'front' : 'back', cx: v.x * fotky.w, cy: v.kotva === 'hore' ? v.y * fotky.h + h / 2 : v.y * fotky.h, w, h, rot: v.rot || 0, popis: `max ${u.maxSirkaCm} × ${Math.min(u.maxVyskaCm, sleeve ? 12 : u.maxVyskaCm)} cm`, nazov: u.nazov };
+    const w = u.maxSirkaCm * 10 * ppm, h = u.maxVyskaCm * 10 * ppm;
+    return { kod: t.umiestnenie, strana: jePredok ? 'front' : 'back', cx: v.x * fotky.w, cy: v.kotva === 'hore' ? v.y * fotky.h + h / 2 : v.y * fotky.h, w, h, rot: v.rot || 0, popis: `max ${u.maxSirkaCm} × ${u.maxVyskaCm} cm`, nazov: u.nazov };
   }).filter(Boolean), [tlace.map((t) => t.umiestnenie).join('|'), umiestnenia, produkt, ppm, fotky.w, fotky.h]); // eslint-disable-line react-hooks/exhaustive-deps
 
 
@@ -92,7 +91,7 @@ const TrickoEditor = forwardRef(function TrickoEditor({ supabase, produkt, farba
 
   return (
     <PlochaEditor ref={edRef} sirkaMm={sirkaMm} vyskaMm={vyskaMm} ppm={ppm} priehladne jedenPohlad podkladUrl={{ front: fotky.front, back: fotky.back || fotky.front }}
-      podkladFarba="#ffffff" zony={zony} nazvyStran={['Spredu', 'Zozadu']} fonty={d.fonty} grafiky={d.grafiky} bezSymbolov={bezSymbolov}
+      podkladFarba="#ffffff" zony={zony} nazvyStran={['Spredu', 'Zozadu']} fonty={d.fonty} grafiky={d.grafiky} bezSymbolov={bezSymbolov} okno
       onZmena={naZmenu} maxVyskaVh={0.4}>
       {children}
     </PlochaEditor>

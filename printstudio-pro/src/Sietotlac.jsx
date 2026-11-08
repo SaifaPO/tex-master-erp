@@ -160,6 +160,7 @@ export default function Sietotlac({ supabase }) {
     return tlace.map((t) => (hotove[t.id] ? { ...t, ...hotove[t.id] } : t));
   };
 
+  const prekrocene = tlace.some((t) => { const u = umiestnenia.find((x) => x.kod === t.umiestnenie); return t.presah || (u && (t.sirka > u.maxSirkaCm + 0.01 || t.vyska > u.maxVyskaCm + 0.01)); });
   const chybajuSubory = tlace.some((t) => !t.subor && !t.maNavrh);
   const objednat = async () => {
     if (chybajuSubory) { setChybaObj('Nahrajte prosím grafiku ku každej potlači alebo si ju navrhnite.'); return; }
@@ -216,10 +217,7 @@ export default function Sietotlac({ supabase }) {
                 <div className="space-y-3">
                   {/* mobil: tričko s motívmi je prilepené hore, nástroje sú pod ním — zmenu vidno hneď bez scrollovania */}
                   <div className="sticky top-16 z-30 lg:static -mx-4 px-4 pt-1 pb-2 lg:mx-0 lg:p-0 bg-slate-50/95 backdrop-blur lg:bg-transparent lg:backdrop-blur-none">{plocha}</div>
-                  <details open className="bg-white rounded-2xl border border-slate-200 p-3">
-                    <summary className="text-sm font-bold text-slate-800 cursor-pointer">Nástroje: text, logá, obrázok</summary>
-                    <div className="mt-3">{nastroje}</div>
-                  </details>
+                  {nastroje}
                 </div>
               )}
             </TrickoEditor>
@@ -343,7 +341,7 @@ export default function Sietotlac({ supabase }) {
 
         <aside className="lg:sticky lg:top-20 space-y-3 min-w-0">
           <CenaSuhrn cena={cena} chyba={chyba} osobnyOdber={osobnyOdber} onOsobnyOdber={setOsobnyOdber} onObjednat={objednat} bezi={bezi}
-            chybaObjednavky={chybaObj} potvrdenie={potvrdenie} zakazane={chybajuSubory || !suhlas || nezaradene > 0} poznamkaZakazane={nezaradene > 0 ? 'Na tričku máte motív mimo potlače (napr. na chrbte bez pridanej potlače). Pridajte potlač s týmto umiestnením alebo motív zmažte.' : chybajuSubory ? 'Pred objednávkou pridajte grafiku ku každej potlači (nahrajte súbor alebo si ju navrhnite).' : 'Potvrďte, že textil dodáte vy.'} riadky={riadky}>
+            chybaObjednavky={chybaObj} potvrdenie={potvrdenie} zakazane={chybajuSubory || !suhlas || nezaradene > 0 || prekrocene} poznamkaZakazane={prekrocene ? 'Niektorý motív je väčší než maximálny rozmer pre svoje umiestnenie (rukáv max. 10 × 10 cm). Zmenšite ho — objednávku nie je možné odoslať.' : nezaradene > 0 ? 'Na tričku máte motív mimo potlače (napr. na chrbte bez pridanej potlače). Pridajte potlač s týmto umiestnením alebo motív zmažte.' : chybajuSubory ? 'Pred objednávkou pridajte grafiku ku každej potlači (nahrajte súbor alebo si ju navrhnite).' : 'Potvrďte, že textil dodáte vy.'} riadky={riadky}>
             <label className="flex items-start gap-2 cursor-pointer text-xs text-slate-300"><input type="checkbox" checked={suhlas} onChange={(e) => setSuhlas(e.target.checked)} className="mt-0.5" /><span>Potvrdzujem, že ide o potlač na <strong>textil dodaný mnou</strong> (cena je len za potlač).</span></label>
           </CenaSuhrn>
 
