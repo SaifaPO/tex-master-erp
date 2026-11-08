@@ -38,8 +38,8 @@ export function VykonCasBlok({ techKey, nastav, ks, farby = 1, tmavy = false, od
   // Závisí od textilu: svetlý = 1 prechod, tmavý = 2 prechody (podklad + farba) = 2x dlhšie. Nameraný priemer platí pre textil podľa nastavenia (merane_na_tmavom).
   const naTmavom = !!nastav?.merane_na_tmavom;
   const skala = tech.farby ? (naTmavom ? 2 : 1) / (tmavy ? 2 : 1) : 1;
-  // špička = plný výkon na 1 prechod (svetlý textil); na tmavom (2 prechody) polovica
-  const spicka = (Number(nastav?.ks_hod_spicka) || 0) * (tech.farby ? (tmavy ? 0.5 : 1) : 1);
+  // špička sa meria na rovnakom textile ako priemer (merane_na_tmavom), preto sa škáluje rovnako
+  const spicka = (Number(nastav?.ks_hod_spicka) || 0) * skala;
   const jednotka = nastav?.jednotka ? ` (namerané na: ${nastav.jednotka})` : '';
 
   if (rate <= 0) {
@@ -79,7 +79,7 @@ export function VykonCasBlok({ techKey, nastav, ks, farby = 1, tmavy = false, od
           ))}
         </tbody>
       </table>
-      {spicka > 0 && <p className="text-[10px] text-slate-500 mt-1.5">Najlepší výkon (špička, plný výkon karuselu bez prestávok): {fmtCislo(spicka, 0)} ks/hod na 1 zariadení → {fmtCas((ks / spicka) * 60)}. Reálne bývajú prestávky, výmena textilu a čistenie.</p>}
+      {spicka > 0 && <p className="text-[10px] text-slate-500 mt-1.5">Najlepší výkon (špička): {fmtCislo(spicka, 0)} ks/hod na 1 zariadení → {fmtCas((ks / spicka) * 60)}. Reálne bývajú prestávky, výmena textilu a čistenie.</p>}
       <p className="text-[10px] text-slate-600 mt-0.5">{tech.farby ? 'Bez prípravy (sitá, nastavenie stroja, čistenie po zákazke).' : 'Bez prípravy a nastavenia zákazky.'}</p>
     </div>
   );
