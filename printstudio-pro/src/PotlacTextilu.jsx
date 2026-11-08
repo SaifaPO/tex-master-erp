@@ -49,6 +49,9 @@ function Sekcia({ cislo, nazov, children, akcia }) {
   );
 }
 
+// veľkostné tabuľky produktov (obrázky vo /public/produkty); ďalšie produkty sa dopĺňajú sem
+const TABULKY = { 'tricko-panske': '/produkty/velkostna-tabulka-tricko-panske.jpg' };
+
 let idCounter = 0;
 const noveId = () => `t${++idCounter}`;
 
@@ -215,7 +218,7 @@ export default function PotlacTextilu({ supabase }) {
         <div className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4" onClick={() => setTabulka(false)}>
           <div className="bg-white rounded-2xl max-w-xl w-full max-h-[85vh] overflow-auto p-4 space-y-3" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between"><h3 className="font-bold text-slate-800">Veľkostná tabuľka — {produkt.nazov}</h3><button type="button" onClick={() => setTabulka(false)} className="text-slate-500 hover:text-slate-800 text-sm font-semibold">Zavrieť</button></div>
-            {produkt.velkostnaTabulkaUrl ? <img src={produkt.velkostnaTabulkaUrl} alt="Veľkostná tabuľka" className="w-full" /> : <p className="text-sm text-slate-500">Veľkostnú tabuľku pre tento produkt práve dopĺňame.</p>}
+            {(produkt.velkostnaTabulkaUrl || TABULKY[produkt.kod]) ? <img src={produkt.velkostnaTabulkaUrl || TABULKY[produkt.kod]} alt="Veľkostná tabuľka" className="w-full" /> : <p className="text-sm text-slate-500">Veľkostnú tabuľku pre tento produkt práve dopĺňame.</p>}
           </div>
         </div>
       )}
