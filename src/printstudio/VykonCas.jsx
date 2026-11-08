@@ -28,17 +28,18 @@ const fmtCislo = (n, d = 1) => Number(n).toLocaleString('sk-SK', { minimumFracti
 
 // Blok "Cas a vykon" pod cenou: kolko ks za minutu / hodinu a ako dlho to potrva pri 1, 2 a 3 zariadeniach.
 // nastav = riadok z vykon_nastavenia; odhadKsHod = zaloha z Kostra cien (60 / cas na ks), ak vykon nie je zmeraný.
-export function VykonCasBlok({ techKey, nastav, ks, farby = 1, odhadKsHod = 0 }) {
+export function VykonCasBlok({ techKey, nastav, ks, farby = 1, tmavy = false, odhadKsHod = 0 }) {
   const tech = techPodlaKluca(techKey);
   if (!tech) return null;
   const zmerane = Number(nastav?.ks_hod_zariadenie) || 0;
   const rate = zmerane || Number(odhadKsHod) || 0;
   const jeOdhad = !zmerane && rate > 0;
-  const ref = tech.farby ? Math.max(1, Number(nastav?.referencne_farby) || 1) : 1;
-  const skala = tech.farby ? ref / Math.max(1, Number(farby) || 1) : 1;
+  // Sieťotlač: čas NEZÁVISÍ od počtu farieb (karusel tlačí všetky farby v jednom kole, každá farba má svoju stanicu).
+  // Závisí od textilu: svetlý = 1 prechod, tmavý = 2 prechody (podklad + farba) = 2x dlhšie. Nameraný priemer platí pre textil podľa nastavenia (merane_na_tmavom).
+  const naTmavom = !!nastav?.merane_na_tmavom;
+  const skala = tech.farby ? (naTmavom ? 2 : 1) / (tmavy ? 2 : 1) : 1;
   const spicka = (Number(nastav?.ks_hod_spicka) || 0) * skala;
   const jednotka = nastav?.jednotka ? ` (namerané na: ${nastav.jednotka})` : '';
-  const fk = Math.max(1, Number(farby) || 1);
 
   if (rate <= 0) {
     return (
@@ -55,7 +56,7 @@ export function VykonCasBlok({ techKey, nastav, ks, farby = 1, odhadKsHod = 0 })
     <div className="mt-3 rounded-xl border border-teal-900/50 bg-teal-950/15 p-3 text-xs">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
         <span className="font-bold text-teal-300 flex items-center gap-1.5"><Timer className="w-3.5 h-3.5" /> Čas výroby pre {ks} ks</span>
-        <span className="text-[10px] text-slate-500">{jeOdhad ? 'odhad z Kostra cien (výkon nezmeraný)' : `reálny priemer${jednotka}`}{tech.farby && fk !== ref ? ` · prepočítané na ${fk} ${fk === 1 ? 'farbu' : fk < 5 ? 'farby' : 'farieb'}` : ''}</span>
+        <span className="text-[10px] text-slate-500">{jeOdhad ? 'odhad z Kostra cien (výkon nezmeraný)' : `reálny priemer${jednotka}`}{tech.farby ? ` · ${tmavy ? 'tmavý textil (2 prechody)' : 'svetlý textil (1 prechod)'}, počet farieb čas nemení` : ''}</span>
       </div>
       <table className="w-full">
         <thead>
@@ -150,7 +151,12 @@ export default function VykonPanel({ supabase, nast, setNast, merania, setMerani
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div><label className={labelCls}>Reálny priemer (ks/hod na 1 {t.zariadenie === 'karusel' ? 'karusel' : 'žehličku'})</label><NumberInput step="0.1" min="0" value={r.ks_hod_zariadenie ?? 0} onChange={(v) => ulozNast(t.key, { ks_hod_zariadenie: v > 0 ? v : null })} fallback={0} className={inputCls} /></div>
                   <div><label className={labelCls}>Špička (ks/hod, najlepší výkon)</label><NumberInput step="0.1" min="0" value={r.ks_hod_spicka ?? 0} onChange={(v) => ulozNast(t.key, { ks_hod_spicka: v > 0 ? v : null })} fallback={0} className={inputCls} /></div>
-                  {t.farby && <div><label className={labelCls}>Pre koľko farieb to platí</label><NumberInput step="1" min="1" value={r.referencne_farby ?? 1} onChange={(v) => ulozNast(t.key, { referencne_farby: Math.max(1, Math.round(v)) })} fallback={1} className={inputCls} /></div>}
+                  {t.farby && <div><label className={labelCls}>Nameraný výkon platí pre textil</label>
+                    <select value={r.merane_na_tmavom ? 'tmavy' : 'svetly'} onChange={(e) => ulozNast(t.key, { merane_na_tmavom: e.target.value === 'tmavy' })} className={inputCls}>
+                      <option value="svetly">Svetlý (1 prechod)</option>
+                      <option value="tmavy">Tmavý (2 prechody)</option>
+                    </select>
+                    <p className="text-[10px] text-slate-500 mt-1">Počet farieb čas nemení. Tmavý textil = 2× dlhšie.</p></div>}
                   <div><label className={labelCls}>Namerané na (napr. tričko, ruksak)</label><input value={r.jednotka || ''} onChange={(e) => setNast(n => ({ ...n, [t.key]: { technologia: t.key, referencne_farby: 1, ...(n[t.key] || {}), jednotka: e.target.value } }))} onBlur={(e) => ulozNast(t.key, { jednotka: e.target.value.trim() || null })} className={inputCls} /></div>
                 </div>
                 {r.poznamka && <p className="text-[11px] text-slate-500 mt-2">{r.poznamka}</p>}

@@ -238,8 +238,8 @@ export default function PotlaceTab({ supabase }) {
 
   // Cas vyroby celej zakazky pri 1 / 2 / 3 zariadeniach (namerane vykony z vykon_nastavenia; ak nie su, odhad z casov v Kostre cien)
   const odhadKsHod = { sublimacia: sublimaciaGarment?.cas_nazehlovania_min, dtf: dtfNaklady?.cas_nazehlovania_min, rezany: rezany.cas_nazehlovania_min, sietotlac: sietotlac.cas_tlace_min };
-  const casBlok = (key, farby = 1) => (
-    <VykonCasBlok techKey={key} nastav={vykonNast[key]} ks={ks} farby={farby} odhadKsHod={Number(odhadKsHod[key]) > 0 ? 60 / Number(odhadKsHod[key]) : 0} />
+  const casBlok = (key, farby = 1, tmavy = false) => (
+    <VykonCasBlok techKey={key} nastav={vykonNast[key]} ks={ks} farby={farby} tmavy={tmavy} odhadKsHod={Number(odhadKsHod[key]) > 0 ? 60 / Number(odhadKsHod[key]) : 0} />
   );
 
   // Prepinac VIP / klientskej zlavy (napr. 15 % pre reklamky) — pouziva sa hore aj v testovacej kalkulacke dole (jeden spolocny stav)
@@ -336,7 +336,7 @@ export default function PotlaceTab({ supabase }) {
               </div>
             </div>
             <NakladovyVysledok zlavaPercent={klientZlava} vc={vcSietotlac} ks={ks} config={pricingConfig} plochaCm2={plochaSietotlacCm2} onPouzit={(cena) => ulozSietotlac(testTmavyTextil ? { cena_cm2_tmavy: Number(cena.toFixed(4)) } : { cena_cm2: Number(cena.toFixed(4)) })} disabled={plochaSietotlacCm2 === 0} />
-            {casBlok('sietotlac', pocetFariebSiet)}
+            {casBlok('sietotlac', pocetFariebSiet, testTmavyTextil)}
             <p className="text-[11px] text-slate-500 mt-2">VC vyššie je len za <strong>1. farbu</strong> (základná predajná sadzba). Rozpad nižšie pri {pocetFariebSiet} {pocetFariebSiet === 1 ? 'farbe' : 'farbách'} (nastav "Počet farieb" v referenčnej objednávke hore) ukazuje, koľko stojí každá ďalšia farba — spotreba farby klesá o 20% na farbu, sito sa počíta za každú znova:</p>
             <div className="bg-slate-950 rounded-xl border border-indigo-900/40 p-3 mt-1 space-y-1 text-xs">
               {sietotlacFarbyRozpad.map(r => (
@@ -500,7 +500,7 @@ export default function PotlaceTab({ supabase }) {
                   );
                 })()}
                 <p className="text-[10px] text-slate-600 mt-1">VC {vc.toFixed(3)}€ × marža {marza.toFixed(0)}%{plochaZaklad ? ` · ${plochaZaklad} cm²` : ''}</p>
-                {casBlok(key, pocetFariebSiet)}
+                {casBlok(key, pocetFariebSiet, testTmavyTextil)}
               </div>
             );
           })}
