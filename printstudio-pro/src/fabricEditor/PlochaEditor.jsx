@@ -12,7 +12,7 @@ import { vytvorEngine, SYMBOLY, FONTY_PREDVOLENE, VZORY_POZADIA, svgDoDataUri } 
 const PlochaEditor = forwardRef(function PlochaEditor({
   sirkaMm, vyskaMm, tvar = null, ppm = 2, rozlozenie = 'vedla', nazvyStran = ['Líce', 'Rub'], spadavkaMm = 0, casti = null, medzeraCastiMm = 10,
   fonty = [], grafiky = [], symboly = SYMBOLY, jednaStrana = false, priehladne = false, podkladFarba = null, onZmena = null, maxVyskaVh = 0.3, popisRozmeru = null,
-  podkladUrl = null, jedenPohlad = false, zony = null, aktivnaZona = null, popisVkladania = null, children,
+  podkladUrl = null, jedenPohlad = false, bezSymbolov = false, zony = null, aktivnaZona = null, popisVkladania = null, children,
 }, ref) {
   const wrapFront = useRef(null), wrapBack = useRef(null), vonkajsi = useRef(null);
   const guideRefs = useRef({});
@@ -111,7 +111,13 @@ const PlochaEditor = forwardRef(function PlochaEditor({
     nahlad: () => engineRef.current?.nahlad(),
     pocetObjektov: () => engineRef.current?.pocetObjektov() || 0,
     zona: (kod, opts) => engineRef.current?.zona(kod, opts) || null,
-    pridajObrazok: (file) => engineRef.current?.pridajObrazokZoSuboru(file),
+    nezaradene: () => engineRef.current?.nezaradene?.() || 0,
+    pridajObrazok: (file, kod) => {
+      const en = engineRef.current; if (!en) return;
+      const z = kod && zony ? zony.find((x) => x.kod === kod) : null;
+      if (z) { setStrana(z.strana); en.nastavVkladanie(kod); setTimeout(() => en.nastavVkladanie(null), 2000); }
+      en.pridajObrazokZoSuboru(file);
+    },
     odstranZonu: (kod) => engineRef.current?.odstranZonu(kod),
     presunZonu: (a, b) => engineRef.current?.presunZonu(a, b),
   }), []);
@@ -205,7 +211,9 @@ const PlochaEditor = forwardRef(function PlochaEditor({
       </div>
 
       <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
-        {grafiky.length > 0 ? (
+        {bezSymbolov ? (
+          <h3 className="font-semibold text-slate-800 mb-2 text-sm flex items-center gap-2"><ImageIcon className="w-4 h-4 text-indigo-500" /> Knižnica grafík a log</h3>
+        ) : grafiky.length > 0 ? (
           <div className="flex bg-slate-200/70 rounded-lg p-0.5 mb-2">
             {[['symboly', 'Symboly'], ['kniznica', 'Knižnica grafík a log']].map(([k, n]) => (
               <button key={k} type="button" onClick={() => setZalozka(k)} className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition flex items-center justify-center gap-1.5 ${zalozka === k ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>
@@ -216,7 +224,7 @@ const PlochaEditor = forwardRef(function PlochaEditor({
         ) : (
           <h3 className="font-semibold text-slate-800 mb-2 text-sm flex items-center gap-2"><Shapes className="w-4 h-4 text-indigo-500" /> Symboly</h3>
         )}
-        {(zalozka === 'symboly' || grafiky.length === 0) ? (
+        {!bezSymbolov && (zalozka === 'symboly' || grafiky.length === 0) ? (
           <div className="grid grid-cols-5 gap-1.5 max-h-56 overflow-y-auto pr-1">
             {symboly.map((s) => <button key={s} type="button" onClick={() => e()?.pridajText({ text: s, symbol: true })} className="h-10 text-2xl bg-white border border-slate-200 hover:bg-slate-100 rounded-md flex items-center justify-center">{s}</button>)}
           </div>

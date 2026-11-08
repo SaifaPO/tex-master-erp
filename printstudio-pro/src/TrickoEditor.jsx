@@ -7,12 +7,14 @@ import { pripravFotkuCache, vyfarbiFotku } from './trickoFarba';
 // do ktorej bol vložený. Z obsahu každej zóny sa robí tlač (veľkosť potlače = veľkosť motívu, orezané, bez skreslenia rotácie rukáva).
 const cm = (mm) => Math.max(1, Math.round(mm) / 10);
 
-const TrickoEditor = forwardRef(function TrickoEditor({ supabase, produkt, farbaHex, umiestnenia, tlace, aktivnaId, onZivy, children }, ref) {
+const TrickoEditor = forwardRef(function TrickoEditor({ supabase, produkt, farbaHex, umiestnenia, tlace, onZivy, onNezaradene, bezSymbolov, children }, ref) {
   const edRef = useRef(null);
   const [fotky, setFotky] = useState({ front: null, back: null, w: 900, h: 1017 });
   const [d, setD] = useState({ fonty: [], grafiky: [] });
   const tlaceRef = useRef(tlace);
   useEffect(() => { tlaceRef.current = tlace; }, [tlace]);
+  const onNezRef = useRef(onNezaradene);
+  useEffect(() => { onNezRef.current = onNezaradene; }, [onNezaradene]);
   const onZivyRef = useRef(onZivy);
   useEffect(() => { onZivyRef.current = onZivy; }, [onZivy]);
   const cas = useRef(null);
@@ -50,12 +52,9 @@ const TrickoEditor = forwardRef(function TrickoEditor({ supabase, produkt, farba
     const jePredok = !!poz.predok; const v = poz.predok || poz.zadok; if (!v) return null;
     const sleeve = /^rukav/.test(t.umiestnenie);
     const w = u.maxSirkaCm * 10 * ppm, h = Math.min(u.maxVyskaCm, sleeve ? 12 : u.maxVyskaCm) * 10 * ppm;
-    return { kod: t.umiestnenie, strana: jePredok ? 'front' : 'back', cx: v.x * fotky.w, cy: v.kotva === 'hore' ? v.y * fotky.h + h / 2 : v.y * fotky.h, w, h, rot: v.rot || 0, popis: `${u.nazov} · max ${u.maxSirkaCm} × ${Math.min(u.maxVyskaCm, sleeve ? 12 : u.maxVyskaCm)} cm`, nazov: u.nazov };
+    return { kod: t.umiestnenie, strana: jePredok ? 'front' : 'back', cx: v.x * fotky.w, cy: v.kotva === 'hore' ? v.y * fotky.h + h / 2 : v.y * fotky.h, w, h, rot: v.rot || 0, popis: `max ${u.maxSirkaCm} × ${Math.min(u.maxVyskaCm, sleeve ? 12 : u.maxVyskaCm)} cm`, nazov: u.nazov };
   }).filter(Boolean), [tlace.map((t) => t.umiestnenie).join('|'), umiestnenia, produkt, ppm, fotky.w, fotky.h]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const aktivna = tlace.find((t) => t.id === aktivnaId);
-  const aktivnaKod = aktivna && zony.some((z) => z.kod === aktivna.umiestnenie) ? aktivna.umiestnenie : null;
-  const aktivnaZonaObj = zony.find((z) => z.kod === aktivnaKod);
 
   // živý náhľad: rozmer a miniatúra motívu v každej zóne
   const prepocitaj = useCallback(async () => {
@@ -66,6 +65,7 @@ const TrickoEditor = forwardRef(function TrickoEditor({ supabase, produkt, farba
       out[t.id] = r ? { nahlad: r.url, sirka: cm(r.sirkaMm), vyska: cm(r.vyskaMm), maNavrh: true, presah: !!r.presah } : { maNavrh: false };
     }
     onZivyRef.current?.(out);
+    onNezRef.current?.(ed.nezaradene?.() || 0);
   }, []);
   const naZmenu = useCallback(() => { clearTimeout(cas.current); cas.current = setTimeout(prepocitaj, 220); }, [prepocitaj]);
   useEffect(() => () => clearTimeout(cas.current), []);
@@ -83,7 +83,7 @@ const TrickoEditor = forwardRef(function TrickoEditor({ supabase, produkt, farba
       }
       return out;
     },
-    pridajObrazok: (file) => edRef.current?.pridajObrazok?.(file),
+    pridajObrazok: (file, kod) => edRef.current?.pridajObrazok?.(file, kod),
     odstranZonu: (kod) => edRef.current?.odstranZonu?.(kod),
     presunZonu: (a, b) => edRef.current?.presunZonu?.(a, b),
   }), []);
@@ -92,8 +92,8 @@ const TrickoEditor = forwardRef(function TrickoEditor({ supabase, produkt, farba
 
   return (
     <PlochaEditor ref={edRef} sirkaMm={sirkaMm} vyskaMm={vyskaMm} ppm={ppm} priehladne jedenPohlad podkladUrl={{ front: fotky.front, back: fotky.back || fotky.front }}
-      podkladFarba="#ffffff" zony={zony} aktivnaZona={aktivnaKod} nazvyStran={['Spredu', 'Zozadu']} fonty={d.fonty} grafiky={d.grafiky}
-      popisVkladania={aktivnaZonaObj ? aktivnaZonaObj.nazov : null} onZmena={naZmenu} maxVyskaVh={0.4}>
+      podkladFarba="#ffffff" zony={zony} nazvyStran={['Spredu', 'Zozadu']} fonty={d.fonty} grafiky={d.grafiky} bezSymbolov={bezSymbolov}
+      onZmena={naZmenu} maxVyskaVh={0.4}>
       {children}
     </PlochaEditor>
   );
