@@ -11,7 +11,7 @@ import { vytvorEngine, SYMBOLY, FONTY_PREDVOLENE, VZORY_POZADIA, svgDoDataUri } 
 // Cez ref: exportuj() -> { front, back (Blob PNG ≈300 DPI), json }, nahlad(), pocetObjektov(), nastavRozmer().
 const PlochaEditor = forwardRef(function PlochaEditor({
   sirkaMm, vyskaMm, tvar = null, ppm = 2, rozlozenie = 'vedla', nazvyStran = ['Líce', 'Rub'], spadavkaMm = 0, casti = null, medzeraCastiMm = 10,
-  fonty = [], grafiky = [], symboly = SYMBOLY, jednaStrana = false, priehladne = false, children,
+  fonty = [], grafiky = [], symboly = SYMBOLY, jednaStrana = false, priehladne = false, podkladFarba = null, children,
 }, ref) {
   const wrapFront = useRef(null), wrapBack = useRef(null), vonkajsi = useRef(null);
   const guideRefs = useRef({});
@@ -196,7 +196,7 @@ const PlochaEditor = forwardRef(function PlochaEditor({
           ))}
         </div>
       </div>
-      <div ref={vonkajsi} className="overflow-auto p-6" style={{ backgroundColor: '#e5e5f7', backgroundImage: 'linear-gradient(45deg,#d1d5db 25%,transparent 25%),linear-gradient(-45deg,#d1d5db 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#d1d5db 75%),linear-gradient(-45deg,transparent 75%,#d1d5db 75%)', backgroundSize: '20px 20px', backgroundPosition: '0 0,0 10px,10px -10px,-10px 0' }}>
+      <div ref={vonkajsi} className="overflow-auto p-6" style={podkladFarba ? { backgroundColor: podkladFarba } : { backgroundColor: '#e5e5f7', backgroundImage: 'linear-gradient(45deg,#d1d5db 25%,transparent 25%),linear-gradient(-45deg,#d1d5db 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#d1d5db 75%),linear-gradient(-45deg,transparent 75%,#d1d5db 75%)', backgroundSize: '20px 20px', backgroundPosition: '0 0,0 10px,10px -10px,-10px 0' }}>
         <div style={{ width: celkovaSirka * zoom, height: celkovaVyska * zoom, margin: '0 auto' }}>
           <div style={{ transform: `scale(${zoom})`, transformOrigin: 'top left', width: celkovaSirka, height: celkovaVyska, display: 'flex', flexDirection: pod ? 'column' : 'row', gap: MEDZERA, alignItems: 'flex-start' }}>
             {[['front', wrapFront, nazvyStran[0]], ['back', wrapBack, nazvyStran[1]]].map(([k, r, n]) => (

@@ -45,9 +45,9 @@ function pracovneDniDopredu(dni: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-async function vytvorErpZakazku(supabase: ReturnType<typeof createClient>, order: any, li: any, druh: 'celenky' | 'buffky' | 'transfer3d' | 'stolova' | 'snurka' | 'folie' | 'sietotlac') {
-  const TABULKY: Record<string, string> = { celenky: 'celenky_objednavky', buffky: 'buffky_objednavky', transfer3d: 'transfer3d_objednavky', stolova: 'stolova_objednavky', snurka: 'snurka_objednavky', folie: 'folie_objednavky', sietotlac: 'sietotlac_objednavky' };
-  const NAZVY: Record<string, string> = { celenky: 'čelenka', buffky: 'buffka', transfer3d: '3D transfer', stolova: 'stolová vlajka', snurka: 'šnúrka na krk', folie: 'rezaná fólia', sietotlac: 'sieťotlač' };
+async function vytvorErpZakazku(supabase: ReturnType<typeof createClient>, order: any, li: any, druh: 'celenky' | 'buffky' | 'transfer3d' | 'stolova' | 'snurka' | 'folie' | 'sietotlac' | 'potlac') {
+  const TABULKY: Record<string, string> = { celenky: 'celenky_objednavky', buffky: 'buffky_objednavky', transfer3d: 'transfer3d_objednavky', stolova: 'stolova_objednavky', snurka: 'snurka_objednavky', folie: 'folie_objednavky', sietotlac: 'sietotlac_objednavky', potlac: 'potlac_objednavky' };
+  const NAZVY: Record<string, string> = { celenky: 'čelenka', buffky: 'buffka', transfer3d: '3D transfer', stolova: 'stolová vlajka', snurka: 'šnúrka na krk', folie: 'rezaná fólia', sietotlac: 'sieťotlač', potlac: 'potlač textilu' };
   const tabulka = TABULKY[druh];
   const druhNazov = NAZVY[druh];
   const objId = najdiVlastnost(li.properties, '_objednavka_id');
@@ -61,8 +61,8 @@ async function vytvorErpZakazku(supabase: ReturnType<typeof createClient>, order
     const { data: v } = await supabase.from('celenky_varianty').select('produkt_id').eq('velkost_kod', obj.velkost || '').eq('material_kod', obj.material || '').maybeSingle();
     blankId = v?.produkt_id ?? null;
     if (!blankId) { const { data: n } = await supabase.from('celenky_naklady').select('produkt_id').eq('id', 1).maybeSingle(); blankId = n?.produkt_id ?? null; }
-  } else if (druh === 'transfer3d' || druh === 'folie' || druh === 'sietotlac') {
-    const { data: n } = await supabase.from(druh === 'folie' ? 'folie_nastavenia' : druh === 'sietotlac' ? 'sietotlac_nastavenia' : 'transfer3d_nastavenia').select('produkt_id').eq('id', 1).maybeSingle();
+  } else if (druh === 'transfer3d' || druh === 'folie' || druh === 'sietotlac' || druh === 'potlac') {
+    const { data: n } = await supabase.from(druh === 'folie' ? 'folie_nastavenia' : druh === 'sietotlac' ? 'sietotlac_nastavenia' : druh === 'potlac' ? 'potlac_nastavenia' : 'transfer3d_nastavenia').select('produkt_id').eq('id', 1).maybeSingle();
     blankId = n?.produkt_id ?? null;
   } else if (druh === 'stolova' || druh === 'snurka') {
     const { data: v } = druh === 'stolova'
@@ -90,8 +90,10 @@ async function vytvorErpZakazku(supabase: ReturnType<typeof createClient>, order
 
   // výrobné stanice: grafik + (sublimácia) + (strihanie/laser) + (šitie) + balenie
   const aktivne = new Set<string>(['grafik', 'balenie']);
-  if (druh === 'sietotlac') {
+  if (druh === 'sietotlac' || (druh === 'potlac' && obj.technologia === 'sietotlac')) {
     aktivne.add('sietotlac'); // sieťotlač: tlač na stanici sietotlac
+  } else if (druh === 'potlac') {
+    aktivne.add('transfer'); // potlač textilu cez DTF / rezaný transfer: stanica transfer
   } else if (druh === 'transfer3d' || druh === 'folie') {
     aktivne.add('transfer'); // 3D transfer / rezaná fólia: tlač/rezanie na stanici transfer
   } else if (druh === 'stolova' || druh === 'snurka') {
@@ -114,11 +116,14 @@ async function vytvorErpZakazku(supabase: ReturnType<typeof createClient>, order
   const termin = pracovneDniDopredu(express ? 5 : 10);
   const dnes = new Date().toISOString().slice(0, 10);
   const orderId = `ZAK-${Date.now()}`;
-  const nazovVarianty = druh === 'sietotlac' ? `${obj.material === 'polyester' ? 'polyester' : 'bavlna'}, ${obj.tmavy ? 'tmavý' : 'svetlý'} textil, ${(obj.polozky || []).map((p: any) => `${p.nazov} ${p.sirkaCm}×${p.vyskaCm} cm/${p.farby} f.`).join(' + ')}` : druh === 'stolova' ? `${obj.velkost || ''}, ${obj.tvar || ''}, ${obj.okraj || ''}, ${obj.podstavec || ''}` : druh === 'snurka' ? `${obj.model || ''}` : druh === 'folie' ? `${obj.druh || ''} ${obj.farba || ''}, ${obj.sirka_mm}×${obj.vyska_mm} mm${obj.separacia ? ', separácia' : ''}` : druh === 'transfer3d' ? `${obj.sirka_cm}×${obj.vyska_cm} cm, 3D ${obj.uroven || ''}, lak ${obj.lak || ''}` : druh === 'celenky' ? `${obj.velkost || ''} ${obj.material || ''}`.trim() : (obj.typ === 'premium' ? `Premium ${obj.material_kod || ''}`.trim() : 'Tubular Basic');
+  const TECH_NAZOV: Record<string, string> = { dtf: 'DTF', rezany: 'rezaný transfer', sietotlac: 'sieťotlač' };
+  const textilPopis = (): string => (obj.vlastny_textil ? 'VLASTNÝ TEXTIL zákazníka' : `TEXTIL OD NÁS: ${obj.produkt_nazov || ''}, ${obj.farba_nazov || ''}${obj.velkosti ? ', veľkosti: ' + Object.entries(obj.velkosti).map(([k, q]) => `${k}×${q}`).join(', ') : ''}`);
+  const nazovVarianty = druh === 'potlac' ? `${TECH_NAZOV[obj.technologia] || obj.technologia}, ${obj.vlastny_textil ? 'vlastný textil' : `${obj.produkt_nazov || ''} ${obj.farba_nazov || ''}`}, ${(obj.polozky || []).map((p: any) => `${p.nazov} ${p.sirkaCm}×${p.vyskaCm} cm`).join(' + ')}` : druh === 'sietotlac' ? `${obj.material === 'polyester' ? 'polyester' : 'bavlna'}, ${obj.tmavy ? 'tmavý' : 'svetlý'} textil, ${(obj.polozky || []).map((p: any) => `${p.nazov} ${p.sirkaCm}×${p.vyskaCm} cm/${p.farby} f.`).join(' + ')}` : druh === 'stolova' ? `${obj.velkost || ''}, ${obj.tvar || ''}, ${obj.okraj || ''}, ${obj.podstavec || ''}` : druh === 'snurka' ? `${obj.model || ''}` : druh === 'folie' ? `${obj.druh || ''} ${obj.farba || ''}, ${obj.sirka_mm}×${obj.vyska_mm} mm${obj.separacia ? ', separácia' : ''}` : druh === 'transfer3d' ? `${obj.sirka_cm}×${obj.vyska_cm} cm, 3D ${obj.uroven || ''}, lak ${obj.lak || ''}` : druh === 'celenky' ? `${obj.velkost || ''} ${obj.material || ''}`.trim() : (obj.typ === 'premium' ? `Premium ${obj.material_kod || ''}`.trim() : 'Tubular Basic');
   const atributy = (order.note_attributes || []).map((a: any) => `${a.name}: ${a.value}`).join(', ');
   const kontakt = [order.email, order.phone || order.shipping_address?.phone].filter(Boolean).join(', ');
   const poznamka = [
     `E-shop ${order.name} (${druhNazov}, ${nazovVarianty}, ${obj.pocet_ks} ks)`,
+    druh === 'potlac' ? `${(TECH_NAZOV[obj.technologia] || obj.technologia).toUpperCase()} | ${textilPopis()} | ` + (obj.polozky || []).map((p: any, i: number) => `POTLAČ ${i + 1}: ${p.nazov} ${p.sirkaCm}×${p.vyskaCm} cm${obj.technologia !== 'dtf' ? `, ${p.farby} farieb` : ''}${obj.technologia === 'sietotlac' && p.efekt ? `, efekt ${p.efekt}` : ''}${p.suborUrl ? ` — súbor: ${p.suborUrl}` : ''}`).join(' | ') + (obj.b2b_kod ? ` | B2B ${obj.b2b_kod}` : '') : '',
     druh === 'sietotlac' ? (obj.polozky || []).map((p: any, i: number) => `POTLAČ ${i + 1}: ${p.nazov} ${p.sirkaCm}×${p.vyskaCm} cm, ${p.farby} farieb, efekt ${p.efekt}${p.suborUrl ? ` — súbor: ${p.suborUrl}` : ''}`).join(' | ') + (obj.dve_velkosti ? ' | DVE VEĽKOSTI POTLAČE (2 sady sít)' : '') + (obj.b2b_kod ? ` | B2B ${obj.b2b_kod}` : '') : '',
     obj.skupina_id ? `MOTÍV ${obj.poradie || '?'} z viacerých v jednej objednávke (spoločné poštovné)` : '',
     express ? 'EXPRES dodanie' : 'štandardné dodanie',
@@ -142,7 +147,7 @@ async function vytvorErpZakazku(supabase: ReturnType<typeof createClient>, order
   const { error: errOrder } = await supabase.from('orders').insert({
     id: orderId, customer: meno, created_at: casNow, scheduled_day: termin, drive_link: '', notes: poznamka, payment_type: 'faktura',
     items: [{
-      itemId: `${orderId}-1`, productId: produkt?.id || null, productName: produkt?.name || li.title || (druh === 'celenky' ? 'Čelenka' : druh === 'transfer3d' ? '3D transfer' : druh === 'stolova' ? 'Stolová vlajka' : druh === 'snurka' ? 'Šnúrka na krk' : druh === 'folie' ? 'Rezaná fólia' : druh === 'sietotlac' ? 'Sieťotlač' : 'Buffka'),
+      itemId: `${orderId}-1`, productId: produkt?.id || null, productName: produkt?.name || li.title || (druh === 'celenky' ? 'Čelenka' : druh === 'transfer3d' ? '3D transfer' : druh === 'stolova' ? 'Stolová vlajka' : druh === 'snurka' ? 'Šnúrka na krk' : druh === 'folie' ? 'Rezaná fólia' : druh === 'sietotlac' ? 'Sieťotlač' : druh === 'potlac' ? 'Potlač textilu' : 'Buffka'),
       customCode: produkt?.custom_code || '', qualityTier: '', gender: 'neutral', qty: obj.pocet_ks, notes: poznamka, imageUrl: '', assignedDesignerId: '', addons: [],
       rozpisUrl, rozpisFileName: obj.subor_nazov || '', rozpisMimeType: /.pdf$/i.test(obj.subor_nazov || '') ? 'application/pdf' : (/.jpe?g$/i.test(obj.subor_nazov || '') ? 'image/jpeg' : 'image/png'),
       materialsNeeded: [], threadQtyM: 0, priority: (count || 0) + 1, productionDate: termin, stationDates: stanicDatumy, stationStatuses: stanicStatusy, materialDeducted: false,
@@ -196,7 +201,7 @@ Deno.serve(async (req) => {
       const jeBuffka = stitky.includes('buffky') || (li.properties || []).some((p: any) => p.name === '_typ');
       const jeTransfer3d = stitky.includes('transfer3d') || (li.properties || []).some((p: any) => p.name === '_uroven');
       const props = (li.properties || []).map((p: any) => p.name);
-      const druh = jeTransfer3d ? 'transfer3d' : props.includes('_stolova') ? 'stolova' : props.includes('_snurka') ? 'snurka' : props.includes('_folie') ? 'folie' : props.includes('_sietotlac') ? 'sietotlac' : jeCelenka ? 'celenky' : jeBuffka ? 'buffky' : null;
+      const druh = jeTransfer3d ? 'transfer3d' : props.includes('_stolova') ? 'stolova' : props.includes('_snurka') ? 'snurka' : props.includes('_folie') ? 'folie' : props.includes('_potlac') ? 'potlac' : props.includes('_sietotlac') ? 'sietotlac' : jeCelenka ? 'celenky' : jeBuffka ? 'buffky' : null;
       if (!druh) continue;
       await new Promise((r) => setTimeout(r, 5)); // unikátne ZAK-ID aj pri viacerých motívoch v jednej objednávke
       const vysledok = await vytvorErpZakazku(supabase, order, li, druh);

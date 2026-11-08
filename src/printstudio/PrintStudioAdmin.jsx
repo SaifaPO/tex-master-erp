@@ -29,6 +29,7 @@ import SosTlacidlaTab from './SosTlacidlaTab';
 import SnurkyTab from './SnurkyTab';
 import FolieTab from './FolieTab';
 import SietotlacTab from './SietotlacTab';
+import PotlacTextiluTab from './PotlacTextiluTab';
 import ObjednavkyVsetkyTab from './ObjednavkyVsetkyTab';
 import DtfSeparatorTab from './DtfSeparatorTab';
 import VektorizerTab from './VektorizerTab';
@@ -54,6 +55,7 @@ const SUBTABS = [
   { id: 'snurky', label: 'Šnúrky na krk', icon: Link2, appUrl: `${PRINTSTUDIO_BASE_URL}/?typ=snurka` },
   { id: 'folie', label: 'Rezané fólie', icon: Scissors, appUrl: `${PRINTSTUDIO_BASE_URL}/?typ=folie` },
   { id: 'sietotlac', label: 'Sieťotlač', icon: Layers3, appUrl: `${PRINTSTUDIO_BASE_URL}/?typ=sietotlac` },
+  { id: 'potlac', label: 'Potlač textilu', icon: Shirt, appUrl: `${PRINTSTUDIO_BASE_URL}/?typ=potlac` },
   { id: 'transfer3d', label: '3D transfery', icon: Layers3, appUrl: `${PRINTSTUDIO_BASE_URL}/?typ=transfer3d` },
   { id: 'celenky', label: 'Čelenky', icon: Circle, appUrl: `${PRINTSTUDIO_BASE_URL}/?typ=celenka` },
   { id: 'vlajky', label: 'Vlajky', icon: Flag, appUrl: `${PRINTSTUDIO_BASE_URL}/?typ=zastava` },
@@ -84,7 +86,7 @@ const SUBTABS = [
 
 const SKUPINY = [
   { id: 'objednavky', label: 'Objednávky', icon: Inbox, tabs: ['objednavky'] },
-  { id: 'aplikacie', label: 'Aplikácie', icon: LayoutGrid, tabs: ['dresy', 'buffky', 'celenky', 'transfer3d', 'stolova', 'snurky', 'folie', 'sietotlac', 'ponuka', 'vlajky', 'beachvlajky', 'metraze'] },
+  { id: 'aplikacie', label: 'Aplikácie', icon: LayoutGrid, tabs: ['dresy', 'buffky', 'celenky', 'transfer3d', 'stolova', 'snurky', 'folie', 'sietotlac', 'potlac', 'ponuka', 'vlajky', 'beachvlajky', 'metraze'] },
   { id: 'kniznica', label: 'Knižnica', icon: Library, tabs: ['produkty', 'kategorie', 'farby', 'fonty', 'grafiky', 'mockupy'] },
   { id: 'ceny', label: 'Ceny a tlač', icon: Coins, tabs: ['cenotvorba', 'kostra-cien', 'laser-spotreba', 'potlace', 'vysivka-kalk', 'kalkulacka-tlace', 'predajny-cennik'] },
   { id: 'nastavenia', label: 'Nastavenia', icon: Settings2, tabs: ['shopify', 'b2b-kody', 'manualy', 'dtf-separator', 'vektorizer', 'vysivka', 'sos', 'ulozisko'] },
@@ -200,6 +202,7 @@ export default function PrintStudioAdmin({ supabase: rawSupabase, initialSubtab,
         {subtab === 'snurky' && <SnurkyTab supabase={supabase} />}
         {subtab === 'folie' && <FolieTab supabase={supabase} />}
         {subtab === 'sietotlac' && <SietotlacTab supabase={supabase} />}
+        {subtab === 'potlac' && <PotlacTextiluTab supabase={supabase} />}
         {subtab === 'b2b-kody' && <B2bKodyTab supabase={supabase} />}
         {subtab === 'dtf-separator' && <DtfSeparatorTab supabase={supabase} />}
         {subtab === 'vektorizer' && <VektorizerTab />}
