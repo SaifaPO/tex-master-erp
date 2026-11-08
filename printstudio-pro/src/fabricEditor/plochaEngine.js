@@ -44,14 +44,17 @@ function prefarbi(img, farba) {
   return c;
 }
 
-export function vytvorEngine({ elFront, elBack, ppm = 2, pozadie = '#ffffff', onVyber, onZrusVyber, onZmena, onPrichytenie }) {
+export function vytvorEngine({ elFront, elBack, elDalsie = {}, ppm = 2, pozadie = '#ffffff', onVyber, onZrusVyber, onZmena, onPrichytenie }) {
   const opts = { preserveObjectStacking: true, objectCaching: false, selection: true };
   const front = new fabric.Canvas(elFront, opts);
   const back = new fabric.Canvas(elBack, opts);
   front.backgroundColor = pozadie;
   back.backgroundColor = pozadie;
   const platna = { front, back };
-  [front, back].forEach((c) => { if (c.wrapperEl) { c.wrapperEl.style.position = 'relative'; c.wrapperEl.style.zIndex = '1'; } }); // plátno je nad podkladovým obrázkom produktu
+  // ďalšie strany (napr. šiltovka: ľavý a pravý bok) — každá má vlastné plátno
+  Object.entries(elDalsie).forEach(([k, el]) => { const c = new fabric.Canvas(el, opts); c.backgroundColor = pozadie; platna[k] = c; });
+  const vsetky = () => Object.values(platna);
+  vsetky().forEach((c) => { if (c.wrapperEl) { c.wrapperEl.style.position = 'relative'; c.wrapperEl.style.zIndex = '1'; } }); // plátno je nad podkladovým obrázkom produktu
   let aktivna = 'front';
   let rozmer = { w: 100, h: 100 }; // px
 
@@ -74,7 +77,7 @@ export function vytvorEngine({ elFront, elBack, ppm = 2, pozadie = '#ffffff', on
     });
     obj.zona = najlepsia ? najlepsia.kod : undefined;
   };
-  const priradVsetky = () => { [['front', front], ['back', back]].forEach(([s, c]) => c.getObjects().forEach((o) => { if (!zonaPodla(o.zona)) priradZonu(o, s); })); };
+  const priradVsetky = () => { Object.entries(platna).forEach(([s, c]) => c.getObjects().forEach((o) => { if (!zonaPodla(o.zona)) priradZonu(o, s); })); };
   const info = (obj) => ({
     sirkaMm: Math.round(obj.getScaledWidth() / ppm), vyskaMm: Math.round(obj.getScaledHeight() / ppm),
     maxMm: Math.round(((obj.zona && zonaPodla(obj.zona)) ? Math.max(zonaPodla(obj.zona).w, zonaPodla(obj.zona).h) * 1.15 : Math.max(rozmer.w, rozmer.h) * 0.9) / ppm),
@@ -86,8 +89,7 @@ export function vytvorEngine({ elFront, elBack, ppm = 2, pozadie = '#ffffff', on
     } : {}),
   });
 
-  [front, back].forEach((canvas, i) => {
-    const strana = i === 0 ? 'front' : 'back';
+  Object.entries(platna).forEach(([strana, canvas]) => {
     const vyber = (e) => onVyber?.(info(e.selected[0]), strana);
     canvas.on('selection:created', vyber);
     canvas.on('selection:updated', vyber);
@@ -155,14 +157,14 @@ export function vytvorEngine({ elFront, elBack, ppm = 2, pozadie = '#ffffff', on
     setRozmer(sirkaMm, vyskaMm, tvar = null) {
       const w = Math.round(sirkaMm * ppm), h = Math.round(vyskaMm * ppm);
       rozmer = { w, h };
-      [front, back].forEach((c) => {
+      vsetky().forEach((c) => {
         c.setWidth(w); c.setHeight(h);
         c.clipPath = tvar && TVARY_VYREZU[tvar] ? TVARY_VYREZU[tvar](w, h) : null;
         c.requestRenderAll();
       });
       return rozmer;
     },
-    calcOffset() { front.calcOffset(); back.calcOffset(); },
+    calcOffset() { vsetky().forEach((c) => c.calcOffset()); },
     pridajText({ text, font = 'Inter', farba = '#000000', obrys = '#ffffff', hrubkaObrysu = 0, kurziva = false, symbol = false, velkostMm = null }) {
       if (!text) return;
       const c = dajAktivne();
@@ -213,7 +215,7 @@ export function vytvorEngine({ elFront, elBack, ppm = 2, pozadie = '#ffffff', on
       if (obrys !== undefined && !(nova > 0)) o.set('stroke', null);
       o.dirty = true; o.setCoords(); c.requestRenderAll(); onVyber?.(info(o), aktivna); onZmena?.();
     },
-    zrusVyber() { [front, back].forEach((c) => { c.discardActiveObject(); c.requestRenderAll(); }); },
+    zrusVyber() { vsetky().forEach((c) => { c.discardActiveObject(); c.requestRenderAll(); }); },
     nastavPozadieVzor(svg) {
       const c = dajAktivne();
       fabric.Image.fromURL(svgDoDataUri(svg), (img) => {
@@ -229,7 +231,7 @@ export function vytvorEngine({ elFront, elBack, ppm = 2, pozadie = '#ffffff', on
     // posuvník veľkosti: šírka vybraného objektu v mm (pomer strán sa zachová)
     velkostMm(mm) { const c = dajAktivne(); const o = c.getActiveObject(); if (!o || !(mm > 0)) return; const stred = o.getCenterPoint(); o.scaleToWidth(mm * ppm); o.setPositionByOrigin(stred, 'center', 'center'); o.setCoords(); c.requestRenderAll(); onVyber?.(info(o), aktivna); onZmena?.(); },
     // väčšie úchyty na rohoch (dotyk) — veľkosť v px plátna, prepočítaná podľa priblíženia
-    nastavOvladace(px) { const p = Math.max(10, Math.round(px)); fabric.Object.prototype.cornerSize = p; fabric.Object.prototype.touchCornerSize = p * 2; fabric.Object.prototype.padding = Math.round(p * 0.3); [front, back].forEach((c) => { c.getObjects().forEach((o) => { o.cornerSize = p; o.touchCornerSize = p * 2; o.padding = Math.round(p * 0.3); o.setCoords(); }); c.requestRenderAll(); }); },
+    nastavOvladace(px) { const p = Math.max(10, Math.round(px)); fabric.Object.prototype.cornerSize = p; fabric.Object.prototype.touchCornerSize = p * 2; fabric.Object.prototype.padding = Math.round(p * 0.3); vsetky().forEach((c) => { c.getObjects().forEach((o) => { o.cornerSize = p; o.touchCornerSize = p * 2; o.padding = Math.round(p * 0.3); o.setCoords(); }); c.requestRenderAll(); }); },
     otoc(uhol) { const c = dajAktivne(); const o = c.getActiveObject(); if (o) { o.set('angle', uhol); o.setCoords(); c.requestRenderAll(); onVyber?.(info(o), aktivna); } },
     dopredu() { const c = dajAktivne(); const o = c.getActiveObject(); if (o) { c.bringForward(o); c.requestRenderAll(); } },
     dozadu() { const c = dajAktivne(); const o = c.getActiveObject(); if (o) { c.sendBackwards(o); c.requestRenderAll(); } },
@@ -237,7 +239,7 @@ export function vytvorEngine({ elFront, elBack, ppm = 2, pozadie = '#ffffff', on
       const c = dajAktivne(); const o = c.getActiveObject(); if (!o) return;
       o.clone((k) => { k.set({ left: o.left + 20 * ppm, top: o.top + 10 * ppm, evented: true }); c.add(k); c.setActiveObject(k); c.requestRenderAll(); }, ['zona']);
     },
-    pocetObjektov: () => front.getObjects().length + back.getObjects().length,
+    pocetObjektov: () => vsetky().reduce((n, c) => n + c.getObjects().length, 0),
     // Tlačové PNG pre líce a rub (≈ 300 DPI, mimo tvaru priehľadné) + JSON stavu na pripadnú reprodukciu
     // maxPx = voliteľný strop na dlhšiu stranu výstupu (veľké plochy by inak prekročili limit plátna prehliadača, najmä na mobile)
     async exportuj({ maxPx = Infinity } = {}) {
@@ -253,10 +255,10 @@ export function vytvorEngine({ elFront, elBack, ppm = 2, pozadie = '#ffffff', on
     nacitajFront(json, hotovo) {
       front.loadFromJSON(json, () => { front.requestRenderAll(); onZmena?.(); hotovo?.(); });
     },
-    odstranZonu(kod) { [front, back].forEach((c) => { c.getObjects().filter((o) => o.zona === kod).forEach((o) => c.remove(o)); c.discardActiveObject(); c.requestRenderAll(); }); },
+    odstranZonu(kod) { vsetky().forEach((c) => { c.getObjects().filter((o) => o.zona === kod).forEach((o) => c.remove(o)); c.discardActiveObject(); c.requestRenderAll(); }); },
     presunZonu(stary, novy) {
       const zs = zonaPodla(stary), zn = zonaPodla(novy);
-      [front, back].forEach((c) => {
+      vsetky().forEach((c) => {
         c.getObjects().filter((o) => o.zona === stary).forEach((o) => {
           o.set({ zona: novy });
           if (zn) { o.set({ left: zn.cx, top: zn.cy, angle: (o.angle || 0) - ((zs && zs.rot) || 0) + (zn.rot || 0) }); o.setCoords(); }
@@ -264,8 +266,8 @@ export function vytvorEngine({ elFront, elBack, ppm = 2, pozadie = '#ffffff', on
         c.requestRenderAll();
       });
     },
-    nastavZony(z) { zony = z || []; priradVsetky(); front.requestRenderAll(); back.requestRenderAll(); },
-    nezaradene() { return [front, back].reduce((n, c) => n + c.getObjects().filter((o) => !zonaPodla(o.zona)).length, 0); },
+    nastavZony(z) { zony = z || []; priradVsetky(); vsetky().forEach((c) => c.requestRenderAll()); },
+    nezaradene() { return vsetky().reduce((n, c) => n + c.getObjects().filter((o) => !zonaPodla(o.zona)).length, 0); },
     nastavVkladanie(kod) { vkladanie = kod || null; }, // len krátkodobo (nahratie obrázka ku konkrétnej potlači); inak sa objekt priraďuje podľa polohy
     // Obsah jednej zóny vykreslený v súradniciach zóny (rotácia zóny sa odstráni — rukáv sa tlačí rovno), orezaný na motív. Vracia dataURL + rozmer v mm.
     async zona(kod, { maxPx = 4096, malyPx = 0 } = {}) {
@@ -320,6 +322,6 @@ export function vytvorEngine({ elFront, elBack, ppm = 2, pozadie = '#ffffff', on
       front.discardActiveObject(); back.discardActiveObject(); front.renderAll(); back.renderAll();
       return { front: front.toDataURL({ format: 'png', multiplier: 1 }), back: back.toDataURL({ format: 'png', multiplier: 1 }) };
     },
-    dispose() { front.dispose(); back.dispose(); },
+    dispose() { vsetky().forEach((c) => c.dispose()); },
   };
 }

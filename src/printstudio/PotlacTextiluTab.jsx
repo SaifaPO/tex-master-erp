@@ -32,14 +32,14 @@ function FotoPole({ supabase, produkt, strana, hodnota, onZmena }) {
   };
   return (
     <div className="space-y-1.5">
-      <div className="text-slate-400 text-xs">{strana === 'predok' ? 'Fotka spredu (povinná)' : 'Fotka zozadu (voliteľná)'}</div>
+      <div className="text-slate-400 text-xs">{{ predok: 'Fotka spredu (povinná)', zadok: 'Fotka zozadu (voliteľná)', lavy: 'Fotka zľava (šiltovka)', pravy: 'Fotka sprava (šiltovka)' }[strana]}</div>
       <div className="aspect-[9/10] w-28 rounded-lg border border-slate-700 bg-white overflow-hidden flex items-center justify-center">
         {hodnota ? <img src={fotoUrl(hodnota)} alt="" className="w-full h-full object-contain" /> : <span className="text-[10px] text-slate-400 px-2 text-center">bez fotky</span>}
       </div>
       <input ref={ref} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => { nahraj(e.target.files?.[0]); e.target.value = ''; }} />
       <div className="flex gap-1.5">
         <button type="button" onClick={() => ref.current?.click()} disabled={bezi} className="px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] flex items-center gap-1"><Upload className="w-3 h-3" /> {bezi ? 'Nahrávam…' : 'Nahrať'}</button>
-        {hodnota && strana === 'zadok' && <button type="button" onClick={() => onZmena(null)} className="px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-rose-300 text-[11px]">Odstrániť</button>}
+        {hodnota && strana !== 'predok' && <button type="button" onClick={() => onZmena(null)} className="px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-rose-300 text-[11px]">Odstrániť</button>}
       </div>
     </div>
   );
@@ -50,7 +50,7 @@ function ProduktKarta({ supabase, p, umiestnenia, zmen, zmaz, otvoreny, prepni }
   const poz = p.pozicie || {};
   const nastavPoz = (kod, pohlad, patch) => {
     const novy = { ...poz, [kod]: { ...(poz[kod] || {}) } };
-    if (patch === null) { delete novy[kod][pohlad]; if (!novy[kod].predok && !novy[kod].zadok) delete novy[kod]; }
+    if (patch === null) { delete novy[kod][pohlad]; if (!novy[kod].predok && !novy[kod].zadok && !novy[kod].lavy && !novy[kod].pravy) delete novy[kod]; }
     else novy[kod][pohlad] = { x: 0.5, y: 0.2, kotva: 'stred', rot: 0, ...(poz[kod]?.[pohlad] || {}), ...patch };
     zmen(p.id, { pozicie: novy });
   };
@@ -121,6 +121,10 @@ function ProduktKarta({ supabase, p, umiestnenia, zmen, zmaz, otvoreny, prepni }
           <div className="flex flex-wrap gap-6">
             <FotoPole supabase={supabase} produkt={p} strana="predok" hodnota={p.foto_predok_url} onZmena={(u) => zmen(p.id, { foto_predok_url: u })} />
             <FotoPole supabase={supabase} produkt={p} strana="zadok" hodnota={p.foto_zadok_url} onZmena={(u) => zmen(p.id, { foto_zadok_url: u })} />
+            {(p.kategoria === 'siltovka' || p.foto_lavy_url || p.foto_pravy_url) && <>
+              <FotoPole supabase={supabase} produkt={p} strana="lavy" hodnota={p.foto_lavy_url} onZmena={(u) => zmen(p.id, { foto_lavy_url: u })} />
+              <FotoPole supabase={supabase} produkt={p} strana="pravy" hodnota={p.foto_pravy_url} onZmena={(u) => zmen(p.id, { foto_pravy_url: u })} />
+            </>}
             <div className="flex-1 min-w-[16rem] space-y-2">
               <p className="text-[11px] text-slate-500 leading-snug">Fotka: produkt rozložený rovno na <strong>čisto bielom pozadí</strong> (bez modelky), celý v zábere. Odporúčané od dodávateľa produktu. Zadná fotka sa použije pri umiestneniach na chrbte.</p>
               <Pole label="Šírka fotky v skutočnosti" jednotka="cm" value={p.foto_sirka_cm} onChange={(v) => zmen(p.id, { foto_sirka_cm: v })} pomoc="Koľko cm reálne zodpovedá celej šírke fotky (nastavuje mierku potlače). Pri tričku M s telom ~52 cm je to približne 102." />
@@ -134,12 +138,12 @@ function ProduktKarta({ supabase, p, umiestnenia, zmen, zmaz, otvoreny, prepni }
               <table className="w-full text-xs">
                 <thead className="bg-slate-950/60 text-slate-500"><tr><th className="text-left p-2">Umiestnenie</th><th className="text-left p-2">Pohľad</th><th className="p-2">Použiť</th><th className="p-2">X %</th><th className="p-2">Y %</th><th className="p-2">Natočenie °</th><th className="p-2">Kotva</th></tr></thead>
                 <tbody>
-                  {umiestnenia.flatMap((u) => ['predok', 'zadok'].map((pohlad) => {
+                  {umiestnenia.flatMap((u) => ['predok', 'zadok', ...(p.foto_lavy_url ? ['lavy'] : []), ...(p.foto_pravy_url ? ['pravy'] : [])].map((pohlad, pi) => {
                     const z = poz[u.kod]?.[pohlad];
                     return (
                       <tr key={u.kod + pohlad} className="border-t border-slate-800 text-slate-300">
-                        <td className="p-2">{pohlad === 'predok' ? u.nazov : ''}</td>
-                        <td className="p-2 text-slate-500">{pohlad === 'predok' ? 'spredu' : 'zozadu'}</td>
+                        <td className="p-2">{pi === 0 ? u.nazov : ''}</td>
+                        <td className="p-2 text-slate-500">{{ predok: 'spredu', zadok: 'zozadu', lavy: 'zľava', pravy: 'sprava' }[pohlad]}</td>
                         <td className="p-2 text-center"><input type="checkbox" checked={!!z} onChange={(e) => nastavPoz(u.kod, pohlad, e.target.checked ? {} : null)} /></td>
                         <td className="p-2 w-20"><NumberInput step="0.5" value={z ? Math.round(z.x * 1000) / 10 : ''} disabled={!z} onChange={(v) => nastavPoz(u.kod, pohlad, { x: v / 100 })} fallback={50} className={cislo} /></td>
                         <td className="p-2 w-20"><NumberInput step="0.5" value={z ? Math.round(z.y * 1000) / 10 : ''} disabled={!z} onChange={(v) => nastavPoz(u.kod, pohlad, { y: v / 100 })} fallback={20} className={cislo} /></td>

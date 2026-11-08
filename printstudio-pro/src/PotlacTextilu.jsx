@@ -418,7 +418,7 @@ export default function PotlacTextilu({ supabase }) {
                     </div>
                   ))}
                 </div>
-                <button type="button" onClick={() => setTabulka(true)} className="text-xs font-semibold text-indigo-700 hover:text-indigo-600 underline">Zobraziť veľkostnú tabuľku</button>
+                {produkt.kategoria !== 'siltovka' && <button type="button" onClick={() => setTabulka(true)} className="text-xs font-semibold text-indigo-700 hover:text-indigo-600 underline">Zobraziť veľkostnú tabuľku</button>}
                 <p className="text-xs text-slate-500">Spolu: <strong>{pocetKs} ks</strong>{pocetKs < minKs && <span className="text-rose-600"> — minimálny odber pre {TECH[technologia].nazov.toLowerCase()} je {minKs} ks.</span>}</p>
               </>
             )}

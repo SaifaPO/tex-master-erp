@@ -422,7 +422,7 @@ Deno.serve(async (req) => {
         },
         produkty: ctx.produkty.filter((p) => p.foto_predok_url).map((p) => ({
           id: p.id, kod: p.kod, nazov: p.nazov, kategoria: p.kategoria, popis: p.popis || '', material: p.material, cenaTextiluBezDph: num(p.cena_textilu_eur),
-          velkosti: p.velkosti || [], farby: p.farby || [], technologie: p.technologie || [], fotoPredok: p.foto_predok_url, fotoZadok: p.foto_zadok_url || null,
+          velkosti: p.velkosti || [], farby: p.farby || [], technologie: p.technologie || [], fotoPredok: p.foto_predok_url, fotoZadok: p.foto_zadok_url || null, fotoLavy: p.foto_lavy_url || null, fotoPravy: p.foto_pravy_url || null,
           fotoSirkaCm: num(p.foto_sirka_cm, 100), pozicie: p.pozicie || {}, velkostnaTabulka: p.velkostna_tabulka || null,
         })),
         efekty: ctx.efekty.map((e) => ({ kod: e.kod, nazov: e.nazov, popis: e.popis || '', priplatokPercent: num(e.priplatok_percent) })),

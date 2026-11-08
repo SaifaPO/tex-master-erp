@@ -25,6 +25,7 @@ async function pripravFotku(url) {
   const lum = new Float32Array(n);
   const pozadie = new Uint8Array(n); // 1 = pozadie spojené s okrajom
   for (let i = 0; i < n; i++) lum[i] = (d[i * 4] + d[i * 4 + 1] + d[i * 4 + 2]) / 3;
+  for (let i = 0; i < n; i++) if (d[i * 4 + 3] < 128) pozadie[i] = 1; // PNG s priehľadným pozadím (šiltovka): priehľadné = mimo produktu
   const jeBiele = (i) => d[i * 4] >= 251 && d[i * 4 + 1] >= 251 && d[i * 4 + 2] >= 251;
   // záplava od okrajov fotky
   const zasobnik = new Int32Array(n);
@@ -46,8 +47,9 @@ async function pripravFotku(url) {
     for (let x = 0; x < w; x++) {
       const i = y * w + x;
       if (pozadie[i]) { alfa[i] = 0; continue; }
+      if (d[i * 4 + 3] < 255) alfa[i] = d[i * 4 + 3]; // vlastná priehľadnosť okraja PNG
       const susedPozadie = (x > 0 && pozadie[i - 1]) || (x < w - 1 && pozadie[i + 1]) || (y > 0 && pozadie[i - w]) || (y < h - 1 && pozadie[i + w]);
-      if (susedPozadie) alfa[i] = Math.round(Math.min(1, Math.max(0.25, (255 - lum[i]) / Math.max(8, 255 - priemer))) * 255);
+      if (susedPozadie && d[i * 4 + 3] === 255) alfa[i] = Math.round(Math.min(1, Math.max(0.25, (255 - lum[i]) / Math.max(8, 255 - priemer))) * 255);
     }
   }
   return { w, h, url, lum, alfa, priemer, povodna: c };
