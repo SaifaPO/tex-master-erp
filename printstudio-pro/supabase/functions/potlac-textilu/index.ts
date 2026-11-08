@@ -139,7 +139,7 @@ function maxPlochy(nast: Riadok, produkt: Riadok, technologia: string, um: Riado
   const ov = (((produkt.pozicie || {}) as Riadok)[um.kod] || {}) as Riadok;
   const okrS = num(ov.okraj?.sirka, num(nast.okraj_sirka_cm, 8)), okrV = num(ov.okraj?.vyska, num(nast.okraj_vyska_cm, 20));
   let s = num(um.max_sirka_cm, 43), v = num(um.max_vyska_cm, 58);
-  if (num(um.max_sirka_cm) >= 30) {
+  if (num(um.max_sirka_cm) >= 30 && !ov.pevne) { // `pevne` = pevný rozmer miesta (napr. nápis po celom rukáve) — netýka sa ho limit technológie ani veľkostná tabuľka
     const tm = (nast.max_rozmery || {})[technologia];
     if (tm) { s = num(tm.sirka, s); v = num(tm.vyska, v); }
     const tab = produkt.velkostna_tabulka as Riadok | null;

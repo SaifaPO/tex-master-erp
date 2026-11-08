@@ -107,7 +107,7 @@ export default function PotlacTextilu({ supabase }) {
     let sMax = u.maxSirkaCm, vMax = u.maxVyskaCm, dovod = '';
     const ov = produkt?.pozicie?.[u.kod] || {}; // produkt môže mať vlastný max. rozmer miesta (napr. hruď mikiny nad vreckom) a vlastné okraje
     const okrS = ov.okraj?.sirka ?? limity.okrajSirkaCm ?? 8, okrV = ov.okraj?.vyska ?? limity.okrajVyskaCm ?? 20;
-    if (u.maxSirkaCm >= 30) { // veľké plochy (hruď stred, chrbát): limit technológie + limit podľa veľkosti trička
+    if (u.maxSirkaCm >= 30 && !ov.pevne) { // veľké plochy (hruď stred, chrbát): limit technológie + limit podľa veľkosti trička
       const tm = limity.maxRozmery?.[technologia];
       if (tm) { sMax = tm.sirka; vMax = tm.vyska; }
       if (!vlastnyTextil && produkt?.velkostnaTabulka) {

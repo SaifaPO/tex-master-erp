@@ -91,7 +91,7 @@ async function nacitajKontext(supabase: ReturnType<typeof createClient>) {
   const [nast, efekty, umiestnenia, cfgR, metriky, sieto, velkosti] = await Promise.all([
     supabase.from('sietotlac_nastavenia').select('*').eq('id', 1).maybeSingle(),
     supabase.from('sietotlac_efekty').select('*').eq('aktivny', true).order('poradie'),
-    supabase.from('sietotlac_umiestnenia').select('*').eq('aktivny', true).not('kod', 'like', 'siltovka_%').order('poradie'), // miesta na šiltovke patria len do Potlače textilu
+    supabase.from('sietotlac_umiestnenia').select('*').eq('aktivny', true).not('kod', 'like', 'siltovka_%').not('kod', 'like', 'rukav_dlhy_%').order('poradie'), // miesta na šiltovke patria len do Potlače textilu
     supabase.from('pricing_config').select('*').eq('id', 1).maybeSingle(),
     supabase.from('cost_metrics').select('id, name, value, power_kw, amortizacia_hod'),
     supabase.from('cennik_sietotlac').select('*').eq('id', 1).maybeSingle(),
