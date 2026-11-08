@@ -50,7 +50,7 @@ function Sekcia({ cislo, nazov, children, akcia }) {
 }
 
 // veľkostné tabuľky produktov (obrázky vo /public/produkty); ďalšie produkty sa dopĺňajú sem
-const TABULKY = { 'tricko-panske': '/produkty/velkostna-tabulka-tricko-panske.jpg' };
+const TABULKY = { 'tricko-panske': '/produkty/velkostna-tabulka-tricko-panske.jpg', 'tricko-damske': '/produkty/velkostna-tabulka-tricko-damske.jpg' };
 
 let idCounter = 0;
 const noveId = () => `t${++idCounter}`;
