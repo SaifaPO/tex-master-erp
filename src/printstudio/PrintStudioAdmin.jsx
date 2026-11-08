@@ -173,7 +173,7 @@ export default function PrintStudioAdmin({ supabase: rawSupabase, initialSubtab,
         )}
       </div>
 
-      <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 shadow-xl">
+      <div className="bg-slate-950 p-3 sm:p-6 rounded-2xl border border-slate-800 shadow-xl min-w-0">
         {subtab === 'objednavky' && <ObjednavkyVsetkyTab supabase={supabase} onOtvor={setSubtab} fokus={fokus} />}
         {subtab === 'kategorie' && <KategorieTab supabase={supabase} />}
         {subtab === 'produkty' && <ProduktyTab supabase={supabase} />}

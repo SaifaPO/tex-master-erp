@@ -319,12 +319,12 @@ export default function ProduktyTab({ supabase }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-white flex items-center gap-2"><Box className="text-indigo-400 h-5 w-5" /> Produkty (Blanks)</h2>
           <p className="text-xs text-slate-400 mt-1">Žiadne sledovanie skladových zásob — len definícia produktu, zón potlače a cien.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button onClick={() => setKategorieOpen(o => !o)} className="flex items-center gap-1.5 border border-slate-700 text-slate-300 hover:bg-slate-800 px-3.5 py-2 rounded-xl text-sm font-semibold transition">
             <Tag className="w-4 h-4" /> Kategórie
           </button>
@@ -338,7 +338,7 @@ export default function ProduktyTab({ supabase }) {
       </div>
 
       {erpImportOpen && (
-        <div className="bg-emerald-950/20 rounded-2xl border border-emerald-800/40 p-5 space-y-3">
+        <div className="bg-emerald-950/20 rounded-2xl border border-emerald-800/40 p-3 sm:p-5 space-y-3">
           <h3 className="font-bold text-sm text-slate-200">Nový blank z Katalógu produktov (ERP)</h3>
           <p className="text-[11px] text-slate-400">Blanks sú sprostredkovateľ medzi Katalógom produktov a aplikáciami (dresy, buffky, čelenky, vlajky…). Vyberte produkt z katalógu — názov a výrobná cena sa prevezmú, cena sa potom sama aktualizuje pri každej zmene v katalógu a po zaplatení objednávky sa zákazka v ERP založí práve na tento produkt.</p>
           <div className="grid sm:grid-cols-[2fr_1fr_auto] gap-2">
@@ -359,7 +359,7 @@ export default function ProduktyTab({ supabase }) {
       )}
 
       {kategorieOpen && (
-        <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-5 space-y-3">
+        <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-3 sm:p-5 space-y-3">
           <h3 className="font-bold text-sm text-slate-200 flex items-center gap-1.5"><Tag className="w-4 h-4 text-indigo-400" /> Kategórie produktov</h3>
           <p className="text-[11px] text-slate-500">Vlastné kategórie si tu pridaj, premenuj alebo zmaž — napr. "Čelenky", "Buffky", "Iné". Kategóriu s produktmi nie je možné zmazať, kým z nej produkty nepresunieš inam.</p>
           <div className="space-y-1.5">
@@ -390,10 +390,10 @@ export default function ProduktyTab({ supabase }) {
       )}
 
       {formOpen && (
-        <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-5 space-y-4">
+        <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-3 sm:p-5 space-y-4">
           <h3 className="font-bold text-sm text-slate-200">{editId ? 'Upraviť produkt' : 'Nový produkt'}</h3>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-slate-400 font-medium">Kategória</label>
               <select value={kategoriaId} onChange={(e) => setKategoriaId(e.target.value)} className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white">
@@ -407,7 +407,7 @@ export default function ProduktyTab({ supabase }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-slate-400 font-medium">Pohlavie</label>
               <select value={pohlavie} onChange={(e) => setPohlavie(e.target.value)} className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white">
@@ -423,7 +423,7 @@ export default function ProduktyTab({ supabase }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-slate-400 font-medium">Základná cena (€){erpProduktId ? ' — z Katalógu produktov' : ''}</label>
               <input value={zakladnaCena} onChange={(e) => setZakladnaCena(e.target.value)} readOnly={!!erpProduktId} type="number" step="0.01" className={`w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white ${erpProduktId ? 'opacity-60 cursor-not-allowed' : ''}`} />
