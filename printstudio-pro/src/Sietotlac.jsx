@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Layers, Minus, Plus, Send, CheckCircle2, Moon, Sun, Upload, Trash2, FileImage, ChevronDown } from 'lucide-react';
+import { Layers, Minus, Plus, Send, CheckCircle2, Moon, Sun, Upload, Trash2, FileImage, ChevronDown, PenTool } from 'lucide-react';
 import PbtHeader from './PbtHeader';
 import NumberInput from './NumberInput';
 import { useB2bKod } from './b2b';
 import B2bKod from './B2bKod';
 import { useCenaNahlad, CenaSuhrn, MnozstevneZlavy } from './cenaNahlad';
+import NavrhGrafiky from './NavrhGrafiky';
 
 // Verejná appka „Sieťotlač“ (?typ=sietotlac): na jednom kuse môže byť viac potlačí (srdce, chrbát, rukávy…), každá s vlastným rozmerom,
 // farbami, efektom a grafikou. Objednávka sa platí cez Shopify (ako ostatné appky) alebo sa pošle len dopyt.
@@ -115,6 +116,7 @@ export default function Sietotlac({ supabase }) {
   const [chybaObj, setChybaObj] = useState('');
   const [potvrdenie, setPotvrdenie] = useState('');
 
+  const [navrhId, setNavrhId] = useState(null); // id potlače, ktorej sa práve navrhuje vlastný motív v editore
   const [dopytOtvoreny, setDopytOtvoreny] = useState(false);
   const [kontakt, setKontakt] = useState({ meno: '', email: '', telefon: '', poznamka: '' });
   const [hp, setHp] = useState('');
@@ -162,7 +164,11 @@ export default function Sietotlac({ supabase }) {
     const pripona = '.' + (f.name.split('.').pop() || '').toLowerCase();
     if (!POVOLENE.includes(pripona)) { window.alert(`Nahrajte prosím súbor vo formáte: ${POVOLENE.join(', ')}.`); return; }
     if (f.size > MAX_MB * 1024 * 1024) { window.alert(`Súbor je príliš veľký (max. ${MAX_MB} MB).`); return; }
-    setTlace((l) => l.map((t) => { if (t.id !== id) return t; if (t.nahlad) URL.revokeObjectURL(t.nahlad); return { ...t, subor: f, nahlad: jeObrazok(f) ? URL.createObjectURL(f) : null }; }));
+    setTlace((l) => l.map((t) => { if (t.id !== id) return t; if (t.nahlad) URL.revokeObjectURL(t.nahlad); return { ...t, subor: f, nahlad: jeObrazok(f) ? URL.createObjectURL(f) : null, navrhJson: null }; }));
+  };
+  const hotovyNavrh = (id, { subor, nahlad, json }) => {
+    setTlace((l) => l.map((t) => { if (t.id !== id) return t; if (t.nahlad) URL.revokeObjectURL(t.nahlad); return { ...t, subor, nahlad, navrhJson: json }; }));
+    setNavrhId(null);
   };
 
   const teloCeny = useMemo(() => ({
@@ -225,6 +231,15 @@ export default function Sietotlac({ supabase }) {
       <PbtHeader title="Sieťotlač" subtitle="Potlač tričiek: viac potlačí, objednávka a platba online" />
       <div className="px-4 py-2 bg-white border-b border-slate-200"><B2bKod b2b={b2b} /></div>
       {nast?.infoText && <p className="px-4 pt-3 text-xs text-slate-500 text-center">{nast.infoText}</p>}
+      {navrhId && (() => {
+        const t = tlace.find((x) => x.id === navrhId);
+        if (!t) return null;
+        const u = umiestnenia.find((x) => x.kod === t.umiestnenie);
+        return (
+          <NavrhGrafiky key={t.id} supabase={supabase} sirkaCm={t.sirka} vyskaCm={t.vyska} nazov={u?.nazov || 'potlač'} pocetFarieb={t.farby}
+            povodnyJson={t.navrhJson} onHotovo={(v) => hotovyNavrh(t.id, v)} onZrus={() => setNavrhId(null)} />
+        );
+      })()}
 
       <main className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 py-5 grid grid-cols-1 lg:grid-cols-[1fr_24rem] gap-5 items-start">
         <div className="space-y-4 min-w-0">
@@ -307,6 +322,10 @@ export default function Sietotlac({ supabase }) {
                           <span className="block text-sm font-medium text-slate-700 truncate">{t.subor ? t.subor.name : 'Nahrať grafiku k tejto potlači'}</span>
                           <span className="block text-[11px] text-slate-400">{t.subor ? 'Kliknutím súbor vymeníte' : `Kliknite alebo pretiahnite súbor (${POVOLENE.join(', ')}, max. ${MAX_MB} MB). Najlepšie vektor alebo PNG s priehľadným pozadím.`}</span>
                         </span>
+                      </button>
+                      <button type="button" onClick={() => setNavrhId(t.id)} disabled={sirkaChyba}
+                        className="mt-2 w-full rounded-xl border border-indigo-300 bg-indigo-50 hover:bg-indigo-100 disabled:opacity-50 text-indigo-800 text-sm font-semibold py-2.5 flex items-center justify-center gap-2 transition">
+                        <PenTool className="w-4 h-4" /> {t.navrhJson ? 'Upraviť môj návrh' : 'Navrhnúť vlastný motív (text, symboly, grafiky)'}
                       </button>
                     </div>
                   </div>

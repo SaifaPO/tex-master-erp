@@ -7,10 +7,11 @@ import { vytvorEngine, SYMBOLY, FONTY_PREDVOLENE, VZORY_POZADIA, svgDoDataUri } 
 // Spoločný editor „líce + rub“ (stolové vlajky, šnúrky na krk). Vracia dve časti cez render-prop children({ nastroje, plocha }):
 // `nastroje` = ľavý panel (strana, pozadie, text, symboly, obrázok, knižnica grafík, úprava objektu), `plocha` = pracovná plocha s plátnami.
 // `casti` (pole dĺžok v mm) = tlač v samostatných častiach vedľa seba na jednej ploche (napr. šnúrka 70 + 12 cm) — zobrazia sa ako samostatné rámy s medzerou na strih.
+// `jednaStrana` = len jedna plocha (rub sa skryje), `priehladne` = bez bieleho pozadia (priehľadný export, napr. sieťotlač).
 // Cez ref: exportuj() -> { front, back (Blob PNG ≈300 DPI), json }, nahlad(), pocetObjektov(), nastavRozmer().
 const PlochaEditor = forwardRef(function PlochaEditor({
   sirkaMm, vyskaMm, tvar = null, ppm = 2, rozlozenie = 'vedla', nazvyStran = ['Líce', 'Rub'], spadavkaMm = 0, casti = null, medzeraCastiMm = 10,
-  fonty = [], grafiky = [], symboly = SYMBOLY, children,
+  fonty = [], grafiky = [], symboly = SYMBOLY, jednaStrana = false, priehladne = false, children,
 }, ref) {
   const wrapFront = useRef(null), wrapBack = useRef(null), vonkajsi = useRef(null);
   const guideRefs = useRef({});
@@ -30,8 +31,8 @@ const PlochaEditor = forwardRef(function PlochaEditor({
   const sirkaPx = Math.round(sirkaMm * ppm), vyskaPx = Math.round(vyskaMm * ppm);
   const pod = rozlozenie === 'pod';
   const MEDZERA = 40;
-  const celkovaSirka = pod ? sirkaPx : sirkaPx * 2 + MEDZERA;
-  const celkovaVyska = pod ? vyskaPx * 2 + MEDZERA + 24 : vyskaPx + 24;
+  const celkovaSirka = (pod || jednaStrana) ? sirkaPx : sirkaPx * 2 + MEDZERA;
+  const celkovaVyska = (pod && !jednaStrana) ? vyskaPx * 2 + MEDZERA + 24 : vyskaPx + 24;
   const zoom = zoomMod === 'fit' ? zoomFit : zoomMod;
 
   // inicializácia Fabric plátien (raz); canvasy sa vytvárajú imperatívne, aby ich React neprepisoval
@@ -39,7 +40,7 @@ const PlochaEditor = forwardRef(function PlochaEditor({
     const mk = (wrap) => { const c = document.createElement('canvas'); wrap.insertBefore(c, wrap.firstChild); return c; };
     const elFront = mk(wrapFront.current), elBack = mk(wrapBack.current);
     const engine = vytvorEngine({
-      elFront, elBack, ppm,
+      elFront, elBack, ppm, pozadie: priehladne ? null : '#ffffff',
       onVyber: (info) => setVybrany(info),
       onZrusVyber: () => setVybrany(null),
       onPrichytenie: (s, v, h) => {
@@ -78,7 +79,8 @@ const PlochaEditor = forwardRef(function PlochaEditor({
   }, [prepocitajFit]);
 
   useImperativeHandle(ref, () => ({
-    exportuj: () => engineRef.current.exportuj(),
+    exportuj: (opts) => engineRef.current.exportuj(opts),
+    nacitajFront: (json, hotovo) => engineRef.current?.nacitajFront(json, hotovo),
     nahlad: () => engineRef.current?.nahlad(),
     pocetObjektov: () => engineRef.current?.pocetObjektov() || 0,
   }), []);
@@ -88,16 +90,16 @@ const PlochaEditor = forwardRef(function PlochaEditor({
 
   const nastroje = (
     <div className="space-y-4">
-      <div>
+      {!jednaStrana && <div>
         <label className="block text-sm font-semibold text-slate-700 mb-2">Kam vložiť nový objekt?</label>
         <div className="flex bg-slate-100 rounded-lg p-1">
           {[['front', nazvyStran[0]], ['back', nazvyStran[1]]].map(([k, n]) => (
             <button key={k} type="button" onClick={() => setStrana(k)} className={`flex-1 py-1.5 text-sm font-semibold rounded transition ${strana === k ? 'bg-white text-indigo-600 shadow border border-indigo-200' : 'text-slate-500 hover:text-slate-800 border border-transparent'}`}>Na {n.toLowerCase()}</button>
           ))}
         </div>
-      </div>
+      </div>}
 
-      <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+      {!priehladne && <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
         <h3 className="font-semibold text-slate-800 mb-2 text-sm flex items-center gap-2"><Palette className="w-4 h-4 text-indigo-500" /> Pozadie (aktívna strana)</h3>
         <div className="grid grid-cols-6 gap-1.5">
           {VZORY_POZADIA.map((v) => (
@@ -108,7 +110,7 @@ const PlochaEditor = forwardRef(function PlochaEditor({
           <input type="color" value={pozadieFarba} onChange={(ev) => { setPozadieFarba(ev.target.value); e()?.nastavPozadieFarbu(ev.target.value); }} className="w-10 h-8 rounded cursor-pointer" title="Jednofarebné pozadie" />
           <button type="button" onClick={() => { setPozadieFarba('#ffffff'); e()?.vymazPozadie(); }} className="flex-1 bg-white border border-slate-300 text-slate-700 text-xs py-2 rounded-lg hover:bg-slate-100 font-medium flex items-center justify-center gap-1"><Eraser className="w-3.5 h-3.5" /> Biele pozadie</button>
         </div>
-      </div>
+      </div>}
 
       <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
         <h3 className="font-semibold text-slate-800 text-sm flex items-center gap-2"><Type className="w-4 h-4 text-indigo-500" /> Pridať text</h3>
@@ -198,8 +200,8 @@ const PlochaEditor = forwardRef(function PlochaEditor({
         <div style={{ width: celkovaSirka * zoom, height: celkovaVyska * zoom, margin: '0 auto' }}>
           <div style={{ transform: `scale(${zoom})`, transformOrigin: 'top left', width: celkovaSirka, height: celkovaVyska, display: 'flex', flexDirection: pod ? 'column' : 'row', gap: MEDZERA, alignItems: 'flex-start' }}>
             {[['front', wrapFront, nazvyStran[0]], ['back', wrapBack, nazvyStran[1]]].map(([k, r, n]) => (
-              <div key={k} style={{ width: sirkaPx, paddingTop: 24 }} className="relative">
-                <span className={`absolute top-0 left-0 text-xs font-bold px-2 py-0.5 rounded ${strana === k ? 'bg-indigo-600 text-white' : 'bg-white/90 text-slate-600'}`}>{n}</span>
+              <div key={k} style={{ width: sirkaPx, paddingTop: 24, display: jednaStrana && k === 'back' ? 'none' : undefined }} className="relative">
+                {!jednaStrana && <span className={`absolute top-0 left-0 text-xs font-bold px-2 py-0.5 rounded ${strana === k ? 'bg-indigo-600 text-white' : 'bg-white/90 text-slate-600'}`}>{n}</span>}
                 <div ref={r} className="relative" style={{ width: sirkaPx, height: vyskaPx, filter: strana === k ? 'drop-shadow(0 0 10px rgba(79,70,229,0.55))' : 'drop-shadow(0 6px 10px rgba(0,0,0,0.12))', opacity: strana === k ? 1 : 0.7, transition: 'opacity .2s' }} onMouseDown={() => setStrana(k)}>
                   {casti && casti.length > 0 ? (
                     <div className="absolute inset-0 pointer-events-none z-10">

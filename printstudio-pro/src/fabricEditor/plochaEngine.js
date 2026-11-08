@@ -44,12 +44,12 @@ function prefarbi(img, farba) {
   return c;
 }
 
-export function vytvorEngine({ elFront, elBack, ppm = 2, onVyber, onZrusVyber, onZmena, onPrichytenie }) {
+export function vytvorEngine({ elFront, elBack, ppm = 2, pozadie = '#ffffff', onVyber, onZrusVyber, onZmena, onPrichytenie }) {
   const opts = { preserveObjectStacking: true, objectCaching: false, selection: true };
   const front = new fabric.Canvas(elFront, opts);
   const back = new fabric.Canvas(elBack, opts);
-  front.backgroundColor = '#ffffff';
-  back.backgroundColor = '#ffffff';
+  front.backgroundColor = pozadie;
+  back.backgroundColor = pozadie;
   const platna = { front, back };
   let aktivna = 'front';
   let rozmer = { w: 100, h: 100 }; // px
@@ -146,7 +146,7 @@ export function vytvorEngine({ elFront, elBack, ppm = 2, onVyber, onZrusVyber, o
       });
     },
     nastavPozadieFarbu(farba) { const c = dajAktivne(); c.backgroundColor = farba; c.requestRenderAll(); onZmena?.(); },
-    vymazPozadie() { this.nastavPozadieFarbu('#ffffff'); },
+    vymazPozadie() { this.nastavPozadieFarbu(pozadie || '#ffffff'); },
     zmaz() { const c = dajAktivne(); c.getActiveObjects().forEach((o) => c.remove(o)); c.discardActiveObject(); c.requestRenderAll(); },
     stredH() { const c = dajAktivne(); const o = c.getActiveObject(); if (o) { o.centerH(); o.setCoords(); c.requestRenderAll(); } },
     stredV() { const c = dajAktivne(); const o = c.getActiveObject(); if (o) { o.centerV(); o.setCoords(); c.requestRenderAll(); } },
@@ -159,14 +159,19 @@ export function vytvorEngine({ elFront, elBack, ppm = 2, onVyber, onZrusVyber, o
     },
     pocetObjektov: () => front.getObjects().length + back.getObjects().length,
     // Tlačové PNG pre líce a rub (≈ 300 DPI, mimo tvaru priehľadné) + JSON stavu na pripadnú reprodukciu
-    async exportuj() {
+    // maxPx = voliteľný strop na dlhšiu stranu výstupu (veľké plochy by inak prekročili limit plátna prehliadača, najmä na mobile)
+    async exportuj({ maxPx = Infinity } = {}) {
       front.discardActiveObject(); back.discardActiveObject(); front.renderAll(); back.renderAll();
-      const nasobok = 300 / 25.4 / ppm;
+      const nasobok = Math.min(300 / 25.4 / ppm, maxPx / Math.max(rozmer.w, rozmer.h));
       const naBlob = async (canvas) => { const url = canvas.toDataURL({ format: 'png', multiplier: nasobok }); return fetch(url).then((r) => r.blob()); };
       return {
         front: await naBlob(front), back: await naBlob(back),
         json: { front: front.toJSON(), back: back.toJSON(), sirkaPx: rozmer.w, vyskaPx: rozmer.h, ppm },
       };
+    },
+    // Načíta uložený stav líca (JSON z exportuj().json.front) — na opätovnú úpravu návrhu
+    nacitajFront(json, hotovo) {
+      front.loadFromJSON(json, () => { front.requestRenderAll(); onZmena?.(); hotovo?.(); });
     },
     // Rýchly náhľad (malé PNG) na zobrazenie v objednávke / zhrnutí
     nahlad() {
