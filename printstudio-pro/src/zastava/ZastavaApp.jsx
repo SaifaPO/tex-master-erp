@@ -6,6 +6,7 @@ import AskQuestion from '../AskQuestion';
 import { nacitajZastavaKatalog } from './zastavaData';
 import RozmeryTab from './RozmeryTab';
 import GrafikaTab from '../beachflag/GrafikaTab';
+import LayersPanel from '../beachflag/LayersPanel';
 import StatnaVlajkaPicker from './StatnaVlajkaPicker';
 import DoplnkyTab from './DoplnkyTab';
 import { rozlozBody } from './okaLayout';
@@ -125,6 +126,7 @@ export default function ZastavaApp({ supabase }) {
     if (canvas.getWidth() !== w || canvas.getHeight() !== h) {
       canvas.setDimensions({ width: w, height: h });
     }
+    canvas.mierkaCm = { x: sirkaCm / w, y: vyskaCm / h }; // cm na pixel plátna (pre úpravu textu v cm)
 
     canvas.getObjects().filter(o => o.isSafeGuide).forEach(o => canvas.remove(o));
     const inset = Math.min(w, h) * 0.05;
@@ -415,6 +417,7 @@ export default function ZastavaApp({ supabase }) {
               katalog={katalog} bgColor={bgColor} onBgColor={setBgColor} pantoneNote={pantoneNote} onPantoneNote={setPantoneNote}
               customText={customText} onCustomTextChange={setCustomText} onPridajText={pridajText}
               onUploadObrazok={uploadObrazok}
+              canvas={canvasReady ? fabricRef.current : null}
               onSpat={() => setKrok('rozmery')} onDalej={() => setKrok('doplnky')}
             />
           </div>
@@ -451,6 +454,7 @@ export default function ZastavaApp({ supabase }) {
         </div>
       </div>
     </div>
+    <LayersPanel canvas={canvasReady ? fabricRef.current : null} rezim="sheet" />
     </>
   );
 }

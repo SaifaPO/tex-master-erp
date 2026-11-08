@@ -88,7 +88,7 @@ export function initBuffkyEngine(root, opts = {}) {
   toolbar.className = 'absolute flex items-center gap-1 select-none';
   toolbar.style.cssText = 'display:none;z-index:10;transform:translateX(-50%);';
   toolbar.innerHTML =
-    '<span data-r="size" class="px-2 py-1 rounded-lg bg-slate-900/95 border border-cyan-500/60 text-[11px] font-mono text-cyan-300 whitespace-nowrap shadow"></span>' +
+    '<span data-r="size" class="hidden sm:inline px-2 py-1 rounded-lg bg-slate-900/95 border border-cyan-500/60 text-[11px] font-mono text-cyan-300 whitespace-nowrap shadow"></span>' +
     '<button type="button" data-r="dup" title="Duplikovať" class="w-7 h-7 rounded-lg bg-slate-900/95 hover:bg-slate-700 border border-slate-600 text-slate-200 text-xs shadow"><i class="fa-solid fa-clone"></i></button>' +
     '<button type="button" data-r="del" title="Zmazať" class="w-7 h-7 rounded-lg bg-rose-950/95 hover:bg-rose-900 border border-rose-700/70 text-rose-300 text-xs shadow"><i class="fa-solid fa-trash-can"></i></button>';
   wrap.appendChild(toolbar);
@@ -567,7 +567,8 @@ export function initBuffkyEngine(root, opts = {}) {
     const spodok = Math.max(...ys) + 16, vrch = Math.min(...ys, g.rot.y) - 16;
     const dole = spodok < CANON - 60;
     toolbar.style.display = 'flex';
-    toolbar.style.left = Math.min(84, Math.max(16, (item.x / CANON) * 100)) + '%';
+    const sirkaPl = canvas.clientWidth || 1, sirkaTb = toolbar.offsetWidth || 120;
+    toolbar.style.left = Math.min(sirkaPl - sirkaTb / 2 - 4, Math.max(sirkaTb / 2 + 4, (item.x / CANON) * sirkaPl)) + 'px';
     toolbar.style.top = ((dole ? spodok : Math.max(8, vrch)) / CANON) * 100 + '%';
     toolbar.style.transform = dole ? 'translateX(-50%)' : 'translate(-50%, -100%)';
   }

@@ -13,7 +13,7 @@ const BUCKET = 'print-designs';
 // Jednoduchá kresba výšky 3D efektu (1–3 vrstvy), kým admin nenahrá vlastnú fotku úrovne.
 function VrstvyObrazok({ pocet }) {
   return (
-    <svg viewBox="0 0 120 80" className="w-full aspect-[3/2] rounded-lg bg-slate-100">
+    <svg viewBox="0 0 120 80" className="w-full h-20 sm:h-24 rounded-lg bg-slate-100">
       <rect x="10" y="62" width="100" height="8" rx="3" fill="#cbd5e1" />
       {Array.from({ length: pocet }).map((_, i) => (
         <rect key={i} x={26 + i * 3} y={52 - i * 11} width={68 - i * 6} height="11" rx="4" fill={['#93c5fd', '#60a5fa', '#3b82f6'][i]} stroke="#1e40af" strokeWidth="0.8" />
@@ -132,7 +132,7 @@ export default function Transfer3D({ supabase }) {
   if (nastavenia?.aktivny === false) return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-600 text-sm px-4 text-center">Objednávanie 3D transferov je dočasne vypnuté.</div>;
 
   const dph = cena?.dphPercent ?? 23;
-  const kartaStyl = (aktivna) => `border-2 rounded-xl p-3 cursor-pointer transition flex flex-col items-center text-center ${aktivna ? 'border-indigo-500 bg-indigo-50 shadow-md' : 'border-slate-200 hover:border-slate-300 bg-white'}`;
+  const kartaStyl = (aktivna) => `border-2 rounded-xl p-2 sm:p-3 cursor-pointer transition flex flex-col items-center text-center ${aktivna ? 'border-indigo-500 bg-indigo-50 shadow-md' : 'border-slate-200 hover:border-slate-300 bg-white'}`;
 
   return (
     <div className="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col">
@@ -177,12 +177,12 @@ export default function Transfer3D({ supabase }) {
             <section className="bg-white rounded-2xl border border-slate-200 p-5">
               <h3 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-2 mb-1">2. Výška 3D efektu</h3>
               <p className="text-xs text-slate-500 mb-4">Čím vyšší efekt, tým dlhšia tlač a vyššia spotreba farby — preto aj vyššia cena.</p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
                 {urovne.map((u, i) => (
                   <div key={u.kod} onClick={() => setUroven(u.kod)} className={kartaStyl(uroven === u.kod)}>
-                    {u.foto_url ? <img src={u.foto_url} alt={u.nazov} className="w-full aspect-[3/2] object-cover rounded-lg mb-2" /> : <VrstvyObrazok pocet={Math.min(3, i + 1)} />}
-                    <h4 className="font-bold text-slate-900 mt-2 text-sm">{u.nazov}</h4>
-                    <p className="text-[11px] text-slate-500 mt-0.5">{u.popis}</p>
+                    {u.foto_url ? <img src={u.foto_url} alt={u.nazov} className="w-full h-20 sm:h-24 object-cover rounded-lg mb-1" /> : <VrstvyObrazok pocet={Math.min(3, i + 1)} />}
+                    <h4 className="font-bold text-slate-900 mt-1 text-xs sm:text-sm leading-tight">{u.nazov}</h4>
+                    <p className="hidden sm:block text-[11px] text-slate-500 mt-0.5">{u.popis}</p>
                   </div>
                 ))}
               </div>
@@ -191,12 +191,12 @@ export default function Transfer3D({ supabase }) {
             <section className="bg-white rounded-2xl border border-slate-200 p-5">
               <h3 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-2 mb-1">3. Povrchová úprava (lak)</h3>
               <p className="text-xs text-slate-500 mb-4">Lak môže ísť na celý motív, len na vybrané detaily, alebo vôbec — ovplyvňuje vzhľad aj cenu.</p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
                 {laky.map((l) => (
                   <div key={l.kod} onClick={() => setLak(l.kod)} className={kartaStyl(lak === l.kod)}>
-                    {l.foto_url && <img src={l.foto_url} alt={l.nazov} className="w-full aspect-[3/2] object-cover rounded-lg mb-2" />}
-                    <h4 className="font-semibold text-slate-900 text-sm">{l.nazov}</h4>
-                    {l.popis && <p className="text-[11px] text-slate-500 mt-0.5">{l.popis}</p>}
+                    {l.foto_url && <img src={l.foto_url} alt={l.nazov} className="w-full h-20 sm:h-24 object-cover rounded-lg mb-1" />}
+                    <h4 className="font-semibold text-slate-900 text-xs sm:text-sm leading-tight">{l.nazov}</h4>
+                    {l.popis && <p className="hidden sm:block text-[11px] text-slate-500 mt-0.5">{l.popis}</p>}
                   </div>
                 ))}
               </div>

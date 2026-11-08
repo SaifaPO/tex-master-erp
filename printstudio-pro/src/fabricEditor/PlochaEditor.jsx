@@ -28,10 +28,10 @@ const PlochaEditor = forwardRef(function PlochaEditor({
   const [hrubkaObrysu, setHrubkaObrysu] = useState(0);
   const [pozadieFarba, setPozadieFarba] = useState('#ffffff');
   const [zalozka, setZalozka] = useState('symboly'); // 'symboly' | 'kniznica'
-  // úzky displej (mobil/tablet na výšku): zobrazí sa len aktívna strana (líce / rub) a plocha sa zmenší tak, aby sa zmestila nad ovládacie prvky
+  // úzky displej (mobil/tablet na výšku): plocha sa zmenší tak, aby sa zmestila nad ovládacie prvky (líce aj rub sú stále vidno naraz)
   const [uzky, setUzky] = useState(() => typeof window !== 'undefined' && window.innerWidth < 1024);
   useEffect(() => { const f = () => setUzky(window.innerWidth < 1024); window.addEventListener('resize', f); return () => window.removeEventListener('resize', f); }, []);
-  const jednaPlocha = jednaStrana || uzky;
+  const jednaPlocha = jednaStrana; // líce aj rub sú vidno naraz (vedľa seba / nad sebou) aj na mobile
   const sirkaPx = Math.round(sirkaMm * ppm), vyskaPx = Math.round(vyskaMm * ppm);
   const pod = rozlozenie === 'pod';
   const MEDZERA = 40;
@@ -226,7 +226,7 @@ const PlochaEditor = forwardRef(function PlochaEditor({
           {casti && casti.length > 1 && <span className="text-slate-500 hidden sm:inline">Tlač v {casti.length} častiach — medzi nimi šrafovaná medzera {medzeraCastiMm} mm na strih</span>}
           {spadavkaMm > 0 && <span className="text-slate-500 hidden sm:flex items-center gap-2"><span className="inline-block w-3 h-3 border-2 border-red-500 border-dashed" /> okraj výroby <span className="inline-block w-3 h-3 border border-green-600 border-dotted ml-1" /> bezpečná zóna ({spadavkaMm} mm)</span>}
         </div>
-        <div className="hidden sm:flex bg-slate-100 rounded-lg p-0.5 text-xs">
+        <div className="flex bg-slate-100 rounded-lg p-0.5 text-xs">
           {[['fit', 'Fit'], [0.25, '25 %'], [0.5, '50 %'], [1, '100 %']].map(([z, n]) => (
             <button key={n} type="button" onClick={() => setZoomMod(z)} className={`px-2.5 py-1 rounded font-medium ${zoomMod === z ? 'bg-white shadow' : 'text-slate-600 hover:bg-white'}`}>{n}</button>
           ))}
@@ -236,7 +236,7 @@ const PlochaEditor = forwardRef(function PlochaEditor({
         <div style={{ width: celkovaSirka * zoom, height: celkovaVyska * zoom, margin: '0 auto' }}>
           <div style={{ transform: `scale(${zoom})`, transformOrigin: 'top left', width: celkovaSirka, height: celkovaVyska, display: 'flex', flexDirection: pod ? 'column' : 'row', gap: MEDZERA, alignItems: 'flex-start' }}>
             {[['front', wrapFront, nazvyStran[0]], ['back', wrapBack, nazvyStran[1]]].map(([k, r, n]) => (
-              <div key={k} style={{ width: sirkaPx, paddingTop: 24, display: (jednaStrana && k === 'back') || (uzky && !jednaStrana && k !== strana) ? 'none' : undefined }} className="relative">
+              <div key={k} style={{ width: sirkaPx, paddingTop: 24, display: jednaStrana && k === 'back' ? 'none' : undefined }} className="relative">
                 {!jednaStrana && <span className={`absolute top-0 left-0 text-xs font-bold px-2 py-0.5 rounded ${strana === k ? 'bg-indigo-600 text-white' : 'bg-white/90 text-slate-600'}`}>{n}</span>}
                 <div ref={r} className="relative" style={{ width: sirkaPx, height: vyskaPx, filter: strana === k ? 'drop-shadow(0 0 10px rgba(79,70,229,0.55))' : 'drop-shadow(0 6px 10px rgba(0,0,0,0.12))', opacity: strana === k ? 1 : 0.7, transition: 'opacity .2s' }} onMouseDown={() => setStrana(k)}>
                   {casti && casti.length > 0 ? (

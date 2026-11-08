@@ -10,7 +10,8 @@ const UHLY = [0, 45, 90, 135, 180, 225, 270, 315];
 // Zoznam vrstiev (texty/loga na platne) + panel vlastnosti pre prave vybranu vrstvu — Martin
 // chcel vidiet co je na akej vrstve, vediet ich preusporiadat/zmazat a upravovat farbu/font/text/
 // obrys priamo tu, nie len tahanim na platne.
-export default function LayersPanel({ canvas }) {
+export default function LayersPanel({ canvas, rezim = 'plny' }) {
+  // rezim 'plny' = zoznam vrstiev (+ vlastnosti vybranej vrstvy na počítači); rezim 'sheet' = len spodný panel úprav pre mobil (dostupný v každom kroku)
   const [, setTick] = useState(0);
   const [selected, setSelected] = useState(null);
   const refresh = () => setTick(v => v + 1);
@@ -40,48 +41,33 @@ export default function LayersPanel({ canvas }) {
   const posunHore = (o) => { canvas.bringForward(o); canvas.renderAll(); refresh(); };
   const posunDole = (o) => { canvas.sendBackwards(o); canvas.renderAll(); refresh(); };
   const aktualizuj = (patch) => { if (!selected) return; selected.set(patch); canvas.renderAll(); refresh(); };
+  const duplikuj = () => { if (!selected) return; const o = selected; o.clone((k) => { k.set({ left: (o.left || 0) + 24, top: (o.top || 0) + 24, evented: true }); canvas.add(k); canvas.setActiveObject(k); canvas.requestRenderAll(); refresh(); }, ['obrysHrubka', 'obrysPoloha']); };
+  const mierka = canvas.mierkaCm || { x: 1, y: 1 }; // cm na jednotku plátna
 
   // Obrys: "vonku" = paintFirst 'stroke' (obrys pod vyplnou) + zdvojnasobeny strokeWidth, aby bola
   // viditelna hrubka rovnaka ako zadana a vnutro pisma sa nikdy nezaplnilo. "stred" = povodne
   // spravanie fabricu (obrys naprieč hranou, pri hrubej linke zozerie vnutro).
-  const obrysHrubka = selected ? (selected.obrysHrubka ?? (selected.strokeWidth || 0)) : 0;
-  const obrysPoloha = selected?.obrysPoloha || 'stred';
+  const obrysHrubka = selected && selected.stroke ? (selected.obrysHrubka ?? Math.round((selected.strokeWidth || 0) * mierka.x * 100) / 100) : 0;
+  const obrysPoloha = selected?.obrysPoloha || 'vonku'; // predvolene obrys POD písmom, aby písmo nezjedal
   const nastavObrys = ({ hrubka = obrysHrubka, poloha = obrysPoloha }) => aktualizuj({
     obrysHrubka: hrubka,
     obrysPoloha: poloha,
-    strokeWidth: poloha === 'vonku' ? hrubka * 2 : hrubka,
+    strokeWidth: (poloha === 'vonku' ? hrubka * 2 : hrubka) / mierka.x,
     paintFirst: poloha === 'vonku' ? 'stroke' : 'fill',
     strokeLineJoin: 'round',
   });
 
   const jeText = selected?.type === 'text' || selected?.type === 'i-text';
-  const mierka = canvas.mierkaCm || { x: 1, y: 1 };
   const sirkaCm = selected ? Math.round(selected.getScaledWidth() * mierka.x * 10) / 10 : 0;
   const vyskaCm = selected ? Math.round(selected.getScaledHeight() * mierka.y * 10) / 10 : 0;
   const uhol = selected ? Math.round((selected.angle || 0) % 360) : 0;
 
-  return (
-    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
-      <h4 className="font-bold text-xs text-slate-800">Vrstvy (loga a texty na vlajke)</h4>
-      {objekty.length === 0 ? (
-        <p className="text-[11px] text-slate-500">Zatiaľ nie je pridaný žiadny text ani logo.</p>
-      ) : (
-        <div className="space-y-1.5">
-          {objekty.map((o, i) => (
-            <div key={i} onClick={() => vyber(o)} className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border cursor-pointer transition-colors ${selected === o ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 bg-white hover:bg-slate-50'}`}>
-              {o.type === 'image' ? <ImageIcon className="w-3.5 h-3.5 text-slate-500 shrink-0" /> : <TypeIcon className="w-3.5 h-3.5 text-slate-500 shrink-0" />}
-              <span className="flex-1 min-w-0 truncate text-xs text-slate-700">{o.type === 'image' ? 'Obrázok / logo' : (o.text || 'Text')}</span>
-              <button type="button" onClick={(e) => { e.stopPropagation(); posunHore(o); }} title="Posunúť vyššie" className="text-slate-400 hover:text-slate-700 p-0.5"><ChevronUp className="w-3.5 h-3.5" /></button>
-              <button type="button" onClick={(e) => { e.stopPropagation(); posunDole(o); }} title="Posunúť nižšie" className="text-slate-400 hover:text-slate-700 p-0.5"><ChevronDown className="w-3.5 h-3.5" /></button>
-              <button type="button" onClick={(e) => { e.stopPropagation(); zmaz(o); }} title="Zmazať" className="text-slate-400 hover:text-rose-500 p-0.5"><Trash2 className="w-3.5 h-3.5" /></button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {selected && (
-        <div className="border-t border-slate-200 pt-3 space-y-2.5">
-          <h5 className="font-bold text-[11px] text-slate-700 uppercase tracking-wide">Vlastnosti vybranej vrstvy</h5>
+  const vlastnosti = selected ? (
+    <div className={rezim === 'sheet' ? 'lg:hidden fixed inset-x-0 bottom-0 z-50 max-h-[46vh] overflow-y-auto bg-indigo-50 border-t-2 border-indigo-200 rounded-t-2xl shadow-[0_-8px_24px_rgba(0,0,0,0.18)] p-3 space-y-2.5' : 'hidden lg:block border-t border-slate-200 pt-3 space-y-2.5'}>
+      <div className="flex items-center justify-between gap-2">
+        <h5 className="font-bold text-[11px] text-slate-700 uppercase tracking-wide">{jeText ? 'Úprava textu' : 'Vlastnosti vybranej vrstvy'}</h5>
+        {rezim === 'sheet' && <button type="button" onClick={() => { canvas.discardActiveObject(); canvas.requestRenderAll(); }} className="px-3 py-1 rounded-lg bg-indigo-600 text-white text-xs font-bold">Hotovo</button>}
+      </div>
 
           {jeText && (
             <div>
@@ -100,7 +86,7 @@ export default function LayersPanel({ canvas }) {
               </div>
               <div>
                 <label className="block text-[10px] text-slate-500 mb-1">Veľkosť písma (cm)</label>
-                <NumberInput step="0.5" min="1" value={Math.round((selected.fontSize || 0) * 10) / 10} onChange={(v) => aktualizuj({ fontSize: v })} fallback={1} className="w-full text-xs px-2 py-1.5 border border-slate-300 rounded-lg" />
+                <NumberInput step="0.5" min="1" value={Math.round((selected.fontSize || 0) * mierka.y * 10) / 10} onChange={(v) => aktualizuj({ fontSize: v / mierka.y })} fallback={1} className="w-full text-xs px-2 py-1.5 border border-slate-300 rounded-lg" />
               </div>
             </div>
           )}
@@ -113,7 +99,7 @@ export default function LayersPanel({ canvas }) {
               </div>
               <div>
                 <label className="block text-[10px] text-slate-500 mb-1">Farba obrysu</label>
-                <input type="color" value={selected.stroke || '#ffffff'} onChange={(e) => aktualizuj({ stroke: e.target.value })} className="w-full h-8 rounded-lg cursor-pointer border border-slate-300" />
+                <input type="color" value={selected.stroke || '#ffffff'} onChange={(e) => { aktualizuj({ stroke: e.target.value }); if (!(obrysHrubka > 0)) nastavObrys({ hrubka: 0.3, poloha: obrysPoloha }); }} className="w-full h-8 rounded-lg cursor-pointer border border-slate-300" />
               </div>
             </div>
           )}
@@ -121,7 +107,7 @@ export default function LayersPanel({ canvas }) {
           {jeText && (
             <div>
               <label className="block text-[10px] text-slate-500 mb-1">Hrúbka obrysu (cm) — 0 = bez obrysu</label>
-              <NumberInput step="0.05" min="0" value={obrysHrubka} onChange={(v) => nastavObrys({ hrubka: v })} fallback={0} className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded-lg" />
+              <NumberInput step="0.05" min="0" value={obrysHrubka} onChange={(v) => { if (v > 0 && !selected.stroke) aktualizuj({ stroke: '#ffffff' }); nastavObrys({ hrubka: v }); if (!(v > 0)) aktualizuj({ stroke: null }); }} fallback={0} className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded-lg" />
             </div>
           )}
 
@@ -149,8 +135,35 @@ export default function LayersPanel({ canvas }) {
           </div>
 
           <p className="text-[11px] text-slate-500 font-mono">Reálna veľkosť na vlajke: {sirkaCm} × {vyskaCm} cm</p>
+      <div className="grid grid-cols-2 gap-2">
+        <button type="button" onClick={duplikuj} className="text-xs px-2 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 font-semibold">Duplikovať</button>
+        <button type="button" onClick={() => zmaz(selected)} className="text-xs px-2 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold">Zmazať</button>
+      </div>
+    </div>
+  ) : null;
+
+  if (rezim === 'sheet') return vlastnosti;
+
+  return (
+    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+      <h4 className="font-bold text-xs text-slate-800">Vrstvy (loga a texty na vlajke)</h4>
+      {objekty.length === 0 ? (
+        <p className="text-[11px] text-slate-500">Zatiaľ nie je pridaný žiadny text ani logo.</p>
+      ) : (
+        <div className="space-y-1.5">
+          {objekty.map((o, i) => (
+            <div key={i} onClick={() => vyber(o)} className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border cursor-pointer transition-colors ${selected === o ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 bg-white hover:bg-slate-50'}`}>
+              {o.type === 'image' ? <ImageIcon className="w-3.5 h-3.5 text-slate-500 shrink-0" /> : <TypeIcon className="w-3.5 h-3.5 text-slate-500 shrink-0" />}
+              <span className="flex-1 min-w-0 truncate text-xs text-slate-700">{o.type === 'image' ? 'Obrázok / logo' : (o.text || 'Text')}</span>
+              <button type="button" onClick={(e) => { e.stopPropagation(); posunHore(o); }} title="Posunúť vyššie" className="text-slate-400 hover:text-slate-700 p-0.5"><ChevronUp className="w-3.5 h-3.5" /></button>
+              <button type="button" onClick={(e) => { e.stopPropagation(); posunDole(o); }} title="Posunúť nižšie" className="text-slate-400 hover:text-slate-700 p-0.5"><ChevronDown className="w-3.5 h-3.5" /></button>
+              <button type="button" onClick={(e) => { e.stopPropagation(); zmaz(o); }} title="Zmazať" className="text-slate-400 hover:text-rose-500 p-0.5"><Trash2 className="w-3.5 h-3.5" /></button>
+            </div>
+          ))}
         </div>
       )}
+
+      {rezim !== 'sheet' && vlastnosti}
     </div>
   );
 }

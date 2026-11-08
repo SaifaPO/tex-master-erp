@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { fabric } from 'fabric';
 import { Flag, Eye } from 'lucide-react';
 import PbtHeader from '../PbtHeader';
+import LayersPanel from './LayersPanel';
 import AskQuestion from '../AskQuestion';
 import { nacitajVlajkaKatalog } from './vlajkaData';
 import ParametreTab from './ParametreTab';
@@ -496,6 +497,7 @@ export default function BeachflagApp({ supabase }) {
 
       </div>
     </div>
+    <LayersPanel canvas={fabricRef.current} rezim="sheet" />
     <SpodnaListaCeny cena={cena} cenaNacitava={cenaNacitava} pocetKs={pocetKs} osobnyOdber={osobnyOdber} />
     </>
   );
