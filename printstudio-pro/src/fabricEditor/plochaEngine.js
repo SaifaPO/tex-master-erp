@@ -86,7 +86,7 @@ export function vytvorEngine({ elFront, elBack, ppm = 2, pozadie = '#ffffff', on
     canvas.on('object:rotating', (e) => onVyber?.(info(e.target), strana));
     canvas.on('text:changed', (e) => onVyber?.(info(e.target), strana)); // úprava textu priamo na plátne (dvojklik)
     canvas.on('mouse:up', () => onPrichytenie?.(strana, false, false));
-    ['object:added', 'object:removed', 'object:modified'].forEach((ev) => canvas.on(ev, () => onZmena?.()));
+    ['object:added', 'object:removed', 'object:modified', 'text:changed'].forEach((ev) => canvas.on(ev, () => onZmena?.()));
   });
 
   const pridaj = (obj) => {
@@ -194,6 +194,30 @@ export function vytvorEngine({ elFront, elBack, ppm = 2, pozadie = '#ffffff', on
     // Načíta uložený stav líca (JSON z exportuj().json.front) — na opätovnú úpravu návrhu
     nacitajFront(json, hotovo) {
       front.loadFromJSON(json, () => { front.requestRenderAll(); onZmena?.(); hotovo?.(); });
+    },
+    // Obsah plátna (spoločný obdĺžnik všetkých objektov) — veľkosť potlače sa pri sieťotlači určí PODĽA MOTÍVU, nič sa neoreže
+    obsah() {
+      const objs = front.getObjects();
+      if (!objs.length) return null;
+      let l = Infinity, t = Infinity, r = -Infinity, b = -Infinity;
+      objs.forEach((o) => { const bb = o.getBoundingRect(true, true); l = Math.min(l, bb.left); t = Math.min(t, bb.top); r = Math.max(r, bb.left + bb.width); b = Math.max(b, bb.top + bb.height); });
+      l = Math.max(0, l); t = Math.max(0, t); r = Math.min(rozmer.w, r); b = Math.min(rozmer.h, b);
+      if (r - l < 1 || b - t < 1) return null;
+      return { left: l, top: t, width: r - l, height: b - t, sirkaMm: (r - l) / ppm, vyskaMm: (b - t) / ppm };
+    },
+    // Malý náhľad motívu orezaný na obsah (živý náhľad na tričku počas kreslenia) + rozmer v mm
+    zivyNahlad(maxPx = 360) {
+      const bb = this.obsah(); if (!bb) return null;
+      const url = front.toDataURL({ format: 'png', left: bb.left, top: bb.top, width: bb.width, height: bb.height, multiplier: Math.min(2, maxPx / Math.max(bb.width, bb.height)) });
+      return { nahlad: url, sirkaMm: bb.sirkaMm, vyskaMm: bb.vyskaMm, json: front.toJSON() };
+    },
+    // Tlačový PNG orezaný na obsah (priehľadné pozadie), bez zrušenia výberu objektu
+    async exportujOrezane({ maxPx = 4096 } = {}) {
+      const bb = this.obsah(); if (!bb) return null;
+      const nasobok = Math.min(300 / 25.4 / ppm, maxPx / Math.max(bb.width, bb.height));
+      const url = front.toDataURL({ format: 'png', left: bb.left, top: bb.top, width: bb.width, height: bb.height, multiplier: nasobok });
+      const blob = await fetch(url).then((r) => r.blob());
+      return { blob, sirkaMm: bb.sirkaMm, vyskaMm: bb.vyskaMm, json: front.toJSON() };
     },
     // Rýchly náhľad (malé PNG) na zobrazenie v objednávke / zhrnutí
     nahlad() {

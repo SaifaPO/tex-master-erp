@@ -1,11 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Minus, Plus, Upload, Trash2, FileImage, ChevronDown, PenTool, Shirt, Check } from 'lucide-react';
 import PbtHeader from './PbtHeader';
 import NumberInput from './NumberInput';
 import { useB2bKod } from './b2b';
 import B2bKod from './B2bKod';
 import { useCenaNahlad, CenaSuhrn, MnozstevneZlavy } from './cenaNahlad';
-import NavrhGrafiky from './NavrhGrafiky';
+import NavrhInline from './NavrhInline';
 import TrickoNahlad from './TrickoNahlad';
 
 // Verejná appka „Potlač textilu“ (?typ=potlac): produkt (tričko, mikina…) → farba → technológia (DTF / rezaný transfer / sieťotlač) → potlače
@@ -77,7 +77,9 @@ export default function PotlacTextilu({ supabase }) {
   const [bezi, setBezi] = useState(false);
   const [chybaObj, setChybaObj] = useState('');
   const [potvrdenie, setPotvrdenie] = useState('');
-  const [navrhId, setNavrhId] = useState(null);
+  const [navrhId, setNavrhId] = useState(null); // id potlače, ktorej editor je otvorený priamo na stránke
+  const flushRef = useRef({});
+  const registruj = useCallback((id, fn) => { if (fn) flushRef.current[id] = fn; else delete flushRef.current[id]; }, []);
   const fileRefs = useRef({});
 
   const volaj = async (body) => {
@@ -145,10 +147,6 @@ export default function PotlacTextilu({ supabase }) {
     if (f.size > MAX_MB * 1024 * 1024) { window.alert(`Súbor je príliš veľký (max. ${MAX_MB} MB).`); return; }
     setTlace((l) => l.map((t) => { if (t.id !== id) return t; if (t.nahlad) URL.revokeObjectURL(t.nahlad); return { ...t, subor: f, nahlad: jeObrazok(f) ? URL.createObjectURL(f) : null, navrhJson: null }; }));
   };
-  const hotovyNavrh = (id, { subor, nahlad, json }) => {
-    setTlace((l) => l.map((t) => { if (t.id !== id) return t; if (t.nahlad) URL.revokeObjectURL(t.nahlad); return { ...t, subor, nahlad, navrhJson: json }; }));
-    setNavrhId(null);
-  };
 
   const teloCeny = useMemo(() => ({
     produktId, vlastnyTextil, farbaHex, material, technologia, velkosti, pocetKs: pocetKsVlastny, osobnyOdber, b2bKod: b2b.kod,
@@ -157,10 +155,10 @@ export default function PotlacTextilu({ supabase }) {
   const pripravene = !!nast && nast.aktivny !== false && !!produkt && tlace.length > 0 && pocetKs >= minKs;
   const { cena, chyba } = useCenaNahlad(supabase, FUNKCIA, teloCeny, pripravene);
 
-  const nahrajSubory = async () => {
+  const nahrajSubory = async (zoznam = tlace) => {
     const sk = crypto.randomUUID();
     const vysledok = [];
-    for (const t of tlace) {
+    for (const t of zoznam) {
       if (!t.subor) { vysledok.push({ suborCesta: null, suborNazov: null }); continue; }
       const cesta = `potlac/${sk}/${t.umiestnenie}_${t.subor.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
       const { error } = await supabase.storage.from(BUCKET).upload(cesta, t.subor, { contentType: t.subor.type || undefined });
@@ -169,13 +167,21 @@ export default function PotlacTextilu({ supabase }) {
     }
     return vysledok;
   };
-  const chybajuSubory = tlace.some((t) => !t.subor);
+  const chybajuSubory = tlace.some((t) => !t.subor && !t.navrhJson);
+  // pred objednávkou sa dokončia rozpracované návrhy v otvorených editoroch
+  const dokonciNavrhy = async () => {
+    const hotove = {};
+    for (const [id, fn] of Object.entries(flushRef.current)) { const patch = await fn(); if (patch) hotove[id] = patch; }
+    return tlace.map((t) => (hotove[t.id] ? { ...t, ...hotove[t.id] } : t));
+  };
   const objednat = async () => {
     if (chybajuSubory) { setChybaObj('Pridajte prosím grafiku ku každej potlači (nahrajte súbor alebo si ju navrhnite).'); return; }
     setBezi(true); setChybaObj(''); setPotvrdenie('');
     try {
-      const subory = await nahrajSubory();
-      const d = await volaj({ ...teloCeny, tlace: teloCeny.tlace.map((t, i) => ({ ...t, ...subory[i] })), preview: undefined });
+      const zoznam = await dokonciNavrhy();
+      if (zoznam.some((t) => !t.subor)) throw new Error('Motív je prázdny — pridajte text, symbol alebo grafiku.');
+      const subory = await nahrajSubory(zoznam);
+      const d = await volaj({ ...teloCeny, tlace: zoznam.map((t, i) => ({ umiestnenie: t.umiestnenie, sirkaCm: t.sirka, vyskaCm: t.vyska, farby: t.farby, efekt: t.efekt, ...subory[i] })), preview: undefined });
       setPotvrdenie(`Objednávka bola vytvorená — ${Number(d.cenaSpolu).toFixed(2)} €. Presmerúvam na platbu…`);
       window.location.href = d.checkoutUrl;
     } catch (e) { setChybaObj('Objednávku sa nepodarilo odoslať: ' + e.message); } finally { setBezi(false); }
@@ -206,19 +212,6 @@ export default function PotlacTextilu({ supabase }) {
       <PbtHeader title="Potlač textilu" subtitle="Tričká, mikiny a ďalšie: DTF, rezaný transfer alebo sieťotlač" />
       <div className="px-4 py-2 bg-white border-b border-slate-200"><B2bKod b2b={b2b} /></div>
       {nast?.infoText && <p className="px-4 pt-3 text-xs text-slate-500 text-center">{nast.infoText}</p>}
-      {navrhId && (() => {
-        const t = tlace.find((x) => x.id === navrhId);
-        if (!t) return null;
-        const u = umiestnenia.find((x) => x.kod === t.umiestnenie);
-        return (
-          <NavrhGrafiky key={t.id} supabase={supabase} sirkaCm={t.sirka} vyskaCm={t.vyska} nazov={u?.nazov || 'potlač'}
-            pocetFarieb={TECH[technologia].farby ? t.farby : null} podkladFarba={farbaHex}
-            upozornenie={technologia === 'dtf' ? null : technologia === 'rezany'
-              ? `Rezaný transfer sa vyrezáva z jednofarebnej fólie — používajte plné tvary a texty (${t.farby} ${t.farby === 1 ? 'farba' : t.farby < 5 ? 'farby' : 'farieb'}). Fotografie a jemné prechody nejdú; na ne je lepší DTF.`
-              : `Sieťotlač je vhodná na jednoduché plné plochy a texty (${t.farby} ${t.farby === 1 ? 'farba' : t.farby < 5 ? 'farby' : 'farieb'}). Fotografie a farebné prechody sa v sieťotlači nevytlačia — na ne je lepšia DTF potlač.`}
-            povodnyJson={t.navrhJson} onHotovo={(v) => hotovyNavrh(t.id, v)} onZrus={() => setNavrhId(null)} />
-        );
-      })()}
 
       <main className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 py-5 grid grid-cols-1 lg:grid-cols-[1fr_24rem] gap-5 items-start">
         <div className="space-y-4 min-w-0">
@@ -302,8 +295,8 @@ export default function PotlacTextilu({ supabase }) {
                         {u?.popis && <p className="text-[11px] text-slate-400 mt-1">{u.popis} (max. {u.maxSirkaCm} × {u.maxVyskaCm} cm)</p>}
                       </div>
                       <div className="grid grid-cols-2 gap-3">
-                        <div><label className="block text-xs font-medium text-slate-500 mb-1">Šírka (cm)</label><NumberInput min="1" max={u?.maxSirkaCm} step="0.5" value={t.sirka} onChange={(v) => uprav(t.id, { sirka: Math.min(u?.maxSirkaCm || 43, Math.max(1, v)) })} fallback={10} className={pole} /></div>
-                        <div><label className="block text-xs font-medium text-slate-500 mb-1">Výška (cm)</label><NumberInput min="1" max={u?.maxVyskaCm} step="0.5" value={t.vyska} onChange={(v) => uprav(t.id, { vyska: Math.min(u?.maxVyskaCm || 58, Math.max(1, v)) })} fallback={10} className={pole} /></div>
+                        <div><label className="block text-xs font-medium text-slate-500 mb-1">Šírka (cm)</label><NumberInput disabled={!!t.navrhJson} min="1" max={u?.maxSirkaCm} step="0.5" value={t.sirka} onChange={(v) => uprav(t.id, { sirka: Math.min(u?.maxSirkaCm || 43, Math.max(1, v)) })} fallback={10} className={pole} /></div>
+                        <div><label className="block text-xs font-medium text-slate-500 mb-1">Výška (cm)</label><NumberInput disabled={!!t.navrhJson} min="1" max={u?.maxVyskaCm} step="0.5" value={t.vyska} onChange={(v) => uprav(t.id, { vyska: Math.min(u?.maxVyskaCm || 58, Math.max(1, v)) })} fallback={10} className={pole} /></div>
                       </div>
                       {TECH[technologia].farby && (
                         <div>
@@ -324,6 +317,7 @@ export default function PotlacTextilu({ supabase }) {
                         </div>
                       )}
                     </div>
+                    {t.navrhJson && <p className="text-[11px] text-emerald-700">Rozmer sa nastavil automaticky podľa vášho motívu.</p>}
                     {sirkaChyba && <p className="text-xs text-rose-600">Rozmer presahuje maximum pre toto umiestnenie ({u.maxSirkaCm} × {u.maxVyskaCm} cm).</p>}
                     <div>
                       <input ref={(el) => { fileRefs.current[t.id] = el; }} type="file" accept={POVOLENE.join(',')} className="hidden" onChange={(e) => { vyberSubor(t.id, e.target.files?.[0]); e.target.value = ''; }} />
@@ -336,10 +330,23 @@ export default function PotlacTextilu({ supabase }) {
                           <span className="block text-[11px] text-slate-400">{t.subor ? 'Kliknutím súbor vymeníte' : `Kliknite alebo pretiahnite súbor (${POVOLENE.join(', ')}, max. ${MAX_MB} MB). Najlepšie vektor alebo PNG s priehľadným pozadím.`}</span>
                         </span>
                       </button>
-                      <button type="button" onClick={() => setNavrhId(t.id)} disabled={sirkaChyba}
-                        className="mt-2 w-full rounded-xl border border-indigo-300 bg-indigo-50 hover:bg-indigo-100 disabled:opacity-50 text-indigo-800 text-sm font-semibold py-2.5 flex items-center justify-center gap-2 transition">
-                        <PenTool className="w-4 h-4" /> {t.navrhJson ? 'Upraviť môj návrh' : 'Navrhnúť vlastný motív (text, symboly, grafiky)'}
+                      <button type="button" onClick={() => setNavrhId(navrhId === t.id ? null : t.id)}
+                        className="mt-2 w-full rounded-xl border-2 border-indigo-300 bg-indigo-50 hover:bg-indigo-100 p-3 flex items-center gap-3 text-left transition">
+                        <PenTool className="w-7 h-7 text-indigo-500 shrink-0" />
+                        <span className="min-w-0">
+                          <span className="block text-sm font-semibold text-indigo-900">{navrhId === t.id ? 'Zavrieť editor' : t.navrhJson ? 'Upraviť môj návrh' : 'Navrhnúť vlastný motív priamo tu'}</span>
+                          <span className="block text-[11px] text-indigo-700/70">Text, písma, symboly, knižnica grafík — motív hneď vidíte na produkte.</span>
+                        </span>
                       </button>
+                      {navrhId === t.id && u && (
+                        <div className="mt-2">
+                          <NavrhInline key={`${t.id}-${t.umiestnenie}`} supabase={supabase} id={t.id} maxSirkaCm={u.maxSirkaCm} maxVyskaCm={u.maxVyskaCm} podkladFarba={farbaHex}
+                            upozornenie={technologia === 'dtf' ? null : technologia === 'rezany'
+                              ? `Rezaný transfer sa vyrezáva z jednofarebnej fólie — používajte plné tvary a texty (${t.farby} ${t.farby === 1 ? 'farba' : t.farby < 5 ? 'farby' : 'farieb'}). Fotografie a jemné prechody nejdú; na ne je lepší DTF.`
+                              : `Sieťotlač je vhodná na jednoduché plné plochy a texty (${t.farby} ${t.farby === 1 ? 'farba' : t.farby < 5 ? 'farby' : 'farieb'}). Fotografie a farebné prechody sa v sieťotlači nevytlačia — na ne je lepšia DTF potlač.`}
+                            povodnyJson={t.navrhJson} onZmena={(patch) => uprav(t.id, patch)} registruj={registruj} onZavri={() => setNavrhId(null)} />
+                        </div>
+                      )}
                     </div>
                   </div>
                 );

@@ -1,11 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Layers, Minus, Plus, Send, CheckCircle2, Moon, Sun, Upload, Trash2, FileImage, ChevronDown, PenTool } from 'lucide-react';
 import PbtHeader from './PbtHeader';
 import NumberInput from './NumberInput';
 import { useB2bKod } from './b2b';
 import B2bKod from './B2bKod';
 import { useCenaNahlad, CenaSuhrn, MnozstevneZlavy } from './cenaNahlad';
-import NavrhGrafiky from './NavrhGrafiky';
+import NavrhInline from './NavrhInline';
 
 // Verejná appka „Sieťotlač“ (?typ=sietotlac): na jednom kuse môže byť viac potlačí (srdce, chrbát, rukávy…), každá s vlastným rozmerom,
 // farbami, efektom a grafikou. Objednávka sa platí cez Shopify (ako ostatné appky) alebo sa pošle len dopyt.
@@ -116,7 +116,10 @@ export default function Sietotlac({ supabase }) {
   const [chybaObj, setChybaObj] = useState('');
   const [potvrdenie, setPotvrdenie] = useState('');
 
-  const [navrhId, setNavrhId] = useState(null); // id potlače, ktorej sa práve navrhuje vlastný motív v editore
+  const [navrhId, setNavrhId] = useState(null); // id potlače, ktorej editor je práve otvorený priamo na stránke
+  const [suhlas, setSuhlas] = useState(false); // potvrdenie: potlač na textil dodaný zákazníkom
+  const flushRef = useRef({});
+  const registruj = useCallback((id, fn) => { if (fn) flushRef.current[id] = fn; else delete flushRef.current[id]; }, []);
   const [dopytOtvoreny, setDopytOtvoreny] = useState(false);
   const [kontakt, setKontakt] = useState({ meno: '', email: '', telefon: '', poznamka: '' });
   const [hp, setHp] = useState('');
@@ -166,10 +169,6 @@ export default function Sietotlac({ supabase }) {
     if (f.size > MAX_MB * 1024 * 1024) { window.alert(`Súbor je príliš veľký (max. ${MAX_MB} MB).`); return; }
     setTlace((l) => l.map((t) => { if (t.id !== id) return t; if (t.nahlad) URL.revokeObjectURL(t.nahlad); return { ...t, subor: f, nahlad: jeObrazok(f) ? URL.createObjectURL(f) : null, navrhJson: null }; }));
   };
-  const hotovyNavrh = (id, { subor, nahlad, json }) => {
-    setTlace((l) => l.map((t) => { if (t.id !== id) return t; if (t.nahlad) URL.revokeObjectURL(t.nahlad); return { ...t, subor, nahlad, navrhJson: json }; }));
-    setNavrhId(null);
-  };
 
   const teloCeny = useMemo(() => ({
     material, tmavy, dveVelkosti, pocetKs, osobnyOdber, b2bKod: b2b.kod,
@@ -177,10 +176,10 @@ export default function Sietotlac({ supabase }) {
   }), [material, tmavy, dveVelkosti, pocetKs, osobnyOdber, b2b.kod, tlace]);
   const { cena, chyba } = useCenaNahlad(supabase, FUNKCIA, teloCeny, !!nast && nast.aktivny !== false && tlace.length > 0);
 
-  const nahrajSubory = async () => {
+  const nahrajSubory = async (zoznam = tlace) => {
     const sk = crypto.randomUUID();
     const vysledok = [];
-    for (const t of tlace) {
+    for (const t of zoznam) {
       if (!t.subor) { vysledok.push({ suborCesta: null, suborNazov: null }); continue; }
       const cesta = `sietotlac/${sk}/${t.umiestnenie}_${t.subor.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
       const { error } = await supabase.storage.from(BUCKET).upload(cesta, t.subor, { contentType: t.subor.type || undefined });
@@ -189,15 +188,24 @@ export default function Sietotlac({ supabase }) {
     }
     return vysledok;
   };
-  const telo = (subory) => ({ ...teloCeny, tlace: teloCeny.tlace.map((t, i) => ({ ...t, ...subory[i] })) });
+  const telo = (subory, zoznam = tlace) => ({ ...teloCeny, tlace: zoznam.map((t, i) => ({ umiestnenie: t.umiestnenie, sirkaCm: t.sirka, vyskaCm: t.vyska, farby: t.farby, efekt: t.efekt, ...subory[i] })) });
+  // pred objednávkou sa dokončia rozpracované návrhy v otvorených editoroch (aby sa neposlala staršia verzia)
+  const dokonciNavrhy = async () => {
+    const hotove = {};
+    for (const [id, fn] of Object.entries(flushRef.current)) { const patch = await fn(); if (patch) hotove[id] = patch; }
+    return tlace.map((t) => (hotove[t.id] ? { ...t, ...hotove[t.id] } : t));
+  };
 
-  const chybajuSubory = tlace.some((t) => !t.subor);
+  const chybajuSubory = tlace.some((t) => !t.subor && !t.navrhJson);
   const objednat = async () => {
-    if (chybajuSubory) { setChybaObj('Nahrajte prosím grafiku ku každej potlači.'); return; }
+    if (chybajuSubory) { setChybaObj('Nahrajte prosím grafiku ku každej potlači alebo si ju navrhnite.'); return; }
+    if (!suhlas) { setChybaObj('Potvrďte prosím, že ide o potlač na textil dodaný vami.'); return; }
     setBezi(true); setChybaObj(''); setPotvrdenie('');
     try {
-      const subory = await nahrajSubory();
-      const d = await volaj(telo(subory));
+      const zoznam = await dokonciNavrhy();
+      if (zoznam.some((t) => !t.subor)) throw new Error('Motív je prázdny — pridajte text, symbol alebo grafiku.');
+      const subory = await nahrajSubory(zoznam);
+      const d = await volaj(telo(subory, zoznam));
       setPotvrdenie(`Objednávka bola vytvorená — ${Number(d.cenaSpolu).toFixed(2)} €. Presmerúvam na platbu…`);
       window.location.href = d.checkoutUrl;
     } catch (e) { setChybaObj('Objednávku sa nepodarilo odoslať: ' + e.message); } finally { setBezi(false); }
@@ -231,15 +239,10 @@ export default function Sietotlac({ supabase }) {
       <PbtHeader title="Sieťotlač" subtitle="Potlač tričiek: viac potlačí, objednávka a platba online" />
       <div className="px-4 py-2 bg-white border-b border-slate-200"><B2bKod b2b={b2b} /></div>
       {nast?.infoText && <p className="px-4 pt-3 text-xs text-slate-500 text-center">{nast.infoText}</p>}
-      {navrhId && (() => {
-        const t = tlace.find((x) => x.id === navrhId);
-        if (!t) return null;
-        const u = umiestnenia.find((x) => x.kod === t.umiestnenie);
-        return (
-          <NavrhGrafiky key={t.id} supabase={supabase} sirkaCm={t.sirka} vyskaCm={t.vyska} nazov={u?.nazov || 'potlač'} pocetFarieb={t.farby}
-            povodnyJson={t.navrhJson} onHotovo={(v) => hotovyNavrh(t.id, v)} onZrus={() => setNavrhId(null)} />
-        );
-      })()}
+      <div className="px-4 pt-3"><div className="max-w-6xl mx-auto rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-xs sm:text-sm text-indigo-900 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+        <span><strong>Potlač na textil dodaný vami (zákazníkom).</strong> Cena je len za potlač — textil nám doručíte sami.</span>
+        <a href="/?typ=potlac" className="font-bold underline hover:text-indigo-700">Chcem potlač aj s textilom od nás (tričká, mikiny…) →</a>
+      </div></div>
 
       <main className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 py-5 grid grid-cols-1 lg:grid-cols-[1fr_24rem] gap-5 items-start">
         <div className="space-y-4 min-w-0">
@@ -269,7 +272,6 @@ export default function Sietotlac({ supabase }) {
           <Sekcia cislo="2" nazov={`Potlače na jednom kuse (${tlace.length})`}
             akcia={<button type="button" onClick={pridajTlac} disabled={volneUmiestnenia.length === 0 || tlace.length >= 6} className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-300 text-white text-xs font-semibold flex items-center gap-1.5"><Plus className="w-3.5 h-3.5" /> Pridať potlač</button>}>
             <p className="text-xs text-slate-500">Napríklad malé logo na srdci a veľká potlač na chrbte, prípadne aj na rukávoch. Každá potlač má vlastný rozmer, počet farieb a grafiku.</p>
-            <div className="hidden lg:block"><NahladTricka tlace={tlace} umiestnenia={umiestnenia} tmavy={tmavy} /></div>
             <div className="space-y-3">
               {tlace.map((t, i) => {
                 const u = umiestnenia.find((x) => x.kod === t.umiestnenie);
@@ -293,8 +295,8 @@ export default function Sietotlac({ supabase }) {
                         {u?.popis && <p className="text-[11px] text-slate-400 mt-1">{u.popis} (max. {u.maxSirkaCm} × {u.maxVyskaCm} cm)</p>}
                       </div>
                       <div className="grid grid-cols-2 gap-3">
-                        <div><label className="block text-xs font-medium text-slate-500 mb-1">Šírka (cm)</label><NumberInput min="1" max={u?.maxSirkaCm} step="0.5" value={t.sirka} onChange={(v) => uprav(t.id, { sirka: Math.min(u?.maxSirkaCm || 43, Math.max(1, v)) })} fallback={10} className={pole} /></div>
-                        <div><label className="block text-xs font-medium text-slate-500 mb-1">Výška (cm)</label><NumberInput min="1" max={u?.maxVyskaCm} step="0.5" value={t.vyska} onChange={(v) => uprav(t.id, { vyska: Math.min(u?.maxVyskaCm || 58, Math.max(1, v)) })} fallback={10} className={pole} /></div>
+                        <div><label className="block text-xs font-medium text-slate-500 mb-1">Šírka (cm)</label><NumberInput disabled={!!t.navrhJson} min="1" max={u?.maxSirkaCm} step="0.5" value={t.sirka} onChange={(v) => uprav(t.id, { sirka: Math.min(u?.maxSirkaCm || 43, Math.max(1, v)) })} fallback={10} className={pole} /></div>
+                        <div><label className="block text-xs font-medium text-slate-500 mb-1">Výška (cm)</label><NumberInput disabled={!!t.navrhJson} min="1" max={u?.maxVyskaCm} step="0.5" value={t.vyska} onChange={(v) => uprav(t.id, { vyska: Math.min(u?.maxVyskaCm || 58, Math.max(1, v)) })} fallback={10} className={pole} /></div>
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-slate-500 mb-1.5">Počet farieb (1–6)</label>
@@ -313,6 +315,7 @@ export default function Sietotlac({ supabase }) {
                         {efektObj?.popis && <p className="text-[11px] text-slate-400 mt-1">{efektObj.popis}</p>}
                       </div>
                     </div>
+                    {t.navrhJson && <p className="text-[11px] text-emerald-700">Rozmer sa nastavil automaticky podľa vášho motívu.</p>}
                     {sirkaChyba && <p className="text-xs text-rose-600">Rozmer presahuje maximum pre toto umiestnenie ({u.maxSirkaCm} × {u.maxVyskaCm} cm).</p>}
                     <div>
                       <input ref={(el) => { fileRefs.current[t.id] = el; }} type="file" accept={POVOLENE.join(',')} className="hidden" onChange={(e) => { vyberSubor(t.id, e.target.files?.[0]); e.target.value = ''; }} />
@@ -325,10 +328,21 @@ export default function Sietotlac({ supabase }) {
                           <span className="block text-[11px] text-slate-400">{t.subor ? 'Kliknutím súbor vymeníte' : `Kliknite alebo pretiahnite súbor (${POVOLENE.join(', ')}, max. ${MAX_MB} MB). Najlepšie vektor alebo PNG s priehľadným pozadím.`}</span>
                         </span>
                       </button>
-                      <button type="button" onClick={() => setNavrhId(t.id)} disabled={sirkaChyba}
-                        className="mt-2 w-full rounded-xl border border-indigo-300 bg-indigo-50 hover:bg-indigo-100 disabled:opacity-50 text-indigo-800 text-sm font-semibold py-2.5 flex items-center justify-center gap-2 transition">
-                        <PenTool className="w-4 h-4" /> {t.navrhJson ? 'Upraviť môj návrh' : 'Navrhnúť vlastný motív (text, symboly, grafiky)'}
+                      <button type="button" onClick={() => setNavrhId(navrhId === t.id ? null : t.id)}
+                        className="mt-2 w-full rounded-xl border-2 border-indigo-300 bg-indigo-50 hover:bg-indigo-100 p-3 flex items-center gap-3 text-left transition">
+                        <PenTool className="w-7 h-7 text-indigo-500 shrink-0" />
+                        <span className="min-w-0">
+                          <span className="block text-sm font-semibold text-indigo-900">{navrhId === t.id ? 'Zavrieť editor' : t.navrhJson ? 'Upraviť môj návrh' : 'Navrhnúť vlastný motív priamo tu'}</span>
+                          <span className="block text-[11px] text-indigo-700/70">Text, písma, symboly, knižnica grafík — motív hneď vidíte na tričku.</span>
+                        </span>
                       </button>
+                      {navrhId === t.id && u && (
+                        <div className="mt-2">
+                          <NavrhInline key={`${t.id}-${t.umiestnenie}`} supabase={supabase} id={t.id} maxSirkaCm={u.maxSirkaCm} maxVyskaCm={u.maxVyskaCm} podkladFarba={tmavy ? '#1e293b' : '#f8fafc'}
+                            upozornenie={`Sieťotlač je vhodná na jednoduché plné plochy a texty (${t.farby} ${t.farby === 1 ? 'farba' : t.farby < 5 ? 'farby' : 'farieb'}). Fotografie a farebné prechody sa v sieťotlači nevytlačia — na ne je lepšia DTF potlač.`}
+                            povodnyJson={t.navrhJson} onZmena={(patch) => uprav(t.id, patch)} registruj={registruj} onZavri={() => setNavrhId(null)} />
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -354,8 +368,11 @@ export default function Sietotlac({ supabase }) {
         </div>
 
         <aside className="lg:sticky lg:top-20 space-y-3 min-w-0">
+          <div className="hidden lg:block bg-white border border-slate-200 rounded-2xl p-3"><NahladTricka tlace={tlace} umiestnenia={umiestnenia} tmavy={tmavy} /></div>
           <CenaSuhrn cena={cena} chyba={chyba} osobnyOdber={osobnyOdber} onOsobnyOdber={setOsobnyOdber} onObjednat={objednat} bezi={bezi}
-            chybaObjednavky={chybaObj} potvrdenie={potvrdenie} zakazane={chybajuSubory} poznamkaZakazane="Pred objednávkou nahrajte grafiku ku každej potlači." riadky={riadky} />
+            chybaObjednavky={chybaObj} potvrdenie={potvrdenie} zakazane={chybajuSubory || !suhlas} poznamkaZakazane={chybajuSubory ? 'Pred objednávkou pridajte grafiku ku každej potlači (nahrajte súbor alebo si ju navrhnite).' : 'Potvrďte, že textil dodáte vy.'} riadky={riadky}>
+            <label className="flex items-start gap-2 cursor-pointer text-xs text-slate-300"><input type="checkbox" checked={suhlas} onChange={(e) => setSuhlas(e.target.checked)} className="mt-0.5" /><span>Potvrdzujem, že ide o potlač na <strong>textil dodaný mnou</strong> (cena je len za potlač).</span></label>
+          </CenaSuhrn>
 
           <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
             {hotovo ? (

@@ -11,10 +11,12 @@ import { vytvorEngine, SYMBOLY, FONTY_PREDVOLENE, VZORY_POZADIA, svgDoDataUri } 
 // Cez ref: exportuj() -> { front, back (Blob PNG ≈300 DPI), json }, nahlad(), pocetObjektov(), nastavRozmer().
 const PlochaEditor = forwardRef(function PlochaEditor({
   sirkaMm, vyskaMm, tvar = null, ppm = 2, rozlozenie = 'vedla', nazvyStran = ['Líce', 'Rub'], spadavkaMm = 0, casti = null, medzeraCastiMm = 10,
-  fonty = [], grafiky = [], symboly = SYMBOLY, jednaStrana = false, priehladne = false, podkladFarba = null, children,
+  fonty = [], grafiky = [], symboly = SYMBOLY, jednaStrana = false, priehladne = false, podkladFarba = null, onZmena = null, maxVyskaVh = 0.3, popisRozmeru = null, children,
 }, ref) {
   const wrapFront = useRef(null), wrapBack = useRef(null), vonkajsi = useRef(null);
   const guideRefs = useRef({});
+  const onZmenaRef = useRef(onZmena);
+  useEffect(() => { onZmenaRef.current = onZmena; }, [onZmena]);
   const engineRef = useRef(null);
   const [strana, setStrana] = useState('front');
   const [vybrany, setVybrany] = useState(null);
@@ -44,7 +46,7 @@ const PlochaEditor = forwardRef(function PlochaEditor({
     const mk = (wrap) => { const c = document.createElement('canvas'); wrap.insertBefore(c, wrap.firstChild); return c; };
     const elFront = mk(wrapFront.current), elBack = mk(wrapBack.current);
     const engine = vytvorEngine({
-      elFront, elBack, ppm, pozadie: priehladne ? null : '#ffffff',
+      elFront, elBack, ppm, pozadie: priehladne ? null : '#ffffff', onZmena: () => onZmenaRef.current?.(),
       onVyber: (info) => setVybrany(info),
       onZrusVyber: () => setVybrany(null),
       onPrichytenie: (s, v, h) => {
@@ -74,8 +76,10 @@ const PlochaEditor = forwardRef(function PlochaEditor({
     const el = vonkajsi.current; if (!el) return;
     const dostupne = el.clientWidth - (uzky ? 24 : 48);
     // na mobile sa plocha zmestí aj do výšky (≈ 40 % obrazovky), aby ostalo miesto na ovládacie prvky a bolo vidieť zmeny bez scrollovania
-    const limitVyska = uzky ? (window.innerHeight * 0.3 - 8) / celkovaVyska : Infinity;
-    setZoomFit(Math.max(0.05, Math.min(1, dostupne / celkovaSirka, limitVyska)));
+    const limitVyska = uzky ? (window.innerHeight * maxVyskaVh - 8) / celkovaVyska : Infinity;
+    // úzke dlhé plochy (šnúrky) by na mobile boli len pár pixelov vysoké — zväčší sa na čitateľnú výšku a plocha sa dá posúvať do strán
+    const minCitatelne = uzky ? 110 / celkovaVyska : 0;
+    setZoomFit(Math.max(0.05, Math.min(1, Math.max(minCitatelne, Math.min(dostupne / celkovaSirka, limitVyska)))));
   }, [celkovaSirka, celkovaVyska, uzky]);
   useLayoutEffect(() => {
     prepocitajFit();
@@ -87,6 +91,8 @@ const PlochaEditor = forwardRef(function PlochaEditor({
   useImperativeHandle(ref, () => ({
     exportuj: (opts) => engineRef.current.exportuj(opts),
     nacitajFront: (json, hotovo) => engineRef.current?.nacitajFront(json, hotovo),
+    zivyNahlad: (px) => engineRef.current?.zivyNahlad(px) || null,
+    exportujOrezane: (opts) => engineRef.current?.exportujOrezane(opts) || null,
     nahlad: () => engineRef.current?.nahlad(),
     pocetObjektov: () => engineRef.current?.pocetObjektov() || 0,
   }), []);
@@ -98,10 +104,10 @@ const PlochaEditor = forwardRef(function PlochaEditor({
     <div className="space-y-4">
       {vybrany && (
         // mobil: panel úpravy je prilepený dole (spodný panel), plocha ostáva hore — zmeny farby, písma či obrysu vidno hneď, bez scrollovania
-        <div className={`bg-indigo-50 border border-indigo-200 p-3 space-y-2.5 ${uzky ? 'fixed inset-x-0 bottom-0 z-50 max-h-[46vh] overflow-y-auto rounded-t-2xl border-t-2 shadow-[0_-8px_24px_rgba(0,0,0,0.18)]' : 'rounded-xl'}`}>
+        <div className={`bg-indigo-50 border border-indigo-200 p-3 space-y-2.5 ${uzky ? 'fixed inset-x-0 bottom-0 z-50 max-h-[46vh] overflow-y-auto overflow-x-hidden rounded-t-2xl border-t-2 shadow-[0_-8px_24px_rgba(0,0,0,0.18)]' : 'rounded-xl'}`}>
           <div className="flex justify-between items-center gap-2">
             <h3 className="font-semibold text-indigo-800 text-xs uppercase tracking-wider">{vybrany.typ === 'text' ? 'Úprava textu' : 'Úprava objektu'}</h3>
-            <span className="text-xs bg-white px-2 py-0.5 rounded border border-indigo-100 font-mono text-indigo-800">{vybrany.sirkaMm} × {vybrany.vyskaMm} mm</span>
+            <span className="text-xs bg-white px-2 py-0.5 rounded border border-indigo-100 font-mono text-indigo-800 whitespace-nowrap">{vybrany.sirkaMm} × {vybrany.vyskaMm} mm</span>
             {uzky && <button type="button" onClick={() => e()?.zrusVyber()} className="ml-auto px-3 py-1 rounded-lg bg-indigo-600 text-white text-xs font-bold">Hotovo</button>}
           </div>
           {vybrany.typ === 'text' && (
@@ -223,6 +229,7 @@ const PlochaEditor = forwardRef(function PlochaEditor({
             </span>
           )}
           <span className="font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">{sirkaMm} × {vyskaMm} mm</span>
+          {popisRozmeru && <span className="text-slate-600 font-medium">{popisRozmeru}</span>}
           {casti && casti.length > 1 && <span className="text-slate-500 hidden sm:inline">Tlač v {casti.length} častiach — medzi nimi šrafovaná medzera {medzeraCastiMm} mm na strih</span>}
           {spadavkaMm > 0 && <span className="text-slate-500 hidden sm:flex items-center gap-2"><span className="inline-block w-3 h-3 border-2 border-red-500 border-dashed" /> okraj výroby <span className="inline-block w-3 h-3 border border-green-600 border-dotted ml-1" /> bezpečná zóna ({spadavkaMm} mm)</span>}
         </div>

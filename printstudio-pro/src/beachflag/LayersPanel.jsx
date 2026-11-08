@@ -63,7 +63,7 @@ export default function LayersPanel({ canvas, rezim = 'plny' }) {
   const uhol = selected ? Math.round((selected.angle || 0) % 360) : 0;
 
   const vlastnosti = selected ? (
-    <div className={rezim === 'sheet' ? 'lg:hidden fixed inset-x-0 bottom-0 z-50 max-h-[46vh] overflow-y-auto bg-indigo-50 border-t-2 border-indigo-200 rounded-t-2xl shadow-[0_-8px_24px_rgba(0,0,0,0.18)] p-3 space-y-2.5' : 'hidden lg:block border-t border-slate-200 pt-3 space-y-2.5'}>
+    <div className={rezim === 'sheet' ? 'lg:hidden fixed inset-x-0 bottom-0 z-50 max-h-[46vh] overflow-y-auto overflow-x-hidden bg-indigo-50 border-t-2 border-indigo-200 rounded-t-2xl shadow-[0_-8px_24px_rgba(0,0,0,0.18)] p-3 space-y-2.5' : 'hidden lg:block border-t border-slate-200 pt-3 space-y-2.5'}>
       <div className="flex items-center justify-between gap-2">
         <h5 className="font-bold text-[11px] text-slate-700 uppercase tracking-wide">{jeText ? 'Úprava textu' : 'Vlastnosti vybranej vrstvy'}</h5>
         {rezim === 'sheet' && <button type="button" onClick={() => { canvas.discardActiveObject(); canvas.requestRenderAll(); }} className="px-3 py-1 rounded-lg bg-indigo-600 text-white text-xs font-bold">Hotovo</button>}

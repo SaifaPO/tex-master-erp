@@ -96,7 +96,7 @@ export default function Snurka({ supabase }) {
       <div className="px-4 py-2 bg-white border-b border-slate-200"><B2bKod b2b={b2b} /></div>
       {d.nast.info_text && <p className="px-4 pt-3 text-xs text-slate-500 text-center">{d.nast.info_text}</p>}
 
-      <PlochaEditor ref={editorRef} sirkaMm={sirkaPlochy} vyskaMm={mod?.vyska_mm || 26} ppm={3} rozlozenie="pod" spadavkaMm={3} casti={casti.length ? casti : null} medzeraCastiMm={MEDZERA_CASTI} fonty={d.fonty} grafiky={d.grafiky}>
+      <PlochaEditor ref={editorRef} sirkaMm={sirkaPlochy} vyskaMm={mod?.vyska_mm || 26} ppm={3} rozlozenie="pod" spadavkaMm={3} popisRozmeru={`hotová šnúrka je ${Math.max(1, (mod?.vyska_mm || 26) - 6)} mm široká, tlačové dáta ${mod?.vyska_mm || 26} mm (spadávka 3 mm)`} casti={casti.length ? casti : null} medzeraCastiMm={MEDZERA_CASTI} fonty={d.fonty} grafiky={d.grafiky}>
         {({ nastroje, plocha }) => (
           <main className="flex-1 w-full max-w-[1500px] mx-auto px-4 sm:px-6 py-5 flex flex-col gap-4 lg:gap-5 lg:grid lg:grid-cols-[24rem_1fr] lg:items-start">
             <aside className="space-y-4 order-2 lg:order-none lg:col-start-1 lg:row-start-1 lg:row-span-2 min-w-0">
