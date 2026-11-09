@@ -149,8 +149,8 @@ async function spoluCenaViac(supabase: ReturnType<typeof createClient>, nast: an
   const zlavaEur = r2(logaSpolu * zlavaPercent / 100);
   const poZlave = logaSpolu - zlavaEur;
   const manipulacia = n(nast.manipulacny_poplatok_eur);
-  const zdarma = n(nast.postovne_zdarma_od_eur) > 0 && (poZlave + manipulacia) >= n(nast.postovne_zdarma_od_eur);
-  const postovne = osobnyOdber || zdarma ? 0 : n(nast.cena_doprava);
+  // Poštovné už nie je v cene appky — pripočíta ho Shopify pri platbe podľa krajiny doručenia (sadzby v Shopify doprave).
+  const postovne = 0;
   const spoluBezDph = poZlave + manipulacia + postovne;
   const dph = r2(spoluBezDph * cfg.dphPercent / 100);
   return {
@@ -199,7 +199,7 @@ async function vytvorDraft(polozky: DraftPolozka[], note: string, tags: string) 
   const res = await fetch(`https://${domain}/admin/api/2025-01/draft_orders.json`, {
     method: 'POST', headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' },
     body: JSON.stringify({ draft_order: {
-      line_items: polozky.map((p) => ({ title: p.title, price: p.price.toFixed(2), quantity: 1, taxable: false, requires_shipping: p.requiresShipping, ...(p.properties ? { properties: p.properties } : {}) })),
+      line_items: polozky.map((p) => ({ title: p.title, price: p.price.toFixed(2), quantity: 1, taxable: false, requires_shipping: p.requiresShipping, properties: [...(p.properties || []), { name: '_appka', value: '1' }] })),
       note, tags, use_customer_default_address: true,
     } }),
   });
@@ -333,7 +333,7 @@ Deno.serve(async (req) => {
       });
       poznamky.push(`${cisloObjednavky} (3D transfery${viac ? `, motív ${i + 1}/${polozky.length}` : ''})` + (tx ? `\nTextúra podkladu: ${tx.nazov}${tx.subor_nazov ? ` — ${tx.subor_nazov}` : ''}` : '') + (suborUrl ? `\nSúbor na tlač: ${suborUrl}` : ''));
     }
-    if (viac && extraCents > 0) riadkyDraft.push({ title: 'Manipulácia a poštovné (spoločné pre všetky motívy)', price: extraCents / 100, requiresShipping: false });
+    if (viac && extraCents > 0) riadkyDraft.push({ title: 'Manipulácia (spoločná pre všetky motívy)', price: extraCents / 100, requiresShipping: false });
     const checkoutUrl = await vytvorDraft(riadkyDraft, poznamky.join('\n\n'), 'transfer3d');
     return odpoved({ ok: true, checkoutUrl, cenaSpolu: c.spolu, objednavkaId: prveId, cisloObjednavky: prveCislo });
   } catch (e) {

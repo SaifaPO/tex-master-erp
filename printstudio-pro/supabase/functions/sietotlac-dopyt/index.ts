@@ -175,8 +175,8 @@ async function vyhodnot(supabase: ReturnType<typeof createClient>, ctx: Kontext,
   const zlavaEur = r2(logaSpolu * zlavaPercent / 100);
   const poZlave = r2(logaSpolu - zlavaEur);
   const manipulacia = num(ctx.nast.manipulacny_poplatok_eur);
-  const zdarma = num(ctx.nast.postovne_zdarma_od_eur) > 0 && (poZlave + manipulacia) >= num(ctx.nast.postovne_zdarma_od_eur);
-  const postovne = v.osobnyOdber || zdarma ? 0 : num(ctx.nast.cena_doprava);
+  // Poštovné už nie je v cene appky — rieši sa podľa krajiny doručenia (Shopify doprava), v ponuke sa neuvádza.
+  const postovne = 0;
   const spoluBezDph = r2(poZlave + manipulacia + postovne);
   const dph = r2(spoluBezDph * ctx.cfg.dphPercent / 100);
   const spolu = r2(spoluBezDph + dph);

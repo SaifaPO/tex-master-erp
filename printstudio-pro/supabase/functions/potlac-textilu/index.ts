@@ -361,8 +361,8 @@ async function vyhodnot(supabase: ReturnType<typeof createClient>, ctx: Kontext,
   const cenaTextilKs = v.vlastnyTextil ? 0 : cenaTextilu(ctx, v.produkt, ks);
   const textilSpolu = r2(cenaTextilKs * ks);
   const manipulacia = num(ctx.nast.manipulacny_poplatok_eur);
-  const zdarma = num(ctx.nast.postovne_zdarma_od_eur) > 0 && (poZlave + textilSpolu + manipulacia) >= num(ctx.nast.postovne_zdarma_od_eur);
-  const postovne = v.osobnyOdber || zdarma ? 0 : num(ctx.nast.cena_doprava);
+  // Poštovné už nie je v cene appky — pripočíta ho Shopify pri platbe podľa krajiny doručenia (sadzby v Shopify doprave).
+  const postovne = 0;
   const spoluBezDph = r2(poZlave + textilSpolu + manipulacia + postovne);
   const dph = r2(spoluBezDph * ctx.cfg.dphPercent / 100);
   const spolu = r2(spoluBezDph + dph);
@@ -494,6 +494,8 @@ Deno.serve(async (req) => {
           { name: '_technologia', value: v.technologia }, { name: '_pocet_ks', value: String(v.pocetKs) }, { name: '_textil', value: popisTextilu(v) },
           ...polozky.flatMap((p, i) => [{ name: `_potlac_${i + 1}`, value: popisTlace(ctx, v, p) }, { name: `_subor_link_${i + 1}`, value: p.suborUrl || '' }]),
           { name: '_osobny_odber', value: v.osobnyOdber ? 'áno' : 'nie' }, { name: '_b2b_kod', value: (c.zlavaB2bPercent as number) > 0 ? v.b2bKod : '' },
+          // Značka „objednávka z appky“ — Shopify Function podľa nej ukáže slovenské poštovné pre appky (5 € / zadarmo od 100 €)
+          { name: '_appka', value: '1' },
         ],
       }], `${cislo} (${TECHNOLOGIE[v.technologia]}, ${v.pocetKs} ks)\nTextil: ${popisTextilu(v)}\n${polozky.map((p, i) => `${i + 1}. ${popisTlace(ctx, v, p)}${p.suborUrl ? `\nSúbor: ${p.suborUrl}` : ''}`).join('\n')}`, 'potlac-textilu');
       return odpoved({ ok: true, checkoutUrl, cenaSpolu: c.spolu, objednavkaId, cisloObjednavky: cislo });

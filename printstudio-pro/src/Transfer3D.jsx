@@ -5,7 +5,7 @@ import NumberInput from './NumberInput';
 import { useB2bKod } from './b2b';
 import B2bKod from './B2bKod';
 import { CenaB2b } from './CenaB2b';
-import { useCenaNahlad, MnozstevneZlavy } from './cenaNahlad';
+import { useCenaNahlad, MnozstevneZlavy, PostovneInfo } from './cenaNahlad';
 import { KosikMotivov, useKosikMotivov, riadkyZCeny } from './kosikMotivov';
 
 const BUCKET = 'print-designs';
@@ -256,14 +256,14 @@ export default function Transfer3D({ supabase }) {
                   <RowSum label={cena.polozky && cena.polozky.length > 1 ? `Motívy spolu (${cena.ksSpolu} ks, bez DPH)` : 'Motívy spolu (bez DPH)'} value={<CenaB2b v={cena.logaSpoluBezDph} p={cena.zlavaB2bPercent} />} />
                   {cena.zlavaB2bEur > 0 && <RowSum label={`B2B zľava ${cena.zlavaB2bPercent} %`} value={`−${cena.zlavaB2bEur.toFixed(2)} €`} />}
                   {cena.manipulaciaBezDph > 0 && <RowSum label="Manipulačný poplatok" value={`${cena.manipulaciaBezDph.toFixed(2)} €`} />}
-                  <RowSum label="Poštovné a balné" value={cena.postovneBezDph === 0 ? 'Zdarma' : `${cena.postovneBezDph.toFixed(2)} €`} />
                   <RowSum label="Cena bez DPH" value={`${cena.spoluBezDph.toFixed(2)} €`} />
                   <RowSum label={`DPH ${dph} %`} value={`${cena.dph.toFixed(2)} €`} />
                   <div className="bg-indigo-600 rounded-xl p-3 mt-2">
-                    <div className="text-indigo-100 text-[11px]">Celkom s DPH:</div>
+                    <div className="text-indigo-100 text-[11px]">{osobnyOdber ? 'Celkom s DPH:' : 'Celkom s DPH (bez poštovného):'}</div>
                     <div className="text-2xl font-extrabold font-mono">{cena.spolu.toFixed(2)} €</div>
                     <div className="text-[10px] text-indigo-200 mt-0.5">Cena vychádza z dodaných rozmerov; konečnú kontrolu grafiky robíme pred výrobou.</div>
                   </div>
+                  <PostovneInfo osobnyOdber={osobnyOdber} />
                 </div>
               ) : <p className="text-xs text-slate-400">Počítam cenu…</p>}
 

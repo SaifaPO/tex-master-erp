@@ -60,6 +60,22 @@ export function MnozstevneZlavy({ urovne, pocetKs, b2bPercent = 0, b2bKod = '' }
   );
 }
 
+// Informácia o poštovnom: v cene appky už nie je zahrnuté, pripočíta sa v Shopify pri platbe podľa krajiny doručenia.
+// Sadzby MUSIA sedieť s dopravou v Shopify (Nastavenia → Doprava a doručenie → Všeobecný profil).
+export function PostovneInfo({ osobnyOdber, tmavy = true }) {
+  const farba = tmavy ? 'text-slate-300 bg-slate-800' : 'text-slate-600 bg-slate-100';
+  if (osobnyOdber) return <p className={`text-[11px] rounded-lg p-2.5 ${farba}`}>Osobný odber — bez poštovného.</p>;
+  return (
+    <div className={`text-[11px] rounded-lg p-2.5 space-y-0.5 ${farba}`}>
+      <div className="font-semibold">Poštovné sa pripočíta pri platbe podľa krajiny doručenia:</div>
+      <div>Slovensko 5 € (zadarmo od 100 €)</div>
+      <div>Česko, Maďarsko, Rakúsko, Poľsko 7 € (zadarmo od 100 €)</div>
+      <div>Ostatná Európa 12–20 € (zadarmo od 200 €)</div>
+      <div>Mimo Európy 35 €</div>
+    </div>
+  );
+}
+
 function Riadok({ label, value }) {
   return <div className="flex items-center justify-between text-xs"><span className="text-slate-400">{label}</span><span className="font-mono text-slate-100">{value}</span></div>;
 }
@@ -88,13 +104,13 @@ export function CenaSuhrn({ cena, chyba, osobnyOdber, onOsobnyOdber, onObjednat,
           <Riadok label={cena.polozky && cena.polozky.length > 1 ? `Spolu za výrobu (${cena.ksSpolu} ks, bez DPH)` : 'Spolu za výrobu (bez DPH)'} value={<CenaB2b v={cena.logaSpoluBezDph} p={cena.zlavaB2bPercent} />} />
           {cena.zlavaB2bEur > 0 && <Riadok label={`B2B zľava ${cena.zlavaB2bPercent} %`} value={`−${cena.zlavaB2bEur.toFixed(2)} €`} />}
           {cena.manipulaciaBezDph > 0 && <Riadok label="Manipulačný poplatok" value={`${cena.manipulaciaBezDph.toFixed(2)} €`} />}
-          <Riadok label="Poštovné a balné" value={cena.postovneBezDph === 0 ? 'Zdarma' : `${cena.postovneBezDph.toFixed(2)} €`} />
           <Riadok label="Cena bez DPH" value={`${cena.spoluBezDph.toFixed(2)} €`} />
           <Riadok label={`DPH ${cena.dphPercent} %`} value={`${cena.dph.toFixed(2)} €`} />
           <div className="bg-indigo-600 rounded-xl p-3 mt-2">
-            <div className="text-indigo-100 text-[11px]">Celkom s DPH:</div>
+            <div className="text-indigo-100 text-[11px]">{osobnyOdber ? 'Celkom s DPH:' : 'Celkom s DPH (bez poštovného):'}</div>
             <div className="text-2xl font-extrabold font-mono">{cena.spolu.toFixed(2)} €</div>
           </div>
+          <PostovneInfo osobnyOdber={osobnyOdber} />
         </div>
       ) : <p className="text-xs text-slate-400">Počítam cenu…</p>}
       <div className="p-2.5 rounded-lg bg-slate-800 flex items-center gap-2 text-[11px] text-slate-300"><CreditCard className="w-4 h-4" /> Platba vopred kartou (Shopify)</div>
