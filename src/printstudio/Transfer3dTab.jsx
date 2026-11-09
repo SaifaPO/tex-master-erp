@@ -210,8 +210,8 @@ export default function Transfer3dTab({ supabase }) {
         <Pole label="Koeficient rizika" jednotka="%" step="1" value={nast.riziko_percent} onChange={(v) => zmenNast({ riziko_percent: v })} />
         <Pole label="Minimálna cena motívov" jednotka="€ bez DPH" value={nast.minimalna_cena_eur} onChange={(v) => zmenNast({ minimalna_cena_eur: v })} />
         <Pole label="Manipulačný poplatok (1× na objednávku)" jednotka="€ bez DPH" value={nast.manipulacny_poplatok_eur} onChange={(v) => zmenNast({ manipulacny_poplatok_eur: v })} />
-        <Pole label="Poštovné a balné" jednotka="€ bez DPH" value={nast.cena_doprava} onChange={(v) => zmenNast({ cena_doprava: v })} />
-        <Pole label="Poštovné zdarma od" jednotka="€ bez DPH, 0 = vypnuté" value={nast.postovne_zdarma_od_eur} onChange={(v) => zmenNast({ postovne_zdarma_od_eur: v })} />
+        <Pole label="Poštovné a balné — nepoužíva sa (poštovné sa nastavuje v Shopify)" jednotka="€ bez DPH" value={nast.cena_doprava} onChange={(v) => zmenNast({ cena_doprava: v })} />
+        <Pole label="Poštovné zdarma od — nepoužíva sa (poštovné sa nastavuje v Shopify)" jednotka="€ bez DPH, 0 = vypnuté" value={nast.postovne_zdarma_od_eur} onChange={(v) => zmenNast({ postovne_zdarma_od_eur: v })} />
         <div className="col-span-2 sm:col-span-3">
           <label className="block text-slate-400 mb-1 text-xs">Info text pre zákazníka (voliteľné, zobrazí sa pod nadpisom)</label>
           <input type="text" value={nast.info_text || ''} onChange={(e) => zmenNast({ info_text: e.target.value })} className="w-full px-2 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs" />

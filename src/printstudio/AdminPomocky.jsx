@@ -63,8 +63,8 @@ export function ObchodneNastavenia({ nast, zmen, produkty, erpProdukty, onBlankV
     <>
       <Karta nadpis="Poplatky, doprava a minimálna cena" popis="Všetky ceny sú bez DPH. Cena samotných výrobkov sa počíta z nákladov nižšie + maržový modul (Cenotvorba).">
         {!bezManipulacie && <Pole label="Manipulačný poplatok (1× na objednávku)" jednotka="€" value={nast.manipulacny_poplatok_eur} onChange={(v) => zmen({ manipulacny_poplatok_eur: v })} />}
-        <Pole label="Poštovné a balné" jednotka="€" value={nast.cena_doprava} onChange={(v) => zmen({ cena_doprava: v })} />
-        <Pole label="Poštovné zdarma od" jednotka="€, 0 = vypnuté" value={nast.postovne_zdarma_od_eur} onChange={(v) => zmen({ postovne_zdarma_od_eur: v })} />
+        <Pole label="Poštovné a balné — nepoužíva sa (poštovné sa nastavuje v Shopify)" jednotka="€" value={nast.cena_doprava} onChange={(v) => zmen({ cena_doprava: v })} />
+        <Pole label="Poštovné zdarma od — nepoužíva sa (poštovné sa nastavuje v Shopify)" jednotka="€, 0 = vypnuté" value={nast.postovne_zdarma_od_eur} onChange={(v) => zmen({ postovne_zdarma_od_eur: v })} />
         <Pole label="Minimálna cena výrobkov v objednávke" jednotka="€" value={nast.minimalna_cena_eur} onChange={(v) => zmen({ minimalna_cena_eur: v })} />
         <div className="col-span-2 sm:col-span-3">
           <label className="block text-slate-400 mb-1 text-xs">Info text pre zákazníka (voliteľné)</label>

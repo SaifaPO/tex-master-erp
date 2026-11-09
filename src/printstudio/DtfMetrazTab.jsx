@@ -110,8 +110,8 @@ export default function DtfMetrazTab({ supabase }) {
       <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-5">
         <h3 className="font-bold text-sm text-white mb-3">Doprava, expres a kapacitné limity</h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-w-3xl">
-          <Field label="Doprava (€)" value={nastavenia.cena_doprava} step="0.1" onChange={(v) => ulozNastavenia({ cena_doprava: v })} />
-          <Field label="Poštovné zdarma od (bm)" value={nastavenia.postovne_zdarma_od_bm} step="0.5" onChange={(v) => ulozNastavenia({ postovne_zdarma_od_bm: v })} />
+          <Field label="Doprava (€) — nepoužíva sa (poštovné sa nastavuje v Shopify)" value={nastavenia.cena_doprava} step="0.1" onChange={(v) => ulozNastavenia({ cena_doprava: v })} />
+          <Field label="Poštovné zdarma od (bm) — nepoužíva sa (poštovné sa nastavuje v Shopify)" value={nastavenia.postovne_zdarma_od_bm} step="0.5" onChange={(v) => ulozNastavenia({ postovne_zdarma_od_bm: v })} />
           <Field label="Minimálna cena objednávky (€)" value={nastavenia.minimalna_cena_objednavky} step="0.5" onChange={(v) => ulozNastavenia({ minimalna_cena_objednavky: v })} />
           <Field label="Príplatok expres (%)" value={nastavenia.priplatok_expres_percent} step="1" onChange={(v) => ulozNastavenia({ priplatok_expres_percent: v })} />
           <Field label="Min. príplatok expres (€)" value={nastavenia.priplatok_expres_min_eur} step="0.5" onChange={(v) => ulozNastavenia({ priplatok_expres_min_eur: v })} />

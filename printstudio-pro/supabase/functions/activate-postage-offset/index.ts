@@ -43,6 +43,13 @@ Deno.serve(async (req) => {
 
     const existujuce = await graphql(domain, token, `{ discountNodes(first: 50, query: "type:app") { nodes { id discount { __typename ... on DiscountAutomaticApp { title status appDiscountType { functionId } } } } } }`);
     const uz = (existujuce.data?.discountNodes?.nodes || []).find((n: { discount?: { appDiscountType?: { functionId?: string } } }) => n.discount?.appDiscountType?.functionId === funkcia.id);
+    // { akcia: 'zmazat' } — zmaže automatickú zľavu (funkcia postage-offset sa v draft checkoute neuplatňuje, zľava je zbytočná)
+    const vstup = await req.json().catch(() => ({}));
+    if (vstup?.akcia === 'zmazat') {
+      if (!uz) return odpoved({ krok: 'zmazat', vysledok: 'zľava neexistuje (už zmazaná)' });
+      const d = await graphql(domain, token, `mutation($id: ID!) { discountAutomaticDelete(id: $id) { deletedAutomaticDiscountId userErrors { field message } } }`, { id: (uz as { id: string }).id });
+      return odpoved({ krok: 'zmazat', vysledok: d });
+    }
     if (uz) return odpoved({ krok: 'uz_existuje', zlava: uz, funkcia });
 
     const c = await graphql(domain, token, `

@@ -120,7 +120,7 @@ export default function BuffkyTab({ supabase }) {
       <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-5">
         <h3 className="font-bold text-sm text-white mb-3">Doprava a expres</h3>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-3xl text-xs">
-          <Field label="Doprava (€)" value={nastavenia.cena_doprava} step="0.1" onChange={(v) => ulozNastavenia({ cena_doprava: v })} />
+          <Field label="Doprava (€) — nepoužíva sa (poštovné sa nastavuje v Shopify)" value={nastavenia.cena_doprava} step="0.1" onChange={(v) => ulozNastavenia({ cena_doprava: v })} />
           <Field label="Príplatok expres (%)" value={nastavenia.priplatok_expres_percent} step="1" onChange={(v) => ulozNastavenia({ priplatok_expres_percent: v })} />
           <Field label="Minimálna cena objednávky (€)" value={nastavenia.minimalna_cena_objednavky} step="0.5" onChange={(v) => ulozNastavenia({ minimalna_cena_objednavky: v })} />
           <div>

@@ -54,7 +54,7 @@ export default function DresZlavyTab({ supabase }) {
       </div>
 
       <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4 max-w-xs">
-        <label className="block text-slate-400 mb-1 text-xs">Doprava (€)</label>
+        <label className="block text-slate-400 mb-1 text-xs">Doprava (€) — nepoužíva sa (poštovné sa nastavuje v Shopify)</label>
         <NumberInput step="0.1" value={nastavenia.cena_doprava} onChange={(v) => ulozNastavenia({ cena_doprava: v })} fallback={0} className="w-full px-2 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white font-mono" />
         <p className="text-[10px] text-slate-500 mt-1">Zákazník ju neplatí pri zaškrtnutí "Osobný odber" pri objednávke.</p>
       </div>
