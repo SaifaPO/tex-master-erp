@@ -4,7 +4,7 @@ import NumberInput from '../NumberInput';
 import { CenaB2b } from '../CenaB2b';
 import { rozlozBody } from './okaLayout';
 import { KosikMotivov } from '../kosikMotivov';
-import { PostovneInfo } from '../cenaNahlad';
+import { PostovneInfo, VlajkyUpozornenie } from '../cenaNahlad';
 
 const STRANY = [
   { value: 'top', label: 'Hore' }, { value: 'bottom', label: 'Dole' },
@@ -233,6 +233,7 @@ export default function DoplnkyTab({
             <div className="flex justify-between"><span>DPH</span><span className="font-semibold">{cena.dphSuma.toFixed(2)} €</span></div>
             <div className="flex justify-between text-sm font-black text-slate-900 pt-1"><span>{osobnyOdber ? "Celkom s DPH" : "Celkom s DPH (bez poštovného)"}</span><span>{cena.cenaSpolu.toFixed(2)} €</span></div>
             <PostovneInfo osobnyOdber={osobnyOdber} tmavy={false} />
+            <VlajkyUpozornenie />
           </>
         ) : (
           <p className="text-slate-400">—</p>

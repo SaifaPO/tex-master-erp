@@ -1,6 +1,6 @@
 import React from 'react';
 import { CenaB2b } from '../CenaB2b';
-import { PostovneInfo } from '../cenaNahlad';
+import { PostovneInfo, VlajkyUpozornenie } from '../cenaNahlad';
 
 // Rozpis ceny po polozkach — pouziva sa v poslednom kroku aj v lište dole (viditelnom pocas celeho objednavania).
 export default function RozpisCeny({ cena, pocetKs, osobnyOdber, kompaktny = false }) {
@@ -48,6 +48,7 @@ export default function RozpisCeny({ cena, pocetKs, osobnyOdber, kompaktny = fal
       <div className="flex justify-between"><span>DPH</span><span className="font-semibold">{cena.dphSuma.toFixed(2)} €</span></div>
       <div className="flex justify-between text-sm font-black text-slate-900 pt-1"><span>{osobnyOdber ? 'Celkom s DPH' : 'Celkom s DPH (bez poštovného)'}</span><span>{cena.cenaSpolu.toFixed(2)} €</span></div>
       <PostovneInfo osobnyOdber={osobnyOdber} tmavy={false} />
+      <VlajkyUpozornenie />
     </div>
   );
 }

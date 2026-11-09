@@ -76,6 +76,24 @@ export function PostovneInfo({ osobnyOdber, tmavy = true }) {
   );
 }
 
+// Upozornenie pre vlajky a beachvlajky (vonkajšie použitie): rozlíšenie výrobnej vady a bežného opotrebenia + odkazy na návod a reklamačné podmienky.
+// Text MUSÍ sedieť so stránkou „Reklamačné podmienky“ (odsek „Vlajky a beachvlajky“) a „Používanie a starostlivosť o vlajky a beachvlajky“ v Shopify.
+export function VlajkyUpozornenie({ tmavy = false }) {
+  const farba = tmavy ? 'text-slate-300 bg-slate-800' : 'text-slate-600 bg-slate-100';
+  const odkaz = tmavy ? 'underline text-indigo-300' : 'underline text-indigo-700';
+  return (
+    <div className={`text-[11px] rounded-lg p-2.5 space-y-1 ${farba}`}>
+      <div className="font-semibold">Používanie vlajok vonku</div>
+      <div>Vlajky a beachvlajky sú určené aj na vonkajšie použitie. Postupné vyblednutie od slnka (UV), rozstrapkanie okrajov a poškodenie silným vetrom alebo búrkou sa nepovažujú za výrobnú vadu. Pri silnom vetre a nepriaznivom počasí vlajku odmontujte. Za výrobné vady (šitie, materiál, potlač) zodpovedáme podľa zákona.</div>
+      <div>
+        <a className={odkaz} href="https://pbtprint.sk/pages/navod-vlajky" target="_blank" rel="noreferrer">Návod na používanie</a>
+        {' · '}
+        <a className={odkaz} href="https://pbtprint.sk/pages/reklamacie" target="_blank" rel="noreferrer">Reklamačné podmienky</a>
+      </div>
+    </div>
+  );
+}
+
 function Riadok({ label, value }) {
   return <div className="flex items-center justify-between text-xs"><span className="text-slate-400">{label}</span><span className="font-mono text-slate-100">{value}</span></div>;
 }
