@@ -154,7 +154,8 @@ Deno.serve(async (req) => {
     const subtotal = predZlavou - Math.round(predZlavou * b2bZlavaPercent) / 100;
     const expressPercent = deliverySpeed === 'express' ? (Number(nastavenia.priplatok_expres_percent) || 0) : 0;
     const expressFee = subtotal * (expressPercent / 100);
-    const shippingFee = osobnyOdber ? 0 : (Number(nastavenia.cena_doprava) || 0);
+    // Poštovné už nie je v cene appky — pripočíta ho Shopify pri platbe podľa krajiny doručenia (sadzby v Shopify doprave).
+    const shippingFee = 0;
     const grandTotalBezDph = subtotal + expressFee + shippingFee;
     const dphPercent = Number(pricingConfig.dphPercent) || 0;
     const dphSuma = grandTotalBezDph * (dphPercent / 100);
@@ -215,6 +216,7 @@ Deno.serve(async (req) => {
           { name: '_osobny_odber', value: osobnyOdber ? 'áno' : 'nie' },
           { name: '_b2b_kod', value: b2bZlavaPercent > 0 ? String(b2bKod).trim().toUpperCase() : '' },
           { name: '_b2b_zlava_percent', value: b2bZlavaPercent > 0 ? String(b2bZlavaPercent) : '' },
+          { name: '_appka', value: '1' },
           ...(viac ? [{ name: '_motiv', value: `${i + 1}/${polozky.length}` }, { name: '_skupina_id', value: skupinaId }] : []),
         ],
       };

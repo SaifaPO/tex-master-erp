@@ -106,7 +106,7 @@ export default function Dres3DApp({ supabase, produktId }) {
     priplatokMaterial: material?.priplatok_eur || 0,
     pocetHracov: kusy.dresov || 1,
     zlavy: katalog?.zlavy || [],
-    doprava: osobnyOdber ? 0 : cenaDoprava,
+    doprava: 0, // poštovné už nie je v cene appky — pripočíta ho Shopify pri platbe podľa krajiny
   }), [katalog, material, roster.length, cenaDoprava, osobnyOdber]);
 
   // Skutocna cena (marza x pocet hracov z nakupnej ceny) sa pocita na serveri — klient nakupne ceny

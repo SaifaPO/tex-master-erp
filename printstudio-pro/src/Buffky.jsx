@@ -10,6 +10,7 @@ import B2bKod from './B2bKod';
 import { CenaB2b } from './CenaB2b';
 import { initBuffkyEngine } from './buffky/buffkyEngine';
 import { vypocitajKosik } from './kosikCena';
+import { PostovneInfo } from './cenaNahlad';
 import { KosikMotivov, nahladZCanvasu } from './kosikMotivov';
 
 const BUCKET = 'print-designs';
@@ -543,15 +544,15 @@ export default function Buffky({ supabase, onSpat }) {
                 : vypocet.riadky.map((r, i) => <RowSum key={i} label={`Motív ${i + 1}: ${r.ks} ks × ${r.cenaKus.toFixed(2)} €`} value={<CenaB2b v={r.tovar} p={b2b.zlavaPercent} />} />)}
               {(vypocet.riadky.length > 1 || b2bZlavaEur > 0) && <RowSum label={`Tovar spolu (${vypocet.ksSpolu} ks, bez DPH)`} value={<CenaB2b v={vypocet.tovarSpolu} p={b2b.zlavaPercent} />} />}
               {vypocet.doplatokMinima > 0 && <RowSum label={`Doplatok do minimálnej hodnoty objednávky (${vypocet.minimum.toFixed(2)} €)`} value={`${vypocet.doplatokMinima.toFixed(2)} €`} />}
-              <RowSum label="Doprava" value={shippingFee === 0 ? 'Zdarma' : `${shippingFee.toFixed(2)} €`} />
               {b2bZlavaEur > 0 && <RowSum label={`B2B zľava ${Number(b2b.zlavaPercent)} %`} value={`−${b2bZlavaEur.toFixed(2)} €`} />}
               {expressFee > 0 && <RowSum label="Príplatok expres" value={`${expressFee.toFixed(2)} €`} />}
               <RowSum label="Cena bez DPH" value={`${grandTotalBezDph.toFixed(2)} €`} />
               <RowSum label={`DPH ${dphPercent}%`} value={`${dphSuma.toFixed(2)} €`} />
               <div className="pt-1.5 border-t border-slate-800 flex items-baseline justify-between">
-                <span className="text-xs text-slate-400">Celkom s DPH</span>
+                <span className="text-xs text-slate-400">{osobnyOdber ? 'Celkom s DPH' : 'Celkom s DPH (bez poštovného)'}</span>
                 <span className="text-xl font-extrabold font-mono text-white">{grandTotal.toFixed(2)} €</span>
               </div>
+              <PostovneInfo osobnyOdber={osobnyOdber} />
             </div>
 
             <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center gap-2 text-[11px] text-cyan-300">

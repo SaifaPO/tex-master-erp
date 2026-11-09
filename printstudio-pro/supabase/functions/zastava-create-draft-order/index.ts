@@ -258,7 +258,7 @@ async function cenaObjednavky(supabase: ReturnType<typeof createClient>, motivy:
   const b2bZlavaEur = Math.round(subtotal * b2bZlavaPercent) / 100;
   const subtotalPoZlave = subtotal - b2bZlavaEur;
   const expresnyPriplatok = expresne ? subtotalPoZlave * (Number(naklady.expresny_priplatok_percent) / 100) : 0;
-  const doprava = osobnyOdber ? 0 : (Number(naklady.cena_doprava) || 0);
+  const doprava = 0; // poštovné už nie je v cene appky — pripočíta ho Shopify pri platbe podľa krajiny
   const cenaBezDph = subtotalPoZlave + expresnyPriplatok + doprava;
   const dphSuma = cenaBezDph * (Number(cfg.dphPercent) / 100);
   const cenaSpolu = cenaBezDph + dphSuma;
@@ -328,6 +328,7 @@ Deno.serve(async (req) => {
       const nazovPolozky = `Zástava — ${mo.material.nazov} (${sirkaCm}×${vyskaCm} cm)${obojstranna ? ' — obojstranná sendvičová' : ''}${viac ? ` — motív ${i + 1}/${motivy.length}` : ''}`;
       const properties: Record<string, string> = {
         _zastava_order: 'true',
+        _appka: '1', // značka „objednávka z appky“ — Shopify Function podľa nej ukáže slovenské poštovné pre appky
         _design_id: designId || '',
         _material: mo.material.nazov,
         _obojstranna: obojstranna ? 'áno (sendvič 3 vrstvy)' : '',

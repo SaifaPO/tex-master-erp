@@ -6,6 +6,7 @@ import AskQuestion from './AskQuestion';
 import { useB2bKod } from './b2b';
 import B2bKod from './B2bKod';
 import { CenaB2b } from './CenaB2b';
+import { PostovneInfo } from './cenaNahlad';
 
 const BUCKET = 'print-designs';
 const ROLL_WIDTH_CM = 56;
@@ -135,7 +136,7 @@ export default function DtfMetraz({ supabase, onSpat }) {
     // smiešne nízko) — berie sa vyššia z dvoch hodnôt.
     expressFee = deliverySpeed === 'express' && !expresUzNedostupny ? Math.max(Number(nastavenia.priplatok_expres_min_eur) || 0, subtotal * (Number(nastavenia.priplatok_expres_percent) / 100)) : 0;
     // Osobný odber = žiadne poštovné; inak zdarma od nastaveného množstva (bm), pod ním normálna sadzba.
-    shippingFee = osobnyOdber || totalLengthBm >= Number(nastavenia.postovne_zdarma_od_bm) ? 0 : Number(nastavenia.cena_doprava);
+    shippingFee = 0; // poštovné už nie je v cene appky — pripočíta ho Shopify pri platbe podľa krajiny
     grandTotalBezDph = subtotal + expressFee + shippingFee + (grafickaPriprava ? 10 : 0);
     // Slovensky B2C zakaznik vzdy plati s DPH — cena v kosiku aj cele vyuctovanie musi byt s DPH,
     // nie len zobrazena orientacne bez nej.
@@ -461,9 +462,6 @@ export default function DtfMetraz({ supabase, onSpat }) {
                 <p className="text-xs text-slate-500 mt-0.5">Vyzdvihnete si zásielku osobne v Prešove alebo Košiciach — neplatíte poštovné.</p>
               </div>
             </label>
-            {!osobnyOdber && (
-              <p className="text-[11px] text-slate-400">Poštovné je zdarma automaticky od {nastavenia.postovne_zdarma_od_bm} bm.</p>
-            )}
 
             {capacityIssue && (
               <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-xs space-y-2.5">
@@ -513,15 +511,15 @@ export default function DtfMetraz({ supabase, onSpat }) {
               {b2bZlavaEur > 0 && <Row label={`B2B zľava ${Number(b2b.zlavaPercent)} %`} value={`−${b2bZlavaEur.toFixed(2)} €`} />}
               <Row label="Príplatok za expres" value={`${expressFee.toFixed(2)} €`} />
               {grafickaPriprava && <Row label="Príprava grafiky na tlač" value="10.00 €" />}
-              <Row label="Doprava" value={shippingFee === 0 ? 'Zdarma' : `${shippingFee.toFixed(2)} €`} />
               <Row label="Harmonogram dodania" value={aktualnyHarmonogram} small />
               <Row label="Cena bez DPH" value={`${grandTotalBezDph.toFixed(2)} €`} />
               <Row label={`DPH ${pricingConfig.dphPercent}%`} value={`${dphSuma.toFixed(2)} €`} />
             </div>
             <div className="pt-3 border-t border-slate-800 flex items-baseline justify-between">
-              <span className="text-xs text-slate-400">Celková cena spolu s DPH (vrátane dopravy)</span>
+              <span className="text-xs text-slate-400">{osobnyOdber ? "Celková cena spolu s DPH" : "Celková cena spolu s DPH (bez poštovného)"}</span>
               <span className="text-2xl font-extrabold font-mono">{grandTotal.toFixed(2)} €</span>
             </div>
+            <PostovneInfo osobnyOdber={osobnyOdber} />
             <div className="p-2.5 rounded-lg bg-indigo-950/40 border border-indigo-500/20 flex items-center gap-2 text-[11px] text-indigo-300">
               <CreditCard className="w-4 h-4" /> Platba vopred kartou (Shopify Pay)
             </div>

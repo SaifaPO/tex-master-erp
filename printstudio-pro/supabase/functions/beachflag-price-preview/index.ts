@@ -199,9 +199,9 @@ async function spocitaj(supabase: ReturnType<typeof createClient>, v: Record<str
   const expresnyPriplatok = expresne ? subtotalPoZlave * (expresnyPercent / 100) : 0;
   const dphPercent = Number(pricingConfig.dphPercent) || 0;
   // Postovne zdarma od urcitej sumy objednavky (s DPH, bez dopravy) — predvolene 150 EUR, nastavitelne v ERP.
-  const postovneZdarmaOd = Number(naklady.postovne_zdarma_od_eur ?? 150) || 0;
+  const postovneZdarmaOd = 0; // poštovné rieši Shopify podľa krajiny
   const tovarSDph = (subtotalPoZlave + expresnyPriplatok) * (1 + dphPercent / 100);
-  const doprava = osobnyOdber || (postovneZdarmaOd > 0 && tovarSDph >= postovneZdarmaOd) ? 0 : (Number(naklady.cena_doprava) || 0);
+  const doprava = 0; // poštovné už nie je v cene appky — pripočíta ho Shopify pri platbe podľa krajiny
 
   const cenaBezDph = subtotalPoZlave + expresnyPriplatok + doprava;
   const dphSuma = cenaBezDph * (dphPercent / 100);
@@ -275,10 +275,10 @@ async function spocitajKosik(supabase: ReturnType<typeof createClient>, v: Recor
   const subtotalPoZlave = subtotal - b2bZlavaEur;
   const expresne = !!v.expresne;
   const expresnyPriplatok = expresne ? subtotalPoZlave * ((Number((nastavenia || { expresny_priplatok_percent: 10 }).expresny_priplatok_percent) || 0) / 100) : 0;
-  const postovneZdarmaOd = Number(nastavenia?.postovne_zdarma_od_eur ?? 150) || 0;
+  const postovneZdarmaOd = 0; // poštovné rieši Shopify podľa krajiny
   const tovarSDph = (subtotalPoZlave + expresnyPriplatok) * (1 + dphPercent / 100);
   const osobnyOdber = !!v.osobnyOdber;
-  const doprava = osobnyOdber || (postovneZdarmaOd > 0 && tovarSDph >= postovneZdarmaOd) ? 0 : (Number(nastavenia?.cena_doprava) || 0);
+  const doprava = 0; // poštovné už nie je v cene appky — pripočíta ho Shopify pri platbe podľa krajiny
   const cenaBezDph = subtotalPoZlave + expresnyPriplatok + doprava;
   const dphSuma = cenaBezDph * (dphPercent / 100);
   const cenaSpolu = cenaBezDph + dphSuma;

@@ -214,8 +214,8 @@ Deno.serve(async (req) => {
       const subtotal = subtotalPredZlavou - Math.round(subtotalPredZlavou * b2bZlavaPercent) / 100;
       // Príplatok expres je vzdy aspon minimalna suma — rovnaky vzorec ako v DtfMetraz.jsx.
       const expressFee = deliverySpeed === 'express' ? Math.max(Number(nastavenia.priplatok_expres_min_eur) || 0, subtotal * ((Number(nastavenia.priplatok_expres_percent) || 0) / 100)) : 0;
-      // Osobny odber = ziadne postovne; inak zdarma od nastaveneho mnozstva (bm).
-      const shippingFee = osobnyOdber || totalLengthBm >= (Number(nastavenia.postovne_zdarma_od_bm) || 0) ? 0 : (Number(nastavenia.cena_doprava) || 0);
+      // Poštovné už nie je v cene appky — pripočíta ho Shopify pri platbe podľa krajiny doručenia (sadzby v Shopify doprave).
+      const shippingFee = 0;
       const grandTotalBezDph = subtotal + expressFee + shippingFee + (grafickaPriprava ? PRIPRAVA_GRAFIKY_EUR : 0);
       const dphPercent = Number(pricingConfig.dphPercent) || 0;
       const dphSuma = grandTotalBezDph * (dphPercent / 100);
@@ -296,9 +296,13 @@ Deno.serve(async (req) => {
               { name: '_osobny_odber', value: (mode === 'auto' || mode === 'subor') && osobnyOdber ? 'áno' : 'nie' },
               { name: '_b2b_kod', value: b2bZlavaPercent > 0 ? String(b2bKod).trim().toUpperCase() : '' },
               { name: '_b2b_zlava_percent', value: b2bZlavaPercent > 0 ? String(b2bZlavaPercent) : '' },
+              // Značka „objednávka z appky“ — Shopify Function podľa nej ukáže slovenské poštovné pre appky. Vzorka a paleta farieb ju nemajú:
+              // majú pevnú cenu vrátane poštovného, preto dostávajú vlastný riadok poštovného 0 € (Shopify im poštovné nepripočíta).
+              ...((mode === 'auto' || mode === 'subor') ? [{ name: '_appka', value: '1' }] : []),
             ],
           },
         ],
+        ...((mode === 'vzorky' || mode === 'paleta') ? { shipping_line: { custom: true, title: 'Poštovné zahrnuté v cene', price: '0.00' } } : {}),
         note: `${cisloObjednavky} (DTF metráž)` + (suborUrl ? `\nSúbor na tlač: ${suborUrl}` : ''),
         tags: 'dtf-metraz',
         use_customer_default_address: true,

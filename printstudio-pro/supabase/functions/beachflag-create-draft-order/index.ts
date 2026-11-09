@@ -81,9 +81,9 @@ function vypocitajCenuVlajky({ nakladMaterial, dokoncenie, stoziare, podstavce, 
 
   const dphPercent = Number(pricingConfig.dphPercent) || 0;
   // Postovne zdarma od urcitej sumy objednavky (s DPH, bez dopravy) — predvolene 150 EUR (rovnako ako v beachflag-price-preview).
-  const postovneZdarmaOd = Number(nastavenia?.postovne_zdarma_od_eur ?? 150) || 0;
+  const postovneZdarmaOd = 0; // poštovné rieši Shopify podľa krajiny
   const tovarSDph = (subtotal + expresnyPriplatok) * (1 + dphPercent / 100);
-  const doprava = osobnyOdber || (postovneZdarmaOd > 0 && tovarSDph >= postovneZdarmaOd) ? 0 : (Number(nastavenia?.cena_doprava) || 0);
+  const doprava = 0; // poštovné už nie je v cene appky — pripočíta ho Shopify pri platbe podľa krajiny
 
   const cenaBezDph = subtotal + expresnyPriplatok + doprava;
   const dphSuma = cenaBezDph * (dphPercent / 100);
@@ -266,9 +266,9 @@ async function vytvorKosik(supabase: ReturnType<typeof createClient>, body: Reco
   const expresnyPercent = Number((nastavenia || { expresny_priplatok_percent: 10 }).expresny_priplatok_percent) || 0;
   const expresnyPriplatok = expresne ? subtotal * (expresnyPercent / 100) : 0;
   const dphPercent = Number(pricingConfig.dphPercent) || 0;
-  const postovneZdarmaOd = Number(nastavenia?.postovne_zdarma_od_eur ?? 150) || 0;
+  const postovneZdarmaOd = 0; // poštovné rieši Shopify podľa krajiny
   const tovarSDph = (subtotal + expresnyPriplatok) * (1 + dphPercent / 100);
-  const doprava = osobnyOdber || (postovneZdarmaOd > 0 && tovarSDph >= postovneZdarmaOd) ? 0 : (Number(nastavenia?.cena_doprava) || 0);
+  const doprava = 0; // poštovné už nie je v cene appky — pripočíta ho Shopify pri platbe podľa krajiny
   const cenaSpolu = Math.round((subtotal + expresnyPriplatok + doprava) * (1 + dphPercent / 100) * 100) / 100;
 
   // Rozpis finalnej ceny (s DPH) do poloziek draftu v centoch, aby sucet presne sedel: motiv = jeho vlajky + jeho pruty a podstavce;
@@ -301,6 +301,7 @@ async function vytvorKosik(supabase: ReturnType<typeof createClient>, body: Reco
     const f = flagy[i];
     const properties: Record<string, string> = {
       _beachflag_order: 'true',
+      _appka: '1', // značka „objednávka z appky“ — Shopify Function podľa nej ukáže slovenské poštovné pre appky
       _design_id: f.designId || '',
       _tvar: v.tvar.nazov,
       _velkost: v.velkost.kod,
@@ -465,6 +466,7 @@ Deno.serve(async (req) => {
     const nazovPolozky = `Beachvlajka — ${tvar.nazov} (${velkost.kod})${obojstranna ? ' — obojstranná sendvičová' : ''}`;
     const properties: Record<string, string> = {
       _beachflag_order: 'true',
+      _appka: '1', // značka „objednávka z appky“ — Shopify Function podľa nej ukáže slovenské poštovné pre appky
       _design_id: designId || '',
       _tvar: tvar.nazov,
       _velkost: velkost.kod,

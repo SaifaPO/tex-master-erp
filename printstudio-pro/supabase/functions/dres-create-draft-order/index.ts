@@ -171,7 +171,7 @@ Deno.serve(async (req) => {
     const pocetDresov = roster.filter(maDres).length;
     const pocetTrenirok = roster.filter(maTrenirky).length;
     if (pocetDresov + pocetTrenirok === 0) throw new Error('Súpiska neobsahuje žiadny dres ani trenírky.');
-    const doprava = osobnyOdber ? 0 : (Number(nastavenia?.cena_doprava) || 0);
+    const doprava = 0; // poštovné už nie je v cene appky — pripočíta ho Shopify pri platbe podľa krajiny
     const cena = vypocitajCenuDresu({
       zakladnaCena: produkt.zakladna_cena,
       priplatokMaterial: material?.priplatok_eur || 0,
@@ -234,6 +234,7 @@ Deno.serve(async (req) => {
       _trenirky_farby: pocetTrenirok > 0 && trenirkyFarby ? JSON.stringify(trenirkyFarby) : '',
       _doprava: doprava.toFixed(2),
       _osobny_odber: osobnyOdber ? 'áno' : 'nie',
+      _appka: '1', // značka „objednávka z appky“ — Shopify Function podľa nej ukáže slovenské poštovné pre appky
       _nahlad_url: nahladUrl || '',
       _b2b_kod: cena.b2bZlavaPercent > 0 ? String(b2bKod).trim().toUpperCase() : '',
       _b2b_zlava_percent: cena.b2bZlavaPercent > 0 ? String(cena.b2bZlavaPercent) : '',

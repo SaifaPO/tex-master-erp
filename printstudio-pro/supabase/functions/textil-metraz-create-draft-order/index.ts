@@ -228,6 +228,8 @@ Deno.serve(async (req) => {
                 ],
               },
             ],
+            // Pevná cena vrátane poštovného — vlastný riadok poštovného 0 €, Shopify poštovné nepripočíta
+            shipping_line: { custom: true, title: 'Poštovné zahrnuté v cene', price: '0.00' },
             note: `${cisloS} (Textilná metráž — ${mode === 'vzorka' ? 'vzorka' : 'farebnica'})` + (suborUrlS ? `\nSúbor na tlač: ${suborUrlS}` : ''),
             tags: 'textil-metraz',
             use_customer_default_address: true,
@@ -304,8 +306,8 @@ Deno.serve(async (req) => {
     const subtotal = subtotalPredZlavou - Math.round(subtotalPredZlavou * b2bZlavaPercent) / 100;
     // Príplatok expres je vzdy aspon minimalna suma — rovnaky vzorec ako v TextilMetraz.jsx.
     const expressFee = deliverySpeed === 'express' ? Math.max(Number(nastavenia.priplatok_expres_min_eur) || 0, subtotal * ((Number(nastavenia.priplatok_expres_percent) || 0) / 100)) : 0;
-    // Osobny odber = ziadne postovne; inak zdarma od nastaveneho mnozstva (bm).
-    const shippingFee = osobnyOdber || totalLengthBm >= (Number(nastavenia.postovne_zdarma_od_bm) || 0) ? 0 : (Number(nastavenia.cena_doprava) || 0);
+    // Poštovné už nie je v cene appky — pripočíta ho Shopify pri platbe podľa krajiny doručenia (sadzby v Shopify doprave).
+    const shippingFee = 0;
     const grandTotalBezDph = subtotal + expressFee + shippingFee;
     const dphPercent = Number(pricingConfig.dphPercent) || 0;
     const dphSuma = grandTotalBezDph * (dphPercent / 100);
@@ -385,6 +387,8 @@ Deno.serve(async (req) => {
               { name: '_osobny_odber', value: osobnyOdber ? 'áno' : 'nie' },
               { name: '_b2b_kod', value: b2bZlavaPercent > 0 ? String(b2bKod).trim().toUpperCase() : '' },
               { name: '_b2b_zlava_percent', value: b2bZlavaPercent > 0 ? String(b2bZlavaPercent) : '' },
+              // Značka „objednávka z appky“ — Shopify Function podľa nej ukáže slovenské poštovné pre appky
+              { name: '_appka', value: '1' },
             ],
           },
         ],

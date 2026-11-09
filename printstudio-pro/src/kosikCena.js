@@ -22,7 +22,8 @@ export function vypocitajKosik({ polozky, cfg, nastavenia, deliverySpeed = 'stan
   const b2bZlavaEur = Math.round(predZlavou * (Number(b2bPercent) || 0)) / 100;
   const subtotal = predZlavou - b2bZlavaEur;
   const expressFee = deliverySpeed === 'express' ? subtotal * ((Number(nastavenia?.priplatok_expres_percent) || 0) / 100) : 0;
-  const shippingFee = osobnyOdber ? 0 : (Number(nastavenia?.cena_doprava) || 0);
+  // Poštovné už nie je v cene appky — pripočíta ho Shopify pri platbe podľa krajiny doručenia (sadzby v Shopify doprave).
+  const shippingFee = 0;
   const grandTotalBezDph = subtotal + expressFee + shippingFee;
   const dphPercent = Number(cfg?.dphPercent) || 0;
   const dphSuma = grandTotalBezDph * (dphPercent / 100);

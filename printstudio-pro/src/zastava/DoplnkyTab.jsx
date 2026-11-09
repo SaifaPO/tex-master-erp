@@ -4,6 +4,7 @@ import NumberInput from '../NumberInput';
 import { CenaB2b } from '../CenaB2b';
 import { rozlozBody } from './okaLayout';
 import { KosikMotivov } from '../kosikMotivov';
+import { PostovneInfo } from '../cenaNahlad';
 
 const STRANY = [
   { value: 'top', label: 'Hore' }, { value: 'bottom', label: 'Dole' },
@@ -228,10 +229,10 @@ export default function DoplnkyTab({
             <div className="flex justify-between"><span>Medzisúčet ({cena.ksSpolu ?? pocetKs} ks)</span><span className="font-semibold text-right"><CenaB2b v={cena.subtotal} p={cena.b2bZlavaPercent} staraCls="text-slate-400" novaCls="text-emerald-700" /></span></div>
             {cena.b2bZlavaEur > 0 && <div className="flex justify-between text-emerald-700 font-semibold"><span>B2B zľava {Number(cena.b2bZlavaPercent)} %</span><span>−{Number(cena.b2bZlavaEur).toFixed(2)} €</span></div>}
             {cena.expresnyPriplatok > 0 && <div className="flex justify-between text-amber-700 font-semibold"><span>Expresný príplatok</span><span>{cena.expresnyPriplatok.toFixed(2)} €</span></div>}
-            <div className="flex justify-between"><span>Doprava</span><span className="font-semibold">{!cena.doprava ? 'Zdarma' : `${Number(cena.doprava).toFixed(2)} €`}</span></div>
             <div className="flex justify-between pt-1 border-t border-slate-200"><span>Spolu bez DPH</span><span className="font-semibold">{cena.cenaBezDph.toFixed(2)} €</span></div>
             <div className="flex justify-between"><span>DPH</span><span className="font-semibold">{cena.dphSuma.toFixed(2)} €</span></div>
-            <div className="flex justify-between text-sm font-black text-slate-900 pt-1"><span>Celkom s DPH</span><span>{cena.cenaSpolu.toFixed(2)} €</span></div>
+            <div className="flex justify-between text-sm font-black text-slate-900 pt-1"><span>{osobnyOdber ? "Celkom s DPH" : "Celkom s DPH (bez poštovného)"}</span><span>{cena.cenaSpolu.toFixed(2)} €</span></div>
+            <PostovneInfo osobnyOdber={osobnyOdber} tmavy={false} />
           </>
         ) : (
           <p className="text-slate-400">—</p>

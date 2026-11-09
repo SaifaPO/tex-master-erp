@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Download } from 'lucide-react';
+import { PostovneInfo } from '../cenaNahlad';
 
 const BUCKET = 'print-designs';
 
@@ -137,14 +138,11 @@ export default function SuhrnModal({ supabase, produkt, configState, roster, mat
                   <span className="font-bold text-emerald-400">{cena.b2bZlavaPercent} % (už v cene){cenaPov && cenaPov.cenaSpolu > cena.cenaSpolu ? ` — ušetríte ${(cenaPov.cenaSpolu - cena.cenaSpolu).toFixed(2)} €` : ''}</span>
                 </div>
               )}
-              <div className="flex justify-between py-1 border-b border-slate-800">
-                <span className="text-slate-400">Doprava:</span>
-                <span className="font-bold text-white">{cena.doprava === 0 ? 'Zdarma' : `${cena.doprava.toFixed(2)} €`}</span>
-              </div>
               <div className="flex justify-between py-1 pt-2">
-                <span className="text-slate-300 font-bold">Celková cena:</span>
+                <span className="text-slate-300 font-bold">{osobnyOdber ? 'Celková cena:' : 'Celková cena (bez poštovného):'}</span>
                 <span className="font-extrabold text-base text-indigo-400">{cenaPov && cenaPov.cenaSpolu > cena.cenaSpolu && <s className="text-xs font-normal text-slate-500 mr-1.5">{cenaPov.cenaSpolu.toFixed(2)} €</s>}{cena.cenaSpolu.toFixed(2)} €</span>
               </div>
+              <PostovneInfo osobnyOdber={osobnyOdber} />
             </div>
           </div>
 

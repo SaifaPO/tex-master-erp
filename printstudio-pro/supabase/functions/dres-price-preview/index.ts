@@ -122,7 +122,7 @@ Deno.serve(async (req) => {
       priplatokMaterial: material?.priplatok_eur || 0,
       pocetHracov: Number(pocetHracov),
       zlavy: zlavy || [],
-      doprava: osobnyOdber ? 0 : (Number(nastavenia?.cena_doprava) || 0),
+      doprava: 0, // poštovné už nie je v cene appky — pripočíta ho Shopify pri platbe podľa krajiny
       nakladKs: Number(naklad?.naklad_ks) || 0,
       nakladMaterial,
       pricingConfig,
