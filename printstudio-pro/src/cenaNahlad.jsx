@@ -62,14 +62,14 @@ export function MnozstevneZlavy({ urovne, pocetKs, b2bPercent = 0, b2bKod = '' }
 
 // Informácia o poštovnom: v cene appky už nie je zahrnuté, pripočíta sa v Shopify pri platbe podľa krajiny doručenia.
 // Sadzby MUSIA sedieť s dopravou v Shopify (Nastavenia → Doprava a doručenie → Všeobecný profil).
-export function PostovneInfo({ osobnyOdber, tmavy = true }) {
+export function PostovneInfo({ osobnyOdber, tmavy = true, vlajky = false }) {
   const farba = tmavy ? 'text-slate-300 bg-slate-800' : 'text-slate-600 bg-slate-100';
   if (osobnyOdber) return <p className={`text-[11px] rounded-lg p-2.5 ${farba}`}>Osobný odber — bez poštovného.</p>;
   return (
     <div className={`text-[11px] rounded-lg p-2.5 space-y-0.5 ${farba}`}>
       <div className="font-semibold">Poštovné sa pripočíta pri platbe podľa krajiny doručenia:</div>
-      <div>Slovensko 5 € (zadarmo od 100 €)</div>
-      <div>Česko, Maďarsko, Rakúsko, Poľsko 7 € (zadarmo od 100 €)</div>
+      {vlajky ? <div>Slovensko 8 € (zadarmo od 150 €)</div> : <div>Slovensko 5 € (zadarmo od 100 €)</div>}
+      {vlajky ? <div>Česko, Maďarsko, Rakúsko, Poľsko 10 € (zadarmo od 200 €)</div> : <div>Česko, Maďarsko, Rakúsko, Poľsko 7 € (zadarmo od 100 €)</div>}
       <div>Ostatná Európa 12–20 € (zadarmo od 200 €)</div>
       <div>Mimo Európy 35 €</div>
     </div>

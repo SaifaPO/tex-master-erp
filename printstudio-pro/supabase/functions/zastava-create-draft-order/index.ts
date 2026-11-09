@@ -328,7 +328,7 @@ Deno.serve(async (req) => {
       const nazovPolozky = `Zástava — ${mo.material.nazov} (${sirkaCm}×${vyskaCm} cm)${obojstranna ? ' — obojstranná sendvičová' : ''}${viac ? ` — motív ${i + 1}/${motivy.length}` : ''}`;
       const properties: Record<string, string> = {
         _zastava_order: 'true',
-        _appka: '1', // značka „objednávka z appky“ — Shopify Function podľa nej ukáže slovenské poštovné pre appky
+        _appka: 'vlajky', // značka „vlajky“ — Shopify Function podľa nej ukáže vyššie poštovné pre vlajky (SR 8 €, susedné krajiny 10 €)
         _design_id: designId || '',
         _material: mo.material.nazov,
         _obojstranna: obojstranna ? 'áno (sendvič 3 vrstvy)' : '',

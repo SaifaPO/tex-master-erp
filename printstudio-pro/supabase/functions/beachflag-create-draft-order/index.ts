@@ -301,7 +301,7 @@ async function vytvorKosik(supabase: ReturnType<typeof createClient>, body: Reco
     const f = flagy[i];
     const properties: Record<string, string> = {
       _beachflag_order: 'true',
-      _appka: '1', // značka „objednávka z appky“ — Shopify Function podľa nej ukáže slovenské poštovné pre appky
+      _appka: 'vlajky', // značka „vlajky“ — Shopify Function podľa nej ukáže vyššie poštovné pre vlajky (SR 8 €, susedné krajiny 10 €)
       _design_id: f.designId || '',
       _tvar: v.tvar.nazov,
       _velkost: v.velkost.kod,
@@ -466,7 +466,7 @@ Deno.serve(async (req) => {
     const nazovPolozky = `Beachvlajka — ${tvar.nazov} (${velkost.kod})${obojstranna ? ' — obojstranná sendvičová' : ''}`;
     const properties: Record<string, string> = {
       _beachflag_order: 'true',
-      _appka: '1', // značka „objednávka z appky“ — Shopify Function podľa nej ukáže slovenské poštovné pre appky
+      _appka: 'vlajky', // značka „vlajky“ — Shopify Function podľa nej ukáže vyššie poštovné pre vlajky (SR 8 €, susedné krajiny 10 €)
       _design_id: designId || '',
       _tvar: tvar.nazov,
       _velkost: velkost.kod,
