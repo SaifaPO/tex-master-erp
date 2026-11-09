@@ -6,6 +6,7 @@ import { useB2bKod } from './b2b';
 import B2bKod from './B2bKod';
 import { useCenaNahlad, CenaSuhrn, MnozstevneZlavy } from './cenaNahlad';
 import TrickoEditor from './TrickoEditor';
+import { stylFarby, fotoFarby } from './Folie';
 
 // Verejná appka „Potlač textilu“ (?typ=potlac): produkt (tričko, mikina…) → farba → technológia (DTF / rezaný transfer / sieťotlač) → potlače
 // s umiestnením na fotke produktu a vlastným návrhom → cena → platba cez Shopify. Textil môže dodať zákazník, alebo ho objednať od nás.
@@ -51,6 +52,41 @@ function Sekcia({ cislo, nazov, children, akcia }) {
   );
 }
 
+// Výber fólie pre jednu farbu rezaného transferu: druh fólie (základná, flock, metalická, trblietavá, puff…) + konkrétna farba zo vzorkovníka
+function FoliaVyber({ cislo, kat, hodnota, onChange }) {
+  const druhObj = kat.druhy.find((d) => d.kod === hodnota.druh);
+  const farbyDruhu = kat.farby.filter((f) => f.druh === hodnota.druh);
+  const farbaObj = farbyDruhu.find((f) => f.kod === hodnota.farba);
+  const zmenDruh = (kod) => onChange({ druh: kod, farba: kat.farby.find((f) => f.druh === kod)?.kod || '' });
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-2.5 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-bold text-slate-600">Fólia {cislo}</span>
+        <span className="text-xs font-semibold text-indigo-700 truncate">{druhObj?.nazov}{farbaObj ? ` · ${farbaObj.nazov}` : ''}</span>
+      </div>
+      <div className="relative">
+        <select value={hodnota.druh} onChange={(e) => zmenDruh(e.target.value)} className="w-full border border-slate-300 rounded-lg p-2 pr-8 text-sm font-medium bg-white appearance-none" aria-label={`Druh fólie ${cislo}`}>
+          {kat.druhy.map((d) => <option key={d.kod} value={d.kod}>{d.nazov}</option>)}
+        </select>
+        <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-2.5 pointer-events-none" />
+      </div>
+      {druhObj?.popis && <p className="text-[11px] text-slate-500 leading-snug">{druhObj.popis}</p>}
+      <div className="flex flex-wrap gap-1.5 p-2 bg-slate-50 rounded-lg border border-slate-200 max-h-44 overflow-y-auto">
+        {farbyDruhu.map((c) => {
+          const foto = fotoFarby(c);
+          const vyb = hodnota.farba === c.kod;
+          return (
+            <button key={c.kod} type="button" title={c.nazov} aria-label={c.nazov} onClick={() => onChange({ druh: hodnota.druh, farba: c.kod })}
+              className={`${foto ? 'w-9 h-9 rounded-lg' : 'w-7 h-7 rounded-full'} shrink-0 transition hover:scale-110`}
+              style={{ ...(foto ? { backgroundColor: c.hex, backgroundImage: `url(${foto})`, backgroundSize: 'cover', backgroundPosition: 'center' } : stylFarby(druhObj?.trieda, c.hex)), border: vyb ? '2px solid #4f46e5' : ((c.hex || '').toUpperCase() === '#FFFFFF' ? '1px solid #e5e7eb' : '2px solid transparent'), boxShadow: vyb ? '0 0 0 3px rgba(79,70,229,0.3)' : '0 1px 3px rgba(0,0,0,0.1)' }} />
+          );
+        })}
+        {farbyDruhu.length === 0 && <span className="text-[11px] text-slate-400">Pre tento druh zatiaľ nie sú farby.</span>}
+      </div>
+    </div>
+  );
+}
+
 // veľkostné tabuľky produktov (obrázky vo /public/produkty); ďalšie produkty sa dopĺňajú sem
 const TABULKY = { 'tricko-panske': '/produkty/velkostna-tabulka-tricko-panske.jpg', 'tricko-damske': '/produkty/velkostna-tabulka-tricko-damske.jpg', 'tricko-detske': '/produkty/velkostna-tabulka-tricko-detske.jpg' };
 
@@ -64,6 +100,7 @@ export default function PotlacTextilu({ supabase }) {
   const [produkty, setProdukty] = useState([]);
   const [efekty, setEfekty] = useState([]);
   const [umiestnenia, setUmiestnenia] = useState([]);
+  const [folieKat, setFolieKat] = useState({ druhy: [], farby: [] }); // katalóg rezaných fólií (druhy + farby)
 
   const [produktId, setProduktId] = useState(null);
   const [vlastnyTextil, setVlastnyTextil] = useState(false);
@@ -124,6 +161,14 @@ export default function PotlacTextilu({ supabase }) {
   };
   const umiestneniaEf = umiestnenia.map((u) => { const m = maxPlochy(u); return { ...u, maxSirkaCm: m.sirka, maxVyskaCm: m.vyska, dovodMax: m.dovod }; });
   const pocetNazehleni = (w, h) => { const a = limity.lisSirkaCm || 38, b = limity.lisVyskaCm || 48; return Math.max(1, Math.min(Math.ceil(w / a) * Math.ceil(h / b), Math.ceil(w / b) * Math.ceil(h / a))); };
+  // fólie jednej potlače: pre každú farbu motívu (t.farby) jeden výber druh + farba; chýbajúci / neplatný výber = prvá fólia katalógu
+  const foliaTlace = (t) => Array.from({ length: t.farby }, (_, i) => {
+    const f = t.folie?.[i];
+    if (f && folieKat.farby.some((x) => x.kod === f.farba && x.druh === f.druh)) return f;
+    const druh = folieKat.druhy[0]?.kod || '';
+    return { druh, farba: folieKat.farby.find((x) => x.druh === druh)?.kod || '' };
+  });
+  const zmenFoliu = (t, i, f) => { const a = foliaTlace(t); a[i] = f; uprav(t.id, { folie: a }); };
   useEffect(() => { if (produkt && techDostupne.length && !techDostupne.includes(technologia)) setTechnologia('dtf'); }, [techDostupne.join('|'), technologia]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const novaPotlac = (u, tech = technologia) => ({ id: noveId(), umiestnenie: u.kod, sirka: u.vychodziaSirkaCm, vyska: u.vychodziaVyskaCm, farby: 1, efekt: efekty[0]?.kod || 'klasicka', subor: null, nahlad: null, navrhJson: null, _tech: tech });
@@ -145,6 +190,7 @@ export default function PotlacTextilu({ supabase }) {
       try {
         const d = await volaj({ akcia: 'cennik' });
         setNast(d.nastavenia); setProdukty(d.produkty); setEfekty(d.efekty); setUmiestnenia(d.umiestnenia);
+        setFolieKat({ druhy: d.folie?.druhy || [], farby: (d.folie?.farby || []).map((f) => ({ ...f, foto_url: f.fotoUrl })) });
         if (d.produkty[0]) vyberProdukt(d.produkty[0], d);
       } catch (e) { setChybaNacitania(e.message); }
       setNacitava(false);
@@ -188,8 +234,8 @@ export default function PotlacTextilu({ supabase }) {
 
   const teloCeny = useMemo(() => ({
     produktId, vlastnyTextil, farbaHex, material, technologia, velkosti, pocetKs: pocetKsVlastny, osobnyOdber, b2bKod: b2b.kod,
-    tlace: tlace.map((t) => ({ umiestnenie: t.umiestnenie, sirkaCm: t.sirka, vyskaCm: t.vyska, farby: t.farby, efekt: t.efekt })),
-  }), [produktId, vlastnyTextil, farbaHex, material, technologia, velkosti, pocetKsVlastny, osobnyOdber, b2b.kod, tlace]);
+    tlace: tlace.map((t) => ({ umiestnenie: t.umiestnenie, sirkaCm: t.sirka, vyskaCm: t.vyska, farby: t.farby, efekt: t.efekt, ...(technologia === 'rezany' ? { folie: foliaTlace(t) } : {}) })),
+  }), [produktId, vlastnyTextil, farbaHex, material, technologia, velkosti, pocetKsVlastny, osobnyOdber, b2b.kod, tlace, folieKat]); // eslint-disable-line react-hooks/exhaustive-deps
   const pripravene = !!nast && nast.aktivny !== false && !!produkt && tlace.length > 0 && pocetKs >= minKs;
   const { cena, chyba } = useCenaNahlad(supabase, FUNKCIA, teloCeny, pripravene);
 
@@ -220,7 +266,7 @@ export default function PotlacTextilu({ supabase }) {
       const zoznam = await dokonciNavrhy();
       if (zoznam.some((t) => !t.subor)) throw new Error('Motív je prázdny — pridajte text, logo alebo obrázok.');
       const subory = await nahrajSubory(zoznam);
-      const d = await volaj({ ...teloCeny, tlace: zoznam.map((t, i) => ({ umiestnenie: t.umiestnenie, sirkaCm: t.sirka, vyskaCm: t.vyska, farby: t.farby, efekt: t.efekt, ...subory[i] })), preview: undefined });
+      const d = await volaj({ ...teloCeny, tlace: zoznam.map((t, i) => ({ umiestnenie: t.umiestnenie, sirkaCm: t.sirka, vyskaCm: t.vyska, farby: t.farby, efekt: t.efekt, ...(technologia === 'rezany' ? { folie: foliaTlace(t) } : {}), ...subory[i] })), preview: undefined });
       setPotvrdenie(`Objednávka bola vytvorená — ${Number(d.cenaSpolu).toFixed(2)} €. Presmerúvam na platbu…`);
       window.location.href = d.checkoutUrl;
     } catch (e) { setChybaObj('Objednávku sa nepodarilo odoslať: ' + e.message); } finally { setBezi(false); }
@@ -352,6 +398,12 @@ export default function PotlacTextilu({ supabase }) {
                             <span className="text-lg font-bold font-mono w-8 text-center">{t.farby}</span>
                             <button type="button" onClick={() => uprav(t.id, { farby: Math.min(6, t.farby + 1) })} className="w-9 h-9 rounded-lg border border-slate-300 bg-white flex items-center justify-center hover:bg-slate-50" aria-label="Viac farieb"><Plus className="w-4 h-4" /></button>
                           </div>
+                        </div>
+                      )}
+                      {technologia === 'rezany' && folieKat.druhy.length > 0 && (
+                        <div className="sm:col-span-2 space-y-2">
+                          <label className="block text-xs font-medium text-slate-500">Fólia a farba — vyberte pre každú farbu motívu</label>
+                          {foliaTlace(t).map((f, fi) => <FoliaVyber key={fi} cislo={fi + 1} kat={folieKat} hodnota={f} onChange={(nf) => zmenFoliu(t, fi, nf)} />)}
                         </div>
                       )}
                       {TECH[technologia].efekt && (

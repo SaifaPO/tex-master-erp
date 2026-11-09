@@ -33,7 +33,7 @@ function rozlozenie(w, h, ks, pracSirka, medzera) {
 }
 
 // Vzhľad vzorky farby podľa druhu fólie (flock, reflexná, metalická, trblietavá)
-function stylFarby(trieda, hex) {
+export function stylFarby(trieda, hex) {
   const zaklad = { backgroundColor: hex };
   if (trieda === 'metallic') return { ...zaklad, backgroundImage: 'linear-gradient(135deg, rgba(255,255,255,0.4) 0%, transparent 50%, rgba(0,0,0,0.1) 100%)' };
   if (trieda === 'reflective') return { ...zaklad, backgroundImage: 'repeating-linear-gradient(45deg, rgba(255,255,255,0.2) 0px, rgba(255,255,255,0.2) 2px, transparent 2px, transparent 4px)' };
@@ -47,7 +47,7 @@ const FOTO_FARBY = new Set(['ps_white', 'ps_black', 'ps_red', 'ps_royal', 'ps_gr
 const FOTO_DRUHY = new Set(['psfilm', 'glitter', 'electric', 'reflex', 'subli', 'flock']);
 // Plná adresa nasadenia: appka beží aj cez Shopify App Proxy (pbtprint.sk/apps/...), kde by cesta "/folie/..." nefungovala.
 const FOLIE_FOTO_ZAKLAD = 'https://printstudio-pro.vercel.app/folie/';
-const fotoFarby = (c) => (c ? (c.foto_url || (FOTO_FARBY.has(c.kod) ? `${FOLIE_FOTO_ZAKLAD}${c.kod}.webp` : null)) : null);
+export const fotoFarby = (c) => (c ? (c.foto_url || (FOTO_FARBY.has(c.kod) ? `${FOLIE_FOTO_ZAKLAD}${c.kod}.webp` : null)) : null);
 const fotoDruhu = (d) => (d ? (d.foto_url || (FOTO_DRUHY.has(d.kod) ? `${FOLIE_FOTO_ZAKLAD}druh_${d.kod}.webp` : null)) : null);
 
 export default function Folie({ supabase }) {

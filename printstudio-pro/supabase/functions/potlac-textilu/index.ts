@@ -154,13 +154,15 @@ function maxPlochy(nast: Riadok, produkt: Riadok, technologia: string, um: Riado
   return { sirka: Math.max(1, Math.floor(s)), vyska: Math.max(1, Math.floor(v)) };
 }
 
-function vcRezanyTransfer(rezany: Riadok | null, folia: Riadok | null, costMetrics: Riadok[], plochaCm2: number, pocetFarieb = 1) {
+function vcRezanyTransfer(rezany: Riadok | null, folia: Riadok | null, costMetrics: Riadok[], plochaCm2: number, pocetFarieb = 1, nakladBmFolie: number | null = null) {
   // Viac farieb: odpad fólie +15 % a čas +0,3 min za každú ďalšiu farbu (Kostra cien), nažehlenie za každú vrstvu zvlášť.
   const nFarieb = Math.max(1, Math.round(pocetFarieb || 1)), dalsie = nFarieb - 1;
   const cislo = (v: unknown, def: number) => (v == null || v === '' ? def : (parseFloat(String(v)) || 0));
   const odpadFarba = cislo(rezany?.priplatok_odpad_farba_percent, 15) / 100, casNavyse = cislo(rezany?.cas_navyse_farba_min, 0.3);
   const sirkaVyuz = parseFloat(rezany?.sirka_vyuzitelna_cm) || 49;
-  const naklad_cm2 = folia ? (((parseFloat(folia.naklad_bm) || 0) / sirkaVyuz) / 100) : 0;
+  // nakladBmFolie = priemerná cena zvolených fólií (€/bm); bez výberu fólie sa berie pôvodný cenníkový riadok
+  const nakladBm = nakladBmFolie != null ? nakladBmFolie : (folia ? (parseFloat(folia.naklad_bm) || 0) : 0);
+  const naklad_cm2 = (nakladBm / sirkaVyuz) / 100;
   const material = plochaCm2 * naklad_cm2 * (1 + odpadFarba * dalsie);
   const pracaCm2 = ((parseFloat(rezany?.cas_rezania_min) || 0) + (parseFloat(rezany?.cas_vylupovania_min) || 0)) / 60 * (parseFloat(rezany?.cena_prace_hod) || 0) * plochaCm2;
   const pracaNavyse = (casNavyse * dalsie / 60) * (parseFloat(rezany?.cena_prace_hod) || 0);
@@ -178,7 +180,7 @@ const MAX_TLACI = 6;
 
 type Kontext = Awaited<ReturnType<typeof nacitajKontext>>;
 async function nacitajKontext(supabase: ReturnType<typeof createClient>) {
-  const [nast, produkty, sNast, efekty, umiestnenia, cfgR, metriky, sieto, sVelkosti, dtf, rezany, folie, tech, subTextil, subGarment] = await Promise.all([
+  const [nast, produkty, sNast, efekty, umiestnenia, cfgR, metriky, sieto, sVelkosti, dtf, rezany, folie, tech, subTextil, subGarment, folieDruhy, folieFarby] = await Promise.all([
     supabase.from('potlac_nastavenia').select('*').eq('id', 1).maybeSingle(),
     supabase.from('potlac_produkty').select('*').eq('aktivny', true).order('poradie'),
     supabase.from('sietotlac_nastavenia').select('*').eq('id', 1).maybeSingle(),
@@ -194,6 +196,8 @@ async function nacitajKontext(supabase: ReturnType<typeof createClient>) {
     supabase.from('cennik_technologie').select('technologia, min_cena'),
     supabase.from('textil_naklady').select('*').eq('technologia', 'sublimacia').maybeSingle(),
     supabase.from('cennik_sublimacia_naklady').select('*').eq('id', 1).maybeSingle(),
+    supabase.from('folie_druhy').select('kod, nazov, popis, foto_url, cena_bm, trieda, poradie').order('poradie'),
+    supabase.from('folie_farby').select('kod, druh_kod, nazov, hex, foto_url, poradie').order('poradie'),
   ]);
   if (nast.error || !nast.data) throw new Error('Appka Potlač textilu ešte nie je pripravená (chýba migrácia migration_potlac_textilu.sql).');
   if (produkty.error) throw produkty.error;
@@ -207,10 +211,12 @@ async function nacitajKontext(supabase: ReturnType<typeof createClient>) {
     nast: nast.data as Riadok, produkty: (produkty.data || []) as Riadok[], sNast: (sNast.data || {}) as Riadok, efekty: (efekty.data || []) as Riadok[],
     umiestnenia: (umiestnenia.data || []) as Riadok[], cfg, metriky: (metriky.data || []) as Riadok[], sieto: sieto.data as Riadok | null,
     sVelkosti: (sVelkosti.data || []) as Riadok[], dtf: dtf.data as Riadok | null, rezany: rezany.data as Riadok | null, folie: (folie.data || []) as Riadok[], minCeny, subTextil: subTextil.data as Riadok | null, subGarment: subGarment.data as Riadok | null,
+    folieDruhy: (folieDruhy.data || []) as Riadok[], folieFarby: (folieFarby.data || []) as Riadok[],
   };
 }
 
-type Tlac = { umiestnenie: string; sirkaCm: number; vyskaCm: number; farby: number; efekt: string; suborCesta: string | null; suborNazov: string | null };
+type Folia = { druh: string; farba: string; druhNazov: string; farbaNazov: string };
+type Tlac = { umiestnenie: string; sirkaCm: number; vyskaCm: number; farby: number; efekt: string; folie: Folia[]; suborCesta: string | null; suborNazov: string | null };
 type Vyber = {
   produkt: Riadok; vlastnyTextil: boolean; farbaNazov: string; farbaHex: string; tmavy: boolean; material: string; technologia: string;
   velkosti: Record<string, number>; pocetKs: number; tlace: Tlac[]; osobnyOdber: boolean; b2bKod: string;
@@ -274,9 +280,22 @@ function normalizuj(ctx: Kontext, b: Riadok, suborPovinny: boolean): Vyber {
       if (!suborCesta.startsWith('potlac/') || suborCesta.includes('..')) throw new Error('Neplatný nahraný súbor.');
     }
     if (suborPovinny && !suborCesta) throw new Error(`Pridajte grafiku k potlači „${um.nazov}“ (nahrajte súbor alebo si ju navrhnite).`);
+    const pocetFarieb = Math.min(8, Math.max(1, Math.round(num(t.farby, 1))));
+    // rezaný transfer: pre každú farbu motívu zákazník vyberie druh fólie a farbu (neplatný alebo chýbajúci výber sa nahradí prvou fóliou katalógu)
+    const folie: Folia[] = [];
+    if (technologia === 'rezany') {
+      const vstupF: Riadok[] = Array.isArray(t.folie) ? t.folie : [];
+      for (let i = 0; i < pocetFarieb; i++) {
+        const f = vstupF[i] || {};
+        let farbaF = ctx.folieFarby.find((x) => x.kod === f.farba && x.druh_kod === f.druh);
+        if (!farbaF) farbaF = ctx.folieFarby.find((x) => x.druh_kod === (ctx.folieDruhy[0]?.kod));
+        const druhF = farbaF ? ctx.folieDruhy.find((d) => d.kod === farbaF!.druh_kod) : null;
+        if (farbaF && druhF) folie.push({ druh: String(druhF.kod), farba: String(farbaF.kod), druhNazov: String(druhF.nazov), farbaNazov: String(farbaF.nazov) });
+      }
+    }
     return {
       umiestnenie: um.kod, sirkaCm: Math.min(Math.max(num(t.sirkaCm, 10), 1), maxS), vyskaCm: Math.min(Math.max(num(t.vyskaCm, 10), 1), maxV),
-      farby: Math.min(8, Math.max(1, Math.round(num(t.farby, 1)))), efekt, suborCesta, suborNazov: t.suborNazov ? String(t.suborNazov).slice(0, 200) : null,
+      farby: pocetFarieb, efekt, folie, suborCesta, suborNazov: t.suborNazov ? String(t.suborNazov).slice(0, 200) : null,
     };
   });
   return {
@@ -304,7 +323,9 @@ function cenaTlace(ctx: Kontext, v: Vyber, t: Tlac, ks: number) {
     vc = vcDtfGarment(ctx.dtf, ctx.metriky, plocha) + (pocetNazehleni(ctx.nast, t.sirkaCm, t.vyskaCm) - 1) * nazehlenieDtfNaKus(ctx.dtf, ctx.metriky);
     zaklad = Math.max(priceAt(vc, ks, ctx.cfg), num(ctx.minCeny.dtf));
   } else {
-    vc = vcRezanyTransfer(ctx.rezany, ctx.folie[0] || null, ctx.metriky, plocha, t.farby);
+    const cenyFolii = t.folie.map((f) => num(ctx.folieDruhy.find((d) => d.kod === f.druh)?.cena_bm));
+    const nakladBmFolie = cenyFolii.length ? cenyFolii.reduce((a, b) => a + b, 0) / cenyFolii.length : null;
+    vc = vcRezanyTransfer(ctx.rezany, ctx.folie[0] || null, ctx.metriky, plocha, t.farby, nakladBmFolie);
     zaklad = Math.max(priceAt(vc, ks, ctx.cfg), num(ctx.rezany?.min_cena));
   }
   return { cenaKs: r2(zaklad * (1 + priplEfekt / 100) * (1 + priplPoly / 100)), vc, priplEfekt, priplPoly };
@@ -376,7 +397,8 @@ const popisTlace = (ctx: Kontext, v: Vyber, t: Tlac) => {
   const nazov = ctx.umiestnenia.find((u) => u.kod === t.umiestnenie)?.nazov || t.umiestnenie;
   const farby = (v.technologia === 'dtf' || v.technologia === 'sublimacia') ? '' : `, ${t.farby} ${t.farby === 1 ? 'farba' : t.farby < 5 ? 'farby' : 'farieb'}`;
   const efekt = v.technologia === 'sietotlac' ? `, ${ctx.efekty.find((e) => e.kod === t.efekt)?.nazov || t.efekt}` : '';
-  return `${nazov}: ${t.sirkaCm} × ${t.vyskaCm} cm${farby}${efekt}`;
+  const folie = v.technologia === 'rezany' && t.folie?.length ? ` [${t.folie.map((f) => `${f.druhNazov} – ${f.farbaNazov}`).join('; ')}]` : '';
+  return `${nazov}: ${t.sirkaCm} × ${t.vyskaCm} cm${farby}${efekt}${folie}`;
 };
 const popisTextilu = (v: Vyber) => v.vlastnyTextil
   ? `vlastný textil (${v.material === 'polyester' ? 'polyester' : 'bavlna'}, ${v.farbaNazov || (v.tmavy ? 'tmavý' : 'svetlý')})`
@@ -432,6 +454,10 @@ Deno.serve(async (req) => {
           fotoSirkaCm: num(p.foto_sirka_cm, 100), pozicie: p.pozicie || {}, velkostnaTabulka: p.velkostna_tabulka || null,
         })),
         efekty: ctx.efekty.map((e) => ({ kod: e.kod, nazov: e.nazov, popis: e.popis || '', priplatokPercent: num(e.priplatok_percent) })),
+        folie: {
+          druhy: ctx.folieDruhy.map((d) => ({ kod: d.kod, nazov: d.nazov, popis: d.popis || '', fotoUrl: d.foto_url || null, trieda: d.trieda || null })),
+          farby: ctx.folieFarby.map((f) => ({ kod: f.kod, druh: f.druh_kod, nazov: f.nazov, hex: f.hex, fotoUrl: f.foto_url || null })),
+        },
         umiestnenia: ctx.umiestnenia.map((u) => ({ kod: u.kod, nazov: u.nazov, popis: u.popis || '', strana: u.strana, maxSirkaCm: num(u.max_sirka_cm), maxVyskaCm: num(u.max_vyska_cm), vychodziaSirkaCm: num(u.vychodzia_sirka_cm, 20), vychodziaVyskaCm: num(u.vychodzia_vyska_cm, 20) })),
       });
     }
