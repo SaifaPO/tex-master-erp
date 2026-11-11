@@ -1,42 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { PenLine, Printer, X, Check, Loader2, Eraser } from 'lucide-react';
+import { PenLine, Download, X, Check, Loader2, Eraser } from 'lucide-react';
+import { stiahniDodaciList } from './dodaciList';
 
 // ODOVZDANIE ZAKAZKY ZAKAZNIKOVI S PODPISOM: pri osobnom odbere (alebo pri kuriérovi) sa na tablete/mobile ukáže zoznam odovzdávaného tovaru,
 // preberajúci napíše meno/priezvisko a podpíše sa prstom. Uloží sa dátum a čas, podpis a presný zoznam tovaru (poistka, že tovar bol prevzatý)
-// a vytlačí sa dodací list s podpisom.
+// a stiahne sa dodací list (PDF vo vzhľade formulára) s podpisom — dá sa vytlačiť alebo poslať zákazníkovi.
 
 const SPOSOBY = [{ id: 'osobny_odber', label: 'Osobný odber' }, { id: 'kurier', label: 'Kuriér' }, { id: 'ine', label: 'Iné' }];
 const skDatumCas = (iso) => { const d = new Date(iso); const p = (n) => String(n).padStart(2, '0'); return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`; };
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-
-function tlacDodaciList(h, firmaNazov) {
-  const w = window.open('', '_blank', 'width=900,height=1000');
-  if (!w) { window.alert('Prehliadač zablokoval okno na tlač — povoľ vyskakovacie okná.'); return; }
-  const riadky = (h.polozky || []).map((p, i) => `<tr><td>${i + 1}</td><td>${esc(p.nazov)}${p.poznamka ? `<div class="pozn">${esc(p.poznamka)}</div>` : ''}</td><td class="r">${esc(p.qty)} ks</td></tr>`).join('');
-  w.document.write(`<html><head><title>Dodací list ${esc(h.order_number || h.order_id)}</title><style>
-    body{font-family:Arial,sans-serif;padding:32px;color:#111;max-width:760px;margin:auto}
-    h1{font-size:22px;margin:0 0 4px} .sub{color:#555;font-size:13px;margin-bottom:18px}
-    table{width:100%;border-collapse:collapse;margin:14px 0} th,td{border:1px solid #bbb;padding:7px 9px;font-size:13px;text-align:left}
-    th{background:#f1f5f9} .r{text-align:right;white-space:nowrap} .pozn{font-size:11px;color:#666}
-    .box{border:1px solid #bbb;border-radius:6px;padding:12px;margin-top:16px;font-size:13px}
-    .sig{margin-top:8px;border-bottom:1px solid #111;height:110px;display:flex;align-items:flex-end} .sig img{max-height:100px}
-    .meta td{border:none;padding:3px 0;font-size:13px}
-  </style></head><body>
-    <h1>Dodací list — odovzdanie tovaru</h1>
-    <div class="sub">${esc(firmaNazov || h.company_brand || '')} • zákazka <b>${esc(h.order_number || h.order_id)}</b></div>
-    <table class="meta"><tr><td>Odberateľ:</td><td><b>${esc(h.customer)}</b></td></tr>
-    <tr><td>Spôsob prevzatia:</td><td>${esc((SPOSOBY.find(s => s.id === h.sposob) || {}).label || h.sposob)}</td></tr>
-    <tr><td>Dátum a čas prevzatia:</td><td><b>${esc(skDatumCas(h.signed_at))}</b></td></tr>
-    <tr><td>Prevzal (meno, priezvisko):</td><td><b>${esc(h.prevzal_meno)}</b></td></tr></table>
-    <table><thead><tr><th>#</th><th>Tovar</th><th class="r">Množstvo</th></tr></thead><tbody>${riadky}</tbody></table>
-    ${h.poznamka ? `<div class="box"><b>Poznámka:</b> ${esc(h.poznamka)}</div>` : ''}
-    <div class="box">Svojím podpisom potvrdzujem, že som vyššie uvedený tovar v uvedenom množstve prevzal a že bol odovzdaný v poriadku.
-      <div class="sig">${h.podpis_png ? `<img src="${h.podpis_png}" alt="podpis">` : ''}</div>
-      <div style="font-size:11px;color:#666;margin-top:4px">Podpis preberajúceho — ${esc(h.prevzal_meno)}</div></div>
-  </body></html>`);
-  w.document.close(); w.focus();
-  setTimeout(() => w.print(), 400);
-}
 
 function PodpisPlatno({ onZmena }) {
   const ref = useRef(null);
@@ -79,6 +51,7 @@ export default function OdovzdanieZakazky({ supabase, order, currentUser, firmaN
   const [odovzdania, setOdovzdania] = useState([]);
   const [chyba, setChyba] = useState('');
   const [otvorene, setOtvorene] = useState(false);
+  const stiahni = async (h) => { try { await stiahniDodaciList(supabase, h); } catch (e) { triggerNotification('error', 'Dodací list sa nepodarilo vytvoriť: ' + (e?.message || e)); } };
 
   const nacitaj = useCallback(async () => {
     const { data, error } = await supabase.from('order_handovers').select('*').eq('order_id', order.id).order('signed_at', { ascending: false });
@@ -99,7 +72,7 @@ export default function OdovzdanieZakazky({ supabase, order, currentUser, firmaN
           <span className="text-emerald-400 font-bold">✓ Prevzal: {h.prevzal_meno}</span>
           <span className="text-slate-400">{skDatumCas(h.signed_at)}</span>
           <span className="text-slate-500">{(h.polozky || []).reduce((s, p) => s + (Number(p.qty) || 0), 0)} ks • {(SPOSOBY.find(s => s.id === h.sposob) || {}).label}</span>
-          <button onClick={() => tlacDodaciList(h, firmaNazov)} className="ml-auto text-indigo-400 hover:text-indigo-300 font-bold flex items-center gap-1"><Printer className="h-3.5 w-3.5" /> Dodací list</button>
+          <button onClick={() => stiahni(h)} className="ml-auto text-indigo-400 hover:text-indigo-300 font-bold flex items-center gap-1"><Download className="h-3.5 w-3.5" /> Dodací list (PDF)</button>
         </div>
       ))}
       {!chyba && odovzdania.length === 0 && <p className="text-[11px] text-slate-500">Zatiaľ nebolo nič odovzdané.</p>}
@@ -108,7 +81,7 @@ export default function OdovzdanieZakazky({ supabase, order, currentUser, firmaN
         <PodpisModal
           supabase={supabase} order={order} currentUser={currentUser} firmaNazov={firmaNazov}
           onClose={() => setOtvorene(false)}
-          onHotovo={async (h) => { setOtvorene(false); await nacitaj(); pridajLog?.(`Tovar odovzdaný: prevzal ${h.prevzal_meno} (${skDatumCas(h.signed_at)})`); triggerNotification('success', 'Odovzdanie je uložené s podpisom.'); tlacDodaciList(h, firmaNazov); }}
+          onHotovo={async (h) => { setOtvorene(false); await nacitaj(); pridajLog?.(`Tovar odovzdaný: prevzal ${h.prevzal_meno} (${skDatumCas(h.signed_at)})`); triggerNotification('success', 'Odovzdanie je uložené s podpisom.'); stiahni(h); }}
         />
       )}
     </div>
@@ -124,6 +97,18 @@ function PodpisModal({ supabase, order, currentUser, firmaNazov, onClose, onHoto
   const [uklada, setUklada] = useState(false);
   const [chyba, setChyba] = useState('');
   const [teraz, setTeraz] = useState(new Date());
+  // Zákazky z appky „Potlač textilu“: namiesto dlhej poznámky z e-shopu zrozumiteľný popis (textil, farba, veľkosti, potlače)
+  useEffect(() => {
+    let zrusene = false;
+    supabase.from('potlac_objednavky').select('*').eq('erp_zakazka_id', order.id).maybeSingle().then(({ data: o }) => {
+      if (zrusene || !o) return;
+      const vel = o.vlastny_textil ? 'vlastný textil zákazníka' : Object.entries(o.velkosti || {}).map(([k, q]) => `${k}×${q}`).join(', ');
+      const pot = (o.polozky || []).map(p => `${p.nazov} ${p.sirkaCm}×${p.vyskaCm} cm`).join('; ');
+      const nazov = `Potlač textilu${o.vlastny_textil ? '' : ` — ${o.produkt_nazov || ''}${o.farba_nazov ? `, ${o.farba_nazov}` : ''}`}`;
+      setPolozky(l => (l.length === 1 ? [{ ...l[0], nazov, poznamka: [vel && `veľkosti: ${vel}`, pot && `potlač: ${pot}`].filter(Boolean).join(' • ') }] : l));
+    });
+    return () => { zrusene = true; };
+  }, [supabase, order.id]);
   useEffect(() => { const t = setInterval(() => setTeraz(new Date()), 15000); return () => clearInterval(t); }, []);
 
   const potvrd = async () => {
@@ -198,7 +183,7 @@ function PodpisModal({ supabase, order, currentUser, firmaNazov, onClose, onHoto
         <div className="flex gap-2">
           <button onClick={onClose} className="px-4 py-3 rounded-xl bg-slate-800 text-slate-300 text-sm font-bold">Zrušiť</button>
           <button onClick={potvrd} disabled={uklada} className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-sm flex items-center justify-center gap-2">
-            {uklada ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Potvrdiť odovzdanie a vytlačiť dodací list
+            {uklada ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Potvrdiť odovzdanie a stiahnuť dodací list
           </button>
         </div>
       </div>
