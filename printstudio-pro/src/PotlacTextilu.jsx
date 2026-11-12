@@ -283,10 +283,23 @@ export default function PotlacTextilu({ supabase }) {
     ['Technológia', TECH[technologia].nazov],
     ['Počet kusov', `${cena.pocetKs} ks`],
     ['Textil', vlastnyTextil ? `Vlastný (${material === 'polyester' ? 'polyester' : 'bavlna'})` : `${produkt.nazov}, ${farbaNazov}`],
-    ...(cena.textilSpoluBezDph > 0 ? [[`Textil od nás (${cena.pocetKs} ks × ${eur(cena.textilKsBezDph)})`, `${eur(cena.textilSpoluBezDph)}`]] : []),
-    ...(cena.tlace || []).map((t) => [t.nazov, `${eur(t.cenaKsBezDph)} / ks`]),
-    ...(cena.priplatokPolyesterPercent > 0 ? [['Príplatok polyester (v cenách vyššie)', `+${cena.priplatokPolyesterPercent} %`]] : []),
+    ...(cena.priplatokPolyesterPercent > 0 ? [['Príplatok polyester (v cenách potlače)', `+${cena.priplatokPolyesterPercent} %`]] : []),
   ] : [];
+  // Prehľadný rozpis ceny: textil a každá potlač osobitne, potom komplet cena 1 kusa (textil + potlač), potom zľava / manipulácia.
+  const rozpis = cena ? (() => {
+    const ks = cena.pocetKs;
+    const potlaceKs = (cena.tlace || []).reduce((s, t) => s + Number(t.cenaKsBezDph), 0);
+    const maTextil = cena.textilSpoluBezDph > 0;
+    const komplet = Number(cena.textilKsBezDph || 0) + potlaceKs;
+    const r = [];
+    if (maTextil) r.push([`Textil – ${produkt.nazov}: ${ks} ks × ${eur(cena.textilKsBezDph)}`, eur(cena.textilSpoluBezDph)]);
+    (cena.tlace || []).forEach((t) => r.push([`Potlač ${t.nazov}: ${ks} ks × ${eur(t.cenaKsBezDph)}`, eur(Number(t.cenaKsBezDph) * ks)]));
+    r.push([maTextil ? 'Cena za 1 ks (textil + potlač)' : 'Cena za 1 ks (potlač)', `${eur(komplet)} bez DPH`, true]);
+    if (cena.doplatokMinimaBezDph > 0) r.push(['Doplatok do minimálnej ceny potlače', eur(cena.doplatokMinimaBezDph)]);
+    if (cena.zlavaB2bEur > 0) r.push([`B2B zľava ${cena.zlavaB2bPercent} % (z potlače)`, `−${eur(cena.zlavaB2bEur)}`]);
+    if (cena.manipulaciaBezDph > 0) r.push(['Manipulačný poplatok', eur(cena.manipulaciaBezDph)]);
+    return r;
+  })() : null;
 
   return (
     <div className="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col">
@@ -482,7 +495,7 @@ export default function PotlacTextilu({ supabase }) {
           {cena?.urovne && <MnozstevneZlavy urovne={cena.urovne} pocetKs={pocetKs} b2bPercent={cena.zlavaB2bPercent} b2bKod={b2b.kod} />}
           <div className="space-y-3">
           <CenaSuhrn cena={cena} chyba={chyba || (!pripravene && pocetKs < minKs ? `Zadajte aspoň ${minKs} ks.` : '')} osobnyOdber={osobnyOdber} onOsobnyOdber={setOsobnyOdber} onObjednat={objednat} bezi={bezi}
-            chybaObjednavky={chybaObj} potvrdenie={potvrdenie} zakazane={chybajuSubory || !pripravene || prekrocene || nezaradene > 0} poznamkaZakazane={prekrocene ? 'Niektorý motív je väčší než maximálny rozmer pre svoje umiestnenie (rukáv max. 10 × 10 cm). Zmenšite ho — objednávku nie je možné odoslať.' : nezaradene > 0 ? 'Na produkte máte motív mimo potlače (napr. na chrbte bez pridanej potlače). Pridajte potlač s týmto umiestnením alebo motív zmažte.' : 'Pred objednávkou pridajte grafiku ku každej potlači.'} riadky={riadky} />
+            chybaObjednavky={chybaObj} potvrdenie={potvrdenie} zakazane={chybajuSubory || !pripravene || prekrocene || nezaradene > 0} poznamkaZakazane={prekrocene ? 'Niektorý motív je väčší než maximálny rozmer pre svoje umiestnenie (rukáv max. 10 × 10 cm). Zmenšite ho — objednávku nie je možné odoslať.' : nezaradene > 0 ? 'Na produkte máte motív mimo potlače (napr. na chrbte bez pridanej potlače). Pridajte potlač s týmto umiestnením alebo motív zmažte.' : 'Pred objednávkou pridajte grafiku ku každej potlači.'} riadky={riadky} rozpis={rozpis} />
           <p className="text-[11px] text-slate-400 text-center">{vlastnyTextil ? 'Cena je len za potlač (vlastný textil). ' : 'V cene je textil aj potlač. '}Platba kartou cez Shopify.</p>
           </div>
         </div>

@@ -94,12 +94,15 @@ export function VlajkyUpozornenie({ tmavy = false }) {
   );
 }
 
-function Riadok({ label, value }) {
-  return <div className="flex items-center justify-between text-xs"><span className="text-slate-400">{label}</span><span className="font-mono text-slate-100">{value}</span></div>;
+function Riadok({ label, value, tucne }) {
+  if (tucne) return <div className="flex items-center justify-between gap-3 text-sm font-bold bg-slate-800 rounded-lg px-2.5 py-2 my-1"><span className="text-white">{label}</span><span className="font-mono text-white whitespace-nowrap">{value}</span></div>;
+  return <div className="flex items-start justify-between gap-3 text-xs"><span className="text-slate-400">{label}</span><span className="font-mono text-slate-100 whitespace-nowrap">{value}</span></div>;
 }
 
 // Súhrn ceny + tlačidlo „Objednať a zaplatiť“ (rovnaký vzhľad pre všetky nové appky)
-export function CenaSuhrn({ cena, chyba, osobnyOdber, onOsobnyOdber, onObjednat, bezi, chybaObjednavky, potvrdenie, zakazane, poznamkaZakazane, riadky = [], children }) {
+// `rozpis` (voliteľné): zoznam [popis, hodnota, tučné?] — ak je zadaný, nahradí štandardné riadky „Cena za 1 ks / Spolu za výrobu / zľava / manipulácia“
+// (používa Potlač textilu: textil a potlač osobitne + komplet cena kusa). Ostatné appky ho nepoužívajú a vyzerajú rovnako ako predtým.
+export function CenaSuhrn({ cena, chyba, osobnyOdber, onOsobnyOdber, onObjednat, bezi, chybaObjednavky, potvrdenie, zakazane, poznamkaZakazane, riadky = [], rozpis = null, children }) {
   return (
     <div className="bg-slate-900 text-white rounded-2xl p-5 space-y-3">
       <h3 className="text-base font-bold border-b border-slate-700 pb-3">Zhrnutie objednávky</h3>
@@ -113,6 +116,7 @@ export function CenaSuhrn({ cena, chyba, osobnyOdber, onOsobnyOdber, onObjednat,
         <div className="bg-rose-950/60 border border-rose-700 text-rose-200 p-3 rounded-lg text-xs flex gap-2"><AlertTriangle className="w-4 h-4 shrink-0" /> {chyba}</div>
       ) : cena ? (
         <div className="space-y-1.5 border-t border-slate-700 pt-3">
+          {rozpis ? rozpis.map(([l, v, t], i) => <Riadok key={i} label={l} value={v} tucne={t} />) : <>
           {cena.polozky && cena.polozky.length > 1
             ? <>
                 {cena.polozky.map((p, i) => <Riadok key={i} label={`Motív ${i + 1}: ${p.ks} ks × ${p.cenaKsBezDph.toFixed(2)} €`} value={<CenaB2b v={p.logaSpoluBezDph} p={cena.zlavaB2bPercent} />} />)}
@@ -122,6 +126,7 @@ export function CenaSuhrn({ cena, chyba, osobnyOdber, onOsobnyOdber, onObjednat,
           <Riadok label={cena.polozky && cena.polozky.length > 1 ? `Spolu za výrobu (${cena.ksSpolu} ks, bez DPH)` : 'Spolu za výrobu (bez DPH)'} value={<CenaB2b v={cena.logaSpoluBezDph} p={cena.zlavaB2bPercent} />} />
           {cena.zlavaB2bEur > 0 && <Riadok label={`B2B zľava ${cena.zlavaB2bPercent} %`} value={`−${cena.zlavaB2bEur.toFixed(2)} €`} />}
           {cena.manipulaciaBezDph > 0 && <Riadok label="Manipulačný poplatok" value={`${cena.manipulaciaBezDph.toFixed(2)} €`} />}
+          </>}
           <Riadok label="Cena bez DPH" value={`${cena.spoluBezDph.toFixed(2)} €`} />
           <Riadok label={`DPH ${cena.dphPercent} %`} value={`${cena.dph.toFixed(2)} €`} />
           <div className="bg-indigo-600 rounded-xl p-3 mt-2">
