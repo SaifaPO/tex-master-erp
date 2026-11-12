@@ -216,10 +216,10 @@ export default function PotlaceTab({ supabase }) {
   // (rovnako ako v e-shope a v Cenovych ponukach). Sekcie vyssie ostavaju pri "1. farbe" + priplatok za dalsiu farbu.
   const vcSietotlacTest = sietotlacPlatny ? vcSietotlacCelkom(kostraLive, testVelkostId, testTmavyTextil, pocetFariebSiet, ks, plochaVlastnaSiet) : 0;
 
-  const vcRezany = vcRezanyTransferZo(kostraLive, testFoliaId, plocha, pocetFariebSiet); // horná karta aj porovnanie dole počítajú rovnako pre zadaný počet farieb
+  const vcRezany = vcRezanyTransferRozpis(kostraLive, testFoliaId, plocha, pocetFariebSiet, ks).spolu; // horná karta aj porovnanie dole počítajú rovnako pre zadaný počet farieb
   const rzSub = vcSublimaciaGarmentRozpis(kostraLive, plocha);
-  const rzDtf = vcDtfGarmentRozpis(kostraLive, plocha, nazehleniDtf);
-  const rzRezany = vcRezanyTransferRozpis(kostraLive, testFoliaId, plocha, pocetFariebSiet);
+  const rzDtf = vcDtfGarmentRozpis(kostraLive, plocha, nazehleniDtf, ks); // + príprava objednávky na kus
+  const rzRezany = vcRezanyTransferRozpis(kostraLive, testFoliaId, plocha, pocetFariebSiet, ks);
   const dvaCasti = (rz, t, n) => [{ label: t, vc: rz?.transfer ?? 0 }, { label: n, vc: rz?.nazehlenie ?? 0 }];
 
   const vybranaHrubka = laserHrubky.find(h => h.id === testHrubkaId);

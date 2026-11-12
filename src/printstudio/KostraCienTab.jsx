@@ -412,6 +412,10 @@ export default function KostraCienTab({ supabase }) {
           <Field label="Čas rezania (min/cm²)" value={rezany.cas_rezania_min} step="0.001" onChange={(v) => ulozRezany({ cas_rezania_min: v })} hint={casNaCm2Hint(rezany.cas_rezania_min, REF_PLOCHA_CM2)} />
           <Field label="Čas vyľupovania (min/cm²)" value={rezany.cas_vylupovania_min} step="0.001" onChange={(v) => ulozRezany({ cas_vylupovania_min: v })} hint={casNaCm2Hint(rezany.cas_vylupovania_min, REF_PLOCHA_CM2)} />
           <Field label="Čas nažehlovania (min/ks)" value={rezany.cas_nazehlovania_min} step="0.1" onChange={(v) => ulozRezany({ cas_nazehlovania_min: v })} hint={casFlatHint(rezany.cas_nazehlovania_min)} />
+          <Field label="Základný odpad fólie (%)" value={rezany.odpad_percent} step="1" onChange={(v) => ulozRezany({ odpad_percent: v })} hint="Medzery medzi motívmi na rolke — pripočíta sa k materiálu aj pri 1 farbe (len ERP kalkulácia)." />
+          <Field label="Príprava objednávky (min / objednávku)" value={rezany.priprava_min} step="1" onChange={(v) => ulozRezany({ priprava_min: v })} hint="Súbor, rozloženie, nastavenie plotra. Rozpočíta sa na kusy (÷ počet ks) — len v ERP kalkulácii, e-shop appky to nepoužívajú." />
+          <Field label="Zložitosť loga: stredne zložité (× vyľupovanie)" value={rezany.zlozitost_stredna_nasobok} step="0.1" onChange={(v) => ulozRezany({ zlozitost_stredna_nasobok: v })} hint="Násobok času vyľupovania na cm² pri stredne zložitom logu (voľba v kalkulačke ponúk)." />
+          <Field label="Zložitosť loga: zložité (× vyľupovanie)" value={rezany.zlozitost_vysoka_nasobok} step="0.1" onChange={(v) => ulozRezany({ zlozitost_vysoka_nasobok: v })} hint="Násobok času vyľupovania na cm² pri zložitom logu (veľa jemných detailov)." />
           <Field label="Manipulácia (€/ks)" value={rezany.naklady_manipulacia} step="0.01" onChange={(v) => ulozRezany({ naklady_manipulacia: v })} />
           <Field label="Viac farieb: fólia navyše za každú ďalšiu farbu (%)" value={rezany.priplatok_odpad_farba_percent ?? 15} step="1" onChange={(v) => ulozRezany({ priplatok_odpad_farba_percent: v })} hint="Odpad pri samostatných kusoch fólie. Nažehlenie a manipulácia sa počítajú za každú farbu (vrstvu) zvlášť." />
           <Field label="Viac farieb: čas navyše za každú ďalšiu farbu (min)" value={rezany.cas_navyse_farba_min ?? 0.3} step="0.1" onChange={(v) => ulozRezany({ cas_navyse_farba_min: v })} hint="Strihanie a vyberanie navyše pri každej ďalšej farbe." />
@@ -515,6 +519,7 @@ export default function KostraCienTab({ supabase }) {
             <div className="grid grid-cols-2 gap-3">
               <Field label="Manipulácia strihania (€/ks)" value={dtf.naklady_manipulacia} step="0.01" onChange={(v) => ulozDtf({ naklady_manipulacia: v })} />
               <Field label="Čas nažehlovania (min/ks)" value={dtf.cas_nazehlovania_min} step="0.1" onChange={(v) => ulozDtf({ cas_nazehlovania_min: v })} hint={casFlatHint(dtf.cas_nazehlovania_min)} />
+              <Field label="Príprava objednávky (min / objednávku)" value={dtf.priprava_min} step="1" onChange={(v) => ulozDtf({ priprava_min: v })} hint="Súbor, rozloženie, nastavenie stroja. Rozpočíta sa na kusy (÷ počet ks) — len v ERP kalkulácii, e-shop appky to nepoužívajú." />
               <Field label="Odpad na rolke (%)" value={dtf.odpad_percent ?? DTF_ODPAD_PREDVOLENY_PERCENT} step="0.5" onChange={(v) => ulozDtf({ odpad_percent: v })} hint="Jedno % pre všetky veľkosti log: medzery medzi logami a okraje pásu. Pripočíta sa len k transferu." />
             </div>
             <VysledokVC label={`1) Transfer pri ${REF_PLOCHA_CM2}cm² (rovnaký vzorec ako metráž + odpad)`} value={vcDtfGarmentRozpisRef.transfer} unit="€/ks" />

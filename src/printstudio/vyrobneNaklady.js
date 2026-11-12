@@ -134,9 +134,11 @@ export function pocetNazehleniDtf(kostra, sirkaCm, vyskaCm) {
   if (w <= 0 || h <= 0) return 1;
   return Math.max(1, Math.min(Math.ceil(w / a) * Math.ceil(h / b), Math.ceil(w / b) * Math.ceil(h / a)));
 }
-export function vcDtfGarmentRozpis(kostra, plochaCm2, pocetNazehleni = 1) {
+// pocetKs je VOLITELNY: ak je zadany, pripocita sa PRIPRAVA OBJEDNAVKY (dtf_naklady.priprava_min — subor, rozlozenie, nastavenie stroja) rozpocitana na kusy
+// (rovnako ako sito pri sietotlaci). Bez pocetKs sa priprava nepocita (e-shop appky a referencne vypocty ostavaju bezo zmeny).
+export function vcDtfGarmentRozpis(kostra, plochaCm2, pocetNazehleni = 1, pocetKs = 0) {
   const n = kostra.dtf;
-  if (!n) return { transfer: 0, nazehlenie: 0, spolu: 0, odpadPercent: 0 };
+  if (!n) return { transfer: 0, nazehlenie: 0, priprava: 0, spolu: 0, odpadPercent: 0 };
   const sirkaM = DTF_ROLL_WIDTH_CM / 100;
   const filmM2 = (parseFloat(n.cena_folie_bm) || 0) / sirkaM; // €/bm -> €/m2 cez sirku pasu
   const materialM2 =
@@ -157,7 +159,8 @@ export function vcDtfGarmentRozpis(kostra, plochaCm2, pocetNazehleni = 1) {
   const lisEurHod = elektrinaZariadeniaEurZaHod(kostra.costMetrics, n.transferovy_lis_zariadenie_id);
   const elektrinaLis = lisEurHod * ((parseFloat(n.cas_nazehlovania_min) || 0) / 60);
   const nazehlenie = ((parseFloat(n.naklady_manipulacia) || 0) + praca + elektrinaLis) * Math.max(1, pocetNazehleni || 1); // každé ďalšie nažehlenie = ďalšia manipulácia + práca + lis
-  return { transfer, nazehlenie, spolu: transfer + nazehlenie, odpadPercent, pocetNazehleni: Math.max(1, pocetNazehleni || 1) };
+  const priprava = pocetKs > 0 ? (((parseFloat(n.priprava_min) || 0) / 60) * (parseFloat(n.cena_prace_hod) || 0)) / pocetKs : 0;
+  return { transfer, nazehlenie, priprava, spolu: transfer + nazehlenie + priprava, odpadPercent, pocetNazehleni: Math.max(1, pocetNazehleni || 1) };
 }
 export function vcDtfGarment(kostra, plochaCm2, pocetNazehleni = 1) {
   return vcDtfGarmentRozpis(kostra, plochaCm2, pocetNazehleni).spolu;
@@ -259,7 +262,9 @@ export function plochaFormatuSietotlac(kostra, velkostId, plochaVlastnaCm2) {
 // praca, nie strojovy cas), TRANSFEROVY LIS bezi pocas flat casu nazehlovania.
 // Viac farieb (flex): každá farba je samostatný kus fólie — fólia navyše (odpad) +15 % a čas navyše (strihanie/vyberanie) +0,3 min za KAŽDÚ ďalšiu farbu (nastaviteľné v Kostre cien);
 // rezanie/vyľupovanie podľa plochy motívu je spolu 1x (plocha sa len rozdelí medzi farby); nažehlenie je za každú vrstvu zvlášť (x počet farieb).
-export function vcRezanyTransferRozpis(kostra, foliaId, plochaCm2, pocetFarieb = 1) {
+// pocetKs (volitelny): pripocita PRIPRAVU OBJEDNAVKY (cennik_rezany_transfer.priprava_min) rozpocitanu na kusy. zlozitost ('jednoduche' | 'stredne' | 'zlozite'):
+// vylupovanie sa nasobi (zlozitost_stredna_nasobok / zlozitost_vysoka_nasobok) — viac jemnych krivek = dlhsie vylupovanie. Bez parametrov sa spravaju vzorce ako doteraz.
+export function vcRezanyTransferRozpis(kostra, foliaId, plochaCm2, pocetFarieb = 1, pocetKs = 0, zlozitost = 'jednoduche') {
   const rezany = kostra.rezany;
   const nFarieb = Math.max(1, Math.round(parseFloat(pocetFarieb) || 1));
   const dalsie = nFarieb - 1;
@@ -269,9 +274,11 @@ export function vcRezanyTransferRozpis(kostra, foliaId, plochaCm2, pocetFarieb =
   const folia = (kostra.folie || []).find(f => f.id === foliaId);
   const sirkaVyuz = parseFloat(rezany?.sirka_vyuzitelna_cm) || 49;
   const naklad_cm2 = folia ? (((parseFloat(folia.naklad_bm) || 0) / sirkaVyuz) / 100) : 0;
-  const material = plochaCm2 * naklad_cm2 * (1 + odpadFarba * dalsie);
+  const odpadZaklad = Math.max(0, parseFloat(rezany?.odpad_percent) || 0) / 100; // základný odpad fólie (medzery medzi motívmi na rolke) — platí aj pri 1 farbe
+  const material = plochaCm2 * naklad_cm2 * (1 + odpadZaklad + odpadFarba * dalsie);
   const pracaNavyseFarby = (casNavyseFarba * dalsie / 60) * (parseFloat(rezany?.cena_prace_hod) || 0);
-  const pracaCm2 = ((parseFloat(rezany?.cas_rezania_min) || 0) + (parseFloat(rezany?.cas_vylupovania_min) || 0)) / 60 * (parseFloat(rezany?.cena_prace_hod) || 0) * plochaCm2;
+  const zlozK = zlozitost === 'zlozite' ? (parseFloat(rezany?.zlozitost_vysoka_nasobok) || 3) : zlozitost === 'stredne' ? (parseFloat(rezany?.zlozitost_stredna_nasobok) || 2) : 1;
+  const pracaCm2 = ((parseFloat(rezany?.cas_rezania_min) || 0) + (parseFloat(rezany?.cas_vylupovania_min) || 0) * zlozK) / 60 * (parseFloat(rezany?.cena_prace_hod) || 0) * plochaCm2;
   const pracaFlat = ((parseFloat(rezany?.cas_nazehlovania_min) || 0) / 60) * (parseFloat(rezany?.cena_prace_hod) || 0);
   const ploterEurHod = elektrinaZariadeniaEurZaHod(kostra.costMetrics, rezany?.ploter_zariadenie_id);
   const elektrinaPloterCm2 = ploterEurHod * ((parseFloat(rezany?.cas_rezania_min) || 0) / 60) * plochaCm2;
@@ -282,9 +289,10 @@ export function vcRezanyTransferRozpis(kostra, foliaId, plochaCm2, pocetFarieb =
   const nazehlenie = ((parseFloat(rezany?.naklady_manipulacia) || 0) + pracaFlat + elektrinaLisFlat) * nFarieb;
   // Casy v minutach na 1 ks (rezanie a vylupovanie sa nasobia plochou, nazehlenie je flat) — len na prehlad pri porovnavani cien.
   const casRezaniaMin = (parseFloat(rezany?.cas_rezania_min) || 0) * plochaCm2;
-  const casVylupovaniaMin = (parseFloat(rezany?.cas_vylupovania_min) || 0) * plochaCm2 + casNavyseFarba * dalsie;
+  const casVylupovaniaMin = (parseFloat(rezany?.cas_vylupovania_min) || 0) * zlozK * plochaCm2 + casNavyseFarba * dalsie;
   const casNazehlovaniaMin = (parseFloat(rezany?.cas_nazehlovania_min) || 0) * nFarieb;
-  return { transfer, nazehlenie, spolu: transfer + nazehlenie, casRezaniaMin, casVylupovaniaMin, casNazehlovaniaMin };
+  const priprava = pocetKs > 0 ? (((parseFloat(rezany?.priprava_min) || 0) / 60) * (parseFloat(rezany?.cena_prace_hod) || 0)) / pocetKs : 0;
+  return { transfer, nazehlenie, priprava, spolu: transfer + nazehlenie + priprava, casRezaniaMin, casVylupovaniaMin, casNazehlovaniaMin };
 }
 export function vcRezanyTransfer(kostra, foliaId, plochaCm2, pocetFarieb = 1) {
   return vcRezanyTransferRozpis(kostra, foliaId, plochaCm2, pocetFarieb).spolu;

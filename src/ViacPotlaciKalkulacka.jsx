@@ -10,7 +10,7 @@ const UMIESTNENIA = ['Hruď — srdce', 'Hruď — stred', 'Chrbát', 'Ľavý ru
 const novaPotlac = (kostra, n) => ({
   id: `vp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
   nazov: UMIESTNENIA[n] || '',
-  metoda: 'dtf', sirka: 10, vyska: 10, farby: 1, velkostId: 'vlastny', tmavy: false, foliaId: kostra?.folie?.[0]?.id ?? '',
+  metoda: 'dtf', sirka: 10, vyska: 10, farby: 1, velkostId: 'vlastny', tmavy: false, zlozitost: 'jednoduche', foliaId: kostra?.folie?.[0]?.id ?? '',
 });
 
 export default function ViacPotlaciKalkulacka({ kostra, fmtMoney, inputCls, labelCls, onPridat }) {
@@ -92,6 +92,16 @@ export default function ViacPotlaciKalkulacka({ kostra, fmtMoney, inputCls, labe
                   <select value={p.foliaId} onChange={(e) => zmen(p.id, { foliaId: e.target.value })} className={inputCls}>
                     {kostra.folie.length === 0 && <option value="">-- žiadna fólia (pridaj v Kostra cien) --</option>}
                     {kostra.folie.map((f) => <option key={f.id} value={f.id}>{f.nazov}</option>)}
+                  </select>
+                </div>
+              )}
+              {def?.needsFolia && (
+                <div className="col-span-2 sm:col-span-1">
+                  <label className={labelCls}>Zložitosť loga</label>
+                  <select value={p.zlozitost} onChange={(e) => zmen(p.id, { zlozitost: e.target.value })} className={inputCls}>
+                    <option value="jednoduche">Jednoduché</option>
+                    <option value="stredne">Stredne zložité</option>
+                    <option value="zlozite">Zložité (veľa jemných detailov)</option>
                   </select>
                 </div>
               )}

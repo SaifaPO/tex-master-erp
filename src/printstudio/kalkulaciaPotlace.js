@@ -37,7 +37,7 @@ export function cenaPotlace(kostra, p, ks) {
     const rz = vcSublimaciaGarmentRozpis(kostra, plocha);
     vc = rz?.spolu ?? 0;
   } else if (p.metoda === 'dtf') {
-    vc = vcDtfGarmentRozpis(kostra, plocha, pocetNazehleniDtf(kostra, p.sirka, p.vyska)).spolu; // motív väčší než lis sa žehlí viackrát
+    vc = vcDtfGarmentRozpis(kostra, plocha, pocetNazehleniDtf(kostra, p.sirka, p.vyska), kusov).spolu; // motív väčší než lis sa žehlí viackrát; + príprava objednávky na kus
   } else if (p.metoda === 'vysivka') {
     vc = vcVysivka(kostra, plocha, kusov);
   } else if (p.metoda === 'sietotlac') {
@@ -51,8 +51,8 @@ export function cenaPotlace(kostra, p, ks) {
   } else if (p.metoda === 'rezany') {
     const folia = kostra.folie.find((f) => String(f.id) === String(p.foliaId));
     if (!folia) chyba = 'Vyber typ fólie.';
-    vc = vcRezanyTransferRozpis(kostra, p.foliaId, plocha, farby).spolu;
-    dodatok = folia?.nazov || '';
+    vc = vcRezanyTransferRozpis(kostra, p.foliaId, plocha, farby, kusov, p.zlozitost || 'jednoduche').spolu;
+    dodatok = [folia?.nazov, p.zlozitost === 'stredne' ? 'stredne zložité' : p.zlozitost === 'zlozite' ? 'zložité' : ''].filter(Boolean).join(', ');
   }
   const jednotkova = Math.max(priceAt(vc, kusov, kostra.pricingConfig), minCenaPotlace(kostra, p.metoda));
   const marza = vc > 0 ? ((jednotkova / vc) - 1) * 100 : 0;

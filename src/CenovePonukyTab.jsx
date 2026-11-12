@@ -350,7 +350,7 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
   const [itemsMode, setItemsMode] = useState('vyroba');
   const [calcMethod, setCalcMethod] = useState('sublimacia');
   const [calcKlient, setCalcKlient] = useState({ on: false, pct: 15 });
-  const [calc, setCalc] = useState({ sirka: 10, vyska: 10, ks: 1, farby: 1, tmavy: false, velkostId: '', foliaId: '' });
+  const [calc, setCalc] = useState({ sirka: 10, vyska: 10, ks: 1, farby: 1, tmavy: false, velkostId: '', foliaId: '', zlozitost: 'jednoduche' });
   const [documents, setDocuments] = useState([]);
   const [newDocumentDraft, setNewDocumentDraft] = useState({ category: DOCUMENT_CATEGORIES[0], name: '', description: '', file: null });
   const [isUploadingDocument, setIsUploadingDocument] = useState(false);
@@ -433,17 +433,17 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
       calcVc = rz?.spolu ?? 0;
       if (rz) calcCasti = [{ label: 'Sublimačný transfer (papier, atrament, tlač)', vc: rz.transfer }, { label: 'Nažehlenie sublimačného papiera na textil', vc: rz.nazehlenie }];
     } else if (calcMethod === 'dtf') {
-      const rz = vcDtfGarmentRozpis(kostra, calcPlocha, pocetNazehleniDtf(kostra, calc.sirka, calc.vyska)); // motív väčší než lis (38×48) sa žehlí viackrát
+      const rz = vcDtfGarmentRozpis(kostra, calcPlocha, pocetNazehleniDtf(kostra, calc.sirka, calc.vyska), calcKs); // motív väčší než lis (38×48) sa žehlí viackrát; + príprava objednávky na kus
       calcVc = rz.spolu;
-      calcCasti = [{ label: `DTF transfer (fólia, farby, tlač, odpad ${Number(rz.odpadPercent).toFixed(0)} %)`, vc: rz.transfer }, { label: 'Nažehlenie DTF transferu na textil', vc: rz.nazehlenie }];
+      calcCasti = [{ label: `DTF transfer (fólia, farby, tlač, odpad ${Number(rz.odpadPercent).toFixed(0)} %)`, vc: rz.transfer }, { label: 'Nažehlenie DTF transferu na textil', vc: rz.nazehlenie }, ...(rz.priprava > 0 ? [{ label: `Príprava objednávky (${kostra.dtf?.priprava_min} min ÷ ${calcKs} ks)`, vc: rz.priprava }] : [])];
     }
     else if (calcMethod === 'vysivka') calcVc = vcVysivka(kostra, calcPlocha, calcKs);
     else if (calcMethod === 'sietotlac') { calcVc = vcSietotlacCelkom(kostra, calc.velkostId, calc.tmavy, calcFarby, calcKs, calcPlocha); calcPlochaPouzita = plochaFormatuSietotlac(kostra, calc.velkostId, calcPlocha); }
     else if (calcMethod === 'rezany') {
-      const rz = vcRezanyTransferRozpis(kostra, calc.foliaId, calcPlocha, calcFarby);
+      const rz = vcRezanyTransferRozpis(kostra, calc.foliaId, calcPlocha, calcFarby, calcKs, calc.zlozitost || 'jednoduche');
       calcVc = rz.spolu;
       calcCasyRezany = { rezanie: rz.casRezaniaMin, vylupovanie: rz.casVylupovaniaMin, nazehlenie: rz.casNazehlovaniaMin };
-      calcCasti = [{ label: `Rezaný transfer (fólia, rezanie, vyľupovanie${calcFarby > 1 ? `, ${calcFarby} farby` : ''})`, vc: rz.transfer }, { label: 'Nažehlenie rezaného transferu na textil', vc: rz.nazehlenie }];
+      calcCasti = [{ label: `Rezaný transfer (fólia, rezanie, vyľupovanie${calc.zlozitost === 'zlozite' ? ' — zložité logo' : calc.zlozitost === 'stredne' ? ' — stredne zložité' : ''}${calcFarby > 1 ? `, ${calcFarby} farby` : ''})`, vc: rz.transfer }, { label: 'Nažehlenie rezaného transferu na textil', vc: rz.nazehlenie }, ...(rz.priprava > 0 ? [{ label: `Príprava objednávky (${kostra.rezany?.priprava_min} min ÷ ${calcKs} ks)`, vc: rz.priprava }] : [])];
     }
   }
   const calcUnitPrice = kostra ? Math.max(priceAt(calcVc, calcKs, kostra.pricingConfig), minCenaPotlace(kostra, calcMethod)) : 0;
@@ -816,12 +816,22 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
                       )}
 
                       {calcMethodDef?.needsFolia && (
-                        <div>
-                          <label className={labelCls}>Typ fólie</label>
-                          <select value={calc.foliaId} onChange={(e) => setCalc(prev => ({ ...prev, foliaId: e.target.value }))} className={inputCls}>
-                            {kostra.folie.length === 0 && <option value="">-- žiadna fólia (pridaj v Kostra cien) --</option>}
-                            {kostra.folie.map(f => <option key={f.id} value={f.id}>{f.nazov}</option>)}
-                          </select>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className={labelCls}>Typ fólie</label>
+                            <select value={calc.foliaId} onChange={(e) => setCalc(prev => ({ ...prev, foliaId: e.target.value }))} className={inputCls}>
+                              {kostra.folie.length === 0 && <option value="">-- žiadna fólia (pridaj v Kostra cien) --</option>}
+                              {kostra.folie.map(f => <option key={f.id} value={f.id}>{f.nazov}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className={labelCls}>Zložitosť loga (vyľupovanie)</label>
+                            <select value={calc.zlozitost || 'jednoduche'} onChange={(e) => setCalc(prev => ({ ...prev, zlozitost: e.target.value }))} className={inputCls}>
+                              <option value="jednoduche">Jednoduché</option>
+                              <option value="stredne">Stredne zložité</option>
+                              <option value="zlozite">Zložité (veľa jemných detailov)</option>
+                            </select>
+                          </div>
                         </div>
                       )}
 
