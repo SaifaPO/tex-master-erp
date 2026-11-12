@@ -3,6 +3,7 @@ import {
   FileText, Plus, Trash2, Copy, Eye, Code, Save, Search, FolderOpen,
   Image as ImageIcon, Upload, Award, ListChecks, Clock, ShoppingCart, Loader2, Paperclip, Download
 } from 'lucide-react';
+import ViacPotlaciKalkulacka from './ViacPotlaciKalkulacka';
 import { priceAt, marginAt } from './printstudio/pricingEngine';
 import { nacitajKostru, vcSublimaciaGarmentRozpis, vcDtfGarmentRozpis, pocetNazehleniDtf, vcRezanyTransferRozpis, vcVysivka, vcSietotlacCelkom, plochaFormatuSietotlac, vcRezanyTransfer, minCenaPotlace } from './printstudio/vyrobneNaklady';
 
@@ -739,7 +740,19 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
               <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-800 w-fit">
                 <button onClick={() => setItemsMode('vyroba')} className={`px-3 py-1.5 rounded-md text-[11px] font-bold ${itemsMode === 'vyroba' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>Výroba</button>
                 <button onClick={() => setItemsMode('potlac')} className={`px-3 py-1.5 rounded-md text-[11px] font-bold ${itemsMode === 'potlac' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>Potlač (kalkulačka)</button>
+                <button onClick={() => setItemsMode('viac')} className={`px-3 py-1.5 rounded-md text-[11px] font-bold ${itemsMode === 'viac' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>Viac potlačí</button>
               </div>
+
+              {itemsMode === 'viac' && (
+                <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
+                  {!kostra ? (
+                    <p className="text-[11px] text-amber-400">Načítavam výrobné náklady z Kostra cien…</p>
+                  ) : (
+                    <ViacPotlaciKalkulacka kostra={kostra} fmtMoney={fmtMoney} inputCls={inputCls} labelCls={labelCls}
+                      onPridat={(items) => { setForm(prev => ({ ...prev, items: [...prev.items, ...items] })); triggerNotification('success', items.length > 1 ? `Pridaných ${items.length} potlačí do ponuky.` : 'Potlač pridaná do ponuky.'); }} />
+                  )}
+                </div>
+              )}
 
               {itemsMode === 'vyroba' && priceList.length > 0 && (
                 <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800 flex gap-2">
