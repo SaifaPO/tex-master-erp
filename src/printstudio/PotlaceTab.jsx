@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Banknote, Calculator, TrendingUp } from 'lucide-react';
 import { priceAt, marginAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 import NumberInput from '../NumberInput';
+import ViacPotlaciKalkulacka from '../ViacPotlaciKalkulacka';
 import VykonPanel, { VykonCasBlok } from './VykonCas';
 import { vcSublimaciaGarment as vcSublimaciaGarmentZo, vcSublimaciaGarmentRozpis, vcDtfGarment as vcDtfGarmentZo, vcDtfGarmentRozpis, pocetNazehleniDtf, vcRezanyTransferRozpis, vcVysivka as vcVysivkaZo, nakladFarbySietotlac, vcSietotlacZaklad, vcSietotlacCelkom, plochaFormatuSietotlac, vcRezanyTransfer as vcRezanyTransferZo, vcLaserRezanie as vcLaserRezaniaZo } from './vyrobneNaklady';
 
@@ -514,6 +515,15 @@ export default function PotlaceTab({ supabase }) {
             );
           })}
         </div>
+      </div>
+
+      {/* VIAC POTLAČÍ NARAZ — dopyt na viac log (napr. malé vpredu + veľké na chrbát): cena každej potlače zvlášť a súčet */}
+      <div className="bg-slate-950 rounded-2xl p-5 border border-indigo-900/40">
+        <h3 className="font-bold text-sm text-white mb-1 flex items-center gap-1.5"><Calculator className="w-4 h-4 text-indigo-400" /> Viac potlačí naraz — rozpis ceny každej potlače a súčet</h3>
+        <p className="text-xs text-slate-400 mb-3">Pri dopyte na viac log nemusíš nacenovať každé osobitne: zadaj každú potlač (umiestnenie, technológia, rozmer) a spoločný počet kusov. Počíta sa rovnakým vzorcom ako testovacia kalkulačka vyššie (výrobná cena z Kostry cien × maržová krivka, minimálna cena úkonu). Do ponuky sa pridáva v Cenových ponukách → Viac potlačí.</p>
+        <ViacPotlaciKalkulacka
+          kostra={{ ...kostraLive, pricingConfig, minCenaDtf: dtf.min_cena, minCenaSublimacia: sublimacia.min_cena, minCenaVysivka: vysivka.min_cena }}
+          fmtMoney={(n) => `${Number(n).toFixed(2)} €`} inputCls={inputCls} labelCls={labelCls} />
       </div>
 
       {/* NAMERANE VYKONY A SPOTREBA */}

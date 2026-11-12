@@ -153,10 +153,10 @@ export default function ViacPotlaciKalkulacka({ kostra, fmtMoney, inputCls, labe
       </div>
       <p className="text-[10px] text-sky-300/90 font-semibold">💶 Ceny sú BEZ DPH — DPH sa pripočíta v súčte ponuky. Cena textilu v nich nie je.</p>
 
-      <div className="flex flex-wrap gap-2 justify-end">
+      {onPridat && <div className="flex flex-wrap gap-2 justify-end">
         <button type="button" onClick={pridajJednu} disabled={chybaNiekde} className="bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-[11px] font-bold px-3 py-1.5 rounded-lg">Pridať do ponuky ako 1 položku</button>
         <button type="button" onClick={pridajZvlast} disabled={chybaNiekde} className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center gap-1"><Plus className="h-3 w-3" /> Pridať každú potlač zvlášť</button>
-      </div>
+      </div>}
     </div>
   );
 }
