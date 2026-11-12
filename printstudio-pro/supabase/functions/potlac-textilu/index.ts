@@ -154,7 +154,7 @@ function maxPlochy(nast: Riadok, produkt: Riadok, technologia: string, um: Riado
   return { sirka: Math.max(1, Math.floor(s)), vyska: Math.max(1, Math.floor(v)) };
 }
 
-function vcRezanyTransfer(rezany: Riadok | null, folia: Riadok | null, costMetrics: Riadok[], plochaCm2: number, pocetFarieb = 1, nakladBmFolie: number | null = null) {
+function vcRezanyTransfer(rezany: Riadok | null, folia: Riadok | null, costMetrics: Riadok[], plochaCm2: number, pocetFarieb = 1, nakladBmFolie: number | null = null, zlozitost = 'jednoduche') {
   // Viac farieb: odpad fólie +15 % a čas +0,3 min za každú ďalšiu farbu (Kostra cien), nažehlenie za každú vrstvu zvlášť.
   const nFarieb = Math.max(1, Math.round(pocetFarieb || 1)), dalsie = nFarieb - 1;
   const cislo = (v: unknown, def: number) => (v == null || v === '' ? def : (parseFloat(String(v)) || 0));
@@ -164,7 +164,9 @@ function vcRezanyTransfer(rezany: Riadok | null, folia: Riadok | null, costMetri
   const nakladBm = nakladBmFolie != null ? nakladBmFolie : (folia ? (parseFloat(folia.naklad_bm) || 0) : 0);
   const naklad_cm2 = (nakladBm / sirkaVyuz) / 100;
   const material = plochaCm2 * naklad_cm2 * (1 + odpadFarba * dalsie);
-  const pracaCm2 = ((parseFloat(rezany?.cas_rezania_min) || 0) + (parseFloat(rezany?.cas_vylupovania_min) || 0)) / 60 * (parseFloat(rezany?.cena_prace_hod) || 0) * plochaCm2;
+  // Náročnosť motívu: vyľupovanie sa násobí (Kostra cien → rezaný: zlozitost_stredna_nasobok / zlozitost_vysoka_nasobok), rovnako ako v ERP kalkulácii
+  const zlozK = zlozitost === 'zlozite' ? (parseFloat(rezany?.zlozitost_vysoka_nasobok) || 3) : zlozitost === 'stredne' ? (parseFloat(rezany?.zlozitost_stredna_nasobok) || 2) : 1;
+  const pracaCm2 = ((parseFloat(rezany?.cas_rezania_min) || 0) + (parseFloat(rezany?.cas_vylupovania_min) || 0) * zlozK) / 60 * (parseFloat(rezany?.cena_prace_hod) || 0) * plochaCm2;
   const pracaNavyse = (casNavyse * dalsie / 60) * (parseFloat(rezany?.cena_prace_hod) || 0);
   const pracaFlat = ((parseFloat(rezany?.cas_nazehlovania_min) || 0) / 60) * (parseFloat(rezany?.cena_prace_hod) || 0);
   const ploterEurHod = elektrinaZariadeniaEurZaHod(costMetrics, rezany?.ploter_zariadenie_id);
@@ -216,7 +218,7 @@ async function nacitajKontext(supabase: ReturnType<typeof createClient>) {
 }
 
 type Folia = { druh: string; farba: string; druhNazov: string; farbaNazov: string };
-type Tlac = { umiestnenie: string; sirkaCm: number; vyskaCm: number; farby: number; efekt: string; folie: Folia[]; suborCesta: string | null; suborNazov: string | null };
+type Tlac = { umiestnenie: string; sirkaCm: number; vyskaCm: number; farby: number; efekt: string; zlozitost: string; folie: Folia[]; suborCesta: string | null; suborNazov: string | null };
 type Vyber = {
   produkt: Riadok; vlastnyTextil: boolean; farbaNazov: string; farbaHex: string; tmavy: boolean; material: string; technologia: string;
   velkosti: Record<string, number>; pocetKs: number; tlace: Tlac[]; osobnyOdber: boolean; b2bKod: string;
@@ -295,7 +297,7 @@ function normalizuj(ctx: Kontext, b: Riadok, suborPovinny: boolean): Vyber {
     }
     return {
       umiestnenie: um.kod, sirkaCm: Math.min(Math.max(num(t.sirkaCm, 10), 1), maxS), vyskaCm: Math.min(Math.max(num(t.vyskaCm, 10), 1), maxV),
-      farby: pocetFarieb, efekt, folie, suborCesta, suborNazov: t.suborNazov ? String(t.suborNazov).slice(0, 200) : null,
+      farby: pocetFarieb, efekt, zlozitost: technologia === 'rezany' && (t.zlozitost === 'stredne' || t.zlozitost === 'zlozite') ? String(t.zlozitost) : 'jednoduche', folie, suborCesta, suborNazov: t.suborNazov ? String(t.suborNazov).slice(0, 200) : null,
     };
   });
   return {
@@ -325,7 +327,7 @@ function cenaTlace(ctx: Kontext, v: Vyber, t: Tlac, ks: number) {
   } else {
     const cenyFolii = t.folie.map((f) => num(ctx.folieDruhy.find((d) => d.kod === f.druh)?.cena_bm));
     const nakladBmFolie = cenyFolii.length ? cenyFolii.reduce((a, b) => a + b, 0) / cenyFolii.length : null;
-    vc = vcRezanyTransfer(ctx.rezany, ctx.folie[0] || null, ctx.metriky, plocha, t.farby, nakladBmFolie);
+    vc = vcRezanyTransfer(ctx.rezany, ctx.folie[0] || null, ctx.metriky, plocha, t.farby, nakladBmFolie, t.zlozitost);
     zaklad = Math.max(priceAt(vc, ks, ctx.cfg), num(ctx.rezany?.min_cena));
   }
   return { cenaKs: r2(zaklad * (1 + priplEfekt / 100) * (1 + priplPoly / 100)), vc, priplEfekt, priplPoly };
@@ -398,7 +400,8 @@ const popisTlace = (ctx: Kontext, v: Vyber, t: Tlac) => {
   const farby = (v.technologia === 'dtf' || v.technologia === 'sublimacia') ? '' : `, ${t.farby} ${t.farby === 1 ? 'farba' : t.farby < 5 ? 'farby' : 'farieb'}`;
   const efekt = v.technologia === 'sietotlac' ? `, ${ctx.efekty.find((e) => e.kod === t.efekt)?.nazov || t.efekt}` : '';
   const folie = v.technologia === 'rezany' && t.folie?.length ? ` [${t.folie.map((f) => `${f.druhNazov} – ${f.farbaNazov}`).join('; ')}]` : '';
-  return `${nazov}: ${t.sirkaCm} × ${t.vyskaCm} cm${farby}${efekt}${folie}`;
+  const zloz = v.technologia === 'rezany' ? `, ${t.zlozitost === 'zlozite' ? 'zložitý motív' : t.zlozitost === 'stredne' ? 'stredne náročný motív' : 'jednoduchý motív'}` : '';
+  return `${nazov}: ${t.sirkaCm} × ${t.vyskaCm} cm${farby}${efekt}${zloz}${folie}`;
 };
 const popisTextilu = (v: Vyber) => v.vlastnyTextil
   ? `vlastný textil (${v.material === 'polyester' ? 'polyester' : 'bavlna'}, ${v.farbaNazov || (v.tmavy ? 'tmavý' : 'svetlý')})`

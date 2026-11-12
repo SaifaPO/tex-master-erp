@@ -234,7 +234,7 @@ export default function PotlacTextilu({ supabase }) {
 
   const teloCeny = useMemo(() => ({
     produktId, vlastnyTextil, farbaHex, material, technologia, velkosti, pocetKs: pocetKsVlastny, osobnyOdber, b2bKod: b2b.kod,
-    tlace: tlace.map((t) => ({ umiestnenie: t.umiestnenie, sirkaCm: t.sirka, vyskaCm: t.vyska, farby: t.farby, efekt: t.efekt, ...(technologia === 'rezany' ? { folie: foliaTlace(t) } : {}) })),
+    tlace: tlace.map((t) => ({ umiestnenie: t.umiestnenie, sirkaCm: t.sirka, vyskaCm: t.vyska, farby: t.farby, efekt: t.efekt, ...(technologia === 'rezany' ? { folie: foliaTlace(t), zlozitost: t.zlozitost || 'jednoduche' } : {}) })),
   }), [produktId, vlastnyTextil, farbaHex, material, technologia, velkosti, pocetKsVlastny, osobnyOdber, b2b.kod, tlace, folieKat]); // eslint-disable-line react-hooks/exhaustive-deps
   const pripravene = !!nast && nast.aktivny !== false && !!produkt && tlace.length > 0 && pocetKs >= minKs;
   const { cena, chyba } = useCenaNahlad(supabase, FUNKCIA, teloCeny, pripravene);
@@ -266,7 +266,7 @@ export default function PotlacTextilu({ supabase }) {
       const zoznam = await dokonciNavrhy();
       if (zoznam.some((t) => !t.subor)) throw new Error('Motív je prázdny — pridajte text, logo alebo obrázok.');
       const subory = await nahrajSubory(zoznam);
-      const d = await volaj({ ...teloCeny, tlace: zoznam.map((t, i) => ({ umiestnenie: t.umiestnenie, sirkaCm: t.sirka, vyskaCm: t.vyska, farby: t.farby, efekt: t.efekt, ...(technologia === 'rezany' ? { folie: foliaTlace(t) } : {}), ...subory[i] })), preview: undefined });
+      const d = await volaj({ ...teloCeny, tlace: zoznam.map((t, i) => ({ umiestnenie: t.umiestnenie, sirkaCm: t.sirka, vyskaCm: t.vyska, farby: t.farby, efekt: t.efekt, ...(technologia === 'rezany' ? { folie: foliaTlace(t), zlozitost: t.zlozitost || 'jednoduche' } : {}), ...subory[i] })), preview: undefined });
       setPotvrdenie(`Objednávka bola vytvorená — ${Number(d.cenaSpolu).toFixed(2)} €. Presmerúvam na platbu…`);
       window.location.href = d.checkoutUrl;
     } catch (e) { setChybaObj('Objednávku sa nepodarilo odoslať: ' + e.message); } finally { setBezi(false); }
@@ -417,6 +417,16 @@ export default function PotlacTextilu({ supabase }) {
                         <div className="sm:col-span-2 space-y-2">
                           <label className="block text-xs font-medium text-slate-500">Fólia a farba — vyberte pre každú farbu motívu</label>
                           {foliaTlace(t).map((f, fi) => <FoliaVyber key={fi} cislo={fi + 1} kat={folieKat} hodnota={f} onChange={(nf) => zmenFoliu(t, fi, nf)} />)}
+                        </div>
+                      )}
+                      {technologia === 'rezany' && (
+                        <div className="sm:col-span-2">
+                          <label className="block text-xs font-medium text-slate-500 mb-1">Náročnosť motívu (ovplyvňuje čas vyľupovania, a tým cenu)</label>
+                          <select value={t.zlozitost || 'jednoduche'} onChange={(e) => uprav(t.id, { zlozitost: e.target.value })} className={pole}>
+                            <option value="jednoduche">Jednoduchý — hladké tvary, málo detailov (napr. veľký nápis, jednoduchý znak)</option>
+                            <option value="stredne">Stredne náročný — niekoľko detailov, menšie písmená</option>
+                            <option value="zlozite">Zložitý — veľa jemných detailov a tenkých čiar</option>
+                          </select>
                         </div>
                       )}
                       {TECH[technologia].efekt && (
