@@ -748,7 +748,7 @@ export default function CenovePonukyTab({ supabase, customers, companySettings, 
                   {!kostra ? (
                     <p className="text-[11px] text-amber-400">Načítavam výrobné náklady z Kostra cien…</p>
                   ) : (
-                    <ViacPotlaciKalkulacka kostra={kostra} fmtMoney={fmtMoney} inputCls={inputCls} labelCls={labelCls}
+                    <ViacPotlaciKalkulacka supabase={supabase} kostra={kostra} fmtMoney={fmtMoney} inputCls={inputCls} labelCls={labelCls}
                       onPridat={(items) => { setForm(prev => ({ ...prev, items: [...prev.items, ...items] })); triggerNotification('success', items.length > 1 ? `Pridaných ${items.length} potlačí do ponuky.` : 'Potlač pridaná do ponuky.'); }} />
                   )}
                 </div>

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Banknote, Calculator, TrendingUp } from 'lucide-react';
 import { priceAt, marginAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 import NumberInput from '../NumberInput';
-import { METODY_POTLACE } from './kalkulaciaPotlace';
+import { METODY_POTLACE, cenaPotlace, nacitaj3dNaklad, nacitaj3dMoznosti } from './kalkulaciaPotlace';
 import ViacPotlaciKalkulacka from '../ViacPotlaciKalkulacka';
 import VykonPanel, { VykonCasBlok } from './VykonCas';
 import { vcSublimaciaGarment as vcSublimaciaGarmentZo, vcSublimaciaGarmentRozpis, vcDtfGarment as vcDtfGarmentZo, vcDtfGarmentRozpis, pocetNazehleniDtf, vcRezanyTransferRozpis, vcVysivka as vcVysivkaZo, nakladFarbySietotlac, vcSietotlacZaklad, vcSietotlacCelkom, plochaFormatuSietotlac, vcRezanyTransfer as vcRezanyTransferZo, vcLaserRezanie as vcLaserRezaniaZo } from './vyrobneNaklady';
@@ -95,6 +95,10 @@ export default function PotlaceTab({ supabase }) {
   const [klientPercent, setKlientPercent] = useState(15);
   const [testFarby, setTestFarby] = useState(1);
   const [testTmavyTextil, setTestTmavyTextil] = useState(false);
+  const [t3dUroven, setT3dUroven] = useState('medium'); // 3D transfer v testovacej kalkulačke: hrúbka efektu a lak
+  const [t3dLak, setT3dLak] = useState('partial');
+  const [t3dMoznosti, setT3dMoznosti] = useState({ urovne: [], laky: [] });
+  const [t3dTick, setT3dTick] = useState(0);
   const [potlac1Metoda, setPotlac1Metoda] = useState('dtf'); // ktorá technológia z kariet testovacej kalkulačky je „Potlač 1“ v rozpise viacerých potlačí
   const [testFoliaId, setTestFoliaId] = useState(null);
   const [testVelkostId, setTestVelkostId] = useState(null);
@@ -224,6 +228,13 @@ export default function PotlaceTab({ supabase }) {
   const rzDtf = vcDtfGarmentRozpis(kostraLive, plocha, nazehleniDtf, ks); // + príprava objednávky na kus
   const vcDtfTest = rzDtf.spolu; // karta DTF v testovacej kalkulačke musí rátať rovnako ako e-shop / Cenové ponuky / Viac potlačí (vrátane prípravy objednávky ÷ ks)
   const rzRezany = vcRezanyTransferRozpis(kostraLive, testFoliaId, plocha, pocetFariebSiet, ks);
+  // 3D transfer: náklad počíta server (rovnako ako v appke 3D transfery); tu sa len načíta a cena sa dopočíta maržovou krivkou
+  useEffect(() => { nacitaj3dMoznosti(supabase).then(setT3dMoznosti); }, [supabase]);
+  useEffect(() => {
+    const t = setTimeout(() => { nacitaj3dNaklad(supabase, { sirka: testW, vyska: testH, uroven: t3dUroven, lak: t3dLak }, ks).then(() => setT3dTick((x) => x + 1)); }, 500);
+    return () => clearTimeout(t);
+  }, [supabase, testW, testH, ks, t3dUroven, t3dLak]);
+  const r3d = (t3dTick >= 0) ? cenaPotlace({ pricingConfig }, { metoda: 't3d', sirka: testW, vyska: testH, uroven: t3dUroven, lak: t3dLak }, ks) : null;
   const dvaCasti = (rz, t, n) => [{ label: t, vc: rz?.transfer ?? 0 }, { label: n, vc: rz?.nazehlenie ?? 0 }];
 
   const vybranaHrubka = laserHrubky.find(h => h.id === testHrubkaId);
@@ -486,8 +497,9 @@ export default function PotlaceTab({ supabase }) {
             { key: 'dtf', label: 'DTF', vc: vcDtfTest, plochaZaklad: plocha, minCena: dtf.min_cena },
             { key: 'sietotlac', label: `Sieťotlač · ${pocetFariebSiet} ${pocetFariebSiet === 1 ? 'farba' : pocetFariebSiet < 5 ? 'farby' : 'farieb'}`, vc: vcSietotlacTest, plochaZaklad: plochaSietotlacCm2, minCena: sietotlac.min_cena },
             { key: 'rezany', label: `Rezaný transfer (flex) · ${pocetFariebSiet} ${pocetFariebSiet === 1 ? 'farba' : pocetFariebSiet < 5 ? 'farby' : 'farieb'}`, vc: vcRezany, plochaZaklad: plocha, minCena: rezany.min_cena },
+            { key: 't3d', label: '3D transfer', vc: r3d?.vc || 0, plochaZaklad: plocha, minCena: 0, chyba: r3d?.chyba },
             { key: 'laser', label: `Laserové rezanie${vybranaHrubka ? ` (${vybranaHrubka.label})` : ''}`, vc: vcLaser, plochaZaklad: plocha, minCena: laser.min_cena },
-          ].map(({ key, label, vc, plochaZaklad, minCena }) => {
+          ].map(({ key, label, vc, plochaZaklad, minCena, chyba }) => {
             // "min. cena úkonu" (nastavená vyššie pri danej technológii) je FLOOR na skutočne
             // účtovanú cenu — bez neho pri lacných materiáloch (nízke VC) maržová krivka vracala
             // len pár centov aj napriek vysokému percentu marže (% z takmer ničoho je stále nič).
@@ -499,9 +511,22 @@ export default function PotlaceTab({ supabase }) {
               <div key={key} onClick={key !== 'laser' ? () => setPotlac1Metoda(key) : undefined} title={key !== 'laser' ? 'Kliknutím použiješ túto technológiu ako Potlač 1 v rozpise viacerých potlačí nižšie' : undefined}
                 className={`bg-slate-900 rounded-xl border p-3 ${key !== 'laser' ? 'cursor-pointer' : ''} ${vybrana ? 'border-indigo-500 ring-1 ring-indigo-500/60' : 'border-slate-800'}`}>
                 <p className="text-xs font-bold text-slate-300 mb-1">{label}{vybrana && <span className="ml-1.5 text-[10px] font-bold text-indigo-300 bg-indigo-950 px-1.5 py-0.5 rounded">Potlač 1</span>}</p>
+                {key === 't3d' && (
+                  <div className="grid grid-cols-2 gap-1.5 mb-1.5" onClick={(e) => e.stopPropagation()}>
+                    <select value={t3dUroven} onChange={(e) => setT3dUroven(e.target.value)} className="px-1.5 py-1 bg-slate-950 border border-slate-700 rounded text-[10px] text-white" title="3D efekt (hrúbka)">
+                      {t3dMoznosti.urovne.length === 0 && <option value={t3dUroven}>{t3dUroven}</option>}
+                      {t3dMoznosti.urovne.map((u) => <option key={u.kod} value={u.kod}>{u.nazov}</option>)}
+                    </select>
+                    <select value={t3dLak} onChange={(e) => setT3dLak(e.target.value)} className="px-1.5 py-1 bg-slate-950 border border-slate-700 rounded text-[10px] text-white" title="Lak">
+                      {t3dMoznosti.laky.length === 0 && <option value={t3dLak}>{t3dLak}</option>}
+                      {t3dMoznosti.laky.map((l) => <option key={l.kod} value={l.kod}>{l.nazov}</option>)}
+                    </select>
+                  </div>
+                )}
+                {chyba && <p className="text-[10px] text-amber-400 mb-1">{chyba}</p>}
                 {klientZlava > 0 && <p className="text-[10px] text-slate-500">Klasická cena</p>}
-                <p className="text-xl font-black text-emerald-400">{cena.toFixed(2)} €<span className="text-xs text-slate-500 font-normal"> /ks</span></p>
-                <p className="text-sm text-slate-400">{(cena * ks).toFixed(2)} € spolu za {ks}ks</p>
+                <p className="text-xl font-black text-emerald-400">{chyba ? '—' : <>{cena.toFixed(2)} €<span className="text-xs text-slate-500 font-normal"> /ks</span></>}</p>
+                {!chyba && <p className="text-sm text-slate-400">{(cena * ks).toFixed(2)} € spolu za {ks}ks</p>}
                 {klientZlava > 0 && (() => {
                   const maxZl = cena > 0 && vc > 0 ? Math.max(0, (1 - (vc * (1 + pricingConfig.marginFloor / 100)) / cena) * 100) : klientZlava;
                   const ucinna = Math.min(klientZlava, Math.floor(maxZl * 10) / 10);
@@ -515,7 +540,8 @@ export default function PotlaceTab({ supabase }) {
                   );
                 })()}
                 <p className="text-[10px] text-slate-600 mt-1">VC {vc.toFixed(3)}€ × marža {marza.toFixed(0)}%{plochaZaklad ? ` · ${plochaZaklad} cm²` : ''}</p>
-                {casBlok(key, pocetFariebSiet, testTmavyTextil)}
+                {key === 't3d' && <p className="text-[10px] text-slate-600">Cena bez minimálnej ceny objednávky 3D transferov (tá sa pripočíta v appke).</p>}
+                {key !== 't3d' && casBlok(key, pocetFariebSiet, testTmavyTextil)}
               </div>
             );
           })}
@@ -525,9 +551,9 @@ export default function PotlaceTab({ supabase }) {
         <div className="mt-5 pt-4 border-t border-slate-800">
           <h4 className="font-bold text-xs text-white mb-1">Viac potlačí v jednej objednávke (napr. malé logo vpredu + veľké na chrbát)</h4>
           <p className="text-[11px] text-slate-400 mb-2">Potlač 1 je zadanie vyššie s technológiou, ktorú označíš kliknutím na kartu (teraz: <strong className="text-indigo-300">{(METODY_POTLACE.find((m) => m.id === potlac1Metoda) || {}).label}</strong>). Ďalšie potlače pridaj tlačidlom — počet kusov aj zľava klienta sa preberajú zhora.</p>
-          <ViacPotlaciKalkulacka
+          <ViacPotlaciKalkulacka supabase={supabase}
             kostra={{ ...kostraLive, pricingConfig, minCenaDtf: dtf.min_cena, minCenaSublimacia: sublimacia.min_cena, minCenaVysivka: vysivka.min_cena }}
-            prva={{ metoda: potlac1Metoda, sirka: testW, vyska: testH, farby: pocetFariebSiet, velkostId: testVelkostId, tmavy: testTmavyTextil, zlozitost: 'jednoduche', foliaId: testFoliaId }}
+            prva={{ metoda: potlac1Metoda, sirka: testW, vyska: testH, farby: pocetFariebSiet, velkostId: testVelkostId, tmavy: testTmavyTextil, zlozitost: 'jednoduche', foliaId: testFoliaId, uroven: t3dUroven, lak: t3dLak }}
             ksExt={ks} zlavaExt={klientZlava}
             fmtMoney={(n) => `${Number(n).toFixed(2)} €`} inputCls={inputCls} labelCls={labelCls} />
         </div>

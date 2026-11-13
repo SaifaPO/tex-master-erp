@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Plus, Trash2, Layers } from 'lucide-react';
-import { cenaPotlace, METODY_POTLACE } from './printstudio/kalkulaciaPotlace';
+import { cenaPotlace, METODY_POTLACE, nacitaj3dNaklad, nacitaj3dMoznosti } from './printstudio/kalkulaciaPotlace';
 
 // Kalkulačka „Viac potlačí“ (Cenové ponuky): jeden dopyt s VIACERÝMI potlačami (napr. malé logo vpredu + veľké vzadu na chrbte).
 // Každú potlač zadáš zvlášť (umiestnenie, technológia, rozmer…), na konci je rozpísaná cena každej potlače a súčet.
@@ -10,12 +10,15 @@ const UMIESTNENIA = ['Hruď — srdce', 'Hruď — stred', 'Chrbát', 'Ľavý ru
 const novaPotlac = (kostra, n) => ({
   id: `vp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
   nazov: UMIESTNENIA[n] || '',
-  metoda: 'dtf', sirka: 10, vyska: 10, farby: 1, velkostId: 'vlastny', tmavy: false, zlozitost: 'jednoduche', foliaId: kostra?.folie?.[0]?.id ?? '',
+  metoda: 'dtf', sirka: 10, vyska: 10, farby: 1, velkostId: 'vlastny', tmavy: false, zlozitost: 'jednoduche', foliaId: kostra?.folie?.[0]?.id ?? '', uroven: 'medium', lak: 'partial',
 });
 
 // Dva režimy: samostatný (Cenové ponuky) a „vložený“ do testovacej kalkulačky (PrintStudio Pro → Potlače) — vtedy je Potlač 1 zadaná
 // hore v testovacej kalkulačke (`prva`), počet kusov a zľava klienta sa preberajú zhora (`ksExt`, `zlavaExt`) a tu sa len pridávajú ďalšie potlače.
-export default function ViacPotlaciKalkulacka({ kostra, fmtMoney, inputCls, labelCls, onPridat, prva, ksExt, zlavaExt }) {
+export default function ViacPotlaciKalkulacka({ kostra, fmtMoney, inputCls, labelCls, onPridat, prva, ksExt, zlavaExt, supabase }) {
+  const [moznosti3d, setMoznosti3d] = useState({ urovne: [], laky: [] });
+  const [tick3d, setTick3d] = useState(0);
+  useEffect(() => { if (supabase) nacitaj3dMoznosti(supabase).then(setMoznosti3d); }, [supabase]);
   const vlozeny = !!prva;
   const [dalsie, setDalsie] = useState(() => (vlozeny ? [] : [novaPotlac(kostra, 0)]));
   const [nazov1, setNazov1] = useState('Hruď — srdce');
@@ -27,11 +30,22 @@ export default function ViacPotlaciKalkulacka({ kostra, fmtMoney, inputCls, labe
   const zlava = zlavaExt != null ? zlavaExt : (klient.on ? Math.min(90, Math.max(0, Number(klient.pct) || 0)) : 0);
   const potlace = useMemo(() => (vlozeny ? [{ ...prva, id: 'prva', nazov: nazov1, pevna: true }, ...dalsie] : dalsie), [vlozeny, prva, nazov1, dalsie]);
   const setPotlace = setDalsie;
+  // 3D transfery: náklad príde zo servera (asynchrónne) — po načítaní sa výpočet prekreslí
+  const kluc3dVsetky = potlace.filter((p) => p.metoda === 't3d').map((p) => `${p.sirka}x${p.vyska}|${p.uroven}|${p.lak}`).join(';');
+  useEffect(() => {
+    if (!supabase || !kluc3dVsetky) return undefined;
+    const t = setTimeout(() => {
+      Promise.all(potlace.filter((p) => p.metoda === 't3d').map((p) => nacitaj3dNaklad(supabase, p, kusov))).then(() => setTick3d((x) => x + 1));
+    }, 500); // krátke oneskorenie, kým sa dopíše rozmer
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supabase, kluc3dVsetky, kusov]);
   const vypocty = useMemo(() => potlace.map((p) => {
-    const r = cenaPotlace(kostra, p, kusov);
+    const p3 = p.metoda === 't3d' ? { ...p, urovenNazov: moznosti3d.urovne.find((u) => u.kod === p.uroven)?.nazov, lakNazov: moznosti3d.laky.find((l) => l.kod === p.lak)?.nazov } : p;
+    const r = cenaPotlace(kostra, p3, kusov);
     const jedn = Math.round(r.jednotkova * (1 - zlava / 100) * 100) / 100;
     return { ...r, jednotkovaKlient: jedn, spolu: Math.round(jedn * kusov * 100) / 100 };
-  }), [potlace, kusov, zlava, kostra]);
+  }), [potlace, kusov, zlava, kostra, moznosti3d, tick3d]);
 
   const sucetKs = Math.round(vypocty.reduce((s, v) => s + v.jednotkovaKlient, 0) * 100) / 100;
   const sucetSpolu = Math.round(vypocty.reduce((s, v) => s + v.spolu, 0) * 100) / 100;
@@ -104,6 +118,22 @@ export default function ViacPotlaciKalkulacka({ kostra, fmtMoney, inputCls, labe
                   </select>
                 </div>
               )}
+              {def?.needs3d && (<>
+                <div className="col-span-2 sm:col-span-1">
+                  <label className={labelCls}>3D efekt (hrúbka)</label>
+                  <select value={p.uroven} onChange={(e) => zmen(p.id, { uroven: e.target.value })} className={inputCls}>
+                    {moznosti3d.urovne.length === 0 && <option value={p.uroven}>{p.uroven}</option>}
+                    {moznosti3d.urovne.map((u) => <option key={u.kod} value={u.kod}>{u.nazov}</option>)}
+                  </select>
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <label className={labelCls}>Lak</label>
+                  <select value={p.lak} onChange={(e) => zmen(p.id, { lak: e.target.value })} className={inputCls}>
+                    {moznosti3d.laky.length === 0 && <option value={p.lak}>{p.lak}</option>}
+                    {moznosti3d.laky.map((l) => <option key={l.kod} value={l.kod}>{l.nazov}</option>)}
+                  </select>
+                </div>
+              </>)}
               {def?.needsFolia && (
                 <div className="col-span-2">
                   <label className={labelCls}>Typ fólie</label>

@@ -56,6 +56,11 @@ export default function VysivkaKalkTab({ supabase }) {
   const [dizajnId, setDizajnId] = useState('');
   const [d, setD] = useState({ stehov: 8000, vymen: 3, strihov: 10 });
   const [ks, setKs] = useState(30);
+  // pomôcka: odhad stehov zo strojového času (keď vyšívač povie len „logo mu trvá X hodín“)
+  const [hodinyLogo, setHodinyLogo] = useState(4);
+  // „Objednané u vyšívača“ — porovnanie vlastnej výroby s cenou subdodávateľa (bez DPH) + naša marža z krivky
+  const [vysivacCena, setVysivacCena] = useState(22);
+  const [vysivacManip, setVysivacManip] = useState(0.3);
 
   const nacitaj = useCallback(async () => {
     const [n, cm, dz, pc] = await Promise.all([
@@ -110,6 +115,26 @@ export default function VysivkaKalkTab({ supabase }) {
     const c = Math.max(priceAt(nk, x.q, pricingCfg) * x.q, Number(nast.min_cena_eur) || 0);
     return { q, nakladKs: nk, marza: nk > 0 ? (c / x.q / nk - 1) * 100 : 0, cenaKs: c / x.q, spolu: c };
   }) : []), [nast, hodStroj, d, pricingCfg]);
+
+  // Odhad stehov z času na jednej hlave: (čas − strihy − výmeny farieb) × rýchlosť stroja
+  const odhadniStehy = () => {
+    const minCelkom = (Number(hodinyLogo) || 0) * 60;
+    const bezPrestojov = minCelkom - ((Number(d.strihov) || 0) * Number(nast.strih_s)) / 60 - ((Number(d.vymen) || 0) * Number(nast.zmena_farby_s)) / 60;
+    setD({ ...d, stehov: Math.max(0, Math.round((bezPrestojov * Number(nast.rychlost_spm)) / 1000) * 1000) });
+  };
+  // Subdodávka: náklad = cena vyšívača + manipulácia/doprava na kus + príprava objednávky (rozložená na kusy), + rezerva; predaj cez rovnakú maržovú krivku
+  const vysivacNaklad = (q) => {
+    const cenaZaklad = q * ((Number(vysivacCena) || 0) + (Number(vysivacManip) || 0)) + ((Number(nast?.priprava_min) || 0) / 60) * (Number(nast?.praca_hod) || 0);
+    return (cenaZaklad * (1 + (Number(nast?.riziko_percent) || 0) / 100)) / q;
+  };
+  const porovnanie = useMemo(() => (nast ? [1, 3, 6, 10, 20, 30, 60, 100, 250].map((q) => {
+    const x = vypocitajVysivku(nast, hodStroj, d, q);
+    const vlastnyVc = x.naklad / q;
+    const vlastnyCena = Math.max(priceAt(vlastnyVc, q, pricingCfg), (Number(nast.min_cena_eur) || 0) / q);
+    const subVc = vysivacNaklad(q);
+    const subCena = Math.max(priceAt(subVc, q, pricingCfg), (Number(nast.min_cena_eur) || 0) / q);
+    return { q, vlastnyVc, vlastnyCena, subVc, subCena };
+  }) : []), [nast, hodStroj, d, pricingCfg, vysivacCena, vysivacManip]);
 
   if (chyba) return <p className="text-sm text-amber-300 bg-amber-950/30 border border-amber-900/50 rounded-xl p-4 flex gap-2"><AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> {chyba}</p>;
   if (!nast || !v) return <p className="text-sm text-slate-500">Načítavam…</p>;
@@ -171,6 +196,11 @@ export default function VysivkaKalkTab({ supabase }) {
             <Pole label="Strihov nite" step="1" hodnota={d.strihov} onChange={(x) => setD({ ...d, strihov: x })} />
             <Pole label="Počet kusov" step="1" hodnota={ks} onChange={(x) => setKs(Math.max(1, Math.round(x)))} />
           </div>
+          <div className="flex flex-wrap items-end gap-2 bg-slate-950 border border-slate-800 rounded-lg p-2.5">
+            <div className="w-36"><Pole label="Odhad stehov z času" jednotka="hod / kus" step="0.5" hodnota={hodinyLogo} onChange={setHodinyLogo} pomoc="Koľko hodín trvá jedno logo na jednej hlave stroja" /></div>
+            <button type="button" onClick={odhadniStehy} className="text-[11px] bg-slate-800 hover:bg-slate-700 text-white font-bold px-3 py-1.5 rounded-lg">Dopočítať stehy</button>
+            <p className="text-[10px] text-slate-500 flex-1 min-w-[12rem]">Keď nevieš počet stehov: zadaj, koľko hodín trvá jedno logo na jednej hlave. Stehy sa dopočítajú z rýchlosti stroja ({cislo(nast.rychlost_spm, 0)} stehov/min) po odpočítaní strihov a výmen farieb.</p>
+          </div>
 
           <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-1.5 text-xs">
             <p className="text-[10px] uppercase tracking-wide text-slate-500 font-bold">1. Čas výšivky (automaticky zo stehov)</p>
@@ -202,6 +232,32 @@ export default function VysivkaKalkTab({ supabase }) {
           </div>
         </section>
       </div>
+
+      <section className="bg-slate-900/60 rounded-2xl border border-slate-800 p-5">
+        <h3 className="font-bold text-sm text-white mb-1">Objednané u vyšívača — porovnanie s vlastnou výrobou</h3>
+        <p className="text-[11px] text-slate-500 mb-3 max-w-3xl">Ak výšivku nerobíš na vlastnom stroji, ale objednáš ju u vyšívača: zadaj jeho cenu za kus (bez DPH). Náklad = jeho cena + manipulácia/doprava + príprava objednávky (rozložená na kusy) + rezerva; predajná cena sa počíta rovnakou maržovou krivkou z Cenotvorby ako pri vlastnej výrobe. Dizajn (stehy) sa preberá z kalkulačky vyššie.</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3 max-w-2xl">
+          <Pole label="Cena od vyšívača" jednotka="€/ks bez DPH" step="0.5" hodnota={vysivacCena} onChange={setVysivacCena} />
+          <Pole label="Manipulácia a doprava" jednotka="€/ks" step="0.05" hodnota={vysivacManip} onChange={setVysivacManip} />
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead className="text-slate-500 uppercase text-[10px]"><tr><th className="text-left py-1.5">Kusov</th><th className="text-right">Vlastný stroj: náklad</th><th className="text-right">predaj / kus</th><th className="text-right">U vyšívača: náklad</th><th className="text-right">predaj / kus</th><th className="text-right">Lacnejšie</th></tr></thead>
+            <tbody>
+              {porovnanie.map((r) => (
+                <tr key={r.q} className={`border-t border-slate-800 ${r.q === v.q ? 'bg-indigo-950/40' : ''}`}>
+                  <td className="py-1.5 text-slate-200 font-semibold">{r.q} ks</td>
+                  <td className="text-right font-mono text-slate-400">{eur(r.vlastnyVc)}</td>
+                  <td className="text-right font-mono text-white font-bold">{eur(r.vlastnyCena)}</td>
+                  <td className="text-right font-mono text-slate-400">{eur(r.subVc)}</td>
+                  <td className="text-right font-mono text-white font-bold">{eur(r.subCena)}</td>
+                  <td className="text-right text-[11px] text-slate-300">{r.vlastnyVc <= r.subVc ? 'vlastný stroj' : 'vyšívač'} <span className="text-slate-500">(−{eur(Math.abs(r.vlastnyVc - r.subVc))}/ks)</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
       <section className="bg-slate-900/60 rounded-2xl border border-slate-800 p-5">
         <h3 className="font-bold text-sm text-white mb-1">Cena za kus podľa množstva (pre tento dizajn)</h3>
