@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Banknote, Calculator, TrendingUp } from 'lucide-react';
 import { priceAt, marginAt, mapConfigFromDb, DEFAULT_PRICING_CONFIG } from './pricingEngine';
 import NumberInput from '../NumberInput';
+import { METODY_POTLACE } from './kalkulaciaPotlace';
 import ViacPotlaciKalkulacka from '../ViacPotlaciKalkulacka';
 import VykonPanel, { VykonCasBlok } from './VykonCas';
 import { vcSublimaciaGarment as vcSublimaciaGarmentZo, vcSublimaciaGarmentRozpis, vcDtfGarment as vcDtfGarmentZo, vcDtfGarmentRozpis, pocetNazehleniDtf, vcRezanyTransferRozpis, vcVysivka as vcVysivkaZo, nakladFarbySietotlac, vcSietotlacZaklad, vcSietotlacCelkom, plochaFormatuSietotlac, vcRezanyTransfer as vcRezanyTransferZo, vcLaserRezanie as vcLaserRezaniaZo } from './vyrobneNaklady';
@@ -94,6 +95,7 @@ export default function PotlaceTab({ supabase }) {
   const [klientPercent, setKlientPercent] = useState(15);
   const [testFarby, setTestFarby] = useState(1);
   const [testTmavyTextil, setTestTmavyTextil] = useState(false);
+  const [potlac1Metoda, setPotlac1Metoda] = useState('dtf'); // ktorá technológia z kariet testovacej kalkulačky je „Potlač 1“ v rozpise viacerých potlačí
   const [testFoliaId, setTestFoliaId] = useState(null);
   const [testVelkostId, setTestVelkostId] = useState(null);
   const [testHrubkaId, setTestHrubkaId] = useState(null);
@@ -220,6 +222,7 @@ export default function PotlaceTab({ supabase }) {
   const vcRezany = vcRezanyTransferRozpis(kostraLive, testFoliaId, plocha, pocetFariebSiet, ks).spolu; // horná karta aj porovnanie dole počítajú rovnako pre zadaný počet farieb
   const rzSub = vcSublimaciaGarmentRozpis(kostraLive, plocha);
   const rzDtf = vcDtfGarmentRozpis(kostraLive, plocha, nazehleniDtf, ks); // + príprava objednávky na kus
+  const vcDtfTest = rzDtf.spolu; // karta DTF v testovacej kalkulačke musí rátať rovnako ako e-shop / Cenové ponuky / Viac potlačí (vrátane prípravy objednávky ÷ ks)
   const rzRezany = vcRezanyTransferRozpis(kostraLive, testFoliaId, plocha, pocetFariebSiet, ks);
   const dvaCasti = (rz, t, n) => [{ label: t, vc: rz?.transfer ?? 0 }, { label: n, vc: rz?.nazehlenie ?? 0 }];
 
@@ -480,7 +483,7 @@ export default function PotlaceTab({ supabase }) {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
           {[
             { key: 'sublimacia', label: 'Sublimácia', vc: vcSublimacia, plochaZaklad: plocha, minCena: sublimacia.min_cena },
-            { key: 'dtf', label: 'DTF', vc: vcDtf, plochaZaklad: plocha, minCena: dtf.min_cena },
+            { key: 'dtf', label: 'DTF', vc: vcDtfTest, plochaZaklad: plocha, minCena: dtf.min_cena },
             { key: 'sietotlac', label: `Sieťotlač · ${pocetFariebSiet} ${pocetFariebSiet === 1 ? 'farba' : pocetFariebSiet < 5 ? 'farby' : 'farieb'}`, vc: vcSietotlacTest, plochaZaklad: plochaSietotlacCm2, minCena: sietotlac.min_cena },
             { key: 'rezany', label: `Rezaný transfer (flex) · ${pocetFariebSiet} ${pocetFariebSiet === 1 ? 'farba' : pocetFariebSiet < 5 ? 'farby' : 'farieb'}`, vc: vcRezany, plochaZaklad: plocha, minCena: rezany.min_cena },
             { key: 'laser', label: `Laserové rezanie${vybranaHrubka ? ` (${vybranaHrubka.label})` : ''}`, vc: vcLaser, plochaZaklad: plocha, minCena: laser.min_cena },
@@ -491,9 +494,11 @@ export default function PotlaceTab({ supabase }) {
             const cenaBezFloor = priceAt(vc, ks, pricingConfig);
             const cena = Math.max(cenaBezFloor, minCena || 0);
             const marza = vc > 0 ? ((cena / vc) - 1) * 100 : 0;
+            const vybrana = key !== 'laser' && potlac1Metoda === key;
             return (
-              <div key={key} className="bg-slate-900 rounded-xl border border-slate-800 p-3">
-                <p className="text-xs font-bold text-slate-300 mb-1">{label}</p>
+              <div key={key} onClick={key !== 'laser' ? () => setPotlac1Metoda(key) : undefined} title={key !== 'laser' ? 'Kliknutím použiješ túto technológiu ako Potlač 1 v rozpise viacerých potlačí nižšie' : undefined}
+                className={`bg-slate-900 rounded-xl border p-3 ${key !== 'laser' ? 'cursor-pointer' : ''} ${vybrana ? 'border-indigo-500 ring-1 ring-indigo-500/60' : 'border-slate-800'}`}>
+                <p className="text-xs font-bold text-slate-300 mb-1">{label}{vybrana && <span className="ml-1.5 text-[10px] font-bold text-indigo-300 bg-indigo-950 px-1.5 py-0.5 rounded">Potlač 1</span>}</p>
                 {klientZlava > 0 && <p className="text-[10px] text-slate-500">Klasická cena</p>}
                 <p className="text-xl font-black text-emerald-400">{cena.toFixed(2)} €<span className="text-xs text-slate-500 font-normal"> /ks</span></p>
                 <p className="text-sm text-slate-400">{(cena * ks).toFixed(2)} € spolu za {ks}ks</p>
@@ -515,15 +520,17 @@ export default function PotlaceTab({ supabase }) {
             );
           })}
         </div>
-      </div>
 
-      {/* VIAC POTLAČÍ NARAZ — dopyt na viac log (napr. malé vpredu + veľké na chrbát): cena každej potlače zvlášť a súčet */}
-      <div className="bg-slate-950 rounded-2xl p-5 border border-indigo-900/40">
-        <h3 className="font-bold text-sm text-white mb-1 flex items-center gap-1.5"><Calculator className="w-4 h-4 text-indigo-400" /> Viac potlačí naraz — rozpis ceny každej potlače a súčet</h3>
-        <p className="text-xs text-slate-400 mb-3">Pri dopyte na viac log nemusíš nacenovať každé osobitne: zadaj každú potlač (umiestnenie, technológia, rozmer) a spoločný počet kusov. Počíta sa rovnakým vzorcom ako testovacia kalkulačka vyššie (výrobná cena z Kostry cien × maržová krivka, minimálna cena úkonu). Do ponuky sa pridáva v Cenových ponukách → Viac potlačí.</p>
-        <ViacPotlaciKalkulacka
-          kostra={{ ...kostraLive, pricingConfig, minCenaDtf: dtf.min_cena, minCenaSublimacia: sublimacia.min_cena, minCenaVysivka: vysivka.min_cena }}
-          fmtMoney={(n) => `${Number(n).toFixed(2)} €`} inputCls={inputCls} labelCls={labelCls} />
+        {/* VIAC POTLAČÍ V 1 OBJEDNÁVKE — Potlač 1 = zadanie + označená technológia vyššie, ďalšie potlače sa pridávajú tu; dole rozpis každej a súčet */}
+        <div className="mt-5 pt-4 border-t border-slate-800">
+          <h4 className="font-bold text-xs text-white mb-1">Viac potlačí v jednej objednávke (napr. malé logo vpredu + veľké na chrbát)</h4>
+          <p className="text-[11px] text-slate-400 mb-2">Potlač 1 je zadanie vyššie s technológiou, ktorú označíš kliknutím na kartu (teraz: <strong className="text-indigo-300">{(METODY_POTLACE.find((m) => m.id === potlac1Metoda) || {}).label}</strong>). Ďalšie potlače pridaj tlačidlom — počet kusov aj zľava klienta sa preberajú zhora.</p>
+          <ViacPotlaciKalkulacka
+            kostra={{ ...kostraLive, pricingConfig, minCenaDtf: dtf.min_cena, minCenaSublimacia: sublimacia.min_cena, minCenaVysivka: vysivka.min_cena }}
+            prva={{ metoda: potlac1Metoda, sirka: testW, vyska: testH, farby: pocetFariebSiet, velkostId: testVelkostId, tmavy: testTmavyTextil, zlozitost: 'jednoduche', foliaId: testFoliaId }}
+            ksExt={ks} zlavaExt={klientZlava}
+            fmtMoney={(n) => `${Number(n).toFixed(2)} €`} inputCls={inputCls} labelCls={labelCls} />
+        </div>
       </div>
 
       {/* NAMERANE VYKONY A SPOTREBA */}

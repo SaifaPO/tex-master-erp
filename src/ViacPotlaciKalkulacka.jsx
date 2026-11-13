@@ -13,13 +13,20 @@ const novaPotlac = (kostra, n) => ({
   metoda: 'dtf', sirka: 10, vyska: 10, farby: 1, velkostId: 'vlastny', tmavy: false, zlozitost: 'jednoduche', foliaId: kostra?.folie?.[0]?.id ?? '',
 });
 
-export default function ViacPotlaciKalkulacka({ kostra, fmtMoney, inputCls, labelCls, onPridat }) {
-  const [potlace, setPotlace] = useState(() => [novaPotlac(kostra, 0)]);
-  const [ks, setKs] = useState(1);
+// Dva režimy: samostatný (Cenové ponuky) a „vložený“ do testovacej kalkulačky (PrintStudio Pro → Potlače) — vtedy je Potlač 1 zadaná
+// hore v testovacej kalkulačke (`prva`), počet kusov a zľava klienta sa preberajú zhora (`ksExt`, `zlavaExt`) a tu sa len pridávajú ďalšie potlače.
+export default function ViacPotlaciKalkulacka({ kostra, fmtMoney, inputCls, labelCls, onPridat, prva, ksExt, zlavaExt }) {
+  const vlozeny = !!prva;
+  const [dalsie, setDalsie] = useState(() => (vlozeny ? [] : [novaPotlac(kostra, 0)]));
+  const [nazov1, setNazov1] = useState('Hruď — srdce');
+  const [ksVlastne, setKs] = useState(1);
   const [klient, setKlient] = useState({ on: false, pct: 15 });
 
+  const ks = ksExt != null ? ksExt : ksVlastne;
   const kusov = Math.max(1, Math.round(Number(ks)) || 1);
-  const zlava = klient.on ? Math.min(90, Math.max(0, Number(klient.pct) || 0)) : 0;
+  const zlava = zlavaExt != null ? zlavaExt : (klient.on ? Math.min(90, Math.max(0, Number(klient.pct) || 0)) : 0);
+  const potlace = useMemo(() => (vlozeny ? [{ ...prva, id: 'prva', nazov: nazov1, pevna: true }, ...dalsie] : dalsie), [vlozeny, prva, nazov1, dalsie]);
+  const setPotlace = setDalsie;
   const vypocty = useMemo(() => potlace.map((p) => {
     const r = cenaPotlace(kostra, p, kusov);
     const jedn = Math.round(r.jednotkova * (1 - zlava / 100) * 100) / 100;
@@ -33,8 +40,8 @@ export default function ViacPotlaciKalkulacka({ kostra, fmtMoney, inputCls, labe
   const chybaNiekde = vypocty.some((v) => v.chyba || !(v.jednotkova > 0));
 
   const zmen = (id, patch) => setPotlace((l) => l.map((p) => (p.id === id ? { ...p, ...patch } : p)));
-  const pridajPotlac = () => setPotlace((l) => [...l, novaPotlac(kostra, l.length)]);
-  const zmazPotlac = (id) => setPotlace((l) => (l.length > 1 ? l.filter((p) => p.id !== id) : l));
+  const pridajPotlac = () => setPotlace((l) => [...l, novaPotlac(kostra, l.length + (vlozeny ? 1 : 0))]);
+  const zmazPotlac = (id) => setPotlace((l) => (vlozeny || l.length > 1 ? l.filter((p) => p.id !== id) : l));
 
   const polozka = (p, v, i) => ({
     key: `it-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
@@ -52,13 +59,24 @@ export default function ViacPotlaciKalkulacka({ kostra, fmtMoney, inputCls, labe
 
   return (
     <div className="space-y-2.5">
-      <div className="flex items-center gap-2">
-        <Layers className="h-4 w-4 text-indigo-400" />
-        <p className="text-[11px] text-slate-400 flex-1">Zadaj každú potlač zvlášť (napr. <em>malé logo vpredu</em> a <em>veľké na chrbát</em>) — dole uvidíš cenu každej a súčet. Počet kusov je spoločný.</p>
-        <div className="w-24"><label className={labelCls}>Počet kusov</label><input type="number" min="1" value={ks} onChange={(e) => setKs(e.target.value)} className={inputCls} /></div>
-      </div>
+      {!vlozeny && (
+        <div className="flex items-center gap-2">
+          <Layers className="h-4 w-4 text-indigo-400" />
+          <p className="text-[11px] text-slate-400 flex-1">Zadaj každú potlač zvlášť (napr. <em>malé logo vpredu</em> a <em>veľké na chrbát</em>) — dole uvidíš cenu každej a súčet. Počet kusov je spoločný.</p>
+          <div className="w-24"><label className={labelCls}>Počet kusov</label><input type="number" min="1" value={ksVlastne} onChange={(e) => setKs(e.target.value)} className={inputCls} /></div>
+        </div>
+      )}
+
+      {vlozeny && (
+        <div className="bg-slate-900 border border-indigo-900/50 rounded-lg p-2.5 flex flex-wrap items-center gap-2">
+          <span className="text-[11px] font-bold text-indigo-300 w-14 shrink-0">Potlač 1</span>
+          <input list="vp-umiestnenia" value={nazov1} onChange={(e) => setNazov1(e.target.value)} placeholder="Umiestnenie (napr. Hruď)" className={`${inputCls} flex-1 min-w-[9rem]`} />
+          <span className="text-[11px] text-slate-400">{vypocty[0]?.label} <span className="text-slate-600">— zo zadania a vybranej technológie vyššie</span></span>
+        </div>
+      )}
 
       {potlace.map((p, i) => {
+        if (p.pevna) return null;
         const def = METODY_POTLACE.find((m) => m.id === p.metoda);
         const v = vypocty[i];
         const vlastnyFormat = !p.velkostId || p.velkostId === 'vlastny';
@@ -70,7 +88,7 @@ export default function ViacPotlaciKalkulacka({ kostra, fmtMoney, inputCls, labe
               <select value={p.metoda} onChange={(e) => zmen(p.id, { metoda: e.target.value })} className={`${inputCls} w-40 shrink-0`}>
                 {METODY_POTLACE.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
               </select>
-              <button type="button" onClick={() => zmazPotlac(p.id)} disabled={potlace.length < 2} title="Zmazať potlač" className="text-slate-500 hover:text-rose-400 disabled:opacity-30 p-1"><Trash2 className="h-3.5 w-3.5" /></button>
+              <button type="button" onClick={() => zmazPotlac(p.id)} disabled={!vlozeny && potlace.length < 2} title="Zmazať potlač" className="text-slate-500 hover:text-rose-400 disabled:opacity-30 p-1"><Trash2 className="h-3.5 w-3.5" /></button>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {(def?.needsRozmer || (def?.needsFormat && vlastnyFormat)) && (<>
@@ -126,14 +144,14 @@ export default function ViacPotlaciKalkulacka({ kostra, fmtMoney, inputCls, labe
 
       <button type="button" onClick={pridajPotlac} className="text-[11px] bg-slate-800 hover:bg-slate-700 text-white px-3 py-1.5 rounded-lg font-bold flex items-center gap-1"><Plus className="h-3 w-3" /> Pridať ďalšiu potlač</button>
 
-      <div className={`rounded-lg border px-3 py-2 flex flex-wrap items-center gap-2 ${klient.on ? 'border-amber-500/60 bg-amber-950/25' : 'border-slate-800 bg-slate-900'}`}>
+      {zlavaExt == null && <div className={`rounded-lg border px-3 py-2 flex flex-wrap items-center gap-2 ${klient.on ? 'border-amber-500/60 bg-amber-950/25' : 'border-slate-800 bg-slate-900'}`}>
         <button type="button" onClick={() => setKlient((k) => ({ ...k, on: !k.on }))} className={`px-2.5 py-1 rounded-md text-[11px] font-bold border-2 ${klient.on ? 'border-amber-500 bg-amber-600/20 text-amber-300' : 'border-slate-700 text-slate-400 hover:text-slate-200'}`}>Režim klienta: {klient.on ? 'ZAP' : 'VYP'}</button>
         <label className="text-[11px] text-slate-400 flex items-center gap-1">Zľava <input type="number" min="0" max="90" step="1" value={klient.pct} onChange={(e) => setKlient((k) => ({ ...k, pct: e.target.value }))} className="w-14 px-1.5 py-1 bg-slate-950 border border-slate-800 rounded text-xs text-white" /> % (na všetky potlače)</label>
         {[10, 15, 20].map((q) => <button key={q} type="button" onClick={() => setKlient({ on: true, pct: q })} className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700">{q} %</button>)}
-      </div>
+      </div>}
 
-      {/* ROZPIS CENY: každá potlač zvlášť + súčet */}
-      <div className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden text-[11px]">
+      {/* ROZPIS CENY: každá potlač zvlášť + súčet (vo vloženom režime až keď je pridaná aspoň jedna ďalšia potlač) */}
+      {(!vlozeny || dalsie.length > 0) && <><div className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden text-[11px]">
         <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 px-3 py-1.5 text-slate-500 uppercase tracking-wide text-[10px] bg-slate-950/60"><span>Potlač</span><span className="text-right">€/ks</span><span className="text-right">Spolu za {kusov} ks</span></div>
         {potlace.map((p, i) => (
           <div key={p.id} className="grid grid-cols-[1fr_auto_auto] gap-x-3 px-3 py-1.5 border-t border-slate-800 text-slate-300">
@@ -151,7 +169,7 @@ export default function ViacPotlaciKalkulacka({ kostra, fmtMoney, inputCls, labe
           <div className="px-3 py-1.5 border-t border-slate-800 text-amber-300">Bežná cena bez zľavy: {fmtMoney(sucetBezZlavy)}/ks • {fmtMoney(sucetBezZlavy * kusov)} za {kusov} ks (zľava {zlava} %). VC spolu {sucetVc.toFixed(3)} €/ks.</div>
         )}
       </div>
-      <p className="text-[10px] text-sky-300/90 font-semibold">💶 Ceny sú BEZ DPH — DPH sa pripočíta v súčte ponuky. Cena textilu v nich nie je.</p>
+      <p className="text-[10px] text-sky-300/90 font-semibold">💶 Ceny sú BEZ DPH — DPH sa pripočíta v súčte ponuky. Cena textilu v nich nie je.</p></>}
 
       {onPridat && <div className="flex flex-wrap gap-2 justify-end">
         <button type="button" onClick={pridajJednu} disabled={chybaNiekde} className="bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-[11px] font-bold px-3 py-1.5 rounded-lg">Pridať do ponuky ako 1 položku</button>
